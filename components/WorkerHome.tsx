@@ -1,0 +1,91 @@
+import React from 'react';
+import { AppView } from '../types';
+import { Radio, CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon } from 'lucide-react';
+
+interface Props {
+  onNavigate: (view: AppView) => void;
+}
+
+const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
+  return (
+    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white">
+      {/* Background Image overlay */}
+      <div 
+        className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center mix-blend-overlay" 
+        style={{ backgroundImage: `url('https://picsum.photos/id/149/1080/1920')` }}
+      ></div>
+      <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#2a1b12]/90 via-[#2a1b12]/80 to-[#2a1b12] pointer-events-none"></div>
+
+      {/* Top Nav */}
+      <nav className="relative z-20 w-full px-6 py-6 flex justify-center items-center border-b border-white/5 bg-[#2a1b12]/50 backdrop-blur-sm sticky top-0">
+        <div className="flex space-x-8 text-sm font-medium text-[#FFF8DC]/80">
+           <span className="hover:text-white cursor-pointer">Historia</span>
+           <span className="hover:text-white cursor-pointer">Programación</span>
+           <span className="hover:text-white cursor-pointer">Quiénes Somos</span>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <div className="relative z-10 flex flex-col flex-1 px-6 py-8 items-center max-w-md mx-auto w-full">
+        
+        {/* Branding */}
+        <div className="flex flex-col items-center justify-center mt-6 mb-12 space-y-4">
+           <div className="relative w-28 h-28 flex items-center justify-center">
+              <div className="bg-white/5 p-6 rounded-[2rem] border border-white/10 backdrop-blur-md shadow-2xl shadow-black/40">
+                 <Radio size={48} className="text-[#CD853F]" />
+              </div>
+           </div>
+           <div className="text-center">
+              <h1 className="text-3xl font-bold tracking-tight text-[#FFF8DC] mb-1">Radio Ciudad</h1>
+              <h2 className="text-[#CD853F] text-lg font-medium tracking-[0.2em] uppercase opacity-90">Monumento</h2>
+              <p className="text-stone-400 text-xs mt-3 font-serif italic tracking-wide opacity-70">"Voz de la segunda villa cubana"</p>
+           </div>
+        </div>
+
+        {/* Grid Menu */}
+        <div className="w-full grid grid-cols-2 gap-4 mb-10">
+           <MenuButton icon={<CalendarDays size={28} />} label="Agenda" subLabel="CMNL" />
+           <MenuButton icon={<Music size={28} />} label="Música" subLabel="CMNL" />
+           <MenuButton icon={<FileText size={28} />} label="Guiones" subLabel="CMNL" />
+           <MenuButton icon={<Podcast size={28} />} label="Programación" subLabel="CMNL" />
+        </div>
+
+        {/* Footer User Info */}
+        <div className="mt-auto w-full">
+           <div className="bg-[#3e2723]/60 rounded-xl p-4 border border-white/5 flex items-center justify-between backdrop-blur-sm">
+              <div className="flex items-center space-x-3">
+                 <div className="h-10 w-10 rounded-full bg-stone-700/50 flex items-center justify-center border border-white/10">
+                    <UserIcon size={18} className="text-stone-300" />
+                 </div>
+                 <div>
+                    <p className="text-[10px] text-stone-400 uppercase tracking-wide">Usuario conectado</p>
+                    <p className="text-sm text-[#FFF8DC] font-medium">Operador de Audio</p>
+                 </div>
+              </div>
+              <button onClick={() => onNavigate(AppView.LANDING)} className="text-stone-400 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full">
+                 <LogOut size={20} />
+              </button>
+           </div>
+           
+           <div className="text-center mt-8 pb-4">
+              <p className="text-[10px] text-stone-600 uppercase tracking-[0.2em]">Radio Ciudad Monumento • App Interna</p>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MenuButton = ({ icon, label, subLabel }: { icon: React.ReactNode, label: string, subLabel: string }) => (
+  <button className="group flex flex-col items-center justify-center aspect-square bg-[#3e2723]/40 hover:bg-[#3e2723] border border-white/5 hover:border-[#CD853F]/30 rounded-2xl p-4 transition-all duration-300 hover:-translate-y-1 shadow-lg hover:shadow-[#CD853F]/10">
+     <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#8B4513] to-[#A0522D] flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform duration-300 text-white">
+        {icon}
+     </div>
+     <span className="text-[#FFF8DC] font-medium text-sm text-center leading-tight">
+        <span className="block text-xs opacity-60 mb-0.5">{subLabel}</span>
+        {label}
+     </span>
+  </button>
+);
+
+export default WorkerHome;
