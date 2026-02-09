@@ -7,6 +7,11 @@ interface Props {
 }
 
 const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
+  
+  const handleAgendaClick = () => {
+    window.open('https://rcmagenda.vercel.app/#/home', '_blank');
+  };
+
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32 overflow-y-auto no-scrollbar">
       
@@ -39,7 +44,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
       </header>
 
       {/* Dashboard Content */}
-      <main className="flex-1 w-full max-w-md mx-auto p-5 flex flex-col gap-6">
+      <main className="flex-1 w-full max-w-2xl mx-auto p-5 flex flex-col gap-6">
          
          {/* Welcome */}
          <div>
@@ -47,14 +52,14 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             <p className="text-xl font-bold text-white">admincmnl</p>
          </div>
 
-         {/* CMNL Apps Grid (Added per requirement) */}
+         {/* CMNL Apps Grid */}
          <div>
             <h2 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest mb-3">Aplicaciones CMNL</h2>
             <div className="grid grid-cols-4 gap-2">
               <AppButton 
                 icon={<CalendarDays size={20} />} 
                 label="Agenda" 
-                onClick={() => onNavigate(AppView.APP_AGENDA)} 
+                onClick={handleAgendaClick} 
               />
               <AppButton 
                 icon={<Music size={20} />} 

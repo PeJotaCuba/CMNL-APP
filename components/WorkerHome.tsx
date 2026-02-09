@@ -7,6 +7,11 @@ interface Props {
 }
 
 const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
+  
+  const handleAgendaClick = () => {
+    window.open('https://rcmagenda.vercel.app/#/home', '_blank');
+  };
+
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white overflow-y-auto no-scrollbar">
       {/* Background Image overlay */}
@@ -26,7 +31,7 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
       </nav>
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col flex-1 px-6 py-8 items-center max-w-md mx-auto w-full">
+      <div className="relative z-10 flex flex-col flex-1 px-6 py-8 items-center max-w-2xl mx-auto w-full">
         
         {/* Branding */}
         <div className="flex flex-col items-center justify-center mt-6 mb-12 space-y-4">
@@ -42,13 +47,13 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
            </div>
         </div>
 
-        {/* Grid Menu - Now Functional */}
+        {/* Grid Menu */}
         <div className="w-full grid grid-cols-2 gap-4 mb-10">
            <MenuButton 
             icon={<CalendarDays size={28} />} 
             label="Agenda" 
             subLabel="CMNL" 
-            onClick={() => onNavigate(AppView.APP_AGENDA)}
+            onClick={handleAgendaClick}
            />
            <MenuButton 
             icon={<Music size={28} />} 

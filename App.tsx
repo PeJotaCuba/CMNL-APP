@@ -66,11 +66,9 @@ const App: React.FC = () => {
   };
 
   return (
-    // Wrapper to simulate mobile app on desktop
-    <div className="w-full h-full min-h-screen bg-stone-900 flex justify-center items-center font-display">
-      <div className="w-full h-full sm:h-[90vh] sm:max-w-[420px] bg-black sm:rounded-3xl overflow-hidden shadow-2xl relative border-x border-stone-800 sm:border-4 sm:border-stone-800">
-        {renderView()}
-      </div>
+    // Removed fixed width wrapper to allow responsive design on desktop
+    <div className="w-full min-h-screen bg-[#1A100C] font-display">
+      {renderView()}
     </div>
   );
 };
