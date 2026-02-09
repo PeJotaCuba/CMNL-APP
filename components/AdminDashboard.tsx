@@ -1,16 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { AppView } from '../types';
-import { Settings, Play, Pause, Plus, ChevronRight, Activity, CalendarDays, Music, FileText, Podcast, SkipBack, SkipForward, LogOut } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AppView, NewsItem } from '../types';
+import { Settings, Plus, ChevronRight, CalendarDays, Music, FileText, Podcast, LogOut, Upload, Trash2 } from 'lucide-react';
 import { getCurrentProgram } from '../utils/scheduleData';
 
 interface Props {
-  onNavigate: (view: AppView) => void;
+  onNavigate: (view: AppView, data?: any) => void;
+  news: NewsItem[];
+  setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
 }
 
-const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
+const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
     // Update program every minute
@@ -19,17 +19,6 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     }, 60000);
     return () => clearInterval(interval);
   }, []);
-
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
 
   const handleExternalApp = (url: string) => {
     window.location.href = url;
@@ -40,18 +29,52 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     onNavigate(AppView.LANDING);
   };
 
+  const handleNewsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        parseAndAddNews(text);
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const parseAndAddNews = (text: string) => {
+    // Parse format: Titular: ... Autor: ... Texto: ...
+    const titleMatch = text.match(/Titular:\s*([\s\S]*?)(?=\nAutor:|$)/i);
+    const authorMatch = text.match(/Autor:\s*([\s\S]*?)(?=\nTexto:|$)/i);
+    const contentMatch = text.match(/Texto:\s*([\s\S]*)/i);
+
+    if (titleMatch && contentMatch) {
+      const newNews: NewsItem = {
+        id: Date.now().toString(),
+        title: titleMatch[1].trim(),
+        author: authorMatch ? authorMatch[1].trim() : 'Redacción',
+        content: contentMatch[1].trim(),
+        date: 'Ahora mismo',
+        category: 'Boletín',
+        image: 'https://picsum.photos/600/300?random=' + Date.now()
+      };
+      setNews(prev => [newNews, ...prev]);
+      alert('Noticia cargada correctamente.');
+    } else {
+      alert('Formato de noticia incorrecto. Asegúrese de usar Titular:, Autor:, Texto:');
+    }
+  };
+
+  const clearNews = () => {
+    if(confirm("¿Estás seguro de borrar todas las noticias?")) {
+        setNews([]);
+    }
+  };
+
+  const latestNews = news.length > 0 ? news[0] : null;
+
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32 overflow-y-auto no-scrollbar">
       
-      {/* Hidden Audio Element for Live Stream */}
-      <audio 
-        ref={audioRef} 
-        src="https://icecast.teveo.cu/KR43FF7C" 
-        preload="none"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-      ></audio>
-
       {/* Top Nav */}
       <nav className="bg-[#3E1E16] text-[#F5EFE6] px-4 py-2 flex items-center justify-center text-[10px] font-medium border-b border-[#9E7649]/20 tracking-wider uppercase sticky top-0 z-30">
         <div className="flex gap-6">
@@ -116,7 +139,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             </div>
          </div>
 
-         {/* Live Program Widget */}
+         {/* Live Program Widget with VECTOR */}
          <div>
             <div className="flex items-center justify-between mb-3 px-1">
                <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -138,9 +161,18 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
                <div className="relative bg-[#2C1B15] rounded-xl overflow-hidden border border-[#9E7649]/10 group shadow-lg">
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600"></div>
                   <div className="p-4 pl-5 flex items-center gap-4">
-                     <div className="relative shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-black shadow-inner">
-                        <img src={currentProgram.image} alt={currentProgram.name} className="w-full h-full object-cover opacity-90" />
+                     
+                     {/* Vector Visualization instead of Image */}
+                     <div className="relative shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center border border-white/5">
+                        <div className="flex gap-1 h-8 items-end">
+                            <div className="w-1 bg-[#9E7649] animate-[soundbar_0.8s_ease-in-out_infinite]"></div>
+                            <div className="w-1 bg-[#9E7649] animate-[soundbar_1.2s_ease-in-out_infinite]"></div>
+                            <div className="w-1 bg-[#9E7649] animate-[soundbar_0.5s_ease-in-out_infinite]"></div>
+                            <div className="w-1 bg-[#9E7649] animate-[soundbar_1.0s_ease-in-out_infinite]"></div>
+                            <div className="w-1 bg-[#9E7649] animate-[soundbar_0.7s_ease-in-out_infinite]"></div>
+                        </div>
                      </div>
+
                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                             <span className="bg-red-600/20 text-red-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-600/20 uppercase tracking-wider">En Vivo</span>
@@ -155,20 +187,38 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             </div>
          </div>
 
-         {/* News */}
-         <div onClick={() => onNavigate(AppView.SECTION_NEWS)} className="cursor-pointer">
-            <h2 className="text-lg font-bold text-white mb-3 px-1">Noticias Recientes</h2>
-            <div className="rounded-xl bg-[#2C1B15] overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all">
-               <div className="h-32 bg-cover bg-center" style={{ backgroundImage: "url('https://picsum.photos/id/234/600/300')" }}></div>
-               <div className="p-4">
-                  <div className="flex justify-between items-center mb-2">
-                     <span className="text-[9px] font-bold text-[#9E7649] uppercase tracking-wider bg-[#9E7649]/10 px-1.5 py-0.5 rounded border border-[#9E7649]/20">Local</span>
-                     <span className="text-[10px] text-[#E8DCCF]/50">Hace 2h</span>
-                  </div>
-                  <h3 className="text-white font-bold text-base leading-tight mb-1">Festival de la Trova comienza mañana</h3>
-                  <p className="text-[#E8DCCF]/70 text-xs line-clamp-2 leading-relaxed">Todo está listo en la plaza del himno para recibir a los artistas invitados...</p>
-               </div>
+         {/* News Management for Admin */}
+         <div>
+            <div className="flex justify-between items-center mb-3 px-1">
+                 <h2 className="text-lg font-bold text-white">Gestión Noticias</h2>
+                 <div className="flex gap-2">
+                     <label className="bg-[#9E7649] hover:bg-[#8B653D] text-white p-2 rounded-lg cursor-pointer transition-colors shadow-md">
+                        <Upload size={16} />
+                        <input type="file" accept=".txt" onChange={handleNewsUpload} className="hidden" />
+                     </label>
+                     <button onClick={clearNews} className="bg-red-900/40 hover:bg-red-900/60 text-red-300 p-2 rounded-lg transition-colors border border-red-900/20">
+                        <Trash2 size={16} />
+                     </button>
+                 </div>
             </div>
+
+            {latestNews ? (
+                <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, latestNews)} className="cursor-pointer rounded-xl bg-[#2C1B15] overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all">
+                <div className="h-32 bg-cover bg-center" style={{ backgroundImage: `url(${latestNews.image})` }}></div>
+                <div className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-[9px] font-bold text-[#9E7649] uppercase tracking-wider bg-[#9E7649]/10 px-1.5 py-0.5 rounded border border-[#9E7649]/20">{latestNews.category}</span>
+                        <span className="text-[10px] text-[#E8DCCF]/50">{latestNews.date}</span>
+                    </div>
+                    <h3 className="text-white font-bold text-base leading-tight mb-1">{latestNews.title}</h3>
+                    <p className="text-[#E8DCCF]/70 text-xs line-clamp-2 leading-relaxed">{latestNews.content}</p>
+                </div>
+                </div>
+            ) : (
+                <div className="p-6 bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 text-center text-xs text-[#E8DCCF]/50">
+                    No hay noticias cargadas.
+                </div>
+            )}
          </div>
          
       </main>
@@ -179,46 +229,13 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             <Plus size={28} />
          </button>
       </div>
-
-      {/* Mini Player */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 px-4 py-3 pb-safe-bottom">
-         <div className="max-w-md mx-auto flex items-center gap-3">
-             <div className="w-10 h-10 rounded bg-stone-800 bg-cover bg-center shadow-md border border-[#9E7649]/30 shrink-0" style={{ backgroundImage: `url(${currentProgram.image})` }}></div>
-             <div className="flex-1 min-w-0">
-                <p className="text-[#F5EFE6] text-sm font-bold truncate">{currentProgram.name}</p>
-                <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                    <p className="text-[#9E7649] text-[10px] truncate">95.3 FM • Señal en vivo</p>
-                </div>
-             </div>
-             <div className="flex items-center gap-3">
-                <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipBack size={20} fill="currentColor" className="opacity-50" /></button>
-                <button 
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 transition-all border border-white/10"
-                >
-                   {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
-                </button>
-                <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipForward size={20} fill="currentColor" className="opacity-50" /></button>
-             </div>
-         </div>
-         {/* Progress Bar (Indeterminate for Live) */}
-         <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#6B442A] overflow-hidden">
-            {isPlaying && (
-                <div className="absolute top-0 bottom-0 bg-[#9E7649] animate-progress-indeterminate"></div>
-            )}
-         </div>
-         <style>{`
-            @keyframes progress-indeterminate {
-                0% { left: -30%; width: 30%; }
-                50% { left: 40%; width: 40%; }
-                100% { left: 100%; width: 30%; }
-            }
-            .animate-progress-indeterminate {
-                animation: progress-indeterminate 2s infinite linear;
-            }
-         `}</style>
-      </div>
+      
+      <style>{`
+        @keyframes soundbar {
+            0%, 100% { height: 10%; }
+            50% { height: 100%; }
+        }
+      `}</style>
     </div>
   );
 };

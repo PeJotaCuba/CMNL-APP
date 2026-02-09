@@ -1,12 +1,27 @@
-import React from 'react';
-import { AppView } from '../types';
+import React, { useState, useEffect } from 'react';
+import { AppView, NewsItem } from '../types';
 import { Radio, CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon } from 'lucide-react';
 
 interface Props {
-  onNavigate: (view: AppView) => void;
+  onNavigate: (view: AppView, data?: any) => void;
+  news: NewsItem[];
 }
 
-const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
+const WorkerHome: React.FC<Props> = ({ onNavigate, news }) => {
+  const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
+
+  // Carousel logic
+  useEffect(() => {
+    if (news.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentNewsIndex((prev) => (prev + 1) % Math.min(news.length, 5));
+      }, 5000); 
+      return () => clearInterval(interval);
+    }
+  }, [news]);
+
+  const displayedNews = news.slice(0, 5);
+  const activeNews = displayedNews[currentNewsIndex];
   
   const handleExternalApp = (url: string) => {
     // Navigate directly to trigger potential PWA/App interception by the OS
@@ -80,6 +95,22 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
             onClick={() => handleExternalApp('https://rcm-programaci-n.vercel.app/')}
            />
         </div>
+
+        {/* News Carousel (Worker View) */}
+        {activeNews && (
+            <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="w-full mb-8 cursor-pointer group">
+                <div className="bg-[#3e2723]/60 rounded-xl p-4 border border-white/5 backdrop-blur-sm hover:border-[#CD853F]/30 transition-all">
+                    <h3 className="text-[#CD853F] text-xs font-bold uppercase tracking-widest mb-2">Noticias Recientes</h3>
+                    <div className="flex gap-4 items-center">
+                        <div className="h-16 w-16 bg-cover bg-center rounded-lg shrink-0" style={{backgroundImage: `url(${activeNews.image})`}}></div>
+                        <div>
+                            <h4 className="text-sm font-bold leading-tight">{activeNews.title}</h4>
+                            <p className="text-xs text-stone-400 mt-1 line-clamp-1">{activeNews.content}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
 
         {/* Footer User Info */}
         <div className="mt-auto w-full">

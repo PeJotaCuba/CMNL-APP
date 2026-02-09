@@ -1,4 +1,4 @@
-import { User } from '../types';
+import { User, NewsItem } from '../types';
 
 export const INITIAL_USERS: User[] = [
   { name: 'Pedro José Reyes Acuña', username: 'admin', mobile: '54413935', password: 'RCMM26', role: 'admin' },
@@ -19,6 +19,18 @@ export const INITIAL_USERS: User[] = [
   { name: 'Caridad Aguilar Rosabal', username: 'caridad', mobile: '56350265', password: 'RadioCiudad1626', role: 'worker' },
   { name: 'José González Cobo', username: 'jose', mobile: '54205626', password: 'RadioCiudad1726', role: 'worker' },
   { name: 'Rosana María Fernández Verdecia', username: 'rosana', mobile: '53535793', password: 'RadioCiudad1826', role: 'worker' },
+];
+
+export const INITIAL_NEWS: NewsItem[] = [
+  {
+    id: '1',
+    title: 'Festival de la Trova comienza mañana',
+    author: 'Redacción Cultural',
+    content: 'Todo está listo en la plaza del himno para recibir a los artistas invitados...',
+    date: 'Hace 2h',
+    category: 'Cultura',
+    image: 'https://picsum.photos/id/234/600/300'
+  }
 ];
 
 export const getCurrentProgram = (): { name: string; time: string; image: string } => {

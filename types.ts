@@ -16,6 +16,7 @@ export enum AppView {
   SECTION_PROGRAMMING_PUBLIC = 'SECTION_PROGRAMMING_PUBLIC',
   SECTION_ABOUT = 'SECTION_ABOUT',
   SECTION_NEWS = 'SECTION_NEWS',
+  SECTION_NEWS_DETAIL = 'SECTION_NEWS_DETAIL', // New view for reading news
   SECTION_PODCAST = 'SECTION_PODCAST',
   SECTION_PROFILE = 'SECTION_PROFILE',
 }
@@ -34,4 +35,14 @@ export interface ProgramSchedule {
   start: string;
   end: string;
   days: number[]; // 0 = Sunday, 1 = Monday, etc.
+}
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  author: string;
+  content: string;
+  image?: string;
+  date: string;
+  category: string;
 }

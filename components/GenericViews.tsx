@@ -1,15 +1,47 @@
 import React from 'react';
-import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast } from 'lucide-react';
+import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User } from 'lucide-react';
+import { NewsItem } from '../types';
 
 interface ViewProps {
   title: string;
   subtitle?: string;
   onBack: () => void;
   type?: 'agenda' | 'music' | 'scripts' | 'schedule';
+  customContent?: string;
+  newsItem?: NewsItem | null;
 }
 
-export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack }) => {
+export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
   const isProgramming = title.includes('Programación');
+
+  // Specific Layout for News Detail
+  if (newsItem) {
+      return (
+        <div className="flex flex-col h-full w-full bg-[#1A100C] text-[#E8DCCF]">
+             <div className="relative h-64 bg-cover bg-center" style={{backgroundImage: `url(${newsItem.image})`}}>
+                 <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[#1A100C]"></div>
+                 <button onClick={onBack} className="absolute top-4 left-4 p-2 bg-black/40 text-white rounded-full backdrop-blur-md z-10">
+                    <ArrowLeft size={24} />
+                 </button>
+                 <div className="absolute bottom-0 left-0 right-0 p-6">
+                    <span className="bg-[#9E7649] text-white text-[10px] font-bold uppercase px-2 py-1 rounded mb-2 inline-block">{newsItem.category}</span>
+                    <h1 className="text-2xl font-bold text-white leading-tight shadow-sm">{newsItem.title}</h1>
+                 </div>
+             </div>
+             <div className="flex-1 p-6 overflow-y-auto">
+                 <div className="flex items-center gap-4 text-xs text-[#9E7649] mb-6 border-b border-[#9E7649]/20 pb-4">
+                     <span className="flex items-center gap-1"><User size={14}/> {newsItem.author}</span>
+                     <span className="flex items-center gap-1"><Clock size={14}/> {newsItem.date}</span>
+                 </div>
+                 <div className="prose prose-invert prose-p:text-[#E8DCCF]/80 prose-headings:text-white max-w-none">
+                     {newsItem.content.split('\n').map((paragraph, i) => (
+                         <p key={i} className="mb-4 leading-relaxed">{paragraph}</p>
+                     ))}
+                 </div>
+             </div>
+        </div>
+      );
+  }
 
   return (
     <div className="flex flex-col h-full w-full bg-[#FDFCF8] text-[#4A3B32]">
@@ -23,7 +55,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack }
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 pb-24"> {/* Added pb-24 for player clearance */}
         {isProgramming ? (
           <div className="max-w-2xl mx-auto">
              <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-[#5D3A24]/10">
@@ -63,11 +95,15 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack }
                </div>
              </div>
           </div>
+        ) : customContent ? (
+            <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-[#5D3A24]/10 whitespace-pre-wrap">
+                {customContent}
+            </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full opacity-50">
              <Construction size={48} className="text-[#8B5E3C] mb-4" />
-             <p className="text-center font-medium">Esta sección está en desarrollo.</p>
-             <p className="text-center text-xs mt-2">Próximamente disponible en la v1.1</p>
+             <p className="text-center font-medium">Contenido no cargado.</p>
+             <p className="text-center text-xs mt-2">Contacte al administrador para actualizar.</p>
           </div>
         )}
       </div>

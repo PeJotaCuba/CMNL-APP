@@ -1,12 +1,28 @@
-import React from 'react';
-import { AppView } from '../types';
+import React, { useState, useEffect } from 'react';
+import { AppView, NewsItem } from '../types';
 import { ScrollText, Mic, Users, Play, Home, Newspaper, Podcast, User, ChevronRight } from 'lucide-react';
 
 interface Props {
-  onNavigate: (view: AppView) => void;
+  onNavigate: (view: AppView, data?: any) => void;
+  news: NewsItem[];
 }
 
-const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
+const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
+  const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
+
+  // Carousel logic
+  useEffect(() => {
+    if (news.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentNewsIndex((prev) => (prev + 1) % Math.min(news.length, 5));
+      }, 5000); // 5 seconds rotation
+      return () => clearInterval(interval);
+    }
+  }, [news]);
+
+  const displayedNews = news.slice(0, 5);
+  const activeNews = displayedNews[currentNewsIndex];
+
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col bg-[#1E1815] font-display text-stone-100 pb-24 overflow-y-auto no-scrollbar">
       {/* Header Pattern Background */}
@@ -82,28 +98,25 @@ const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
           </div>
         </button>
 
-        {/* Live Now Widget */}
-        <div className="mt-2 rounded-xl bg-[#2C2420] border border-white/5 p-4 shadow-lg">
-          <div className="flex items-center justify-between mb-3">
-             <h3 className="text-[10px] font-bold uppercase tracking-widest text-[#C69C6D]">En Vivo Ahora</h3>
-             <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-             </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-lg bg-stone-800 overflow-hidden shrink-0 relative">
-               <img src="https://picsum.photos/id/453/200/200" alt="Show cover" className="w-full h-full object-cover" />
+        {/* News Carousel */}
+        {activeNews && (
+            <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="mt-2 relative rounded-xl bg-[#2C2420] border border-white/5 overflow-hidden shadow-lg h-40 cursor-pointer group">
+                <div className="absolute inset-0 bg-cover bg-center opacity-60 transition-transform duration-1000 group-hover:scale-105" style={{backgroundImage: `url(${activeNews.image})`}}></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+                <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-[#C69C6D] bg-black/50 px-2 py-0.5 rounded">{activeNews.category}</span>
+                        <div className="flex gap-1">
+                            {displayedNews.map((_, idx) => (
+                                <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === currentNewsIndex ? 'bg-[#C69C6D]' : 'bg-white/30'}`}></div>
+                            ))}
+                        </div>
+                    </div>
+                    <h3 className="text-sm font-bold text-white line-clamp-1">{activeNews.title}</h3>
+                    <p className="text-[10px] text-stone-300 mt-0.5 line-clamp-1">{activeNews.content}</p>
+                </div>
             </div>
-            <div className="flex-1 min-w-0">
-               <h4 className="text-base font-bold text-white truncate">Acontecer</h4>
-               <p className="text-xs text-stone-400 truncate mt-0.5">10:00 AM - 12:00 PM</p>
-            </div>
-            <button className="h-10 w-10 rounded-full bg-[#8B5E3C] text-white flex items-center justify-center hover:bg-[#A06C45] transition-colors shadow-lg shadow-black/20">
-               <Play size={20} fill="currentColor" />
-            </button>
-          </div>
-        </div>
+        )}
 
       </main>
 
