@@ -4,6 +4,7 @@ import PublicLanding from './components/PublicLanding';
 import ListenerHome from './components/ListenerHome';
 import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
+import UserManagement from './components/UserManagement';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 
 const App: React.FC = () => {
@@ -35,6 +36,8 @@ const App: React.FC = () => {
         return <WorkerHome onNavigate={handleNavigate} />;
       case AppView.ADMIN_DASHBOARD:
         return <AdminDashboard onNavigate={handleNavigate} />;
+      case AppView.APP_USER_MANAGEMENT:
+        return <UserManagement onBack={handleBack} />;
       
       // CMNL Apps
       case AppView.APP_AGENDA:

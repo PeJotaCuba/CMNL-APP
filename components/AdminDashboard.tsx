@@ -1,21 +1,52 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AppView } from '../types';
-import { Settings, Users, UserPlus, Play, Bell, SkipBack, Pause, SkipForward, Plus, ChevronRight, Activity, CalendarDays, Music, FileText, Podcast } from 'lucide-react';
+import { Settings, Play, Pause, Plus, ChevronRight, Activity, CalendarDays, Music, FileText, Podcast, SkipBack, SkipForward } from 'lucide-react';
+import { getCurrentProgram } from '../utils/scheduleData';
 
 interface Props {
   onNavigate: (view: AppView) => void;
 }
 
 const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
-  
-  const handleAgendaClick = () => {
-    // Navigate directly to trigger potential PWA/App interception by the OS
-    window.location.href = 'https://rcmagenda.vercel.app/#/home';
+  const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    // Update program every minute
+    const interval = setInterval(() => {
+      setCurrentProgram(getCurrentProgram());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleExternalApp = (url: string) => {
+    window.location.href = url;
   };
 
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32 overflow-y-auto no-scrollbar">
       
+      {/* Hidden Audio Element for Live Stream */}
+      <audio 
+        ref={audioRef} 
+        src="https://teveo.cu/live/audio/cBuF7RrzKPRNNV5q" 
+        preload="none"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+      ></audio>
+
       {/* Top Nav */}
       <nav className="bg-[#3E1E16] text-[#F5EFE6] px-4 py-2 flex items-center justify-center text-[10px] font-medium border-b border-[#9E7649]/20 tracking-wider uppercase sticky top-0 z-30">
         <div className="flex gap-6">
@@ -32,14 +63,12 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             <p className="text-[10px] text-[#9E7649]/80 italic mt-1 font-serif">Voz de la segunda villa cubana</p>
          </div>
          <div className="flex items-center gap-3">
-             <div className="relative">
-                <div className="w-9 h-9 rounded-full border border-[#9E7649] overflow-hidden">
-                    <img src="https://i.pravatar.cc/150?img=11" alt="Admin" className="w-full h-full object-cover" />
-                </div>
-                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#1A100C] rounded-full"></div>
+             <div className="text-right">
+                <p className="text-xs font-bold text-white">Pedro José Reyes</p>
+                <p className="text-[10px] text-[#9E7649]">Administrador</p>
              </div>
-             <button onClick={() => onNavigate(AppView.LANDING)} className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#9E7649]/20 text-[#E8DCCF] transition-colors">
-                <Settings size={20} />
+             <button onClick={() => onNavigate(AppView.APP_USER_MANAGEMENT)} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-[#9E7649]/20 text-[#E8DCCF] transition-colors border border-[#9E7649]/30">
+                <Settings size={18} />
              </button>
          </div>
       </header>
@@ -47,10 +76,9 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
       {/* Dashboard Content */}
       <main className="flex-1 w-full max-w-2xl mx-auto p-5 flex flex-col gap-6">
          
-         {/* Welcome */}
+         {/* Welcome (Simplified) */}
          <div>
-            <h2 className="text-sm text-stone-400 font-medium">Bienvenido al panel,</h2>
-            <p className="text-xl font-bold text-white">admincmnl</p>
+            <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
          </div>
 
          {/* CMNL Apps Grid */}
@@ -60,70 +88,36 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
               <AppButton 
                 icon={<CalendarDays size={20} />} 
                 label="Agenda" 
-                onClick={handleAgendaClick} 
+                onClick={() => handleExternalApp('https://rcmagenda.vercel.app/#/home')} 
               />
               <AppButton 
                 icon={<Music size={20} />} 
                 label="Música" 
-                onClick={() => onNavigate(AppView.APP_MUSICA)} 
+                onClick={() => handleExternalApp('https://rcm-musica.vercel.app/')} 
               />
               <AppButton 
                 icon={<FileText size={20} />} 
                 label="Guiones" 
-                onClick={() => onNavigate(AppView.APP_GUIONES)} 
+                onClick={() => handleExternalApp('https://guion-bd.vercel.app/')} 
               />
               <AppButton 
                 icon={<Podcast size={20} />} 
                 label="Progr." 
-                onClick={() => onNavigate(AppView.APP_PROGRAMACION)} 
+                onClick={() => handleExternalApp('https://rcm-programaci-n.vercel.app/')} 
               />
             </div>
          </div>
 
-         {/* Stats Card */}
-         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#3E1E16] to-[#2A150F] shadow-xl border border-[#9E7649]/20 p-5">
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#9E7649]/20 rounded-full blur-3xl pointer-events-none"></div>
-            
-            <div className="flex items-start justify-between mb-4 relative z-10">
-               <div>
-                  <h3 className="text-white text-lg font-bold">Gestionar Usuarios</h3>
-                  <p className="text-[#E8DCCF]/60 text-xs mt-0.5">Control de acceso y registros</p>
-               </div>
-               <span className="bg-[#9E7649]/20 text-[#9E7649] text-[10px] font-bold px-2 py-1 rounded border border-[#9E7649]/20">ADMIN</span>
-            </div>
-
-            <div className="flex items-center gap-3 mb-6 relative z-10">
-               <div className="flex -space-x-3">
-                  {[1, 2, 3].map((i) => (
-                      <div key={i} className="w-9 h-9 rounded-full ring-2 ring-[#3E1E16] overflow-hidden bg-stone-800">
-                          <img src={`https://i.pravatar.cc/150?img=${i + 10}`} alt="User" className="w-full h-full object-cover" />
-                      </div>
-                  ))}
-                  <div className="w-9 h-9 rounded-full ring-2 ring-[#3E1E16] bg-[#6B442A] flex items-center justify-center text-xs font-bold text-white z-10">
-                      +121
-                  </div>
-               </div>
-               <div className="flex flex-col">
-                  <span className="text-xl font-bold text-white leading-none">124</span>
-                  <span className="text-[10px] text-[#E8DCCF]/60 uppercase tracking-wide">Activos</span>
-               </div>
-            </div>
-
-            <div className="flex gap-3 relative z-10">
-               <button className="flex-1 h-10 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg flex items-center justify-center gap-2 text-sm font-bold shadow-lg transition-colors">
-                  <Users size={16} />
-                  <span>Ver Todos</span>
-               </button>
-               <button className="w-10 h-10 bg-[#6B442A] hover:bg-[#5D3A24] text-[#E8DCCF] rounded-lg flex items-center justify-center border border-white/5 transition-colors">
-                  <UserPlus size={18} />
-               </button>
-            </div>
-         </div>
-
-         {/* Today's Schedule */}
+         {/* Live Program Widget */}
          <div>
             <div className="flex items-center justify-between mb-3 px-1">
-               <h2 className="text-lg font-bold text-white">Programación de Hoy</h2>
+               <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                 <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                 </span>
+                 En el Aire
+               </h2>
                <button 
                   onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)}
                   className="text-[#9E7649] text-xs font-medium flex items-center gap-0.5 hover:text-[#B68D5D] transition-colors"
@@ -133,24 +127,22 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             </div>
 
             <div className="flex flex-col gap-3">
-               {/* Live Item */}
-               <div className="relative bg-[#2C1B15] rounded-xl overflow-hidden border border-[#9E7649]/10 group">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#9E7649]"></div>
-                  <div className="p-3 pl-4 flex items-center gap-4">
-                     <div className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-black shadow-inner">
-                        <img src="https://picsum.photos/id/453/200/200" alt="Show" className="w-full h-full object-cover opacity-80" />
-                        <div className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-red-600 rounded-full border-2 border-[#2C1B15] flex items-center justify-center shadow-sm">
-                           <Activity size={12} className="text-white" />
-                        </div>
+               <div className="relative bg-[#2C1B15] rounded-xl overflow-hidden border border-[#9E7649]/10 group shadow-lg">
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600"></div>
+                  <div className="p-4 pl-5 flex items-center gap-4">
+                     <div className="relative shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-black shadow-inner">
+                        <img src={currentProgram.image} alt={currentProgram.name} className="w-full h-full object-cover opacity-90" />
                      </div>
                      <div className="flex-1 min-w-0">
-                        <h4 className="text-white font-bold truncate text-sm">La Historia de Bayamo</h4>
-                        <p className="text-[#9E7649] text-xs font-medium mt-0.5">En Vivo • 10:00 AM - 12:00 PM</p>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-red-600/20 text-red-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-600/20 uppercase tracking-wider">En Vivo</span>
+                        </div>
+                        <h4 className="text-white font-bold text-lg leading-tight truncate">{currentProgram.name}</h4>
+                        <p className="text-[#9E7649] text-xs font-medium mt-1">{currentProgram.time}</p>
                      </div>
-                     <button className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-[#9E7649] transition-colors">
-                        <Play size={16} fill="currentColor" />
-                     </button>
                   </div>
+                  {/* Background blur effect */}
+                  <div className="absolute inset-0 z-[-1] opacity-20 bg-cover bg-center blur-xl" style={{ backgroundImage: `url(${currentProgram.image})` }}></div>
                </div>
             </div>
          </div>
@@ -158,7 +150,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
          {/* News */}
          <div onClick={() => onNavigate(AppView.SECTION_NEWS)} className="cursor-pointer">
             <h2 className="text-lg font-bold text-white mb-3 px-1">Noticias Recientes</h2>
-            <div className="rounded-xl bg-[#2C1B15] overflow-hidden shadow-sm border border-[#9E7649]/10">
+            <div className="rounded-xl bg-[#2C1B15] overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all">
                <div className="h-32 bg-cover bg-center" style={{ backgroundImage: "url('https://picsum.photos/id/234/600/300')" }}></div>
                <div className="p-4">
                   <div className="flex justify-between items-center mb-2">
@@ -183,25 +175,41 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
       {/* Mini Player */}
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 px-4 py-3 pb-safe-bottom">
          <div className="max-w-md mx-auto flex items-center gap-3">
-             <div className="w-10 h-10 rounded bg-stone-800 bg-cover bg-center shadow-md border border-[#9E7649]/30 shrink-0" style={{ backgroundImage: "url('https://picsum.photos/id/453/100/100')" }}></div>
+             <div className="w-10 h-10 rounded bg-stone-800 bg-cover bg-center shadow-md border border-[#9E7649]/30 shrink-0" style={{ backgroundImage: `url(${currentProgram.image})` }}></div>
              <div className="flex-1 min-w-0">
-                <p className="text-[#F5EFE6] text-sm font-bold truncate">La Historia de Bayamo</p>
-                <p className="text-[#9E7649] text-[10px] truncate">En el aire • 102.3 FM</p>
+                <p className="text-[#F5EFE6] text-sm font-bold truncate">{currentProgram.name}</p>
+                <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                    <p className="text-[#9E7649] text-[10px] truncate">102.3 FM • Señal en vivo</p>
+                </div>
              </div>
              <div className="flex items-center gap-3">
                 <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipBack size={20} fill="currentColor" className="opacity-50" /></button>
-                <button className="w-9 h-9 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 transition-all">
-                   <Pause size={18} fill="currentColor" />
+                <button 
+                  onClick={togglePlay}
+                  className="w-10 h-10 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 transition-all border border-white/10"
+                >
+                   {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
                 </button>
                 <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipForward size={20} fill="currentColor" className="opacity-50" /></button>
              </div>
          </div>
-         {/* Progress Bar */}
-         <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#6B442A]">
-             <div className="h-full bg-[#9E7649] w-1/3 relative">
-                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#F5EFE6] rounded-full shadow-sm"></div>
-             </div>
+         {/* Progress Bar (Indeterminate for Live) */}
+         <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#6B442A] overflow-hidden">
+            {isPlaying && (
+                <div className="absolute top-0 bottom-0 bg-[#9E7649] animate-progress-indeterminate"></div>
+            )}
          </div>
+         <style>{`
+            @keyframes progress-indeterminate {
+                0% { left: -30%; width: 30%; }
+                50% { left: 40%; width: 40%; }
+                100% { left: 100%; width: 30%; }
+            }
+            .animate-progress-indeterminate {
+                animation: progress-indeterminate 2s infinite linear;
+            }
+         `}</style>
       </div>
     </div>
   );

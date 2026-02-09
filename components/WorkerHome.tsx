@@ -8,9 +8,9 @@ interface Props {
 
 const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
   
-  const handleAgendaClick = () => {
+  const handleExternalApp = (url: string) => {
     // Navigate directly to trigger potential PWA/App interception by the OS
-    window.location.href = 'https://rcmagenda.vercel.app/#/home';
+    window.location.href = url;
   };
 
   return (
@@ -54,25 +54,25 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
             icon={<CalendarDays size={28} />} 
             label="Agenda" 
             subLabel="CMNL" 
-            onClick={handleAgendaClick}
+            onClick={() => handleExternalApp('https://rcmagenda.vercel.app/#/home')}
            />
            <MenuButton 
             icon={<Music size={28} />} 
             label="Música" 
             subLabel="CMNL" 
-            onClick={() => onNavigate(AppView.APP_MUSICA)}
+            onClick={() => handleExternalApp('https://rcm-musica.vercel.app/')}
            />
            <MenuButton 
             icon={<FileText size={28} />} 
             label="Guiones" 
             subLabel="CMNL" 
-            onClick={() => onNavigate(AppView.APP_GUIONES)}
+            onClick={() => handleExternalApp('https://guion-bd.vercel.app/')}
            />
            <MenuButton 
             icon={<Podcast size={28} />} 
             label="Programación" 
             subLabel="CMNL" 
-            onClick={() => onNavigate(AppView.APP_PROGRAMACION)}
+            onClick={() => handleExternalApp('https://rcm-programaci-n.vercel.app/')}
            />
         </div>
 

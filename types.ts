@@ -3,6 +3,7 @@ export enum AppView {
   LISTENER_HOME = 'LISTENER_HOME',
   WORKER_HOME = 'WORKER_HOME',
   ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
+  APP_USER_MANAGEMENT = 'APP_USER_MANAGEMENT',
   
   // CMNL Apps
   APP_AGENDA = 'APP_AGENDA',
@@ -24,4 +25,13 @@ export interface User {
   role: 'admin' | 'worker' | 'listener';
   name: string;
   avatar?: string;
+  mobile?: string;
+  password?: string;
+}
+
+export interface ProgramSchedule {
+  name: string;
+  start: string;
+  end: string;
+  days: number[]; // 0 = Sunday, 1 = Monday, etc.
 }
