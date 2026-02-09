@@ -14,8 +14,10 @@ const PublicLanding: React.FC<Props> = ({ onNavigate }) => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (username.toLowerCase() === 'admin') {
+      localStorage.setItem('rcm_user_session', 'admin');
       onNavigate(AppView.ADMIN_DASHBOARD);
     } else {
+      localStorage.setItem('rcm_user_session', 'worker');
       onNavigate(AppView.WORKER_HOME);
     }
   };

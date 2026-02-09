@@ -13,6 +13,11 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
     window.location.href = url;
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('rcm_user_session');
+    onNavigate(AppView.LANDING);
+  };
+
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white overflow-y-auto no-scrollbar">
       {/* Background Image overlay */}
@@ -88,7 +93,7 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
                     <p className="text-sm text-[#FFF8DC] font-medium">Operador de Audio</p>
                  </div>
               </div>
-              <button onClick={() => onNavigate(AppView.LANDING)} className="text-stone-400 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full">
+              <button onClick={handleLogout} className="text-stone-400 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full">
                  <LogOut size={20} />
               </button>
            </div>

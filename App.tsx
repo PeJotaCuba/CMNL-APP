@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView } from './types';
 import PublicLanding from './components/PublicLanding';
 import ListenerHome from './components/ListenerHome';
@@ -10,6 +10,16 @@ import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LANDING);
   const [history, setHistory] = useState<AppView[]>([]);
+
+  useEffect(() => {
+    // Check for persistent session
+    const sessionRole = localStorage.getItem('rcm_user_session');
+    if (sessionRole === 'admin') {
+      setCurrentView(AppView.ADMIN_DASHBOARD);
+    } else if (sessionRole === 'worker') {
+      setCurrentView(AppView.WORKER_HOME);
+    }
+  }, []);
 
   const handleNavigate = (view: AppView) => {
     setHistory((prev) => [...prev, currentView]);

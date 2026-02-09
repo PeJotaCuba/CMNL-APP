@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { AppView } from '../types';
-import { Settings, Play, Pause, Plus, ChevronRight, Activity, CalendarDays, Music, FileText, Podcast, SkipBack, SkipForward } from 'lucide-react';
+import { Settings, Play, Pause, Plus, ChevronRight, Activity, CalendarDays, Music, FileText, Podcast, SkipBack, SkipForward, LogOut } from 'lucide-react';
 import { getCurrentProgram } from '../utils/scheduleData';
 
 interface Props {
@@ -35,13 +35,18 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     window.location.href = url;
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('rcm_user_session');
+    onNavigate(AppView.LANDING);
+  };
+
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32 overflow-y-auto no-scrollbar">
       
       {/* Hidden Audio Element for Live Stream */}
       <audio 
         ref={audioRef} 
-        src="https://teveo.cu/live/audio/cBuF7RrzKPRNNV5q" 
+        src="https://icecast.teveo.cu/KR43FF7C" 
         preload="none"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
@@ -69,6 +74,9 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
              </div>
              <button onClick={() => onNavigate(AppView.APP_USER_MANAGEMENT)} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-[#9E7649]/20 text-[#E8DCCF] transition-colors border border-[#9E7649]/30">
                 <Settings size={18} />
+             </button>
+             <button onClick={handleLogout} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-red-900/40 text-[#E8DCCF] hover:text-red-400 transition-colors border border-[#9E7649]/30">
+                <LogOut size={18} />
              </button>
          </div>
       </header>
@@ -180,7 +188,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
                 <p className="text-[#F5EFE6] text-sm font-bold truncate">{currentProgram.name}</p>
                 <div className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                    <p className="text-[#9E7649] text-[10px] truncate">102.3 FM • Señal en vivo</p>
+                    <p className="text-[#9E7649] text-[10px] truncate">95.3 FM • Señal en vivo</p>
                 </div>
              </div>
              <div className="flex items-center gap-3">
