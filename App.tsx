@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppView, User, NewsItem, ChatMessage } from './types';
+import { AppView, User, NewsItem } from './types';
 import PublicLanding from './components/PublicLanding';
 import ListenerHome from './components/ListenerHome';
 import WorkerHome from './components/WorkerHome';
@@ -20,9 +20,6 @@ const App: React.FC = () => {
   const [aboutContent, setAboutContent] = useState<string>('');
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   
-  // Message State
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-
   // Auth State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -52,12 +49,6 @@ const App: React.FC = () => {
       }
     } else {
        setCurrentView(AppView.LISTENER_HOME);
-    }
-    
-    // Load messages
-    const storedMessages = localStorage.getItem('rcm_internal_messages');
-    if (storedMessages) {
-        setMessages(JSON.parse(storedMessages));
     }
   }, []);
 
@@ -123,23 +114,6 @@ const App: React.FC = () => {
     setHistory([]);
     setCurrentView(AppView.LISTENER_HOME);
   };
-  
-  const sendMessage = (to: string, content: string) => {
-      if (!currentUser) return;
-      
-      const newMessage: ChatMessage = {
-          id: Date.now().toString(),
-          from: currentUser.username,
-          to,
-          content,
-          timestamp: Date.now(),
-          read: false
-      };
-      
-      const updatedMessages = [...messages, newMessage];
-      setMessages(updatedMessages);
-      localStorage.setItem('rcm_internal_messages', JSON.stringify(updatedMessages));
-  };
 
   const togglePlay = () => {
     if (audioRef.current) {
@@ -198,9 +172,6 @@ const App: React.FC = () => {
                 news={news} 
                 currentUser={currentUser} 
                 onLogout={handleLogout}
-                users={users}
-                messages={messages}
-                onSendMessage={sendMessage}
             />
         );
       case AppView.ADMIN_DASHBOARD:
@@ -211,8 +182,6 @@ const App: React.FC = () => {
             users={users}
             currentUser={currentUser}
             onLogout={handleLogout}
-            messages={messages}
-            onSendMessage={sendMessage}
           />
         );
       case AppView.APP_USER_MANAGEMENT:

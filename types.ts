@@ -49,12 +49,3 @@ export interface NewsItem {
   date: string;
   category: string;
 }
-
-export interface ChatMessage {
-  id: string;
-  from: string; // username
-  to: string;   // username
-  content: string;
-  timestamp: number;
-  read: boolean;
-}
