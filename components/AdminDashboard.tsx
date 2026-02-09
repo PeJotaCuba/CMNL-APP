@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppView } from '../types';
-import { Settings, Users, UserPlus, Play, Bell, SkipBack, Pause, SkipForward, Plus, ChevronRight, Activity } from 'lucide-react';
+import { Settings, Users, UserPlus, Play, Bell, SkipBack, Pause, SkipForward, Plus, ChevronRight, Activity, CalendarDays, Music, FileText, Podcast } from 'lucide-react';
 
 interface Props {
   onNavigate: (view: AppView) => void;
@@ -8,14 +8,14 @@ interface Props {
 
 const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
   return (
-    <div className="relative min-h-screen bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32">
+    <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32 overflow-y-auto no-scrollbar">
       
       {/* Top Nav */}
       <nav className="bg-[#3E1E16] text-[#F5EFE6] px-4 py-2 flex items-center justify-center text-[10px] font-medium border-b border-[#9E7649]/20 tracking-wider uppercase sticky top-0 z-30">
         <div className="flex gap-6">
-          <span className="hover:text-[#9E7649] cursor-pointer transition-colors">Historia</span>
-          <span className="hover:text-[#9E7649] cursor-pointer transition-colors">Programación</span>
-          <span className="hover:text-[#9E7649] cursor-pointer transition-colors">Quiénes Somos</span>
+          <button onClick={() => onNavigate(AppView.SECTION_HISTORY)} className="hover:text-[#9E7649] cursor-pointer transition-colors">Historia</button>
+          <button onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} className="hover:text-[#9E7649] cursor-pointer transition-colors">Programación</button>
+          <button onClick={() => onNavigate(AppView.SECTION_ABOUT)} className="hover:text-[#9E7649] cursor-pointer transition-colors">Quiénes Somos</button>
         </div>
       </nav>
 
@@ -45,6 +45,33 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
          <div>
             <h2 className="text-sm text-stone-400 font-medium">Bienvenido al panel,</h2>
             <p className="text-xl font-bold text-white">admincmnl</p>
+         </div>
+
+         {/* CMNL Apps Grid (Added per requirement) */}
+         <div>
+            <h2 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest mb-3">Aplicaciones CMNL</h2>
+            <div className="grid grid-cols-4 gap-2">
+              <AppButton 
+                icon={<CalendarDays size={20} />} 
+                label="Agenda" 
+                onClick={() => onNavigate(AppView.APP_AGENDA)} 
+              />
+              <AppButton 
+                icon={<Music size={20} />} 
+                label="Música" 
+                onClick={() => onNavigate(AppView.APP_MUSICA)} 
+              />
+              <AppButton 
+                icon={<FileText size={20} />} 
+                label="Guiones" 
+                onClick={() => onNavigate(AppView.APP_GUIONES)} 
+              />
+              <AppButton 
+                icon={<Podcast size={20} />} 
+                label="Progr." 
+                onClick={() => onNavigate(AppView.APP_PROGRAMACION)} 
+              />
+            </div>
          </div>
 
          {/* Stats Card */}
@@ -91,7 +118,10 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
          <div>
             <div className="flex items-center justify-between mb-3 px-1">
                <h2 className="text-lg font-bold text-white">Programación de Hoy</h2>
-               <button className="text-[#9E7649] text-xs font-medium flex items-center gap-0.5 hover:text-[#B68D5D] transition-colors">
+               <button 
+                  onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)}
+                  className="text-[#9E7649] text-xs font-medium flex items-center gap-0.5 hover:text-[#B68D5D] transition-colors"
+                >
                   Ver guía <ChevronRight size={14} />
                </button>
             </div>
@@ -116,25 +146,11 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
                      </button>
                   </div>
                </div>
-
-               {/* Next Item */}
-               <div className="bg-[#2C1B15]/40 rounded-xl overflow-hidden border border-transparent p-3 flex items-center gap-4 hover:bg-[#2C1B15]/60 transition-colors">
-                   <div className="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-black/40 grayscale opacity-70">
-                        <img src="https://picsum.photos/id/145/200/200" alt="Show" className="w-full h-full object-cover" />
-                   </div>
-                   <div className="flex-1 min-w-0 opacity-60">
-                        <h4 className="text-white font-medium truncate text-sm">Trova Cubana</h4>
-                        <p className="text-[#E8DCCF]/50 text-xs mt-0.5">12:00 PM - 02:00 PM</p>
-                   </div>
-                   <button className="w-8 h-8 rounded-full flex items-center justify-center text-[#E8DCCF]/30 hover:text-[#E8DCCF]/60 transition-colors">
-                        <Bell size={16} />
-                   </button>
-               </div>
             </div>
          </div>
 
          {/* News */}
-         <div>
+         <div onClick={() => onNavigate(AppView.SECTION_NEWS)} className="cursor-pointer">
             <h2 className="text-lg font-bold text-white mb-3 px-1">Noticias Recientes</h2>
             <div className="rounded-xl bg-[#2C1B15] overflow-hidden shadow-sm border border-[#9E7649]/10">
                <div className="h-32 bg-cover bg-center" style={{ backgroundImage: "url('https://picsum.photos/id/234/600/300')" }}></div>
@@ -184,5 +200,12 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     </div>
   );
 };
+
+const AppButton = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => (
+    <button onClick={onClick} className="flex flex-col items-center justify-center bg-[#2C1B15] rounded-xl p-3 border border-white/5 hover:bg-[#3E1E16] transition-all">
+        <div className="text-[#9E7649] mb-1">{icon}</div>
+        <span className="text-[10px] text-[#F5EFE6] font-medium">{label}</span>
+    </button>
+);
 
 export default AdminDashboard;

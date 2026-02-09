@@ -8,7 +8,7 @@ interface Props {
 
 const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
   return (
-    <div className="relative flex min-h-screen w-full flex-col bg-[#1E1815] font-display text-stone-100 pb-24">
+    <div className="relative flex min-h-screen h-full w-full flex-col bg-[#1E1815] font-display text-stone-100 pb-24 overflow-y-auto no-scrollbar">
       {/* Header Pattern Background */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
 
@@ -29,7 +29,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
       <main className="flex-1 px-5 flex flex-col gap-4 relative z-10">
         
         {/* Card: Historia */}
-        <button className="group relative w-full h-32 overflow-hidden rounded-2xl shadow-lg hover:shadow-[#C69C6D]/10 transition-all">
+        <button onClick={() => onNavigate(AppView.SECTION_HISTORY)} className="group relative w-full h-32 overflow-hidden rounded-2xl shadow-lg hover:shadow-[#C69C6D]/10 transition-all">
           <div className="absolute inset-0 bg-[#3E1E16]/90 z-10"></div>
           <div className="absolute inset-0 bg-[url('https://picsum.photos/id/204/800/400')] bg-cover bg-center opacity-40 mix-blend-overlay group-hover:scale-105 transition-transform duration-700"></div>
           <div className="relative z-20 h-full flex items-center justify-between px-6">
@@ -47,7 +47,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
         </button>
 
         {/* Card: Programación */}
-        <button className="group relative w-full h-32 overflow-hidden rounded-2xl shadow-lg hover:shadow-[#C69C6D]/10 transition-all">
+        <button onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} className="group relative w-full h-32 overflow-hidden rounded-2xl shadow-lg hover:shadow-[#C69C6D]/10 transition-all">
           <div className="absolute inset-0 bg-[#C69C6D] z-10 opacity-95"></div>
           <div className="absolute inset-0 bg-[url('https://picsum.photos/id/1/800/400')] bg-cover bg-center opacity-20 mix-blend-multiply group-hover:scale-105 transition-transform duration-700"></div>
           <div className="relative z-20 h-full flex items-center justify-between px-6">
@@ -65,7 +65,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
         </button>
 
         {/* Card: Quienes Somos */}
-        <button className="group relative w-full h-32 overflow-hidden rounded-2xl shadow-lg hover:shadow-[#C69C6D]/10 transition-all">
+        <button onClick={() => onNavigate(AppView.SECTION_ABOUT)} className="group relative w-full h-32 overflow-hidden rounded-2xl shadow-lg hover:shadow-[#C69C6D]/10 transition-all">
           <div className="absolute inset-0 bg-[#2C2420] z-10 opacity-90"></div>
           <div className="absolute inset-0 bg-[url('https://picsum.photos/id/338/800/400')] bg-cover bg-center opacity-30 group-hover:scale-105 transition-transform duration-700"></div>
           <div className="relative z-20 h-full flex items-center justify-between px-6">
@@ -114,15 +114,15 @@ const ListenerHome: React.FC<Props> = ({ onNavigate }) => {
             <Home size={22} strokeWidth={2.5} />
             <span className="text-[9px] font-bold uppercase tracking-wide">Inicio</span>
           </button>
-          <button className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
+          <button onClick={() => onNavigate(AppView.SECTION_NEWS)} className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
             <Newspaper size={22} />
             <span className="text-[9px] font-medium uppercase tracking-wide">Noticias</span>
           </button>
-          <button className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
+          <button onClick={() => onNavigate(AppView.SECTION_PODCAST)} className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
             <Podcast size={22} />
             <span className="text-[9px] font-medium uppercase tracking-wide">Podcast</span>
           </button>
-          <button className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
+          <button onClick={() => onNavigate(AppView.SECTION_PROFILE)} className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
             <User size={22} />
             <span className="text-[9px] font-medium uppercase tracking-wide">Perfil</span>
           </button>

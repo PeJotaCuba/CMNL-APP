@@ -8,7 +8,7 @@ interface Props {
 
 const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
   return (
-    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white">
+    <div className="relative flex min-h-screen h-full w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white overflow-y-auto no-scrollbar">
       {/* Background Image overlay */}
       <div 
         className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center mix-blend-overlay" 
@@ -19,9 +19,9 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
       {/* Top Nav */}
       <nav className="relative z-20 w-full px-6 py-6 flex justify-center items-center border-b border-white/5 bg-[#2a1b12]/50 backdrop-blur-sm sticky top-0">
         <div className="flex space-x-8 text-sm font-medium text-[#FFF8DC]/80">
-           <span className="hover:text-white cursor-pointer">Historia</span>
-           <span className="hover:text-white cursor-pointer">Programación</span>
-           <span className="hover:text-white cursor-pointer">Quiénes Somos</span>
+           <button onClick={() => onNavigate(AppView.SECTION_HISTORY)} className="hover:text-white cursor-pointer transition-colors">Historia</button>
+           <button onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} className="hover:text-white cursor-pointer transition-colors">Programación</button>
+           <button onClick={() => onNavigate(AppView.SECTION_ABOUT)} className="hover:text-white cursor-pointer transition-colors">Quiénes Somos</button>
         </div>
       </nav>
 
@@ -42,12 +42,32 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
            </div>
         </div>
 
-        {/* Grid Menu */}
+        {/* Grid Menu - Now Functional */}
         <div className="w-full grid grid-cols-2 gap-4 mb-10">
-           <MenuButton icon={<CalendarDays size={28} />} label="Agenda" subLabel="CMNL" />
-           <MenuButton icon={<Music size={28} />} label="Música" subLabel="CMNL" />
-           <MenuButton icon={<FileText size={28} />} label="Guiones" subLabel="CMNL" />
-           <MenuButton icon={<Podcast size={28} />} label="Programación" subLabel="CMNL" />
+           <MenuButton 
+            icon={<CalendarDays size={28} />} 
+            label="Agenda" 
+            subLabel="CMNL" 
+            onClick={() => onNavigate(AppView.APP_AGENDA)}
+           />
+           <MenuButton 
+            icon={<Music size={28} />} 
+            label="Música" 
+            subLabel="CMNL" 
+            onClick={() => onNavigate(AppView.APP_MUSICA)}
+           />
+           <MenuButton 
+            icon={<FileText size={28} />} 
+            label="Guiones" 
+            subLabel="CMNL" 
+            onClick={() => onNavigate(AppView.APP_GUIONES)}
+           />
+           <MenuButton 
+            icon={<Podcast size={28} />} 
+            label="Programación" 
+            subLabel="CMNL" 
+            onClick={() => onNavigate(AppView.APP_PROGRAMACION)}
+           />
         </div>
 
         {/* Footer User Info */}
@@ -76,8 +96,8 @@ const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
   );
 };
 
-const MenuButton = ({ icon, label, subLabel }: { icon: React.ReactNode, label: string, subLabel: string }) => (
-  <button className="group flex flex-col items-center justify-center aspect-square bg-[#3e2723]/40 hover:bg-[#3e2723] border border-white/5 hover:border-[#CD853F]/30 rounded-2xl p-4 transition-all duration-300 hover:-translate-y-1 shadow-lg hover:shadow-[#CD853F]/10">
+const MenuButton = ({ icon, label, subLabel, onClick }: { icon: React.ReactNode, label: string, subLabel: string, onClick: () => void }) => (
+  <button onClick={onClick} className="group flex flex-col items-center justify-center aspect-square bg-[#3e2723]/40 hover:bg-[#3e2723] border border-white/5 hover:border-[#CD853F]/30 rounded-2xl p-4 transition-all duration-300 hover:-translate-y-1 shadow-lg hover:shadow-[#CD853F]/10">
      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#8B4513] to-[#A0522D] flex items-center justify-center mb-3 shadow-inner group-hover:scale-110 transition-transform duration-300 text-white">
         {icon}
      </div>
