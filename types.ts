@@ -1,5 +1,5 @@
 export enum AppView {
-  LANDING = 'LANDING',
+  LANDING = 'LANDING', // Now acts as Login View
   LISTENER_HOME = 'LISTENER_HOME',
   WORKER_HOME = 'WORKER_HOME',
   ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
@@ -21,10 +21,13 @@ export enum AppView {
   SECTION_PROFILE = 'SECTION_PROFILE',
 }
 
+export type UserClassification = 'Director' | 'Asesor' | 'Realizador de sonido' | 'Locutor' | 'Administrador' | 'Usuario';
+
 export interface User {
   username: string;
   role: 'admin' | 'worker' | 'listener';
   name: string;
+  classification?: UserClassification;
   avatar?: string;
   mobile?: string;
   password?: string;

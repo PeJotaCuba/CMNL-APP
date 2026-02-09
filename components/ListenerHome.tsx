@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem } from '../types';
-import { ScrollText, Mic, Users, Play, Home, Newspaper, Podcast, User, ChevronRight } from 'lucide-react';
+import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, ChevronRight, ChevronLeft, LogIn } from 'lucide-react';
+import { LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
@@ -10,28 +11,47 @@ interface Props {
 const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
-  // Carousel logic
   useEffect(() => {
     if (news.length > 1) {
       const interval = setInterval(() => {
         setCurrentNewsIndex((prev) => (prev + 1) % Math.min(news.length, 5));
-      }, 5000); // 5 seconds rotation
+      }, 5000); 
       return () => clearInterval(interval);
+    } else {
+        setCurrentNewsIndex(0);
     }
   }, [news]);
 
   const displayedNews = news.slice(0, 5);
   const activeNews = displayedNews[currentNewsIndex];
 
+  const nextNews = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % displayedNews.length);
+  };
+
+  const prevNews = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + displayedNews.length) % displayedNews.length);
+  };
+
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col bg-[#1E1815] font-display text-stone-100 pb-24 overflow-y-auto no-scrollbar">
       {/* Header Pattern Background */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
 
+      {/* Auth Button Top Right */}
+      <button 
+        onClick={() => onNavigate(AppView.LANDING)}
+        className="absolute top-4 right-4 z-20 p-2 text-stone-500 hover:text-[#C69C6D] transition-colors bg-black/20 rounded-full backdrop-blur-sm"
+      >
+        <LogIn size={20} />
+      </button>
+
       {/* Header */}
       <header className="flex flex-col items-center justify-center pt-8 pb-6 px-6 relative z-10">
-        <div className="w-20 h-20 mb-4 rounded-full bg-[#2C2420] border border-[#C69C6D]/20 flex items-center justify-center shadow-2xl">
-           <span className="text-[#C69C6D]"><Mic size={32} /></span>
+        <div className="w-20 h-20 mb-4 rounded-2xl bg-white shadow-2xl overflow-hidden p-0">
+           <img src={LOGO_URL} alt="Radio Ciudad" className="w-full h-full object-cover" />
         </div>
         <h1 className="text-xl font-serif font-bold text-center text-[#C69C6D] tracking-wide">
           Radio Ciudad Monumento
@@ -99,10 +119,22 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
         </button>
 
         {/* News Carousel */}
-        {activeNews && (
+        {activeNews ? (
             <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="mt-2 relative rounded-xl bg-[#2C2420] border border-white/5 overflow-hidden shadow-lg h-40 cursor-pointer group">
                 <div className="absolute inset-0 bg-cover bg-center opacity-60 transition-transform duration-1000 group-hover:scale-105" style={{backgroundImage: `url(${activeNews.image})`}}></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+                
+                {displayedNews.length > 1 && (
+                    <>
+                        <button onClick={prevNews} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 p-1 rounded-full text-white/70 hover:text-white z-20 transition-colors">
+                            <ChevronLeft size={24} />
+                        </button>
+                        <button onClick={nextNews} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 p-1 rounded-full text-white/70 hover:text-white z-20 transition-colors">
+                            <ChevronRight size={24} />
+                        </button>
+                    </>
+                )}
+
                 <div className="absolute bottom-0 left-0 right-0 p-4">
                     <div className="flex items-center justify-between mb-1">
                         <span className="text-[9px] font-bold uppercase tracking-widest text-[#C69C6D] bg-black/50 px-2 py-0.5 rounded">{activeNews.category}</span>
@@ -116,6 +148,10 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
                     <p className="text-[10px] text-stone-300 mt-0.5 line-clamp-1">{activeNews.content}</p>
                 </div>
             </div>
+        ) : (
+            <div className="mt-2 rounded-xl bg-[#2C2420] border border-white/5 h-40 flex items-center justify-center">
+                <p className="text-xs text-stone-500">No hay noticias recientes</p>
+            </div>
         )}
 
       </main>
@@ -123,7 +159,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 w-full bg-[#1E1815]/95 backdrop-blur-xl border-t border-white/5 pb-safe pt-2 px-6 z-50">
         <div className="flex justify-around items-center h-16">
-          <button onClick={() => onNavigate(AppView.LANDING)} className="flex flex-col items-center gap-1.5 text-[#C69C6D]">
+          <button onClick={() => onNavigate(AppView.LISTENER_HOME)} className="flex flex-col items-center gap-1.5 text-[#C69C6D]">
             <Home size={22} strokeWidth={2.5} />
             <span className="text-[9px] font-bold uppercase tracking-wide">Inicio</span>
           </button>
@@ -136,7 +172,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
             <span className="text-[9px] font-medium uppercase tracking-wide">Podcast</span>
           </button>
           <button onClick={() => onNavigate(AppView.SECTION_PROFILE)} className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
-            <User size={22} />
+            <UserIcon size={22} />
             <span className="text-[9px] font-medium uppercase tracking-wide">Perfil</span>
           </button>
         </div>

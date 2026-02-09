@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { AppView, NewsItem } from '../types';
-import { Settings, Plus, ChevronRight, CalendarDays, Music, FileText, Podcast, LogOut, Upload, Trash2 } from 'lucide-react';
-import { getCurrentProgram } from '../utils/scheduleData';
+import { AppView, NewsItem, User } from '../types';
+import { Settings, ChevronRight, CalendarDays, Music, FileText, Podcast, LogOut, MessageCircle, X } from 'lucide-react';
+import { getCurrentProgram, LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
-  setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
+  users: User[]; // Needed to find admin number
+  currentUser: User | null;
+  onLogout: () => void;
 }
 
-const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
+const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser, onLogout }) => {
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+  const [showFabMenu, setShowFabMenu] = useState(false);
 
   useEffect(() => {
-    // Update program every minute
     const interval = setInterval(() => {
       setCurrentProgram(getCurrentProgram());
     }, 60000);
@@ -24,53 +26,12 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
     window.location.href = url;
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('rcm_user_session');
-    onNavigate(AppView.LANDING);
-  };
-
-  const handleNewsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        parseAndAddNews(text);
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const parseAndAddNews = (text: string) => {
-    // Parse format: Titular: ... Autor: ... Texto: ...
-    const titleMatch = text.match(/Titular:\s*([\s\S]*?)(?=\nAutor:|$)/i);
-    const authorMatch = text.match(/Autor:\s*([\s\S]*?)(?=\nTexto:|$)/i);
-    const contentMatch = text.match(/Texto:\s*([\s\S]*)/i);
-
-    if (titleMatch && contentMatch) {
-      const newNews: NewsItem = {
-        id: Date.now().toString(),
-        title: titleMatch[1].trim(),
-        author: authorMatch ? authorMatch[1].trim() : 'Redacción',
-        content: contentMatch[1].trim(),
-        date: 'Ahora mismo',
-        category: 'Boletín',
-        image: 'https://picsum.photos/600/300?random=' + Date.now()
-      };
-      setNews(prev => [newNews, ...prev]);
-      alert('Noticia cargada correctamente.');
-    } else {
-      alert('Formato de noticia incorrecto. Asegúrese de usar Titular:, Autor:, Texto:');
-    }
-  };
-
-  const clearNews = () => {
-    if(confirm("¿Estás seguro de borrar todas las noticias?")) {
-        setNews([]);
-    }
-  };
-
   const latestNews = news.length > 0 ? news[0] : null;
+
+  const getAdminPhone = () => {
+    const admin = users.find(u => u.username === 'admin');
+    return admin?.mobile ? `53${admin.mobile}` : '';
+  };
 
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-32 overflow-y-auto no-scrollbar">
@@ -87,18 +48,25 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
       {/* Header */}
       <header className="sticky top-[33px] z-20 bg-[#1A100C]/95 backdrop-blur-md px-5 py-4 flex items-center justify-between border-b border-[#9E7649]/10 shadow-sm">
          <div className="flex flex-col">
-            <h1 className="text-white font-black text-lg leading-none tracking-tight">RADIO CIUDAD <br/><span className="text-[#9E7649]">MONUMENTO</span></h1>
-            <p className="text-[10px] text-[#9E7649]/80 italic mt-1 font-serif">Voz de la segunda villa cubana</p>
+            <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white p-0.5 overflow-hidden">
+                    <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
+                </div>
+                <div>
+                    <h1 className="text-white font-black text-lg leading-none tracking-tight">RADIO CIUDAD <br/><span className="text-[#9E7649]">MONUMENTO</span></h1>
+                    <p className="text-[10px] text-[#9E7649]/80 italic mt-0.5 font-serif">Voz de la segunda villa cubana</p>
+                </div>
+            </div>
          </div>
          <div className="flex items-center gap-3">
              <div className="text-right">
-                <p className="text-xs font-bold text-white">Pedro José Reyes</p>
-                <p className="text-[10px] text-[#9E7649]">Administrador</p>
+                <p className="text-xs font-bold text-white">{currentUser?.name || 'Admin'}</p>
+                <p className="text-[10px] text-[#9E7649]">{currentUser?.classification || 'Administrador'}</p>
              </div>
              <button onClick={() => onNavigate(AppView.APP_USER_MANAGEMENT)} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-[#9E7649]/20 text-[#E8DCCF] transition-colors border border-[#9E7649]/30">
                 <Settings size={18} />
              </button>
-             <button onClick={handleLogout} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-red-900/40 text-[#E8DCCF] hover:text-red-400 transition-colors border border-[#9E7649]/30">
+             <button onClick={onLogout} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-red-900/40 text-[#E8DCCF] hover:text-red-400 transition-colors border border-[#9E7649]/30">
                 <LogOut size={18} />
              </button>
          </div>
@@ -162,7 +130,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600"></div>
                   <div className="p-4 pl-5 flex items-center gap-4">
                      
-                     {/* Vector Visualization instead of Image */}
+                     {/* Vector Visualization */}
                      <div className="relative shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center border border-white/5">
                         <div className="flex gap-1 h-8 items-end">
                             <div className="w-1 bg-[#9E7649] animate-[soundbar_0.8s_ease-in-out_infinite]"></div>
@@ -187,19 +155,10 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
             </div>
          </div>
 
-         {/* News Management for Admin */}
+         {/* News Preview (Read-only for Admin, upload moved to Settings) */}
          <div>
             <div className="flex justify-between items-center mb-3 px-1">
-                 <h2 className="text-lg font-bold text-white">Gestión Noticias</h2>
-                 <div className="flex gap-2">
-                     <label className="bg-[#9E7649] hover:bg-[#8B653D] text-white p-2 rounded-lg cursor-pointer transition-colors shadow-md">
-                        <Upload size={16} />
-                        <input type="file" accept=".txt" onChange={handleNewsUpload} className="hidden" />
-                     </label>
-                     <button onClick={clearNews} className="bg-red-900/40 hover:bg-red-900/60 text-red-300 p-2 rounded-lg transition-colors border border-red-900/20">
-                        <Trash2 size={16} />
-                     </button>
-                 </div>
+                 <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
             </div>
 
             {latestNews ? (
@@ -216,17 +175,40 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
                 </div>
             ) : (
                 <div className="p-6 bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 text-center text-xs text-[#E8DCCF]/50">
-                    No hay noticias cargadas.
+                    No hay noticias cargadas. Ir a Ajustes para gestionar.
                 </div>
             )}
          </div>
          
       </main>
 
-      {/* FAB */}
-      <div className="fixed bottom-24 right-5 z-40">
-         <button className="w-14 h-14 rounded-full bg-[#9E7649] text-white shadow-xl shadow-[#6B442A]/40 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all">
-            <Plus size={28} />
+      {/* FAB - Message Menu */}
+      <div className="fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
+         {showFabMenu && (
+             <div className="flex flex-col gap-3 animate-fade-in-up">
+                 <a 
+                    href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                 >
+                    Unirse a Comunidad CMNL
+                 </a>
+                 <a 
+                    href={`https://wa.me/${getAdminPhone()}`}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                 >
+                    Escribir a administradores
+                 </a>
+             </div>
+         )}
+         <button 
+            onClick={() => setShowFabMenu(!showFabMenu)}
+            className="w-14 h-14 rounded-full bg-[#9E7649] text-white shadow-xl shadow-[#6B442A]/40 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         >
+            {showFabMenu ? <X size={28} /> : <MessageCircle size={28} />}
          </button>
       </div>
       
@@ -234,6 +216,13 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, setNews }) => {
         @keyframes soundbar {
             0%, 100% { height: 10%; }
             50% { height: 100%; }
+        }
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fade-in-up 0.2s ease-out forwards;
         }
       `}</style>
     </div>

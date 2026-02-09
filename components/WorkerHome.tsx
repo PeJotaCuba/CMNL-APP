@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { AppView, NewsItem } from '../types';
+import { AppView, NewsItem, User } from '../types';
 import { Radio, CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon } from 'lucide-react';
+import { LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
+  currentUser: User | null;
+  onLogout: () => void;
 }
 
-const WorkerHome: React.FC<Props> = ({ onNavigate, news }) => {
+const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
   // Carousel logic
@@ -26,11 +29,6 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news }) => {
   const handleExternalApp = (url: string) => {
     // Navigate directly to trigger potential PWA/App interception by the OS
     window.location.href = url;
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('rcm_user_session');
-    onNavigate(AppView.LANDING);
   };
 
   return (
@@ -57,8 +55,8 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news }) => {
         {/* Branding */}
         <div className="flex flex-col items-center justify-center mt-6 mb-12 space-y-4">
            <div className="relative w-28 h-28 flex items-center justify-center">
-              <div className="bg-white/5 p-6 rounded-[2rem] border border-white/10 backdrop-blur-md shadow-2xl shadow-black/40">
-                 <Radio size={48} className="text-[#CD853F]" />
+              <div className="bg-white p-0 rounded-[2rem] border border-white/10 backdrop-blur-md shadow-2xl shadow-black/40 overflow-hidden">
+                 <img src={LOGO_URL} alt="Radio Ciudad" className="w-full h-full object-cover" />
               </div>
            </div>
            <div className="text-center">
@@ -121,10 +119,11 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news }) => {
                  </div>
                  <div>
                     <p className="text-[10px] text-stone-400 uppercase tracking-wide">Usuario conectado</p>
-                    <p className="text-sm text-[#FFF8DC] font-medium">Operador de Audio</p>
+                    <p className="text-sm text-[#FFF8DC] font-medium">{currentUser?.name}</p>
+                    <p className="text-xs text-[#CD853F]">{currentUser?.classification || 'Trabajador'}</p>
                  </div>
               </div>
-              <button onClick={handleLogout} className="text-stone-400 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full">
+              <button onClick={onLogout} className="text-stone-400 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full">
                  <LogOut size={20} />
               </button>
            </div>
