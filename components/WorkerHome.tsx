@@ -9,7 +9,8 @@ interface Props {
 const WorkerHome: React.FC<Props> = ({ onNavigate }) => {
   
   const handleAgendaClick = () => {
-    window.open('https://rcmagenda.vercel.app/#/home', '_blank');
+    // Navigate directly to trigger potential PWA/App interception by the OS
+    window.location.href = 'https://rcmagenda.vercel.app/#/home';
   };
 
   return (
