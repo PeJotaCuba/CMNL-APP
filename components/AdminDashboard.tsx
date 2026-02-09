@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from 'react';
-import { AppView, NewsItem, User } from '../types';
-import { Settings, ChevronRight, CalendarDays, Music, FileText, Podcast, LogOut, MessageCircle, X } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { AppView, NewsItem, User, ChatMessage } from '../types';
+import { Settings, ChevronRight, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare, X, ArrowLeft, Send } from 'lucide-react';
 import { getCurrentProgram, LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
-  users: User[]; // Needed to find admin number
+  users: User[]; 
   currentUser: User | null;
   onLogout: () => void;
+  messages?: ChatMessage[];
+  onSendMessage?: (to: string, content: string) => void;
 }
 
-const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser, onLogout }) => {
+const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser, onLogout, messages = [], onSendMessage }) => {
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
-  const [showFabMenu, setShowFabMenu] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatUser, setChatUser] = useState<User | null>(null);
+  const [messageText, setMessageText] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -22,15 +27,40 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+      if (showChat && chatUser) {
+          chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+  }, [showChat, chatUser, messages]);
+
   const handleExternalApp = (url: string) => {
     window.location.href = url;
   };
 
   const latestNews = news.length > 0 ? news[0] : null;
 
-  const getAdminPhone = () => {
-    const admin = users.find(u => u.username === 'admin');
-    return admin?.mobile ? `53${admin.mobile}` : '';
+  // Chat Logic
+  const handleSendMessage = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (messageText.trim() && chatUser && onSendMessage) {
+          onSendMessage(chatUser.username, messageText);
+          setMessageText('');
+      }
+  };
+
+  const isUserOnline = (username: string) => {
+      if (username === 'admin' || username === 'lissell') return true;
+      if (username === currentUser?.username) return true;
+      const sum = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      return sum % 3 === 0;
+  };
+
+  const getConversation = () => {
+      if (!chatUser || !currentUser) return [];
+      return messages.filter(m => 
+        (m.from === currentUser.username && m.to === chatUser.username) || 
+        (m.from === chatUser.username && m.to === currentUser.username)
+      ).sort((a,b) => a.timestamp - b.timestamp);
   };
 
   return (
@@ -53,7 +83,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
                     <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                    <h1 className="text-white font-black text-lg leading-none tracking-tight">RADIO CIUDAD <br/><span className="text-[#9E7649]">MONUMENTO</span></h1>
+                    <h1 className="text-white font-black text-lg leading-none tracking-tight">CMNL App</h1>
                     <p className="text-[10px] text-[#9E7649]/80 italic mt-0.5 font-serif">Voz de la segunda villa cubana</p>
                 </div>
             </div>
@@ -61,7 +91,10 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
          <div className="flex items-center gap-3">
              <div className="text-right">
                 <p className="text-xs font-bold text-white">{currentUser?.name || 'Admin'}</p>
-                <p className="text-[10px] text-[#9E7649]">{currentUser?.classification || 'Administrador'}</p>
+                <p className="text-[10px] text-[#9E7649] flex items-center justify-end gap-1">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    {currentUser?.classification || 'Administrador'}
+                </p>
              </div>
              <button onClick={() => onNavigate(AppView.APP_USER_MANAGEMENT)} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-[#9E7649]/20 text-[#E8DCCF] transition-colors border border-[#9E7649]/30">
                 <Settings size={18} />
@@ -76,8 +109,11 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
       <main className="flex-1 w-full max-w-2xl mx-auto p-5 flex flex-col gap-6">
          
          {/* Welcome (Simplified) */}
-         <div>
+         <div className="flex justify-between items-center">
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
+            <button onClick={() => setShowChat(true)} className="flex items-center gap-2 text-xs font-bold bg-[#3E1E16] px-3 py-1.5 rounded-full border border-[#9E7649]/20 hover:bg-[#9E7649]/20 transition-colors text-[#9E7649]">
+                <MessageSquare size={14} /> Mensajería Interna
+            </button>
          </div>
 
          {/* CMNL Apps Grid */}
@@ -155,7 +191,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
             </div>
          </div>
 
-         {/* News Preview (Read-only for Admin, upload moved to Settings) */}
+         {/* News Preview */}
          <div>
             <div className="flex justify-between items-center mb-3 px-1">
                  <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
@@ -182,35 +218,101 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
          
       </main>
 
-      {/* FAB - Message Menu */}
-      <div className="fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
-         {showFabMenu && (
-             <div className="flex flex-col gap-3 animate-fade-in-up">
-                 <a 
-                    href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
-                 >
-                    Unirse a Comunidad CMNL
-                 </a>
-                 <a 
-                    href={`https://wa.me/${getAdminPhone()}`}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
-                 >
-                    Escribir a administradores
-                 </a>
-             </div>
-         )}
-         <button 
-            onClick={() => setShowFabMenu(!showFabMenu)}
-            className="w-14 h-14 rounded-full bg-[#9E7649] text-white shadow-xl shadow-[#6B442A]/40 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
-         >
-            {showFabMenu ? <X size={28} /> : <MessageCircle size={28} />}
-         </button>
-      </div>
+      {/* FAB - Worker Group */}
+      <a 
+         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+         target="_blank" 
+         rel="noopener noreferrer"
+         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         title="Grupo de Trabajo WhatsApp"
+      >
+         <MessageSquare size={28} fill="white" />
+      </a>
+
+      {/* Internal Chat Modal */}
+      {showChat && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4">
+              <div className="bg-[#1A100C] w-full sm:w-[400px] h-[80vh] sm:h-[600px] rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl border border-[#9E7649]/20 overflow-hidden">
+                  {/* Chat Header */}
+                  <div className="bg-[#3E1E16] p-4 flex items-center justify-between border-b border-[#9E7649]/20">
+                      {chatUser ? (
+                          <div className="flex items-center gap-3">
+                              <button onClick={() => setChatUser(null)} className="text-[#E8DCCF] hover:text-white"><ArrowLeft size={20} /></button>
+                              <div>
+                                  <h3 className="font-bold text-white text-sm">{chatUser.name}</h3>
+                                  <span className="text-[10px] text-[#9E7649]">{isUserOnline(chatUser.username) ? 'En línea' : 'Desconectado'}</span>
+                              </div>
+                          </div>
+                      ) : (
+                          <h3 className="font-bold text-white">Mensajería Interna</h3>
+                      )}
+                      <button onClick={() => {setShowChat(false); setChatUser(null);}} className="text-[#E8DCCF]/50 hover:text-white"><X size={24} /></button>
+                  </div>
+
+                  {/* Chat Content */}
+                  <div className="flex-1 overflow-y-auto bg-[#2a1b12]">
+                      {!chatUser ? (
+                          // User List
+                          <div className="p-2">
+                              {users?.filter(u => u.username !== currentUser?.username).map((u, i) => (
+                                  <div key={i} onClick={() => setChatUser(u)} className="p-3 flex items-center gap-3 hover:bg-white/5 rounded-lg cursor-pointer transition-colors border-b border-white/5">
+                                      <div className="relative">
+                                          <div className="w-10 h-10 rounded-full bg-[#3E1E16] flex items-center justify-center text-[#9E7649] font-bold border border-[#9E7649]/20">
+                                              {u.username.substring(0,2).toUpperCase()}
+                                          </div>
+                                          {isUserOnline(u.username) && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border border-[#2a1b12] rounded-full"></div>}
+                                      </div>
+                                      <div>
+                                          <h4 className="text-sm font-medium text-[#E8DCCF]">{u.name}</h4>
+                                          <p className="text-[10px] text-[#9E7649]">{u.classification || 'Usuario'}</p>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      ) : (
+                          // Conversation View
+                          <div className="p-4 flex flex-col gap-3 min-h-full">
+                              {getConversation().length === 0 && (
+                                  <div className="text-center text-[#E8DCCF]/30 text-xs mt-10">No hay mensajes previos.</div>
+                              )}
+                              {getConversation().map((msg, i) => {
+                                  const isMe = msg.from === currentUser?.username;
+                                  return (
+                                      <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                          <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${isMe ? 'bg-[#9E7649] text-white rounded-br-none' : 'bg-[#3E1E16] text-[#E8DCCF] rounded-bl-none border border-[#9E7649]/20'}`}>
+                                              <p>{msg.content}</p>
+                                              <span className={`text-[9px] block mt-1 ${isMe ? 'text-black/30' : 'text-white/30'}`}>
+                                                  {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                              </span>
+                                          </div>
+                                      </div>
+                                  );
+                              })}
+                              <div ref={chatEndRef}></div>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* Chat Input */}
+                  {chatUser && (
+                      <div className="p-3 bg-[#3E1E16] border-t border-[#9E7649]/20">
+                          <form onSubmit={handleSendMessage} className="flex gap-2">
+                              <input 
+                                  type="text" 
+                                  value={messageText} 
+                                  onChange={(e) => setMessageText(e.target.value)}
+                                  placeholder="Escribir mensaje..."
+                                  className="flex-1 bg-[#1A100C] border border-[#9E7649]/30 rounded-full px-4 text-sm text-white focus:outline-none focus:border-[#9E7649]"
+                              />
+                              <button type="submit" disabled={!messageText.trim()} className="w-10 h-10 rounded-full bg-[#9E7649] flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                                  <Send size={18} />
+                              </button>
+                          </form>
+                      </div>
+                  )}
+              </div>
+          </div>
+      )}
       
       <style>{`
         @keyframes soundbar {

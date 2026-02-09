@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X } from 'lucide-react';
 import { NewsItem } from '../types';
 
 interface ViewProps {
@@ -12,7 +12,10 @@ interface ViewProps {
 }
 
 export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
+  const [showFabMenu, setShowFabMenu] = useState(false);
   const isProgramming = title.includes('Programación');
+  // Logic to show FAB on specific public views (History, About, Programming)
+  const showListenerFab = title.includes('Historia') || title.includes('Quiénes Somos') || title.includes('Programación');
 
   // Specific Layout for News Detail
   if (newsItem) {
@@ -107,6 +110,48 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
           </div>
         )}
       </div>
+
+      {/* Floating WhatsApp Menu for Listener Views */}
+      {showListenerFab && (
+          <div className="fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
+             {showFabMenu && (
+                 <div className="flex flex-col gap-3 animate-fade-in-up">
+                     <a 
+                        href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                     >
+                        Unirse a Comunidad CMNL
+                     </a>
+                     <a 
+                        href="https://wa.me/5354413935"
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                     >
+                        Escribir a administradores
+                     </a>
+                 </div>
+             )}
+             <button 
+                onClick={() => setShowFabMenu(!showFabMenu)}
+                className="w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+             >
+                {showFabMenu ? <X size={28} /> : <MessageCircle size={30} fill="white" />}
+             </button>
+             
+             <style>{`
+                @keyframes fade-in-up {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in-up {
+                    animation: fade-in-up 0.2s ease-out forwards;
+                }
+             `}</style>
+          </div>
+      )}
     </div>
   );
 };
