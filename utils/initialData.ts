@@ -1,4 +1,4 @@
-{
+export const appData = {
   "users": [
     {
       "name": "Pedro José Reyes Acuña",
@@ -158,4 +158,4 @@
       "image": ""
     }
   ]
-}
+};

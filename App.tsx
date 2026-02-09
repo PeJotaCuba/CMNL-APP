@@ -6,18 +6,18 @@ import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
 import UserManagement from './components/UserManagement';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
-import { INITIAL_USERS, INITIAL_NEWS, getCurrentProgram } from './utils/scheduleData';
+import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram } from './utils/scheduleData';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
   const [history, setHistory] = useState<AppView[]>([]);
   
-  // Global Data State
+  // Global Data State - Initialized from JSON via utils
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [news, setNews] = useState<NewsItem[]>(INITIAL_NEWS);
-  const [historyContent, setHistoryContent] = useState<string>('');
-  const [aboutContent, setAboutContent] = useState<string>('');
+  const [historyContent, setHistoryContent] = useState<string>(INITIAL_HISTORY);
+  const [aboutContent, setAboutContent] = useState<string>(INITIAL_ABOUT);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   
   // Auth State
