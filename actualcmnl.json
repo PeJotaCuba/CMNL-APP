@@ -149,13 +149,31 @@
   "aboutContent": "",
   "news": [
     {
-      "id": "1770626805628",
+      "id": "17707638435010.4228980378792705",
       "title": "Peloteras de Granma, virtuales clasificadas a la final nacional tras aplastante victoria",
       "author": "Humberto Zamora Fajardo",
-      "content": "El equipo de béisbol femenino de Granma dio un paso firme hacia la final nacional al noquear 16 x 1 a sus homólogas de Guantánamo este viernes. La abrumadora victoria, concretada en cinco entradas con Adriana Carrazana como lanzadora principal, coloca a las dirigidas por el profesor Anibal Ferrer Pérez en una posición de privilegio.\r\n\r\nEl partido se disputó contra un rival distinto al inicialmente previsto. El calendario original las enfrentaba a Santiago de Cuba, anfitrionas de la fase. Sin embargo, un juego suspendido por lluvia entre Santiago y Guantánamo, que debió concluirse en la mañana del viernes, obligó al cambio de oponente a última hora. Las granmenses no se inmutaron y desplegaron un poderoso ofensivo.\r\n\r\nEste triunfo, sumado al knockout que ellas mismas propinaron a Holguín el jueves y a los resultados favorables del resto de la jornada (Holguín venció a Santiago de Cuba, y esta última derrotó a Guantánamo), las sitúa como virtuales clasificadas. Aunque deben cerrar la fase este sábado contra las santiagueras, la combinación de resultados hace matemáticamente muy difícil que cualquier otro equipo pueda desplazarlas de su puesto. La gran final del campeonato nacional se jugará próximamente en Bayamo.",
-      "date": "Ahora mismo",
-      "category": "Boletín",
-      "image": "https://picsum.photos/600/300?random=1770626805628"
+      "content": "El equipo de béisbol femenino de Granma dio un paso firme hacia la final nacional al noquear 16 x 1 a sus homólogas de Guantánamo este viernes. La abrumadora victoria, concretada en cinco entradas con Adriana Carrazana como lanzadora principal, coloca a las dirigidas por el profesor Anibal Ferrer Pérez en una posición de privilegio.\n\nEl partido se disputó contra un rival distinto al inicialmente previsto. El calendario original las enfrentaba a Santiago de Cuba, anfitrionas de la fase. Sin embargo, un juego suspendido por lluvia entre Santiago y Guantánamo, que debió concluirse en la mañana del viernes, obligó al cambio de oponente a última hora. Las granmenses no se inmutaron y desplegaron un poderoso ofensivo.\n\nEste triunfo, sumado al knockout que ellas mismas propinaron a Holguín el jueves y a los resultados favorables del resto de la jornada (Holguín venció a Santiago de Cuba, y esta última derrotó a Guantánamo), las sitúa como virtuales clasificadas. Aunque deben cerrar la fase este sábado contra las santiagueras, la combinación de resultados hace matemáticamente muy difícil que cualquier otro equipo pueda desplazarlas de su puesto. La gran final del campeonato nacional se jugará próximamente en Bayamo.",
+      "date": "Reciente",
+      "category": "Noticia",
+      "image": ""
+    },
+    {
+      "id": "17707638435010.2619619882021118",
+      "title": "Fiesta de goles en Bayamo cierra intercambio futbolístico con Rafael Freyre",
+      "author": "Humberto Zamora Fajardo",
+      "content": "La cancha del Combinado Deportivo Jesús Menéndez de Bayamo fue el escenario este domingo de un vibrante intercambio amistoso entre equipos de fútbol comunitario. Los conjuntos bayameses, con raíces en el equipo Larguero, recibieron a sus homólogos del municipio holguinero de Rafael Freyre, en una jornada marcada por muchos goles y una gran confraternización, repitiendo el formato de un encuentro similar jugado el mes pasado en tierras holguineras.\n\nLos anfitriones se mostraron \"descorteses\" y se llevaron la victoria en los dos partidos disputados. En la apertura, el equipo denominado Larguero B (Preselección de la Sexta Copa Interbarrios) se impuso 2x0 al similar de Freyre B, con anotaciones de Lázaro Benny Tamayo López y Aldo Cedeño Chávez. El duelo de cierre, sin embargo, fue el más emocionante. El Larguero A logró una espectacular remontada para vencer 4x3. Aunque al descanso perdían 3x1, gracias a un hat-trick inicial del talentoso Nelson Rojas de la visita, los locales reaccionaron en el segundo tiempo. Un veterano, Ruslán Batista, había descontado en la primera parte. La heroína de la remontada fue el joven Alexandro Hechavarría, autor de un triplete en el complemento (minutos 65, 70 y 73), sentenciando el partido con una gran actuación.\n\nEl evento, coordinado por figuras como el internacional Alejandro Marrero y el técnico Yoandris Jorge Vázquez (organizador de la Copa Interbarrios que inicia su sexta edición el 15 de febrero), demostró el alto nivel y la pasión que el fútbol genera a nivel de base, trascendiendo lo deportivo para contribuir a la felicidad y unidad comunitaria.",
+      "date": "Reciente",
+      "category": "Noticia",
+      "image": ""
+    },
+    {
+      "id": "17707638435010.6312941060467867",
+      "title": "Avanzan labores de recuperación en áreas agrícolas dañadas por el huracán Melissa en polo Cautillo",
+      "author": "Humberto Zamora Fajardo",
+      "content": "A pesar de la escasez de recursos, se encuentra en proceso la recuperación de una parte importante de las 1,500 hectáreas afectadas por el huracán Melissa en el polo productivo Cautillo. Según declaraciones en exclusiva a Radio Ciudad Monumento de Rogelio Hernández Montero, director de la Empresa Agroindustrial Bayamo, los cultivos más dañados fueron el plátano, la yuca y el boniato.\n\nPara enfrentar la situación crítica, se han implementado varias estrategias. En el caso del plátano, se está aprovechando la misma semilla rescatada de las plantaciones arrasadas por el meteoro. Paralelamente, se han sembrado varias hectáreas de boniato, un cultivo de ciclo corto, con el objetivo inmediato de paliar la afectación en la producción de alimentos.\n\nHernández Montero reconoció que las labores recuperativas se realizan en condiciones muy difíciles, principalmente por la falta de combustible y otros insumos esenciales. No obstante, el trabajo continúa con la previsión de que este proceso de recuperación pueda concluir en la próxima campaña de primavera, la cual se estima que alcance su punto crucial aproximadamente entre los meses de julio y agosto. Este esfuerzo busca restablecer la capacidad productiva de una zona agrícola clave para el territorio.",
+      "date": "Reciente",
+      "category": "Noticia",
+      "image": ""
     }
   ]
 }
