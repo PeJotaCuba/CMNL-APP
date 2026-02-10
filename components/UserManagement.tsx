@@ -338,6 +338,104 @@ const UserManagement: React.FC<Props> = ({
                 </div>
             </div>
         )}
+
+        {/* Content Management Tab - FIXED: Added Logic for displaying content management sections */}
+        {activeTab === 'content' && (
+          <div className="p-6 max-w-4xl mx-auto grid gap-8 animate-in fade-in duration-300">
+            
+            {/* Historia Section */}
+            <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-lg">
+               <div className="flex items-center gap-4 mb-4 border-b border-[#9E7649]/10 pb-4">
+                  <div className="p-3 bg-[#9E7649]/20 rounded-xl text-[#9E7649]">
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Historia de la Emisora</h3>
+                    <p className="text-xs text-[#E8DCCF]/60">Visible en la sección pública "Historia"</p>
+                  </div>
+               </div>
+               
+               <div className="bg-black/20 p-4 rounded-lg mb-6 text-sm text-[#E8DCCF]/80 max-h-40 overflow-y-auto whitespace-pre-wrap border border-white/5 font-mono leading-relaxed">
+                  {historyContent || <span className="italic opacity-50">No hay contenido definido actualmente.</span>}
+               </div>
+
+               <label className="group flex items-center justify-center gap-3 w-full py-4 border-2 border-dashed border-[#9E7649]/30 rounded-xl hover:bg-[#9E7649]/5 cursor-pointer transition-all hover:border-[#9E7649]">
+                  <Upload size={20} className="text-[#9E7649] group-hover:scale-110 transition-transform" />
+                  <span className="text-[#9E7649] font-bold text-sm">Cargar archivo .TXT (Historia)</span>
+                  <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'history')} className="hidden" />
+               </label>
+            </div>
+
+            {/* About Section */}
+            <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-lg">
+               <div className="flex items-center gap-4 mb-4 border-b border-[#9E7649]/10 pb-4">
+                  <div className="p-3 bg-[#9E7649]/20 rounded-xl text-[#9E7649]">
+                    <Info size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Quiénes Somos</h3>
+                    <p className="text-xs text-[#E8DCCF]/60">Visible en la sección pública "Quiénes Somos"</p>
+                  </div>
+               </div>
+
+               <div className="bg-black/20 p-4 rounded-lg mb-6 text-sm text-[#E8DCCF]/80 max-h-40 overflow-y-auto whitespace-pre-wrap border border-white/5 font-mono leading-relaxed">
+                  {aboutContent || <span className="italic opacity-50">No hay contenido definido actualmente.</span>}
+               </div>
+
+               <label className="group flex items-center justify-center gap-3 w-full py-4 border-2 border-dashed border-[#9E7649]/30 rounded-xl hover:bg-[#9E7649]/5 cursor-pointer transition-all hover:border-[#9E7649]">
+                  <Upload size={20} className="text-[#9E7649] group-hover:scale-110 transition-transform" />
+                  <span className="text-[#9E7649] font-bold text-sm">Cargar archivo .TXT (Quiénes Somos)</span>
+                  <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'about')} className="hidden" />
+               </label>
+            </div>
+
+            {/* News Section */}
+            <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-lg">
+               <div className="flex items-center gap-4 mb-4 border-b border-[#9E7649]/10 pb-4">
+                  <div className="p-3 bg-[#9E7649]/20 rounded-xl text-[#9E7649]">
+                    <Newspaper size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Gestión de Noticias</h3>
+                    <p className="text-xs text-[#E8DCCF]/60">Carga masiva de noticias y boletines</p>
+                  </div>
+               </div>
+
+               <div className="flex flex-col md:flex-row gap-6 mb-6">
+                   <div className="flex-1 bg-[#1A100C] p-4 rounded-lg border border-white/5">
+                      <p className="text-xs text-[#9E7649] font-bold mb-3 uppercase tracking-wide flex items-center gap-2">
+                        <FileText size={14}/> Formato Requerido (.txt)
+                      </p>
+                      <code className="text-[10px] text-[#E8DCCF]/70 font-mono block whitespace-pre bg-black/30 p-3 rounded border border-white/5">
+                        Titular: Título de la noticia{'\n'}
+                        Autor: Nombre del periodista{'\n'}
+                        Texto: Cuerpo de la noticia...{'\n'}
+                        ___{'\n'}
+                        (Separador de 3 guiones bajos)
+                      </code>
+                   </div>
+                   
+                   <div className="flex-1 flex flex-col justify-center items-center bg-[#1A100C] p-4 rounded-lg border border-white/5">
+                      <span className="text-xs text-[#E8DCCF]/60 mb-1">Noticias en sistema</span>
+                      <span className="text-4xl font-bold text-white mb-4">{news.length}</span>
+                      <button 
+                        onClick={() => {if(confirm('¿Está seguro de eliminar todas las noticias?')) setNews([])}} 
+                        className="text-xs text-red-400 hover:text-red-300 bg-red-900/20 hover:bg-red-900/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 border border-red-900/30"
+                      >
+                        <Trash2 size={14}/> Eliminar todas
+                      </button>
+                   </div>
+               </div>
+
+               <label className="group flex items-center justify-center gap-3 w-full py-4 border-2 border-dashed border-[#9E7649]/30 rounded-xl hover:bg-[#9E7649]/5 cursor-pointer transition-all hover:border-[#9E7649]">
+                  <Upload size={20} className="text-[#9E7649] group-hover:scale-110 transition-transform" />
+                  <span className="text-[#9E7649] font-bold text-sm">Importar archivo .TXT (Noticias)</span>
+                  <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'news')} className="hidden" />
+               </label>
+            </div>
+
+          </div>
+        )}
       </div>
     </div>
   );
