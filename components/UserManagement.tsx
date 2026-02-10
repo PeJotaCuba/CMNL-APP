@@ -118,32 +118,65 @@ const UserManagement: React.FC<Props> = ({
   };
 
   const parseAndAddNews = (text: string) => {
-    // Split by lines of underscores which act as separators
-    const blocks = text.split(/_+/);
+    // Normalize line endings to avoid issues with different OS files
+    const normalizedText = text.replace(/\r\n/g, '\n');
+    
+    // Split by lines that are just underscores (3 or more) to avoid splitting valid text containing underscores.
+    // If no strict separators found, falls back to the simpler check but encourages correct formatting.
+    // This Regex looks for newlines surrounding underscores.
+    const blocks = normalizedText.split(/\n\s*_{3,}\s*\n/);
+    
+    // Fallback: If split resulted in 1 block but text implies multiple (heuristic), try simple split
+    // But for now, let's assume valid separators.
+    
     const parsedNews: NewsItem[] = [];
     let count = 0;
 
     blocks.forEach(block => {
         if (!block.trim()) return;
 
-        const titleMatch = block.match(/Titular:\s*([\s\S]*?)(?=\nAutor:|$)/i);
-        const authorMatch = block.match(/Autor:\s*([\s\S]*?)(?=\nTexto:|$)/i);
-        const contentMatch = block.match(/Texto:\s*([\s\S]*)/i);
+        // Use indexOf + substring instead of Regex for more robustness with large multi-line text bodies
+        const titleKey = "Titular:";
+        const authorKey = "Autor:";
+        const textKey = "Texto:";
 
-        if (titleMatch && contentMatch) {
-            const title = titleMatch[1].trim();
-            const content = contentMatch[1].trim();
+        const titleIndex = block.indexOf(titleKey);
+        const textIndex = block.indexOf(textKey);
+
+        if (titleIndex !== -1 && textIndex !== -1) {
+            // Find Author if it exists
+            const authorIndex = block.indexOf(authorKey);
             
-            parsedNews.push({
-                id: Date.now().toString() + Math.random().toString(),
-                title: title,
-                author: authorMatch ? authorMatch[1].trim() : 'Redacción',
-                content: content,
-                date: 'Reciente',
-                category: detectCategory(title + ' ' + content),
-                image: '' // Force empty to avoid old vector logic if it was present
-            });
-            count++;
+            // Extract Title
+            // Ends at Author (if present and before text) OR at Text (if Author missing)
+            let titleEnd = textIndex;
+            if (authorIndex !== -1 && authorIndex > titleIndex && authorIndex < textIndex) {
+                titleEnd = authorIndex;
+            }
+            const title = block.substring(titleIndex + titleKey.length, titleEnd).trim();
+
+            // Extract Author
+            let author = "Redacción";
+            if (authorIndex !== -1 && authorIndex > titleIndex && authorIndex < textIndex) {
+                author = block.substring(authorIndex + authorKey.length, textIndex).trim();
+            }
+
+            // Extract Content
+            // Takes everything from "Texto:" to the end of the block string
+            const content = block.substring(textIndex + textKey.length).trim();
+
+            if (title && content) {
+                 parsedNews.push({
+                    id: Date.now().toString() + Math.random().toString(),
+                    title: title,
+                    author: author,
+                    content: content,
+                    date: 'Reciente',
+                    category: detectCategory(title + ' ' + content),
+                    image: '' // Force empty to avoid old vector logic if it was present
+                });
+                count++;
+            }
         }
     });
 
@@ -152,7 +185,7 @@ const UserManagement: React.FC<Props> = ({
       setNews(parsedNews);
       alert(`Se han cargado ${count} noticias correctamente. La lista anterior ha sido reemplazada.`);
     } else {
-      alert('No se encontraron noticias con el formato válido. Asegúrese de separar las noticias con guiones bajos (____) y usar Titular:, Autor:, Texto:');
+      alert('No se encontraron noticias válidas. Use el formato:\nTitular: ...\nAutor: ...\nTexto: ...\n____ (separador)');
     }
   };
 
@@ -301,80 +334,6 @@ const UserManagement: React.FC<Props> = ({
                             </div>
                             <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'users')} className="hidden" />
                         </label>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {activeTab === 'content' && (
-            <div className="p-6 bg-[#1A100C]">
-                <h2 className="text-sm font-bold text-[#9E7649] uppercase tracking-wider mb-6">Carga de Contenido</h2>
-                
-                <div className="grid gap-6 max-w-2xl mx-auto pb-12">
-                    {/* History Section */}
-                    <div className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-[#9E7649]/10 flex items-center justify-center text-[#9E7649]">
-                                <FileText size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-white font-bold">Sección Historia</h3>
-                                <p className="text-xs text-[#E8DCCF]/60">Texto para "Nuestra Historia"</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                             <label className="flex-1 bg-[#3E1E16] hover:bg-[#4E2A20] text-[#E8DCCF] py-3 rounded-lg border border-[#9E7649]/20 cursor-pointer flex items-center justify-center gap-2 transition-colors">
-                                <Upload size={16} /> Cargar TXT
-                                <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'history')} className="hidden" />
-                             </label>
-                             <button onClick={() => {setHistoryContent(''); alert('Historia borrada');}} className="px-4 bg-red-900/20 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/20">
-                                <Trash2 size={16} />
-                             </button>
-                        </div>
-                    </div>
-
-                    {/* About Section */}
-                    <div className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-[#9E7649]/10 flex items-center justify-center text-[#9E7649]">
-                                <Info size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-white font-bold">Sección Quiénes Somos</h3>
-                                <p className="text-xs text-[#E8DCCF]/60">Texto institucional</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                             <label className="flex-1 bg-[#3E1E16] hover:bg-[#4E2A20] text-[#E8DCCF] py-3 rounded-lg border border-[#9E7649]/20 cursor-pointer flex items-center justify-center gap-2 transition-colors">
-                                <Upload size={16} /> Cargar TXT
-                                <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'about')} className="hidden" />
-                             </label>
-                             <button onClick={() => {setAboutContent(''); alert('Quiénes Somos borrado');}} className="px-4 bg-red-900/20 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/20">
-                                <Trash2 size={16} />
-                             </button>
-                        </div>
-                    </div>
-
-                    {/* News Section */}
-                    <div className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-full bg-[#9E7649]/10 flex items-center justify-center text-[#9E7649]">
-                                <Newspaper size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-white font-bold">Sección Noticias</h3>
-                                <p className="text-xs text-[#E8DCCF]/60">Carga múltiple (separadas por ____)</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                             <label className="flex-1 bg-[#3E1E16] hover:bg-[#4E2A20] text-[#E8DCCF] py-3 rounded-lg border border-[#9E7649]/20 cursor-pointer flex items-center justify-center gap-2 transition-colors">
-                                <Upload size={16} /> Cargar TXT
-                                <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'news')} className="hidden" />
-                             </label>
-                             <button onClick={() => {setNews([]); alert('Noticias borradas');}} className="px-4 bg-red-900/20 hover:bg-red-900/40 text-red-400 rounded-lg border border-red-900/20">
-                                <Trash2 size={16} />
-                             </button>
-                        </div>
                     </div>
                 </div>
             </div>
