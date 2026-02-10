@@ -26,6 +26,7 @@ const App: React.FC = () => {
   // Player State
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
 
@@ -146,6 +147,49 @@ const App: React.FC = () => {
       }
   };
 
+  // Logic to sync from GitHub (Used by Users and Admins)
+  const handleCloudSync = async () => {
+      if(isSyncing) return;
+      
+      const confirmSync = window.confirm('¿Desea actualizar los datos (Noticias, Parrilla, Usuarios) desde la nube?');
+      if(!confirmSync) return;
+
+      setIsSyncing(true);
+      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/actualcmnl.json';
+
+      try {
+          const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
+          if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+          
+          const json = await response.json();
+          let changes = 0;
+
+          if (json.users && Array.isArray(json.users)) {
+            setUsers(json.users);
+            changes++;
+          }
+          if (typeof json.historyContent === 'string') {
+            setHistoryContent(json.historyContent);
+            changes++;
+          }
+          if (typeof json.aboutContent === 'string') {
+            setAboutContent(json.aboutContent);
+            changes++;
+          }
+          if (json.news && Array.isArray(json.news)) {
+            setNews(json.news);
+            changes++;
+          }
+
+          alert('¡Sincronización completada! Los datos están actualizados.');
+      } catch (error) {
+          console.error("Sync Error:", error);
+          alert('Error de conexión. No se pudieron obtener los datos más recientes.');
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
   // Determine if Player should be visible
   const isAppView = currentView.startsWith('APP_') && currentView !== AppView.APP_USER_MANAGEMENT;
   const isLoginScreen = currentView === AppView.LANDING; 
@@ -164,7 +208,7 @@ const App: React.FC = () => {
             }
         }} />;
       case AppView.LISTENER_HOME:
-        return <ListenerHome onNavigate={handleNavigate} news={news} />;
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} />;
       case AppView.WORKER_HOME:
         return (
             <WorkerHome 
@@ -172,6 +216,8 @@ const App: React.FC = () => {
                 news={news} 
                 currentUser={currentUser} 
                 onLogout={handleLogout}
+                onSync={handleCloudSync}
+                isSyncing={isSyncing}
             />
         );
       case AppView.ADMIN_DASHBOARD:
@@ -217,7 +263,7 @@ const App: React.FC = () => {
       case AppView.SECTION_ABOUT:
         return <PlaceholderView title="Quiénes Somos" subtitle="Nuestro equipo y misión" onBack={handleBack} customContent={aboutContent} />;
       case AppView.SECTION_NEWS:
-        return <ListenerHome onNavigate={handleNavigate} news={news} />; 
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} />; 
       case AppView.SECTION_NEWS_DETAIL:
         return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} newsItem={selectedNews} />;
       case AppView.SECTION_PODCAST:
@@ -226,7 +272,7 @@ const App: React.FC = () => {
         return <PlaceholderView title="Mi Perfil" subtitle="Configuración de usuario" onBack={handleBack} />;
         
       default:
-        return <ListenerHome onNavigate={handleNavigate} news={news} />;
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} />;
     }
   };
 

@@ -57,7 +57,12 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
   };
 
   const handleExternalApp = (url: string) => {
-    window.location.href = url;
+    let finalUrl = url;
+    if (currentUser) {
+        const separator = url.includes('?') ? '&' : '?';
+        finalUrl = `${url}${separator}username=${encodeURIComponent(currentUser.username)}&password=${encodeURIComponent(currentUser.password || '')}`;
+    }
+    window.location.href = finalUrl;
   };
 
   return (

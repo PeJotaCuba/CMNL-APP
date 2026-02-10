@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem, User } from '../types';
-import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
@@ -8,6 +8,8 @@ interface Props {
   news: NewsItem[];
   currentUser: User | null;
   onLogout: () => void;
+  onSync: () => void;
+  isSyncing: boolean;
 }
 
 const newsColors = [
@@ -19,7 +21,7 @@ const newsColors = [
   'bg-[#263238]', // Dark Blue Grey
 ];
 
-const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }) => {
+const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout, onSync, isSyncing }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
   // Carousel logic
@@ -48,8 +50,14 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
   };
   
   const handleExternalApp = (url: string) => {
-    // Navigate directly to trigger potential PWA/App interception by the OS
-    window.location.href = url;
+    // Append credentials for auto-login if user is present
+    let finalUrl = url;
+    if (currentUser) {
+        // Check if URL already has query params
+        const separator = url.includes('?') ? '&' : '?';
+        finalUrl = `${url}${separator}username=${encodeURIComponent(currentUser.username)}&password=${encodeURIComponent(currentUser.password || '')}`;
+    }
+    window.location.href = finalUrl;
   };
 
   return (
@@ -62,12 +70,21 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
       <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#2a1b12]/90 via-[#2a1b12]/80 to-[#2a1b12] pointer-events-none fixed"></div>
 
       {/* Top Nav */}
-      <nav className="relative z-20 w-full px-6 py-6 flex justify-center items-center border-b border-white/5 bg-[#2a1b12]/50 backdrop-blur-sm sticky top-0">
-        <div className="flex space-x-8 text-sm font-medium text-[#FFF8DC]/80">
+      <nav className="relative z-20 w-full px-6 py-6 flex justify-between items-center border-b border-white/5 bg-[#2a1b12]/50 backdrop-blur-sm sticky top-0">
+        <div className="flex space-x-6 text-sm font-medium text-[#FFF8DC]/80">
            <button onClick={() => onNavigate(AppView.SECTION_HISTORY)} className="hover:text-white cursor-pointer transition-colors">Historia</button>
            <button onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} className="hover:text-white cursor-pointer transition-colors">Programación</button>
-           <button onClick={() => onNavigate(AppView.SECTION_ABOUT)} className="hover:text-white cursor-pointer transition-colors">Quiénes Somos</button>
         </div>
+        
+        {/* Sync Button */}
+        <button 
+            onClick={onSync} 
+            disabled={isSyncing}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-[#CD853F] px-3 py-1.5 rounded-full text-xs font-bold transition-all disabled:opacity-50"
+        >
+            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Sincronizar</span>
+        </button>
       </nav>
 
       {/* Main Content */}

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem } from '../types';
-import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, ChevronRight, ChevronLeft, LogIn, MessageCircle, X } from 'lucide-react';
+import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, ChevronRight, ChevronLeft, LogIn, MessageCircle, X, RefreshCw } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
+  onSync?: () => void;
+  isSyncing?: boolean;
 }
 
 const newsColors = [
@@ -17,7 +19,7 @@ const newsColors = [
   'bg-[#263238]', // Dark Blue Grey
 ];
 
-const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
+const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
 
@@ -50,13 +52,24 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
       {/* Header Pattern Background */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
 
-      {/* Auth Button Top Right */}
-      <button 
-        onClick={() => onNavigate(AppView.LANDING)}
-        className="absolute top-4 right-4 z-20 p-2 text-stone-500 hover:text-[#C69C6D] transition-colors bg-black/20 rounded-full backdrop-blur-sm"
-      >
-        <LogIn size={20} />
-      </button>
+      {/* Buttons Top Right */}
+      <div className="absolute top-4 right-4 z-20 flex gap-2">
+         {onSync && (
+             <button 
+                onClick={onSync}
+                disabled={isSyncing}
+                className="p-2 text-stone-500 hover:text-[#C69C6D] transition-colors bg-black/20 rounded-full backdrop-blur-sm disabled:opacity-50"
+             >
+                <RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} />
+             </button>
+         )}
+         <button 
+            onClick={() => onNavigate(AppView.LANDING)}
+            className="p-2 text-stone-500 hover:text-[#C69C6D] transition-colors bg-black/20 rounded-full backdrop-blur-sm"
+         >
+            <LogIn size={20} />
+         </button>
+      </div>
 
       {/* Header */}
       <header className="flex flex-col items-center justify-center pt-8 pb-6 px-6 relative z-10">
