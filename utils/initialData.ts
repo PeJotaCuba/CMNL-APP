@@ -149,12 +149,30 @@ export const appData = {
   "aboutContent": "",
   "news": [
     {
-      "id": "1770626805628",
+      "id": "1",
       "title": "Peloteras de Granma, virtuales clasificadas a la final nacional tras aplastante victoria",
       "author": "Humberto Zamora Fajardo",
-      "content": "El equipo de béisbol femenino de Granma dio un paso firme hacia la final nacional al noquear 16 x 1 a sus homólogas de Guantánamo este viernes. La abrumadora victoria, concretada en cinco entradas con Adriana Carrazana como lanzadora principal, coloca a las dirigidas por el profesor Anibal Ferrer Pérez en una posición de privilegio.\r\n\r\nEl partido se disputó contra un rival distinto al inicialmente previsto. El calendario original las enfrentaba a Santiago de Cuba, anfitrionas de la fase. Sin embargo, un juego suspendido por lluvia entre Santiago y Guantánamo, que debió concluirse en la mañana del viernes, obligó al cambio de oponente a última hora. Las granmenses no se inmutaron y desplegaron un poderoso ofensivo.\r\n\r\nEste triunfo, sumado al knockout que ellas mismas propinaron a Holguín el jueves y a los resultados favorables del resto de la jornada (Holguín venció a Santiago de Cuba, y esta última derrotó a Guantánamo), las sitúa como virtuales clasificadas. Aunque deben cerrar la fase este sábado contra las santiagueras, la combinación de resultados hace matemáticamente muy difícil que cualquier otro equipo pueda desplazarlas de su puesto. La gran final del campeonato nacional se jugará próximamente en Bayamo.",
+      "content": "El equipo de béisbol femenino de Granma dio un paso firme hacia la final nacional al noquear 16 x 1 a sus homólogas de Guantánamo este viernes. La abrumadora victoria, concretada en cinco entradas con Adriana Carrazana como lanzadora principal, coloca a las dirigidas por el profesor Anibal Ferrer Pérez en una posición de privilegio. El partido se disputó contra un rival distinto al inicialmente previsto...",
       "date": "Ahora mismo",
       "category": "Deportes",
+      "image": ""
+    },
+    {
+      "id": "2",
+      "title": "Fiesta de goles en Bayamo cierra intercambio futbolístico con Rafael Freyre",
+      "author": "Humberto Zamora Fajardo",
+      "content": "La cancha del Combinado Deportivo Jesús Menéndez de Bayamo fue el escenario este domingo de un vibrante intercambio amistoso entre equipos de fútbol comunitario. Los conjuntos bayameses, con raíces en el equipo Larguero, recibieron a sus homólogos del municipio holguinero de Rafael Freyre...",
+      "date": "Ahora mismo",
+      "category": "Deportes",
+      "image": ""
+    },
+    {
+      "id": "3",
+      "title": "Avanzan labores de recuperación en áreas agrícolas dañadas por el huracán Melissa en polo Cautillo",
+      "author": "Humberto Zamora Fajardo",
+      "content": "A pesar de la escasez de recursos, se encuentra en proceso la recuperación de una parte importante de las 1,500 hectáreas afectadas por el huracán Melissa en el polo productivo Cautillo. Según declaraciones en exclusiva a Radio Ciudad Monumento de Rogelio Hernández Montero...",
+      "date": "Ahora mismo",
+      "category": "Economía",
       "image": ""
     }
   ]

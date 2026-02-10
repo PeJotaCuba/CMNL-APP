@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem, User } from '../types';
-import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare } from 'lucide-react';
+import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
@@ -25,6 +25,16 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
 
   const displayedNews = news.slice(0, 5);
   const activeNews = displayedNews[currentNewsIndex];
+
+  const nextNews = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % displayedNews.length);
+  };
+
+  const prevNews = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + displayedNews.length) % displayedNews.length);
+  };
   
   const handleExternalApp = (url: string) => {
     // Navigate directly to trigger potential PWA/App interception by the OS
@@ -96,7 +106,7 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
 
         {/* News Carousel (Worker View) */}
         {activeNews && (
-            <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="w-full mb-8 cursor-pointer group">
+            <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="w-full mb-8 cursor-pointer group relative">
                 <div className="bg-[#3e2723]/60 rounded-xl p-4 border border-white/5 backdrop-blur-sm hover:border-[#CD853F]/30 transition-all">
                     <h3 className="text-[#CD853F] text-xs font-bold uppercase tracking-widest mb-2">Noticias Recientes</h3>
                     <div className="flex gap-4 items-center">
@@ -107,6 +117,18 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
                         </div>
                     </div>
                 </div>
+
+                {/* Arrows */}
+                {displayedNews.length > 1 && (
+                    <>
+                        <button onClick={prevNews} className="absolute -left-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-1.5 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
+                            <ChevronLeft size={20} />
+                        </button>
+                        <button onClick={nextNews} className="absolute -right-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-1.5 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
+                            <ChevronRight size={20} />
+                        </button>
+                    </>
+                )}
             </div>
         )}
 

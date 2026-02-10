@@ -50,7 +50,6 @@ const UserManagement: React.FC<Props> = ({
   const startEditUser = (user: User) => {
     setNewUser(user);
     setIsEditing(true);
-    // Scroll to form on mobile if needed, though with new layout it's just below
   };
 
   const removeUser = (username: string) => {
@@ -113,25 +112,50 @@ const UserManagement: React.FC<Props> = ({
     }
   };
 
-  const parseAndAddNews = (text: string) => {
-    const titleMatch = text.match(/Titular:\s*([\s\S]*?)(?=\nAutor:|$)/i);
-    const authorMatch = text.match(/Autor:\s*([\s\S]*?)(?=\nTexto:|$)/i);
-    const contentMatch = text.match(/Texto:\s*([\s\S]*)/i);
+  const detectCategory = (text: string): string => {
+      const t = text.toLowerCase();
+      if (t.includes('pelota') || t.includes('beisbol') || t.includes('futbol') || t.includes('gol') || t.includes('deporte')) return 'Deportes';
+      if (t.includes('cultura') || t.includes('arte') || t.includes('musica') || t.includes('concierto')) return 'Cultura';
+      if (t.includes('agricultura') || t.includes('siembra') || t.includes('cosecha') || t.includes('campesino')) return 'Economía';
+      if (t.includes('lluvia') || t.includes('huracan') || t.includes('sismo')) return 'Clima';
+      return 'Boletín';
+  };
 
-    if (titleMatch && contentMatch) {
-      const newNews: NewsItem = {
-        id: Date.now().toString(),
-        title: titleMatch[1].trim(),
-        author: authorMatch ? authorMatch[1].trim() : 'Redacción',
-        content: contentMatch[1].trim(),
-        date: 'Ahora mismo',
-        category: 'Boletín',
-        image: 'https://picsum.photos/600/300?random=' + Date.now()
-      };
-      setNews(prev => [newNews, ...prev]);
-      alert('Noticia cargada correctamente.');
+  const parseAndAddNews = (text: string) => {
+    // Split by lines of underscores which act as separators
+    const blocks = text.split(/_+/);
+    const parsedNews: NewsItem[] = [];
+    let count = 0;
+
+    blocks.forEach(block => {
+        if (!block.trim()) return;
+
+        const titleMatch = block.match(/Titular:\s*([\s\S]*?)(?=\nAutor:|$)/i);
+        const authorMatch = block.match(/Autor:\s*([\s\S]*?)(?=\nTexto:|$)/i);
+        const contentMatch = block.match(/Texto:\s*([\s\S]*)/i);
+
+        if (titleMatch && contentMatch) {
+            const title = titleMatch[1].trim();
+            const content = contentMatch[1].trim();
+            
+            parsedNews.push({
+                id: Date.now().toString() + Math.random().toString(),
+                title: title,
+                author: authorMatch ? authorMatch[1].trim() : 'Redacción',
+                content: content,
+                date: 'Reciente',
+                category: detectCategory(title + ' ' + content),
+                image: '' // Leaving empty triggers the vector generator in utils
+            });
+            count++;
+        }
+    });
+
+    if (count > 0) {
+      setNews(prev => [...parsedNews, ...prev]);
+      alert(`Se han cargado ${count} noticias correctamente.`);
     } else {
-      alert('Formato de noticia incorrecto. Asegúrese de usar Titular:, Autor:, Texto:');
+      alert('No se encontraron noticias con el formato válido. Asegúrese de separar las noticias con guiones bajos (____) y usar Titular:, Autor:, Texto:');
     }
   };
 
@@ -276,7 +300,7 @@ const UserManagement: React.FC<Props> = ({
                         <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-[#9E7649]/30 rounded-lg hover:bg-[#9E7649]/5 cursor-pointer transition-colors">
                             <div className="flex flex-col items-center gap-1">
                                 <Upload size={24} className="text-[#9E7649]" />
-                                <span className="text-xs font-medium text-[#E8DCCF]">Importar Lista</span>
+                                <span className="text-xs font-medium text-[#E8DCCF]">Importar Lista Usuarios</span>
                             </div>
                             <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'users')} className="hidden" />
                         </label>
@@ -342,7 +366,7 @@ const UserManagement: React.FC<Props> = ({
                             </div>
                             <div>
                                 <h3 className="text-white font-bold">Sección Noticias</h3>
-                                <p className="text-xs text-[#E8DCCF]/60">Carga de noticias recientes</p>
+                                <p className="text-xs text-[#E8DCCF]/60">Carga múltiple (separadas por ____)</p>
                             </div>
                         </div>
                         <div className="flex gap-2">
