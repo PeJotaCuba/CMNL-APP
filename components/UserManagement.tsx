@@ -112,13 +112,9 @@ const UserManagement: React.FC<Props> = ({
     }
   };
 
+  // Removed classification logic as requested. All news get a generic category.
   const detectCategory = (text: string): string => {
-      const t = text.toLowerCase();
-      if (t.includes('pelota') || t.includes('beisbol') || t.includes('futbol') || t.includes('gol') || t.includes('deporte')) return 'Deportes';
-      if (t.includes('cultura') || t.includes('arte') || t.includes('musica') || t.includes('concierto')) return 'Cultura';
-      if (t.includes('agricultura') || t.includes('siembra') || t.includes('cosecha') || t.includes('campesino')) return 'Economía';
-      if (t.includes('lluvia') || t.includes('huracan') || t.includes('sismo')) return 'Clima';
-      return 'Boletín';
+      return 'Noticia';
   };
 
   const parseAndAddNews = (text: string) => {
@@ -145,15 +141,16 @@ const UserManagement: React.FC<Props> = ({
                 content: content,
                 date: 'Reciente',
                 category: detectCategory(title + ' ' + content),
-                image: '' // Leaving empty triggers the vector generator in utils
+                image: '' // Force empty to avoid old vector logic if it was present
             });
             count++;
         }
     });
 
     if (count > 0) {
-      setNews(prev => [...parsedNews, ...prev]);
-      alert(`Se han cargado ${count} noticias correctamente.`);
+      // Overwrite instead of append as requested
+      setNews(parsedNews);
+      alert(`Se han cargado ${count} noticias correctamente. La lista anterior ha sido reemplazada.`);
     } else {
       alert('No se encontraron noticias con el formato válido. Asegúrese de separar las noticias con guiones bajos (____) y usar Titular:, Autor:, Texto:');
     }

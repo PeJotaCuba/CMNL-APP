@@ -8,6 +8,15 @@ interface Props {
   news: NewsItem[];
 }
 
+const newsColors = [
+  'bg-[#3E1E16]', // Brand Dark Brown
+  'bg-[#1a237e]', // Deep Blue
+  'bg-[#004d40]', // Deep Teal
+  'bg-[#b71c1c]', // Deep Red
+  'bg-[#4a148c]', // Deep Purple
+  'bg-[#263238]', // Dark Blue Grey
+];
+
 const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
@@ -15,7 +24,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
   useEffect(() => {
     if (news.length > 1) {
       const interval = setInterval(() => {
-        setCurrentNewsIndex((prev) => (prev + 1) % Math.min(news.length, 5));
+        setCurrentNewsIndex((prev) => (prev + 1) % news.length);
       }, 5000); 
       return () => clearInterval(interval);
     } else {
@@ -23,17 +32,17 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
     }
   }, [news]);
 
-  const displayedNews = news.slice(0, 5);
-  const activeNews = displayedNews[currentNewsIndex];
+  const activeNews = news.length > 0 ? news[currentNewsIndex] : null;
+  const currentColor = newsColors[currentNewsIndex % newsColors.length];
 
   const nextNews = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % displayedNews.length);
+    if(news.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % news.length);
   };
 
   const prevNews = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + displayedNews.length) % displayedNews.length);
+    if(news.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
   };
 
   return (
@@ -119,34 +128,33 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
           </div>
         </button>
 
-        {/* News Carousel */}
+        {/* News Carousel - Solid Color, No Image, No Classification */}
         {activeNews ? (
-            <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="mt-2 relative rounded-xl bg-[#2C2420] border border-white/5 overflow-hidden shadow-lg h-40 cursor-pointer group">
-                <div className="absolute inset-0 bg-cover bg-center opacity-60 transition-transform duration-1000 group-hover:scale-105" style={{backgroundImage: `url(${activeNews.image})`}}></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+            <div 
+                onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
+                className={`mt-2 relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg h-44 cursor-pointer group transition-colors duration-500`}
+            >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
                 
-                {displayedNews.length > 1 && (
+                {news.length > 1 && (
                     <>
-                        <button onClick={prevNews} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 p-1 rounded-full text-white/70 hover:text-white z-20 transition-colors">
+                        <button onClick={prevNews} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 p-2 rounded-full text-white/70 hover:text-white z-20 transition-all border border-white/10">
                             <ChevronLeft size={24} />
                         </button>
-                        <button onClick={nextNews} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 p-1 rounded-full text-white/70 hover:text-white z-20 transition-colors">
+                        <button onClick={nextNews} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 p-2 rounded-full text-white/70 hover:text-white z-20 transition-all border border-white/10">
                             <ChevronRight size={24} />
                         </button>
                     </>
                 )}
 
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-[#C69C6D] bg-black/50 px-2 py-0.5 rounded">{activeNews.category}</span>
-                        <div className="flex gap-1">
-                            {displayedNews.map((_, idx) => (
-                                <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === currentNewsIndex ? 'bg-[#C69C6D]' : 'bg-white/30'}`}></div>
-                            ))}
-                        </div>
+                <div className="absolute inset-0 p-6 flex flex-col justify-center px-12">
+                    <div className="flex items-center justify-center gap-1 mb-2">
+                        {news.slice(0, 6).map((_, idx) => (
+                            <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
+                        ))}
                     </div>
-                    <h3 className="text-sm font-bold text-white line-clamp-1">{activeNews.title}</h3>
-                    <p className="text-[10px] text-stone-300 mt-0.5 line-clamp-1">{activeNews.content}</p>
+                    <h3 className="text-lg font-bold text-white text-center leading-tight line-clamp-2 mb-2">{activeNews.title}</h3>
+                    <p className="text-xs text-stone-200 text-center line-clamp-2 opacity-80">{activeNews.content}</p>
                 </div>
             </div>
         ) : (

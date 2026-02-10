@@ -11,6 +11,15 @@ interface ViewProps {
   newsItem?: NewsItem | null;
 }
 
+const newsColors = [
+  'bg-[#3E1E16]', 
+  'bg-[#1a237e]', 
+  'bg-[#004d40]', 
+  'bg-[#b71c1c]', 
+  'bg-[#4a148c]', 
+  'bg-[#263238]',
+];
+
 export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const isProgramming = title.includes('Programación');
@@ -19,16 +28,19 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
 
   // Specific Layout for News Detail
   if (newsItem) {
+      // Deterministic color based on id or length
+      const colorIndex = newsItem.title.length % newsColors.length;
+      const headerColor = newsColors[colorIndex];
+
       return (
         <div className="flex flex-col h-full w-full bg-[#1A100C] text-[#E8DCCF]">
-             <div className="relative h-64 bg-cover bg-center" style={{backgroundImage: `url(${newsItem.image})`}}>
-                 <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[#1A100C]"></div>
-                 <button onClick={onBack} className="absolute top-4 left-4 p-2 bg-black/40 text-white rounded-full backdrop-blur-md z-10">
+             <div className={`relative h-56 flex flex-col justify-end ${headerColor}`}>
+                 <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-[#1A100C] opacity-80"></div>
+                 <button onClick={onBack} className="absolute top-4 left-4 p-2 bg-black/40 text-white rounded-full backdrop-blur-md z-10 border border-white/10 hover:bg-white/20 transition-all">
                     <ArrowLeft size={24} />
                  </button>
-                 <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <span className="bg-[#9E7649] text-white text-[10px] font-bold uppercase px-2 py-1 rounded mb-2 inline-block">{newsItem.category}</span>
-                    <h1 className="text-2xl font-bold text-white leading-tight shadow-sm">{newsItem.title}</h1>
+                 <div className="relative p-6 z-10">
+                    <h1 className="text-2xl font-bold text-white leading-tight shadow-sm mb-2">{newsItem.title}</h1>
                  </div>
              </div>
              <div className="flex-1 p-6 overflow-y-auto">

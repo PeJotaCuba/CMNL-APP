@@ -11,6 +11,15 @@ interface Props {
   onLogout: () => void;
 }
 
+const newsColors = [
+  'bg-[#3E1E16]', 
+  'bg-[#1a237e]', 
+  'bg-[#004d40]', 
+  'bg-[#b71c1c]', 
+  'bg-[#4a148c]', 
+  'bg-[#263238]',
+];
+
 const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser, onLogout }) => {
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
 
@@ -159,16 +168,14 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
             </div>
 
             {latestNews ? (
-                <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, latestNews)} className="cursor-pointer rounded-xl bg-[#2C1B15] overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all">
-                <div className="h-32 bg-cover bg-center" style={{ backgroundImage: `url(${latestNews.image})` }}></div>
-                <div className="p-4">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-[9px] font-bold text-[#9E7649] uppercase tracking-wider bg-[#9E7649]/10 px-1.5 py-0.5 rounded border border-[#9E7649]/20">{latestNews.category}</span>
-                        <span className="text-[10px] text-[#E8DCCF]/50">{latestNews.date}</span>
-                    </div>
-                    <h3 className="text-white font-bold text-base leading-tight mb-1">{latestNews.title}</h3>
-                    <p className="text-[#E8DCCF]/70 text-xs line-clamp-2 leading-relaxed">{latestNews.content}</p>
-                </div>
+                <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, latestNews)} className={`cursor-pointer rounded-xl ${newsColors[0]} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all`}>
+                  <div className="p-5">
+                      <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] text-[#E8DCCF]/50">{latestNews.date}</span>
+                      </div>
+                      <h3 className="text-white font-bold text-base leading-tight mb-2">{latestNews.title}</h3>
+                      <p className="text-[#E8DCCF]/70 text-xs line-clamp-3 leading-relaxed">{latestNews.content}</p>
+                  </div>
                 </div>
             ) : (
                 <div className="p-6 bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 text-center text-xs text-[#E8DCCF]/50">

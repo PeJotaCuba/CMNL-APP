@@ -10,6 +10,15 @@ interface Props {
   onLogout: () => void;
 }
 
+const newsColors = [
+  'bg-[#3E1E16]', // Brand Dark Brown
+  'bg-[#1a237e]', // Deep Blue
+  'bg-[#004d40]', // Deep Teal
+  'bg-[#b71c1c]', // Deep Red
+  'bg-[#4a148c]', // Deep Purple
+  'bg-[#263238]', // Dark Blue Grey
+];
+
 const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
@@ -17,23 +26,23 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
   useEffect(() => {
     if (news.length > 1) {
       const interval = setInterval(() => {
-        setCurrentNewsIndex((prev) => (prev + 1) % Math.min(news.length, 5));
+        setCurrentNewsIndex((prev) => (prev + 1) % news.length);
       }, 5000); 
       return () => clearInterval(interval);
     }
   }, [news]);
 
-  const displayedNews = news.slice(0, 5);
-  const activeNews = displayedNews[currentNewsIndex];
+  const activeNews = news.length > 0 ? news[currentNewsIndex] : null;
+  const currentColor = newsColors[currentNewsIndex % newsColors.length];
 
   const nextNews = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % displayedNews.length);
+    if(news.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % news.length);
   };
 
   const prevNews = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if(displayedNews.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + displayedNews.length) % displayedNews.length);
+    if(news.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
   };
   
   const handleExternalApp = (url: string) => {
@@ -104,27 +113,23 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
            />
         </div>
 
-        {/* News Carousel (Worker View) */}
+        {/* News Carousel (Worker View) - No Image, Solid Color */}
         {activeNews && (
             <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="w-full mb-8 cursor-pointer group relative">
-                <div className="bg-[#3e2723]/60 rounded-xl p-4 border border-white/5 backdrop-blur-sm hover:border-[#CD853F]/30 transition-all">
-                    <h3 className="text-[#CD853F] text-xs font-bold uppercase tracking-widest mb-2">Noticias Recientes</h3>
-                    <div className="flex gap-4 items-center">
-                        <div className="h-16 w-16 bg-cover bg-center rounded-lg shrink-0" style={{backgroundImage: `url(${activeNews.image})`}}></div>
-                        <div>
-                            <h4 className="text-sm font-bold leading-tight">{activeNews.title}</h4>
-                            <p className="text-xs text-stone-400 mt-1 line-clamp-1">{activeNews.content}</p>
-                        </div>
+                <div className={`${currentColor} rounded-xl p-6 border border-white/5 shadow-lg transition-all duration-500`}>
+                    <div className="flex flex-col justify-center items-center text-center px-6">
+                        <h4 className="text-lg font-bold leading-tight text-white mb-2">{activeNews.title}</h4>
+                        <p className="text-xs text-stone-300 mt-1 line-clamp-2">{activeNews.content}</p>
                     </div>
                 </div>
 
                 {/* Arrows */}
-                {displayedNews.length > 1 && (
+                {news.length > 1 && (
                     <>
-                        <button onClick={prevNews} className="absolute -left-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-1.5 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
+                        <button onClick={prevNews} className="absolute -left-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-2 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
                             <ChevronLeft size={20} />
                         </button>
-                        <button onClick={nextNews} className="absolute -right-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-1.5 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
+                        <button onClick={nextNews} className="absolute -right-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-2 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
                             <ChevronRight size={20} />
                         </button>
                     </>
