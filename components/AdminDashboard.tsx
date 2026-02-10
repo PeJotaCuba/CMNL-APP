@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AppView, NewsItem, User } from '../types';
-import { Settings, ChevronRight, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare } from 'lucide-react';
+import { Settings, ChevronRight, ChevronLeft, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare } from 'lucide-react';
 import { getCurrentProgram, LOGO_URL } from '../utils/scheduleData';
 
 interface Props {
@@ -22,6 +22,7 @@ const newsColors = [
 
 const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser, onLogout }) => {
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+  const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -30,11 +31,34 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
     return () => clearInterval(interval);
   }, []);
 
+  // News Carousel Interval
+  useEffect(() => {
+    if (news.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentNewsIndex((prev) => (prev + 1) % news.length);
+      }, 5000); 
+      return () => clearInterval(interval);
+    } else {
+        setCurrentNewsIndex(0);
+    }
+  }, [news]);
+
+  const activeNews = news.length > 0 ? news[currentNewsIndex] : null;
+  const currentColor = newsColors[currentNewsIndex % newsColors.length];
+
+  const nextNews = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(news.length > 0) setCurrentNewsIndex((prev) => (prev + 1) % news.length);
+  };
+
+  const prevNews = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if(news.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
+  };
+
   const handleExternalApp = (url: string) => {
     window.location.href = url;
   };
-
-  const latestNews = news.length > 0 ? news[0] : null;
 
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-40 overflow-y-auto no-scrollbar">
@@ -161,20 +185,38 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
             </div>
          </div>
 
-         {/* News Preview */}
+         {/* News Carousel */}
          <div>
             <div className="flex justify-between items-center mb-3 px-1">
                  <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
             </div>
 
-            {latestNews ? (
-                <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, latestNews)} className={`cursor-pointer rounded-xl ${newsColors[0]} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all`}>
-                  <div className="p-5">
-                      <div className="flex justify-between items-center mb-2">
-                          <span className="text-[10px] text-[#E8DCCF]/50">{latestNews.date}</span>
+            {activeNews ? (
+                <div 
+                    onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
+                    className={`relative cursor-pointer rounded-xl ${currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all h-52 group`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
+
+                  {news.length > 1 && (
+                    <>
+                        <button onClick={prevNews} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 p-2 rounded-full text-white/70 hover:text-white z-20 transition-all border border-white/10">
+                            <ChevronLeft size={24} />
+                        </button>
+                        <button onClick={nextNews} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 p-2 rounded-full text-white/70 hover:text-white z-20 transition-all border border-white/10">
+                            <ChevronRight size={24} />
+                        </button>
+                    </>
+                  )}
+
+                  <div className="absolute inset-0 p-6 flex flex-col justify-center px-12 items-start text-left">
+                      <div className="flex items-center gap-1 mb-3">
+                        {news.slice(0, 6).map((_, idx) => (
+                            <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
+                        ))}
                       </div>
-                      <h3 className="text-white font-bold text-base leading-tight mb-2">{latestNews.title}</h3>
-                      <p className="text-[#E8DCCF]/70 text-xs line-clamp-3 leading-relaxed">{latestNews.content}</p>
+                      <h3 className="text-xl font-bold text-white leading-tight mb-2 line-clamp-2">{activeNews.title}</h3>
+                      <p className="text-sm text-[#E8DCCF]/90 line-clamp-2 leading-relaxed">{activeNews.content}</p>
                   </div>
                 </div>
             ) : (

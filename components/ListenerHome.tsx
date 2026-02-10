@@ -128,11 +128,11 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
           </div>
         </button>
 
-        {/* News Carousel - Solid Color, No Image, No Classification */}
+        {/* News Carousel - Left Aligned, Bigger Text */}
         {activeNews ? (
             <div 
                 onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
-                className={`mt-2 relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg h-44 cursor-pointer group transition-colors duration-500`}
+                className={`mt-2 relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg h-52 cursor-pointer group transition-colors duration-500`}
             >
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
                 
@@ -147,19 +147,19 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news }) => {
                     </>
                 )}
 
-                <div className="absolute inset-0 p-6 flex flex-col justify-center px-12">
-                    <div className="flex items-center justify-center gap-1 mb-2">
+                <div className="absolute inset-0 p-6 flex flex-col justify-center px-12 items-start text-left">
+                    <div className="flex items-center gap-1 mb-3">
                         {news.slice(0, 6).map((_, idx) => (
                             <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
                         ))}
                     </div>
-                    <h3 className="text-lg font-bold text-white text-center leading-tight line-clamp-2 mb-2">{activeNews.title}</h3>
-                    <p className="text-xs text-stone-200 text-center line-clamp-2 opacity-80">{activeNews.content}</p>
+                    <h3 className="text-xl font-bold text-white leading-tight line-clamp-2 mb-2">{activeNews.title}</h3>
+                    <p className="text-sm text-stone-200 line-clamp-2 opacity-90">{activeNews.content}</p>
                 </div>
             </div>
         ) : (
             <div className="mt-2 rounded-xl bg-[#2C2420] border border-white/5 h-40 flex items-center justify-center">
-                <p className="text-xs text-stone-500">No hay noticias recientes</p>
+                <p className="text-sm text-stone-500">No hay noticias recientes</p>
             </div>
         )}
 

@@ -29,6 +29,8 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
         setCurrentNewsIndex((prev) => (prev + 1) % news.length);
       }, 5000); 
       return () => clearInterval(interval);
+    } else {
+        setCurrentNewsIndex(0);
     }
   }, [news]);
 
@@ -113,27 +115,34 @@ const WorkerHome: React.FC<Props> = ({ onNavigate, news, currentUser, onLogout }
            />
         </div>
 
-        {/* News Carousel (Worker View) - No Image, Solid Color */}
+        {/* News Carousel (Worker View) - Matches Listener View */}
         {activeNews && (
-            <div onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} className="w-full mb-8 cursor-pointer group relative">
-                <div className={`${currentColor} rounded-xl p-6 border border-white/5 shadow-lg transition-all duration-500`}>
-                    <div className="flex flex-col justify-center items-center text-center px-6">
-                        <h4 className="text-lg font-bold leading-tight text-white mb-2">{activeNews.title}</h4>
-                        <p className="text-xs text-stone-300 mt-1 line-clamp-2">{activeNews.content}</p>
-                    </div>
-                </div>
+            <div 
+                onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
+                className={`w-full mb-8 relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg h-52 cursor-pointer group transition-colors duration-500`}
+            >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
 
-                {/* Arrows */}
                 {news.length > 1 && (
                     <>
-                        <button onClick={prevNews} className="absolute -left-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-2 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
-                            <ChevronLeft size={20} />
+                        <button onClick={prevNews} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 p-2 rounded-full text-white/70 hover:text-white z-20 transition-all border border-white/10">
+                            <ChevronLeft size={24} />
                         </button>
-                        <button onClick={nextNews} className="absolute -right-3 top-1/2 -translate-y-1/2 bg-[#3e2723] border border-white/10 p-2 rounded-full text-white/70 hover:text-white shadow-lg transition-all z-10 hover:scale-110">
-                            <ChevronRight size={20} />
+                        <button onClick={nextNews} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 p-2 rounded-full text-white/70 hover:text-white z-20 transition-all border border-white/10">
+                            <ChevronRight size={24} />
                         </button>
                     </>
                 )}
+
+                <div className="absolute inset-0 p-6 flex flex-col justify-center px-12 items-start text-left">
+                    <div className="flex items-center gap-1 mb-3">
+                        {news.slice(0, 6).map((_, idx) => (
+                            <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
+                        ))}
+                    </div>
+                    <h4 className="text-xl font-bold leading-tight text-white mb-2 line-clamp-2">{activeNews.title}</h4>
+                    <p className="text-sm text-stone-300 line-clamp-2 opacity-90">{activeNews.content}</p>
+                </div>
             </div>
         )}
 
