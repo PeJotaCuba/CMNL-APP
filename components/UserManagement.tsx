@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper, DownloadCloud, RefreshCw } from 'lucide-react';
 import { User, NewsItem, UserClassification } from '../types';
 
 interface Props {
@@ -24,6 +24,7 @@ const UserManagement: React.FC<Props> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'users' | 'content'>('users');
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -175,7 +176,6 @@ const UserManagement: React.FC<Props> = ({
   // --- LÓGICA DE RESPALDO Y RESTAURACIÓN ---
 
   const handleDownloadBackup = () => {
-    // Capturamos el estado actual exacto
     const data = {
         users,
         historyContent,
@@ -183,9 +183,8 @@ const UserManagement: React.FC<Props> = ({
         news
     };
     
-    // Generamos nombre con fecha para control de versiones
-    const date = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
-    const filename = `CMNL_Respaldo_${date}.json`;
+    // Nombre fijo solicitado para coincidir con el repositorio
+    const filename = `actualcmnl.json`;
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -198,49 +197,53 @@ const UserManagement: React.FC<Props> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const json = JSON.parse(event.target?.result as string);
-                
-                let restoredCount = 0;
+  const handleLoadFromGithub = async () => {
+      if(!confirm('¿Estás seguro de sincronizar con GitHub? Esto reemplazará los datos locales con la versión oficial de la nube.')) {
+          return;
+      }
 
-                if (json.users && Array.isArray(json.users)) {
-                    setUsers(json.users);
-                    restoredCount++;
-                }
-                
-                if (typeof json.historyContent === 'string') {
-                    setHistoryContent(json.historyContent);
-                    restoredCount++;
-                }
-                
-                if (typeof json.aboutContent === 'string') {
-                    setAboutContent(json.aboutContent);
-                    restoredCount++;
-                }
-                
-                if (json.news && Array.isArray(json.news)) {
-                    setNews(json.news);
-                    restoredCount++;
-                }
+      setIsLoadingCloud(true);
+      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/actualcmnl.json';
 
-                if (restoredCount > 0) {
-                    alert('Copia de seguridad restaurada correctamente. Se han actualizado: Usuarios, Historia, Quiénes Somos y Noticias.');
-                } else {
-                    alert('El archivo JSON no contiene la estructura de datos esperada.');
-                }
+      try {
+          const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
+          if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+          
+          const json = await response.json();
+          let restoredCount = 0;
 
-            } catch (error) {
-                console.error(error);
-                alert('Error al leer el archivo. Asegúrese de que es un archivo .json de respaldo válido.');
-            }
-        };
-        reader.readAsText(file);
-    }
+          if (json.users && Array.isArray(json.users)) {
+            setUsers(json.users);
+            restoredCount++;
+          }
+          
+          if (typeof json.historyContent === 'string') {
+            setHistoryContent(json.historyContent);
+            restoredCount++;
+          }
+          
+          if (typeof json.aboutContent === 'string') {
+            setAboutContent(json.aboutContent);
+            restoredCount++;
+          }
+          
+          if (json.news && Array.isArray(json.news)) {
+            setNews(json.news);
+            restoredCount++;
+          }
+
+          if (restoredCount > 0) {
+            alert('¡Sincronización exitosa! Los datos se han actualizado desde el repositorio oficial.');
+          } else {
+            alert('El archivo descargado no tiene el formato esperado.');
+          }
+
+      } catch (error) {
+          console.error("Error cargando desde GitHub:", error);
+          alert('Error al conectar con GitHub. Verifique su conexión a internet.');
+      } finally {
+          setIsLoadingCloud(false);
+      }
   };
 
   const filteredUsers = users.filter(u => 
@@ -261,12 +264,20 @@ const UserManagement: React.FC<Props> = ({
         </div>
         
         <div className="flex gap-2">
-            <label className="flex items-center gap-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-[#9E7649]/30" title="Restaurar desde archivo JSON">
-                <UploadCloud size={16} />
-                <span className="hidden sm:inline">Restaurar</span>
-                <input type="file" accept=".json" onChange={handleRestoreBackup} className="hidden" />
-            </label>
-            <button onClick={handleDownloadBackup} className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" title="Guardar todo en archivo JSON">
+            <button 
+                onClick={handleLoadFromGithub} 
+                disabled={isLoadingCloud}
+                className="flex items-center gap-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] px-3 py-2 rounded-lg text-xs font-bold transition-colors border border-[#9E7649]/30 disabled:opacity-50" 
+                title="Cargar actualcmnl.json desde GitHub"
+            >
+                {isLoadingCloud ? <RefreshCw size={16} className="animate-spin"/> : <DownloadCloud size={16} />}
+                <span className="hidden sm:inline">Sincronizar</span>
+            </button>
+            <button 
+                onClick={handleDownloadBackup} 
+                className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" 
+                title="Descargar actualcmnl.json localmente"
+            >
                 <Download size={16} /> 
                 <span className="hidden sm:inline">Respaldar</span>
             </button>

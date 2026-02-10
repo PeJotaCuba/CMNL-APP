@@ -61,7 +61,7 @@
       body {
         /* Prevent bounce on iOS */
         overscroll-behavior-y: none;
-        background-color: #1A100C; /* Match PWA background */
+        background-color: #1A100C;
       }
       .no-scrollbar::-webkit-scrollbar {
         display: none;
@@ -92,7 +92,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./service-worker.js')
+          navigator.serviceWorker.register('./service-worker.js', { scope: '/' })
             .then((registration) => {
               console.log('ServiceWorker registrado con éxito: ', registration.scope);
             })

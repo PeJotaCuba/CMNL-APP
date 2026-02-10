@@ -2,8 +2,8 @@
   "name": "Radio Ciudad Monumento",
   "short_name": "CMNL App",
   "description": "La voz de la segunda villa cubana. Noticias, programación y radio en vivo.",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1A100C",
   "theme_color": "#8B5E3C",
@@ -25,15 +25,15 @@
   ],
   "screenshots": [
     {
-      "src": "screenshots/mobile-home.png",
-      "sizes": "1080x1920",
+      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Pantalla de Inicio Móvil"
     },
     {
-      "src": "screenshots/desktop-dashboard.png",
-      "sizes": "1920x1080",
+      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Panel de Administración"
@@ -42,7 +42,7 @@
   "shortcuts": [
     {
       "name": "Escuchar en Vivo",
-      "url": "./index.html",
+      "url": "/",
       "icons": [{ "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-192-192.png", "sizes": "192x192" }]
     }
   ],

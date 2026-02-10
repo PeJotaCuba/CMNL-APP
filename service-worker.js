@@ -1,18 +1,16 @@
 /*
  * Service Worker para CMNL App
  * Estrategia: Cache-First para estáticos, Network-First para navegación.
- * Excluye explícitamente el stream de audio para evitar problemas de reproducción.
  */
 
-const CACHE_NAME = 'cmnl-app-v1';
+const CACHE_NAME = 'cmnl-app-v2'; // Incrementamos versión para forzar actualización
 const OFFLINE_URL = 'offline.html';
 
 const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './offline.html',
-  './manifest.json',
-  './index.tsx' // En producción esto serán los bundles JS/CSS compilados
+  '/',
+  '/index.html',
+  '/offline.html',
+  '/manifest.json'
 ];
 
 // Instalación: Precarga de recursos críticos
@@ -26,7 +24,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activación: Limpieza de caches antiguas
+// Activación: Limpieza de caches antiguas y toma de control inmediata
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keyList) => {
@@ -40,7 +38,7 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  self.clients.claim();
+  return self.clients.claim();
 });
 
 // Fetch: Intercepción de peticiones de red
@@ -50,8 +48,10 @@ self.addEventListener('fetch', (event) => {
 
   // 2. CRÍTICO: No cachear el stream de audio de Icecast
   if (event.request.url.includes('icecast.teveo.cu')) {
-    return; // Dejar que el navegador maneje el stream directamente
+    return;
   }
+
+  const url = new URL(event.request.url);
 
   // 3. Estrategia para navegación (HTML): Network First, fallback to Offline Page
   if (event.request.mode === 'navigate') {
@@ -64,21 +64,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 4. Estrategia para recursos estáticos (JS, CSS, Imágenes): Stale-While-Revalidate
-  // Intenta servir del caché, pero actualiza en segundo plano
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // Solo cachear respuestas válidas
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+  // 4. Estrategia para recursos estáticos: Stale-While-Revalidate
+  // Para scripts y estilos del mismo origen
+  if (url.origin === location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png'))) {
+      event.respondWith(
+        caches.match(event.request).then((cachedResponse) => {
+          const fetchPromise = fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+            }
+            return networkResponse;
           });
-        }
-        return networkResponse;
-      });
-      return cachedResponse || fetchPromise;
-    })
-  );
+          return cachedResponse || fetchPromise;
+        })
+      );
+      return;
+  }
+
+  // Default: Network Only para todo lo demás (APIs externas, etc)
+  return; 
 });
