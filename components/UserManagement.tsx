@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper, UploadCloud } from 'lucide-react';
 import { User, NewsItem, UserClassification } from '../types';
 
 interface Props {
@@ -112,22 +112,13 @@ const UserManagement: React.FC<Props> = ({
     }
   };
 
-  // Removed classification logic as requested. All news get a generic category.
   const detectCategory = (text: string): string => {
       return 'Noticia';
   };
 
   const parseAndAddNews = (text: string) => {
-    // Normalize line endings to avoid issues with different OS files
     const normalizedText = text.replace(/\r\n/g, '\n');
-    
-    // Split by lines that are just underscores (3 or more) to avoid splitting valid text containing underscores.
-    // If no strict separators found, falls back to the simpler check but encourages correct formatting.
-    // This Regex looks for newlines surrounding underscores.
     const blocks = normalizedText.split(/\n\s*_{3,}\s*\n/);
-    
-    // Fallback: If split resulted in 1 block but text implies multiple (heuristic), try simple split
-    // But for now, let's assume valid separators.
     
     const parsedNews: NewsItem[] = [];
     let count = 0;
@@ -135,7 +126,6 @@ const UserManagement: React.FC<Props> = ({
     blocks.forEach(block => {
         if (!block.trim()) return;
 
-        // Use indexOf + substring instead of Regex for more robustness with large multi-line text bodies
         const titleKey = "Titular:";
         const authorKey = "Autor:";
         const textKey = "Texto:";
@@ -144,25 +134,19 @@ const UserManagement: React.FC<Props> = ({
         const textIndex = block.indexOf(textKey);
 
         if (titleIndex !== -1 && textIndex !== -1) {
-            // Find Author if it exists
             const authorIndex = block.indexOf(authorKey);
             
-            // Extract Title
-            // Ends at Author (if present and before text) OR at Text (if Author missing)
             let titleEnd = textIndex;
             if (authorIndex !== -1 && authorIndex > titleIndex && authorIndex < textIndex) {
                 titleEnd = authorIndex;
             }
             const title = block.substring(titleIndex + titleKey.length, titleEnd).trim();
 
-            // Extract Author
             let author = "Redacción";
             if (authorIndex !== -1 && authorIndex > titleIndex && authorIndex < textIndex) {
                 author = block.substring(authorIndex + authorKey.length, textIndex).trim();
             }
 
-            // Extract Content
-            // Takes everything from "Texto:" to the end of the block string
             const content = block.substring(textIndex + textKey.length).trim();
 
             if (title && content) {
@@ -173,7 +157,7 @@ const UserManagement: React.FC<Props> = ({
                     content: content,
                     date: 'Reciente',
                     category: detectCategory(title + ' ' + content),
-                    image: '' // Force empty to avoid old vector logic if it was present
+                    image: '' 
                 });
                 count++;
             }
@@ -181,7 +165,6 @@ const UserManagement: React.FC<Props> = ({
     });
 
     if (count > 0) {
-      // Overwrite instead of append as requested
       setNews(parsedNews);
       alert(`Se han cargado ${count} noticias correctamente. La lista anterior ha sido reemplazada.`);
     } else {
@@ -189,22 +172,75 @@ const UserManagement: React.FC<Props> = ({
     }
   };
 
+  // --- LÓGICA DE RESPALDO Y RESTAURACIÓN ---
+
   const handleDownloadBackup = () => {
+    // Capturamos el estado actual exacto
     const data = {
         users,
         historyContent,
         aboutContent,
         news
     };
+    
+    // Generamos nombre con fecha para control de versiones
+    const date = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
+    const filename = `CMNL_Respaldo_${date}.json`;
+
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'actualcmnl.json';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const json = JSON.parse(event.target?.result as string);
+                
+                let restoredCount = 0;
+
+                if (json.users && Array.isArray(json.users)) {
+                    setUsers(json.users);
+                    restoredCount++;
+                }
+                
+                if (typeof json.historyContent === 'string') {
+                    setHistoryContent(json.historyContent);
+                    restoredCount++;
+                }
+                
+                if (typeof json.aboutContent === 'string') {
+                    setAboutContent(json.aboutContent);
+                    restoredCount++;
+                }
+                
+                if (json.news && Array.isArray(json.news)) {
+                    setNews(json.news);
+                    restoredCount++;
+                }
+
+                if (restoredCount > 0) {
+                    alert('Copia de seguridad restaurada correctamente. Se han actualizado: Usuarios, Historia, Quiénes Somos y Noticias.');
+                } else {
+                    alert('El archivo JSON no contiene la estructura de datos esperada.');
+                }
+
+            } catch (error) {
+                console.error(error);
+                alert('Error al leer el archivo. Asegúrese de que es un archivo .json de respaldo válido.');
+            }
+        };
+        reader.readAsText(file);
+    }
   };
 
   const filteredUsers = users.filter(u => 
@@ -223,9 +259,18 @@ const UserManagement: React.FC<Props> = ({
           <h1 className="text-lg font-bold text-white leading-none">Ajustes & Gestión</h1>
           <p className="text-[10px] text-[#9E7649]">Administración de sistema</p>
         </div>
-        <button onClick={handleDownloadBackup} className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors">
-            <Download size={16} /> Respaldar
-        </button>
+        
+        <div className="flex gap-2">
+            <label className="flex items-center gap-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-[#9E7649]/30" title="Restaurar desde archivo JSON">
+                <UploadCloud size={16} />
+                <span className="hidden sm:inline">Restaurar</span>
+                <input type="file" accept=".json" onChange={handleRestoreBackup} className="hidden" />
+            </label>
+            <button onClick={handleDownloadBackup} className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" title="Guardar todo en archivo JSON">
+                <Download size={16} /> 
+                <span className="hidden sm:inline">Respaldar</span>
+            </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -244,13 +289,12 @@ const UserManagement: React.FC<Props> = ({
           </button>
       </div>
 
-      {/* Scrollable Main Content Area - Single scroll for mobile flow */}
+      {/* Scrollable Main Content Area */}
       <div className="flex-1 overflow-y-auto pb-40"> 
         
         {activeTab === 'users' && (
             <div className="flex flex-col md:flex-row h-full md:h-auto">
-                
-                {/* List Section - Displays first on mobile, Left on Desktop */}
+                {/* List Section */}
                 <div className="flex-1 bg-[#1A100C] flex flex-col min-h-[50vh] md:h-full md:overflow-y-auto border-b md:border-b-0 md:border-r border-[#9E7649]/10">
                     <div className="p-4 border-b border-[#9E7649]/10 bg-[#1A100C] sticky top-0 z-10">
                         <div className="relative">
@@ -290,7 +334,7 @@ const UserManagement: React.FC<Props> = ({
                     </div>
                 </div>
 
-                {/* Form & Upload Section - Displays second on mobile (scrolled down), Right on Desktop */}
+                {/* Form & Upload Section */}
                 <div className="w-full md:w-1/3 bg-[#2C1B15] p-6 shrink-0 md:h-full md:overflow-y-auto">
                     <div className="mb-10">
                         <h2 className="text-sm font-bold text-[#9E7649] uppercase tracking-wider mb-4">{isEditing ? 'Editar Usuario' : 'Crear Usuario'}</h2>
@@ -339,7 +383,7 @@ const UserManagement: React.FC<Props> = ({
             </div>
         )}
 
-        {/* Content Management Tab - FIXED: Added Logic for displaying content management sections */}
+        {/* Content Management Tab */}
         {activeTab === 'content' && (
           <div className="p-6 max-w-4xl mx-auto grid gap-8 animate-in fade-in duration-300">
             
