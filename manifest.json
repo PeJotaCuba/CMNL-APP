@@ -11,13 +11,13 @@
   "categories": ["entertainment", "music", "news", "radio"],
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-192-192.png",
+      "src": "https://cdn.jsdelivr.net/gh/PeJotaCuba/CMNL-APP@b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-192-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
+      "src": "https://cdn.jsdelivr.net/gh/PeJotaCuba/CMNL-APP@b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -25,14 +25,14 @@
   ],
   "screenshots": [
     {
-      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
+      "src": "https://cdn.jsdelivr.net/gh/PeJotaCuba/CMNL-APP@b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Pantalla de Inicio Móvil"
     },
     {
-      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
+      "src": "https://cdn.jsdelivr.net/gh/PeJotaCuba/CMNL-APP@b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-512-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "form_factor": "wide",
@@ -43,7 +43,7 @@
     {
       "name": "Escuchar en Vivo",
       "url": "/",
-      "icons": [{ "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-192-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "https://cdn.jsdelivr.net/gh/PeJotaCuba/CMNL-APP@b7bfe5c66e709e81cf015c8dde4b51216e8e1b53/icons/icon-192-192.png", "sizes": "192x192" }]
     }
   ],
   "prefer_related_applications": false
