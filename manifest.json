@@ -11,13 +11,13 @@
   "categories": ["entertainment", "music", "news", "radio"],
   "icons": [
     {
-      "src": "icons/icon-192x192.png",
+      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/39c5b636cb179e2bd57f84e4a6dedc30cd3889e3/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512x512.png",
+      "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/39c5b636cb179e2bd57f84e4a6dedc30cd3889e3/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -43,7 +43,7 @@
     {
       "name": "Escuchar en Vivo",
       "url": "./index.html",
-      "icons": [{ "src": "icons/icon-192x192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/39c5b636cb179e2bd57f84e4a6dedc30cd3889e3/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ],
   "prefer_related_applications": false
