@@ -127,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <SidebarItem 
                   icon={<Podcast size={20} />} 
                   label="Gestión" 
-                  onClick={() => handleExternalApp('https://rcm-programaci-n.vercel.app/')} 
+                  onClick={() => handleNavigation(AppView.APP_PROGRAMACION)} 
                 />
               </>
             ) : (
