@@ -40,12 +40,48 @@ export interface ProgramSchedule {
   days: number[]; // 0 = Sunday, 1 = Monday, etc.
 }
 
-export interface NewsItem {
-  id: string;
-  title: string;
-  author: string;
-  content: string;
-  image?: string;
-  date: string;
-  category: string;
+export interface ProgramSection {
+  name: string;
+  schedule: string;
+  duration: string;
+  description: string;
+}
+
+export interface RolePaymentInfo {
+  role: string;
+  percentage: string;
+  tr: string;
+  salaries: { level: string; amount: string }[];
+  rates: { level: string; amount: string }[];
+}
+
+export interface ProgramCatalog {
+  name: string;
+  roles: RolePaymentInfo[];
+}
+
+export interface ProgramFicha {
+  name: string;
+  schedule: string;
+  duration: string;
+  frequency: string;
+  func: string;
+  music_cuban: string;
+  music_foreign: string;
+  group: string;
+  form: string;
+  complexity: string;
+  theme: string;
+  target: string;
+  times: {
+    music: string;
+    info: string;
+    propaganda: string;
+  };
+  startDate: string;
+  emissionType: string;
+  literarySupport: string;
+  objective: string;
+  profile: string;
+  sections: ProgramSection[];
 }

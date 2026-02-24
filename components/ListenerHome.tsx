@@ -64,22 +64,33 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) 
       {/* Header Pattern Background */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none fixed"></div>
 
-      {/* Mobile Top Nav */}
-      <nav className="md:hidden relative z-20 w-full px-6 py-6 flex justify-between items-center bg-[#1E1815]/50 backdrop-blur-sm sticky top-0">
-        <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="text-[#C69C6D] hover:text-white transition-colors"
-        >
-            <Menu size={24} />
-        </button>
+      {/* Mobile Sticky Header */}
+      <header className="md:hidden sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#1E1815]/90 backdrop-blur-md border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="text-[#C69C6D] hover:text-white transition-colors p-1"
+          >
+              <Menu size={24} />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white overflow-hidden p-0 shadow-lg">
+               <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <h1 className="text-sm font-serif font-bold text-[#C69C6D] leading-none tracking-wide">CMNL App</h1>
+              <p className="text-[8px] text-stone-500 uppercase tracking-tighter mt-0.5">Voz de la segunda villa</p>
+            </div>
+          </div>
+        </div>
         
         {isSyncing && (
-             <div className="flex items-center gap-2 text-[#C69C6D] text-xs font-bold">
-                 <RefreshCw size={14} className="animate-spin" />
-                 <span className="hidden sm:inline">Sincronizando...</span>
+             <div className="flex items-center gap-2 text-[#C69C6D] text-[10px] font-bold">
+                 <RefreshCw size={12} className="animate-spin" />
+                 <span>Sincronizando...</span>
              </div>
         )}
-      </nav>
+      </header>
 
       {/* Desktop Left Sidebar */}
       <aside className="hidden md:flex flex-col w-64 bg-[#2C1B15]/80 backdrop-blur-md border-r border-white/5 p-6 z-20 relative h-screen sticky top-0">
@@ -117,18 +128,8 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) 
       {/* Main Content */}
       <main className="flex-1 px-5 py-8 md:px-10 md:py-10 flex flex-col gap-4 relative z-10 max-w-7xl mx-auto w-full">
         
-        {/* Mobile Branding */}
-        <div className="md:hidden flex flex-col items-center justify-center mb-6">
-            <div className="w-20 h-20 mb-4 rounded-2xl bg-white shadow-2xl overflow-hidden p-0">
-               <img src={LOGO_URL} alt="CMNL App" className="w-full h-full object-cover" />
-            </div>
-            <h1 className="text-2xl font-serif font-bold text-center text-[#C69C6D] tracking-wide">
-              CMNL App
-            </h1>
-            <p className="text-[10px] font-medium text-center text-stone-500 uppercase tracking-[0.2em] mt-2">
-              Voz de la segunda villa cubana
-            </p>
-        </div>
+        {/* Mobile Branding (Hidden as it's now in the header) */}
+        <div className="md:hidden h-4"></div>
 
         <div className="flex flex-col h-full">
              <div className="flex justify-between items-center mb-4 px-1">

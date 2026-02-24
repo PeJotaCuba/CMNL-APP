@@ -296,7 +296,7 @@ const App: React.FC = () => {
       case AppView.APP_GUIONES:
         return <CMNLAppView title="Guiones CMNL" type="scripts" onBack={handleBack} />;
       case AppView.APP_PROGRAMACION:
-        return <GestionApp onBack={handleBack} />;
+        return <GestionApp onBack={handleBack} currentUser={currentUser} />;
 
       // Public Sections
       case AppView.SECTION_HISTORY:

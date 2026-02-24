@@ -87,38 +87,39 @@ const WorkerHome: React.FC<Props> = ({
       ></div>
       <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#2a1b12]/90 via-[#2a1b12]/80 to-[#2a1b12] pointer-events-none fixed"></div>
 
-      {/* Top Nav */}
-      <nav className="relative z-20 w-full px-6 py-6 flex justify-between items-center bg-[#2a1b12]/50 backdrop-blur-sm sticky top-0">
-        <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="text-[#FFF8DC]/80 hover:text-white transition-colors"
-        >
-            <Menu size={24} />
-        </button>
+      {/* Mobile Sticky Header */}
+      <header className="sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#2a1b12]/90 backdrop-blur-md border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="text-[#FFF8DC]/80 hover:text-white transition-colors p-1"
+          >
+              <Menu size={24} />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white overflow-hidden p-0 shadow-lg">
+               <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-[#FFF8DC] leading-none tracking-tight">CMNL App</h1>
+              <p className="text-[8px] text-[#CD853F] uppercase tracking-tighter mt-0.5">Gestión Interna</p>
+            </div>
+          </div>
+        </div>
         
         {isSyncing && (
-             <div className="flex items-center gap-2 text-[#CD853F] text-xs font-bold">
-                 <RefreshCw size={14} className="animate-spin" />
-                 <span className="hidden sm:inline">Sincronizando...</span>
+             <div className="flex items-center gap-2 text-[#CD853F] text-[10px] font-bold">
+                 <RefreshCw size={12} className="animate-spin" />
+                 <span>Sincronizando...</span>
              </div>
         )}
-      </nav>
+      </header>
 
       {/* Main Content */}
       <div className="relative z-10 flex flex-col flex-1 px-6 py-4 items-center max-w-2xl mx-auto w-full gap-8">
         
-        {/* Branding */}
-        <div className="flex flex-col items-center justify-center mt-2 mb-4 space-y-4">
-           <div className="relative w-20 h-20 flex items-center justify-center">
-              <div className="bg-white p-0 rounded-[1.5rem] border border-white/10 backdrop-blur-md shadow-2xl shadow-black/40 overflow-hidden">
-                 <img src={LOGO_URL} alt="CMNL App" className="w-full h-full object-cover" />
-              </div>
-           </div>
-           <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight text-[#FFF8DC] mb-1">CMNL App</h1>
-              <h2 className="text-[#CD853F] text-sm font-medium tracking-[0.2em] uppercase opacity-90">Gestión Interna</h2>
-           </div>
-        </div>
+        {/* Branding (Hidden as it's now in the header) */}
+        <div className="h-2"></div>
 
         {/* Live Program Widget (Integrated Player) */}
         <div className="w-full">

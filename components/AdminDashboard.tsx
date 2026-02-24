@@ -82,37 +82,35 @@ const AdminDashboard: React.FC<Props> = ({
         isSyncing={isSyncing}
       />
       
-      {/* Top Nav (Visible on all screens) */}
-      <nav className="bg-[#3E1E16] text-[#F5EFE6] px-4 py-2 flex items-center justify-between text-[10px] font-medium border-b border-[#9E7649]/20 tracking-wider uppercase sticky top-0 z-30">
-        <button onClick={() => setIsSidebarOpen(true)} className="hover:text-[#9E7649] transition-colors">
-            <Menu size={20} />
-        </button>
-        <div className="flex gap-6">
-        </div>
-      </nav>
-
-      {/* Header */}
-      <header className="sticky top-[33px] z-20 bg-[#1A100C]/95 backdrop-blur-md px-5 py-4 flex items-center justify-between border-b border-[#9E7649]/10 shadow-sm">
-         <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white p-0.5 overflow-hidden">
-                    <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
-                </div>
-                <div>
-                    <h1 className="text-white font-black text-lg leading-none tracking-tight">CMNL App</h1>
-                    <p className="text-[10px] text-[#9E7649]/80 italic mt-0.5 font-serif">Voz de la segunda villa cubana</p>
-                </div>
+      {/* Mobile Sticky Header */}
+      <header className="sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#3E1E16] border-b border-[#9E7649]/20 shadow-md">
+        <div className="flex items-center gap-3">
+          <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="text-[#F5EFE6] hover:text-[#9E7649] transition-colors p-1"
+          >
+              <Menu size={24} />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-white overflow-hidden p-0 shadow-lg">
+               <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
             </div>
-         </div>
-         <div className="flex items-center gap-3">
-             <div className="text-right">
-                <p className="text-xs font-bold text-white">{currentUser?.name || 'Admin'}</p>
-                <p className="text-[10px] text-[#9E7649] flex items-center justify-end gap-1">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                    {currentUser?.classification || 'Administrador'}
-                </p>
-             </div>
-         </div>
+            <div>
+              <h1 className="text-sm font-bold text-white leading-none tracking-tight">CMNL App</h1>
+              <p className="text-[8px] text-[#9E7649] uppercase tracking-tighter mt-0.5">Administración</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+            <div className="text-right">
+               <p className="text-[10px] font-bold text-white leading-none">{currentUser?.name || 'Admin'}</p>
+               <p className="text-[8px] text-[#9E7649] flex items-center justify-end gap-1 mt-0.5">
+                   <span className="w-1 h-1 bg-green-500 rounded-full"></span>
+                   {currentUser?.classification || 'Admin'}
+               </p>
+            </div>
+        </div>
       </header>
 
       {/* Dashboard Content */}
