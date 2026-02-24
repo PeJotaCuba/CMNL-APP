@@ -193,7 +193,9 @@ const App: React.FC = () => {
   // Determine if Player should be visible
   const isAppView = currentView.startsWith('APP_') && currentView !== AppView.APP_USER_MANAGEMENT;
   const isLoginScreen = currentView === AppView.LANDING; 
-  const showPlayer = !isAppView && !isLoginScreen;
+  // Hide player on WorkerHome and AdminDashboard as it's integrated there
+  const isIntegratedPlayerView = currentView === AppView.WORKER_HOME || currentView === AppView.ADMIN_DASHBOARD;
+  const showPlayer = !isAppView && !isLoginScreen && !isIntegratedPlayerView;
 
   const renderView = () => {
     switch (currentView) {
@@ -218,6 +220,11 @@ const App: React.FC = () => {
                 onLogout={handleLogout}
                 onSync={handleCloudSync}
                 isSyncing={isSyncing}
+                isPlaying={isPlaying}
+                togglePlay={togglePlay}
+                isRefreshing={isRefreshing}
+                onRefreshLive={handleRefreshLive}
+                currentProgram={currentProgram}
             />
         );
       case AppView.ADMIN_DASHBOARD:
@@ -228,6 +235,13 @@ const App: React.FC = () => {
             users={users}
             currentUser={currentUser}
             onLogout={handleLogout}
+            onSync={handleCloudSync}
+            isSyncing={isSyncing}
+            isPlaying={isPlaying}
+            togglePlay={togglePlay}
+            isRefreshing={isRefreshing}
+            onRefreshLive={handleRefreshLive}
+            currentProgram={currentProgram}
           />
         );
       case AppView.APP_USER_MANAGEMENT:

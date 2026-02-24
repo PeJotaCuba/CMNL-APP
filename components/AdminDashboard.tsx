@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { AppView, NewsItem, User } from '../types';
-import { Settings, ChevronRight, ChevronLeft, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare } from 'lucide-react';
-import { getCurrentProgram, LOGO_URL } from '../utils/scheduleData';
+import { AppView, NewsItem, User, ProgramItem } from '../types';
+import { Settings, ChevronRight, ChevronLeft, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare, Menu, ScrollText, Mic, Users, RefreshCw, Play, Pause } from 'lucide-react';
+import { LOGO_URL } from '../utils/scheduleData';
+import Sidebar from './Sidebar';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
@@ -9,6 +10,13 @@ interface Props {
   users: User[]; 
   currentUser: User | null;
   onLogout: () => void;
+  onSync: () => void;
+  isSyncing: boolean;
+  isPlaying: boolean;
+  togglePlay: () => void;
+  isRefreshing: boolean;
+  onRefreshLive: () => void;
+  currentProgram: ProgramItem;
 }
 
 const newsColors = [
@@ -20,16 +28,22 @@ const newsColors = [
   'bg-[#263238]',
 ];
 
-const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser, onLogout }) => {
-  const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+const AdminDashboard: React.FC<Props> = ({ 
+    onNavigate, 
+    news, 
+    users, 
+    currentUser, 
+    onLogout, 
+    onSync, 
+    isSyncing,
+    isPlaying,
+    togglePlay,
+    isRefreshing,
+    onRefreshLive,
+    currentProgram
+}) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentProgram(getCurrentProgram());
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // News Carousel Interval
   useEffect(() => {
@@ -56,24 +70,24 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
     if(news.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
   };
 
-  const handleExternalApp = (url: string) => {
-    let finalUrl = url;
-    if (currentUser) {
-        const separator = url.includes('?') ? '&' : '?';
-        finalUrl = `${url}${separator}username=${encodeURIComponent(currentUser.username)}&password=${encodeURIComponent(currentUser.password || '')}`;
-    }
-    window.location.href = finalUrl;
-  };
-
   return (
-    <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-40 overflow-y-auto no-scrollbar">
+    <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-10 overflow-y-auto no-scrollbar">
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        onNavigate={onNavigate}
+        currentUser={currentUser}
+        onLogout={onLogout}
+        onSync={onSync}
+        isSyncing={isSyncing}
+      />
       
-      {/* Top Nav */}
-      <nav className="bg-[#3E1E16] text-[#F5EFE6] px-4 py-2 flex items-center justify-center text-[10px] font-medium border-b border-[#9E7649]/20 tracking-wider uppercase sticky top-0 z-30">
+      {/* Top Nav (Visible on all screens) */}
+      <nav className="bg-[#3E1E16] text-[#F5EFE6] px-4 py-2 flex items-center justify-between text-[10px] font-medium border-b border-[#9E7649]/20 tracking-wider uppercase sticky top-0 z-30">
+        <button onClick={() => setIsSidebarOpen(true)} className="hover:text-[#9E7649] transition-colors">
+            <Menu size={20} />
+        </button>
         <div className="flex gap-6">
-          <button onClick={() => onNavigate(AppView.SECTION_HISTORY)} className="hover:text-[#9E7649] cursor-pointer transition-colors">Historia</button>
-          <button onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} className="hover:text-[#9E7649] cursor-pointer transition-colors">Programación</button>
-          <button onClick={() => onNavigate(AppView.SECTION_ABOUT)} className="hover:text-[#9E7649] cursor-pointer transition-colors">Quiénes Somos</button>
         </div>
       </nav>
 
@@ -98,12 +112,6 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
                     {currentUser?.classification || 'Administrador'}
                 </p>
              </div>
-             <button onClick={() => onNavigate(AppView.APP_USER_MANAGEMENT)} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-[#9E7649]/20 text-[#E8DCCF] transition-colors border border-[#9E7649]/30">
-                <Settings size={18} />
-             </button>
-             <button onClick={onLogout} className="w-9 h-9 rounded-full bg-[#2C1B15] flex items-center justify-center hover:bg-red-900/40 text-[#E8DCCF] hover:text-red-400 transition-colors border border-[#9E7649]/30">
-                <LogOut size={18} />
-             </button>
          </div>
       </header>
 
@@ -115,34 +123,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
          </div>
 
-         {/* CMNL Apps Grid */}
-         <div>
-            <h2 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest mb-3">Aplicaciones CMNL</h2>
-            <div className="grid grid-cols-4 gap-2">
-              <AppButton 
-                icon={<CalendarDays size={20} />} 
-                label="Agenda" 
-                onClick={() => handleExternalApp('https://rcmagenda.vercel.app/#/home')} 
-              />
-              <AppButton 
-                icon={<Music size={20} />} 
-                label="Música" 
-                onClick={() => handleExternalApp('https://rcm-musica.vercel.app/')} 
-              />
-              <AppButton 
-                icon={<FileText size={20} />} 
-                label="Guiones" 
-                onClick={() => handleExternalApp('https://guion-bd.vercel.app/')} 
-              />
-              <AppButton 
-                icon={<Podcast size={20} />} 
-                label="Progr." 
-                onClick={() => handleExternalApp('https://rcm-programaci-n.vercel.app/')} 
-              />
-            </div>
-         </div>
-
-         {/* Live Program Widget with VECTOR */}
+         {/* Live Program Widget with Integrated Player */}
          <div>
             <div className="flex items-center justify-between mb-3 px-1">
                <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -152,46 +133,57 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
                  </span>
                  En el Aire
                </h2>
-               <button 
-                  onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)}
-                  className="text-[#9E7649] text-xs font-medium flex items-center gap-0.5 hover:text-[#B68D5D] transition-colors"
-                >
-                  Ver guía <ChevronRight size={14} />
-               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
-               <div className="relative bg-[#2C1B15] rounded-xl overflow-hidden border border-[#9E7649]/10 group shadow-lg">
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600"></div>
-                  <div className="p-4 pl-5 flex items-center gap-4">
-                     
-                     {/* Vector Visualization */}
-                     <div className="relative shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-black/40 flex items-center justify-center border border-white/5">
-                        <div className="flex gap-1 h-8 items-end">
-                            <div className="w-1 bg-[#9E7649] animate-[soundbar_0.8s_ease-in-out_infinite]"></div>
-                            <div className="w-1 bg-[#9E7649] animate-[soundbar_1.2s_ease-in-out_infinite]"></div>
-                            <div className="w-1 bg-[#9E7649] animate-[soundbar_0.5s_ease-in-out_infinite]"></div>
-                            <div className="w-1 bg-[#9E7649] animate-[soundbar_1.0s_ease-in-out_infinite]"></div>
-                            <div className="w-1 bg-[#9E7649] animate-[soundbar_0.7s_ease-in-out_infinite]"></div>
-                        </div>
-                     </div>
-
-                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-red-600/20 text-red-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-600/20 uppercase tracking-wider">En Vivo</span>
-                        </div>
-                        <h4 className="text-white font-bold text-lg leading-tight truncate">{currentProgram.name}</h4>
-                        <p className="text-[#9E7649] text-xs font-medium mt-1">{currentProgram.time}</p>
-                     </div>
+            <div className="relative bg-[#2C1B15] rounded-xl overflow-hidden border border-[#9E7649]/10 group shadow-lg">
+               <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600"></div>
+               <div className="p-5 flex items-center gap-5">
+                  
+                  {/* Vector Visualization (Left) */}
+                  <div className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center border border-white/5">
+                      <div className="flex gap-1 h-8 items-end">
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.8s_ease-in-out_infinite]' : 'h-2'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_1.2s_ease-in-out_infinite]' : 'h-4'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.5s_ease-in-out_infinite]' : 'h-1'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_1.0s_ease-in-out_infinite]' : 'h-3'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.7s_ease-in-out_infinite]' : 'h-2'}`}></div>
+                      </div>
                   </div>
-                  {/* Background blur effect */}
-                  <div className="absolute inset-0 z-[-1] opacity-20 bg-cover bg-center blur-xl" style={{ backgroundImage: `url(${currentProgram.image})` }}></div>
+
+                  {/* Info (Center) */}
+                  <div className="flex-1 min-w-0">
+                     <div className="flex items-center gap-2 mb-1">
+                         <span className="bg-red-600/20 text-red-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-600/20 uppercase tracking-wider">En Vivo • 95.3 FM</span>
+                     </div>
+                     <h4 className="text-white font-bold text-xl leading-tight truncate mb-1">{currentProgram.name}</h4>
+                     <p className="text-[#9E7649] text-sm font-medium">{currentProgram.time}</p>
+                  </div>
+
+                  {/* Controls (Right) */}
+                  <div className="flex items-center gap-4">
+                      <button 
+                        onClick={togglePlay}
+                        className="w-12 h-12 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all"
+                        title={isPlaying ? "Pausar" : "Reproducir"}
+                      >
+                         {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                      </button>
+                      <button 
+                          onClick={onRefreshLive}
+                          className={`w-12 h-12 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all ${isRefreshing ? 'animate-spin' : ''}`}
+                          title="Actualizar señal"
+                      >
+                          <RefreshCw size={24} />
+                      </button>
+                  </div>
                </div>
+               {/* Background blur effect */}
+               <div className="absolute inset-0 z-[-1] opacity-20 bg-cover bg-center blur-xl" style={{ backgroundImage: `url(${currentProgram.image})` }}></div>
             </div>
          </div>
 
          {/* News Carousel */}
-         <div>
+         <div className="flex-1 flex flex-col">
             <div className="flex justify-between items-center mb-3 px-1">
                  <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
             </div>
@@ -199,7 +191,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
             {activeNews ? (
                 <div 
                     onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
-                    className={`relative cursor-pointer rounded-xl ${currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all h-52 group`}
+                    className={`relative cursor-pointer rounded-xl ${currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all min-h-[200px] flex-1 group`}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
 
@@ -260,12 +252,5 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate, news, users, currentUser,
     </div>
   );
 };
-
-const AppButton = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => (
-    <button onClick={onClick} className="flex flex-col items-center justify-center bg-[#2C1B15] rounded-xl p-3 border border-white/5 hover:bg-[#3E1E16] transition-all">
-        <div className="text-[#9E7649] mb-1">{icon}</div>
-        <span className="text-[10px] text-[#F5EFE6] font-medium">{label}</span>
-    </button>
-);
 
 export default AdminDashboard;
