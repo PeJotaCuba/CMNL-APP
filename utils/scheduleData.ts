@@ -12,7 +12,7 @@ const utf8_to_b64 = (str: string) => {
 };
 
 // Helper to generate SVG Vector Backgrounds based on category
-const getCategoryVector = (category: string, title: string): string => {
+export const getCategoryVector = (category: string, title: string): string => {
   const cat = (category || '').toLowerCase().trim();
   const t = (title || '').toLowerCase();
   

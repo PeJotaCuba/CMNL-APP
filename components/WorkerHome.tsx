@@ -134,11 +134,11 @@ const WorkerHome: React.FC<Props> = ({
 
             <div className="relative bg-[#2C1B15] rounded-xl overflow-hidden border border-[#9E7649]/10 group shadow-lg">
                <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-600"></div>
-               <div className="p-5 flex items-center gap-5">
+               <div className="p-4 flex items-center gap-3">
                   
                   {/* Vector Visualization (Left) */}
-                  <div className="relative shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center border border-white/5">
-                      <div className="flex gap-1 h-8 items-end">
+                  <div className="relative shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center border border-white/5">
+                      <div className="flex gap-0.5 h-6 items-end">
                           <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.8s_ease-in-out_infinite]' : 'h-2'}`}></div>
                           <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_1.2s_ease-in-out_infinite]' : 'h-4'}`}></div>
                           <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.5s_ease-in-out_infinite]' : 'h-1'}`}></div>
@@ -148,29 +148,29 @@ const WorkerHome: React.FC<Props> = ({
                   </div>
 
                   {/* Info (Center) */}
-                  <div className="flex-1 min-w-0">
-                     <div className="flex items-center gap-2 mb-1">
-                         <span className="bg-red-600/20 text-red-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-600/20 uppercase tracking-wider">En Vivo • 95.3 FM</span>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                     <div className="flex items-center gap-2 mb-0.5">
+                         <span className="bg-red-600/20 text-red-500 text-[8px] font-bold px-1.5 py-0.5 rounded border border-red-600/20 uppercase tracking-wider">En Vivo</span>
                      </div>
-                     <h4 className="text-white font-bold text-xl leading-tight truncate mb-1">{currentProgram.name}</h4>
-                     <p className="text-[#9E7649] text-sm font-medium">{currentProgram.time}</p>
+                     <h4 className="text-white font-bold text-sm sm:text-base leading-tight line-clamp-2">{currentProgram.name}</h4>
+                     <p className="text-[#9E7649] text-xs font-medium truncate">{currentProgram.time}</p>
                   </div>
 
                   {/* Controls (Right) */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 shrink-0">
                       <button 
                         onClick={togglePlay}
-                        className="w-12 h-12 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all"
+                        className="w-10 h-10 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all"
                         title={isPlaying ? "Pausar" : "Reproducir"}
                       >
-                         {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                         {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
                       </button>
                       <button 
                           onClick={onRefreshLive}
-                          className={`w-12 h-12 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 active:scale-95 transition-all ${isRefreshing ? 'animate-spin' : ''}`}
+                          className={`w-10 h-10 rounded-full bg-[#2C1B15] border border-[#9E7649]/30 text-[#9E7649] flex items-center justify-center shadow-lg hover:bg-[#9E7649]/10 active:scale-95 transition-all ${isRefreshing ? 'animate-spin' : ''}`}
                           title="Actualizar señal"
                       >
-                          <RefreshCw size={24} />
+                          <RefreshCw size={18} />
                       </button>
                   </div>
                </div>

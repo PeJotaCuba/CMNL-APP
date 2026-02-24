@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper, DownloadCloud, RefreshCw } from 'lucide-react';
 import { User, NewsItem, UserClassification } from '../types';
+import { getCategoryVector } from '../utils/scheduleData';
 
 interface Props {
   onBack: () => void;
@@ -151,14 +152,15 @@ const UserManagement: React.FC<Props> = ({
             const content = block.substring(textIndex + textKey.length).trim();
 
             if (title && content) {
+                 const category = detectCategory(title + ' ' + content);
                  parsedNews.push({
                     id: Date.now().toString() + Math.random().toString(),
                     title: title,
                     author: author,
                     content: content,
                     date: 'Reciente',
-                    category: detectCategory(title + ' ' + content),
-                    image: '' 
+                    category: category,
+                    image: getCategoryVector(category, title)
                 });
                 count++;
             }
@@ -228,7 +230,13 @@ const UserManagement: React.FC<Props> = ({
           }
           
           if (json.news && Array.isArray(json.news)) {
-            setNews(json.news);
+            const processedNews = json.news.map((n: NewsItem) => ({
+                ...n,
+                image: (!n.image || n.image === '') 
+                    ? getCategoryVector(n.category || 'Boletín', n.title) 
+                    : n.image
+            }));
+            setNews(processedNews);
             restoredCount++;
           }
 
@@ -304,49 +312,9 @@ const UserManagement: React.FC<Props> = ({
       <div className="flex-1 overflow-y-auto pb-40"> 
         
         {activeTab === 'users' && (
-            <div className="flex flex-col md:flex-row h-full md:h-auto">
-                {/* List Section */}
-                <div className="flex-1 bg-[#1A100C] flex flex-col min-h-[50vh] md:h-full md:overflow-y-auto border-b md:border-b-0 md:border-r border-[#9E7649]/10">
-                    <div className="p-4 border-b border-[#9E7649]/10 bg-[#1A100C] sticky top-0 z-10">
-                        <div className="relative">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9E7649]" />
-                            <input type="text" placeholder="Buscar usuarios..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#2C1B15] pl-10 pr-4 py-2 rounded-lg text-sm border border-[#9E7649]/10 focus:border-[#9E7649]/50 outline-none placeholder:text-[#E8DCCF]/30" />
-                        </div>
-                    </div>
-                    
-                    <div className="p-4 grid gap-3">
-                        {filteredUsers.map((user, idx) => (
-                            <div key={idx} className="bg-[#2C1B15] p-3 rounded-xl border border-[#9E7649]/10 flex items-center justify-between group hover:border-[#9E7649]/30 transition-all">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-[#1A100C] flex items-center justify-center text-[#9E7649] font-bold text-xs border border-[#9E7649]/20">
-                                        {user.username.substring(0,2).toUpperCase()}
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-white text-sm">{user.name}</h3>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                             <span className="text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1.5 py-0.5 rounded">{user.classification || 'Usuario'}</span>
-                                             <span className="text-[10px] text-[#E8DCCF]/50">@{user.username}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="text-[10px] bg-black/20 px-2 py-1 rounded text-[#E8DCCF]/50 font-mono hidden sm:block">{user.password}</div>
-                                    <button onClick={() => startEditUser(user)} className="p-2 text-[#E8DCCF]/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
-                                        <Edit2 size={16} />
-                                    </button>
-                                    {user.username !== 'admin' && (
-                                        <button onClick={() => removeUser(user.username)} className="p-2 text-[#E8DCCF]/40 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
+            <div className="flex flex-col md:flex-row-reverse h-full md:h-auto">
                 {/* Form & Upload Section */}
-                <div className="w-full md:w-1/3 bg-[#2C1B15] p-6 shrink-0 md:h-full md:overflow-y-auto">
+                <div className="w-full md:w-1/3 bg-[#2C1B15] p-6 shrink-0 md:h-full md:overflow-y-auto border-b md:border-b-0 md:border-l border-[#9E7649]/10">
                     <div className="mb-10">
                         <h2 className="text-sm font-bold text-[#9E7649] uppercase tracking-wider mb-4">{isEditing ? 'Editar Usuario' : 'Crear Usuario'}</h2>
                         
@@ -389,6 +357,46 @@ const UserManagement: React.FC<Props> = ({
                             </div>
                             <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'users')} className="hidden" />
                         </label>
+                    </div>
+                </div>
+
+                {/* List Section */}
+                <div className="flex-1 bg-[#1A100C] flex flex-col min-h-[50vh] md:h-full md:overflow-y-auto">
+                    <div className="p-4 border-b border-[#9E7649]/10 bg-[#1A100C] sticky top-0 z-10">
+                        <div className="relative">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9E7649]" />
+                            <input type="text" placeholder="Buscar usuarios..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#2C1B15] pl-10 pr-4 py-2 rounded-lg text-sm border border-[#9E7649]/10 focus:border-[#9E7649]/50 outline-none placeholder:text-[#E8DCCF]/30" />
+                        </div>
+                    </div>
+                    
+                    <div className="p-4 grid gap-3">
+                        {filteredUsers.map((user, idx) => (
+                            <div key={idx} className="bg-[#2C1B15] p-3 rounded-xl border border-[#9E7649]/10 flex items-center justify-between group hover:border-[#9E7649]/30 transition-all">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-[#1A100C] flex items-center justify-center text-[#9E7649] font-bold text-xs border border-[#9E7649]/20">
+                                        {user.username.substring(0,2).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-white text-sm">{user.name}</h3>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                             <span className="text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1.5 py-0.5 rounded">{user.classification || 'Usuario'}</span>
+                                             <span className="text-[10px] text-[#E8DCCF]/50">@{user.username}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="text-[10px] bg-black/20 px-2 py-1 rounded text-[#E8DCCF]/50 font-mono hidden sm:block">{user.password}</div>
+                                    <button onClick={() => startEditUser(user)} className="p-2 text-[#E8DCCF]/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                                        <Edit2 size={16} />
+                                    </button>
+                                    {user.username !== 'admin' && (
+                                        <button onClick={() => removeUser(user.username)} className="p-2 text-[#E8DCCF]/40 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

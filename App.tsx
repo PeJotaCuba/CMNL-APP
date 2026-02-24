@@ -6,18 +6,34 @@ import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
 import UserManagement from './components/UserManagement';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
-import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram } from './utils/scheduleData';
+import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
   const [history, setHistory] = useState<AppView[]>([]);
   
-  // Global Data State - Initialized from JSON via utils
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [news, setNews] = useState<NewsItem[]>(INITIAL_NEWS);
-  const [historyContent, setHistoryContent] = useState<string>(INITIAL_HISTORY);
-  const [aboutContent, setAboutContent] = useState<string>(INITIAL_ABOUT);
+  // Global Data State - Initialized from LocalStorage or JSON via utils
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem('rcm_data_users');
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
+  });
+  
+  const [news, setNews] = useState<NewsItem[]>(() => {
+    const saved = localStorage.getItem('rcm_data_news');
+    return saved ? JSON.parse(saved) : INITIAL_NEWS;
+  });
+
+  const [historyContent, setHistoryContent] = useState<string>(() => {
+    const saved = localStorage.getItem('rcm_data_history');
+    return saved || INITIAL_HISTORY;
+  });
+
+  const [aboutContent, setAboutContent] = useState<string>(() => {
+    const saved = localStorage.getItem('rcm_data_about');
+    return saved || INITIAL_ABOUT;
+  });
+
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   
   // Auth State
@@ -29,6 +45,12 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+
+  // Persistence Effects
+  useEffect(() => { localStorage.setItem('rcm_data_users', JSON.stringify(users)); }, [users]);
+  useEffect(() => { localStorage.setItem('rcm_data_news', JSON.stringify(news)); }, [news]);
+  useEffect(() => { localStorage.setItem('rcm_data_history', historyContent); }, [historyContent]);
+  useEffect(() => { localStorage.setItem('rcm_data_about', aboutContent); }, [aboutContent]);
 
   useEffect(() => {
     // Check for persistent session
@@ -177,7 +199,13 @@ const App: React.FC = () => {
             changes++;
           }
           if (json.news && Array.isArray(json.news)) {
-            setNews(json.news);
+            const processedNews = json.news.map((n: NewsItem) => ({
+                ...n,
+                image: (!n.image || n.image === '') 
+                    ? getCategoryVector(n.category || 'Boletín', n.title) 
+                    : n.image
+            }));
+            setNews(processedNews);
             changes++;
           }
 
