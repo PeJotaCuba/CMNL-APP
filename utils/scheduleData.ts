@@ -4,6 +4,13 @@ import { appData } from './initialData';
 // Simulacion de archivo en carpeta Iconos - Logo sin el punto central
 export const LOGO_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='white' rx='80' ry='80'/%3E%3Cpath d='M140,380 V200 A60,60 0 0,1 260,200 V380' fill='none' stroke='%233E1E16' stroke-width='65' stroke-linecap='round' /%3E%3Cpath d='M260,380 V160 A100,100 0 0,1 460,160 V380' fill='none' stroke='%238B5E3C' stroke-width='65' stroke-linecap='round' /%3E%3C/svg%3E";
 
+// Helper to safely encode Unicode strings to Base64
+const utf8_to_b64 = (str: string) => {
+  return window.btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+      (match, p1) => String.fromCharCode(parseInt(p1, 16)))
+  );
+};
+
 // Helper to generate SVG Vector Backgrounds based on category
 const getCategoryVector = (category: string, title: string): string => {
   const cat = (category || '').toLowerCase().trim();
@@ -51,7 +58,7 @@ const getCategoryVector = (category: string, title: string): string => {
     </svg>
   `;
 
-  return `data:image/svg+xml;base64,${btoa(svg)}`;
+  return `data:image/svg+xml;base64,${utf8_to_b64(svg)}`;
 };
 
 // --- DATA MAPPING ---
