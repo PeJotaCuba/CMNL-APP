@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { User, Script } from '../types';
-import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, RefreshCw, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
+import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
 import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
 
@@ -288,28 +288,6 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
         } finally {
             setIsProcessing(false);
             if (globalUploadRef.current) globalUploadRef.current.value = '';
-        }
-    };
-
-    const handleRemoteUpdate = async () => {
-        setIsProcessing(true);
-        try {
-            const response = await fetch('https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/guiones.json');
-            if (!response.ok) throw new Error('Error al descargar');
-            
-            const allScripts: Script[] = await response.json();
-            
-            // Limpiar datos locales antes de actualizar para reflejar exactamente el servidor
-            PROGRAMS.forEach(p => {
-                localStorage.removeItem(`guionbd_data_${p.file}`);
-            });
-            
-            distributeScripts(allScripts, true);
-            alert("Base de datos actualizada.");
-        } catch (error) {
-            alert("Error al actualizar desde el servidor.");
-        } finally {
-            setIsProcessing(false);
         }
     };
 
@@ -822,8 +800,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                                 {s.themes && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
                                             </h3>
                                         </div>
-                                        <span className="text-xs text-[#E8DCCF]/60 bg-black/30 px-3 py-1.5 rounded-lg whitespace-nowrap font-mono flex items-center gap-1.5 border border-white/5">
-                                            <Calendar size={12} /> {s.dateAdded}
+                                        <span className="text-xs text-[#E8DCCF]/60 bg-black/30 px-3 py-1.5 rounded-lg font-mono flex items-center gap-1.5 border border-white/5 text-center">
+                                            <Calendar size={12} className="shrink-0" /> {s.dateAdded}
                                         </span>
                                     </div>
                                     <div className="flex flex-wrap gap-8 text-sm bg-[#1A100C] p-3.5 rounded-xl border border-[#9E7649]/10">
@@ -1007,20 +985,11 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                 {/* Botones de Acción */}
                                 <div className="flex flex-wrap gap-3 justify-center">
                                     <button
-                                        onClick={handleRemoteUpdate}
-                                        disabled={isProcessing}
-                                        className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm disabled:opacity-50"
-                                    >
-                                        <RefreshCw size={18} className={isProcessing ? "animate-spin" : ""} />
-                                        <span className="hidden md:inline text-sm font-bold">Actualizar</span>
-                                    </button>
-
-                                    <button
                                         onClick={() => setShowStats(true)}
                                         className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
                                     >
                                         <FileText size={18} />
-                                        <span className="hidden md:inline text-sm font-bold">Informes</span>
+                                        <span className="text-sm font-bold">Informes</span>
                                     </button>
 
                                     {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (

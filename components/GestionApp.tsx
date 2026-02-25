@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Download, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import { INITIAL_FICHAS } from '../utils/fichasData';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Props {
   onBack: () => void;
@@ -14,6 +16,7 @@ interface WorkLog {
     role: string;
     programName: string;
     date: string; // YYYY-MM-DD
+    amount: number;
 }
 
 interface UserPaymentConfig {
@@ -49,6 +52,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   // Work Log State
   const [workLogDate, setWorkLogDate] = useState(new Date().toISOString().split('T')[0]);
   const [workLogView, setWorkLogView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [showAccumulated, setShowAccumulated] = useState(false);
   
   // Payment Config State
   const [configForm, setConfigForm] = useState<UserPaymentConfig>({ role: 'Director', level: 'I' });
@@ -88,6 +92,113 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       if (isNaN(num)) return value;
       if (num <= 1 && num > 0) return `${Math.round(num * 100)}%`;
       return `${num}%`;
+  };
+
+  const isProgramOnDay = (program: ProgramFicha, dateStr: string) => {
+      const date = new Date(dateStr);
+      const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+      const freq = program.frequency.toLowerCase();
+      
+      // Normalize frequency string
+      if (freq.includes('diario') || freq.includes('lunes a domingo')) return true;
+      if (freq.includes('lunes a sábado') && day !== 0) return true;
+      if (freq.includes('lunes a viernes') && day >= 1 && day <= 5) return true;
+      
+      const daysMap: { [key: number]: string[] } = {
+          0: ['domingo', 'dominical'],
+          1: ['lunes'],
+          2: ['martes'],
+          3: ['miércoles', 'miercoles'],
+          4: ['jueves'],
+          5: ['viernes'],
+          6: ['sábado', 'sabado', 'sabatina']
+      };
+
+      return daysMap[day].some(d => freq.includes(d));
+  };
+
+  const getProgramRate = (programName: string, role: string, level: string) => {
+      // Normalize names for better matching
+      const normalize = (s: string) => s.trim().toLowerCase();
+      const program = catalogo.find(p => normalize(p.name) === normalize(programName) || normalize(p.name).includes(normalize(programName)) || normalize(programName).includes(normalize(p.name)));
+      
+      if (!program) return 0;
+
+      let total = 0;
+      
+      // Normalize role for matching
+      let searchRole = role;
+      if (normalize(role) === 'realizador de sonido') searchRole = 'Realizador';
+
+      // Find main role rate
+      const roleInfo = program.roles.find(r => normalize(r.role) === normalize(searchRole));
+      if (roleInfo) {
+           const rateObj = roleInfo.rates.find(r => r.level === level);
+           if (rateObj) {
+               total += parseFloat(rateObj.amount) || 0;
+           }
+      }
+
+      // If Director, add Musical Production if available
+      if (role === 'Director') {
+          const musicRole = program.roles.find(r => r.role.toLowerCase().includes('producción musical'));
+          if (musicRole) {
+              const rateObj = musicRole.rates.find(r => r.level === level);
+              if (rateObj) {
+                  total += parseFloat(rateObj.amount) || 0;
+              }
+          }
+      }
+      
+      return total;
+  };
+
+  const generatePDF = () => {
+      if (!currentUser || !userPaymentConfig) return;
+      
+      const doc = new jsPDF();
+      const title = `Reporte de Pagos - ${currentUser.name}`;
+      const subtitle = `Cargo: ${userPaymentConfig.role} | Nivel: ${userPaymentConfig.level}`;
+      const date = `Fecha de emisión: ${new Date().toLocaleDateString()}`;
+
+      doc.setFontSize(18);
+      doc.text(title, 14, 22);
+      doc.setFontSize(12);
+      doc.text(subtitle, 14, 30);
+      doc.setFontSize(10);
+      doc.text(date, 14, 36);
+
+      const tableColumn = ["Fecha", "Programa", "Monto"];
+      const tableRows: any[] = [];
+
+      // Filter logs for current user and role
+      const userLogs = workLogs.filter(l => 
+          l.userId === currentUser.username && 
+          l.role === userPaymentConfig.role
+      ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      let totalAmount = 0;
+
+      userLogs.forEach(log => {
+          const logData = [
+              log.date,
+              log.programName,
+              `$${log.amount.toFixed(2)}`
+          ];
+          tableRows.push(logData);
+          totalAmount += log.amount;
+      });
+
+      // Add total row
+      tableRows.push(["", "TOTAL", `$${totalAmount.toFixed(2)}`]);
+
+      autoTable(doc, {
+          head: [tableColumn],
+          body: tableRows,
+          startY: 40,
+      });
+
+      doc.save(`reporte_pagos_${currentUser.username}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'fichas' | 'catalogo') => {
@@ -295,28 +406,6 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       URL.revokeObjectURL(url);
   };
 
-  const handleUpdateGestionData = async () => {
-      try {
-          const response = await fetch('https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/gestioncmnl.json');
-          if (!response.ok) throw new Error('Error al descargar los datos');
-          const data = await response.json();
-          
-          if (data.fichas) {
-              setFichas(data.fichas);
-              localStorage.setItem('rcm_data_fichas', JSON.stringify(data.fichas));
-          }
-          if (data.catalogo) {
-              setCatalogo(data.catalogo);
-              localStorage.setItem('rcm_data_catalogo', JSON.stringify(data.catalogo));
-          }
-          
-          alert('Base de datos actualizada correctamente');
-      } catch (error) {
-          console.error('Error updating data:', error);
-          alert('Error al actualizar la base de datos. Verifique su conexión.');
-      }
-  };
-
   const handleEdit = () => {
       if (selectedFicha) {
           setEditForm({ ...selectedFicha });
@@ -366,7 +455,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   };
 
   const toggleWorkLog = (programName: string, date: string, role: string) => {
-      if (!currentUser) return;
+      if (!currentUser || !userPaymentConfig) return;
       const userId = currentUser.username;
       
       const existingIndex = workLogs.findIndex(l => 
@@ -381,51 +470,27 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
           newLogs.splice(existingIndex, 1);
           setWorkLogs(newLogs);
       } else {
+          const amount = getProgramRate(programName, role, userPaymentConfig.level);
           setWorkLogs([...workLogs, {
               id: Date.now().toString() + Math.random(),
               userId,
               role,
               programName,
-              date
+              date,
+              amount
           }]);
       }
   };
 
   const calculateTotalPayment = () => {
       if (!userPaymentConfig || !currentUser) return 0;
-      let total = 0;
       
       const userLogs = workLogs.filter(l => 
           l.userId === currentUser.username && 
           l.role === userPaymentConfig.role
       );
 
-      userLogs.forEach(log => {
-          const program = catalogo.find(p => p.name === log.programName);
-          if (!program) return;
-
-          // Find main role rate
-          const roleInfo = program.roles.find(r => r.role === userPaymentConfig.role);
-          if (roleInfo) {
-               const rateObj = roleInfo.rates.find(r => r.level === userPaymentConfig.level);
-               if (rateObj) {
-                   total += parseFloat(rateObj.amount) || 0;
-               }
-          }
-
-          // If Director, add Musical Production
-          if (userPaymentConfig.role === 'Director') {
-              const musicRole = program.roles.find(r => r.role.includes('Producción Musical'));
-              if (musicRole) {
-                  const rateObj = musicRole.rates.find(r => r.level === userPaymentConfig.level);
-                  if (rateObj) {
-                      total += parseFloat(rateObj.amount) || 0;
-                  }
-              }
-          }
-      });
-
-      return total;
+      return userLogs.reduce((acc, log) => acc + log.amount, 0);
   };
 
   // Render Pagos Section
@@ -530,12 +595,20 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       <h1 className="text-lg font-bold text-white leading-none">Pagos</h1>
                       <p className="text-[10px] text-[#9E7649]">Control y Cálculo de Salarios</p>
                   </div>
-                  <button 
-                      onClick={() => setUserPaymentConfig(null)}
-                      className="text-xs text-[#9E7649] hover:text-white underline"
-                  >
-                      Configuración
-                  </button>
+                  <div className="flex gap-2">
+                       <button 
+                          onClick={() => setShowAccumulated(!showAccumulated)}
+                          className={`text-xs px-3 py-1 rounded border ${showAccumulated ? 'bg-[#9E7649] text-white border-[#9E7649]' : 'border-[#9E7649]/30 text-[#9E7649]'}`}
+                      >
+                          {showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}
+                      </button>
+                      <button 
+                          onClick={() => setUserPaymentConfig(null)}
+                          className="text-xs text-[#9E7649] hover:text-white underline"
+                      >
+                          Configuración
+                      </button>
+                  </div>
               </div>
 
               <div className="p-6 max-w-6xl mx-auto w-full">
@@ -556,81 +629,156 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       </div>
                   </div>
 
-                  {/* Controls */}
-                  <div className="flex flex-wrap gap-4 mb-6 bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10">
-                      <div className="flex items-center gap-2 bg-black/20 rounded p-1 border border-[#9E7649]/30">
-                          <button onClick={() => setWorkLogView('daily')} className={`px-3 py-1 rounded ${workLogView === 'daily' ? 'bg-[#9E7649] text-white' : 'text-[#9E7649]'}`}>Diario</button>
-                          <button onClick={() => setWorkLogView('weekly')} className={`px-3 py-1 rounded ${workLogView === 'weekly' ? 'bg-[#9E7649] text-white' : 'text-[#9E7649]'}`}>Semanal</button>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-auto">
-                          <button onClick={() => {
-                              const d = new Date(workLogDate);
-                              d.setDate(d.getDate() - (workLogView === 'weekly' ? 7 : 1));
-                              setWorkLogDate(d.toISOString().split('T')[0]);
-                          }} className="p-2 hover:bg-white/10 rounded-full"><ChevronLeft size={20}/></button>
-                          
-                          <span className="font-mono font-bold text-white">
-                              {workLogView === 'daily' ? workLogDate : `Semana del ${dates[0]}`}
-                          </span>
-
-                          <button onClick={() => {
-                              const d = new Date(workLogDate);
-                              d.setDate(d.getDate() + (workLogView === 'weekly' ? 7 : 1));
-                              setWorkLogDate(d.toISOString().split('T')[0]);
-                          }} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight size={20}/></button>
-                      </div>
-                  </div>
-
-                  {/* Grid */}
-                  <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
-                      <div className="overflow-x-auto">
-                          <table className="w-full text-sm text-left">
-                              <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
-                                  <tr>
-                                      <th className="px-6 py-3">Programa</th>
-                                      {dates.map(date => (
-                                          <th key={date} className="px-6 py-3 text-center">
-                                              {new Date(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
-                                          </th>
+                  {showAccumulated ? (
+                      <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden p-4">
+                          <div className="flex justify-between items-center mb-4">
+                              <h3 className="text-white font-bold">Historial Acumulado</h3>
+                              <button onClick={generatePDF} className="flex items-center gap-2 bg-[#9E7649] text-white px-3 py-1 rounded text-sm hover:bg-[#8B653D]">
+                                  <FileDown size={16} /> Descargar PDF
+                              </button>
+                          </div>
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-sm text-left">
+                                  <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
+                                      <tr>
+                                          <th className="px-6 py-3">Fecha</th>
+                                          <th className="px-6 py-3">Programa</th>
+                                          <th className="px-6 py-3 text-right">Monto</th>
+                                          <th className="px-6 py-3 text-center">Acciones</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      {workLogs
+                                          .filter(l => l.userId === currentUser?.username && l.role === userPaymentConfig.role)
+                                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                          .map(log => (
+                                          <tr key={log.id} className="border-b border-[#9E7649]/10 hover:bg-white/5">
+                                              <td className="px-6 py-4 text-white">{log.date}</td>
+                                              <td className="px-6 py-4 text-white">{log.programName}</td>
+                                              <td className="px-6 py-4 text-right font-mono text-[#9E7649]">${log.amount.toFixed(2)}</td>
+                                              <td className="px-6 py-4 text-center">
+                                                  <button 
+                                                      onClick={() => toggleWorkLog(log.programName, log.date, log.role)}
+                                                      className="text-red-400 hover:text-red-300 p-1"
+                                                  >
+                                                      <Trash2 size={16} />
+                                                  </button>
+                                              </td>
+                                          </tr>
                                       ))}
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {programsList.map(prog => (
-                                      <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
-                                          <td className="px-6 py-4 font-medium text-white">{prog}</td>
-                                          {dates.map(date => {
-                                              const isWorked = workLogs.some(l => 
-                                                  l.userId === currentUser?.username && 
-                                                  l.role === userPaymentConfig.role && 
-                                                  l.programName === prog && 
-                                                  l.date === date
-                                              );
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  ) : (
+                      <>
+                          {/* Controls */}
+                          <div className="flex flex-wrap gap-4 mb-6 bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10">
+                              <div className="flex items-center gap-2 bg-black/20 rounded p-1 border border-[#9E7649]/30">
+                                  <button onClick={() => setWorkLogView('daily')} className={`px-3 py-1 rounded ${workLogView === 'daily' ? 'bg-[#9E7649] text-white' : 'text-[#9E7649]'}`}>Diario</button>
+                                  <button onClick={() => setWorkLogView('weekly')} className={`px-3 py-1 rounded ${workLogView === 'weekly' ? 'bg-[#9E7649] text-white' : 'text-[#9E7649]'}`}>Semanal</button>
+                              </div>
+
+                              <div className="flex items-center gap-2 ml-auto">
+                                  <button onClick={() => {
+                                      const d = new Date(workLogDate);
+                                      d.setDate(d.getDate() - (workLogView === 'weekly' ? 7 : 1));
+                                      setWorkLogDate(d.toISOString().split('T')[0]);
+                                  }} className="p-2 hover:bg-white/10 rounded-full"><ChevronLeft size={20}/></button>
+                                  
+                                  <span className="font-mono font-bold text-white">
+                                      {workLogView === 'daily' ? workLogDate : `Semana del ${dates[0]}`}
+                                  </span>
+
+                                  <button onClick={() => {
+                                      const d = new Date(workLogDate);
+                                      d.setDate(d.getDate() + (workLogView === 'weekly' ? 7 : 1));
+                                      setWorkLogDate(d.toISOString().split('T')[0]);
+                                  }} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight size={20}/></button>
+                              </div>
+                          </div>
+
+                          {/* Grid */}
+                          <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
+                              <div className="overflow-x-auto">
+                                  <table className="w-full text-sm text-left">
+                                      <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
+                                          <tr>
+                                              <th className="px-6 py-3">Programa</th>
+                                              {dates.map(date => (
+                                                  <th key={date} className="px-6 py-3 text-center">
+                                                      {workLogView === 'daily' ? 'Selección' : new Date(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
+                                                  </th>
+                                              ))}
+                                          </tr>
+                                      </thead>
+                                      <tbody>
+                                          {programsList.map(prog => {
+                                              // Check if program is aired on any of the selected dates
+                                              const isAired = dates.some(date => {
+                                                  const ficha = fichas.find(f => f.name === prog);
+                                                  return ficha ? isProgramOnDay(ficha, date) : true; // If no ficha, assume yes
+                                              });
+
+                                              if (!isAired) return null;
+
                                               return (
-                                                  <td key={date} className="px-6 py-4 text-center">
-                                                      <button 
-                                                          onClick={() => toggleWorkLog(prog, date, userPaymentConfig.role)}
-                                                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
-                                                      >
-                                                          <Check size={16} className={isWorked ? 'opacity-100' : 'opacity-0'} />
-                                                      </button>
-                                                  </td>
+                                                  <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
+                                                      <td className="px-6 py-4 font-medium text-white">{prog}</td>
+                                                      {dates.map(date => {
+                                                          const isWorked = workLogs.some(l => 
+                                                              l.userId === currentUser?.username && 
+                                                              l.role === userPaymentConfig.role && 
+                                                              l.programName === prog && 
+                                                              l.date === date
+                                                          );
+                                                          
+                                                          const ficha = fichas.find(f => f.name === prog);
+                                                          const canWork = ficha ? isProgramOnDay(ficha, date) : true;
+
+                                                          return (
+                                                              <td key={date} className="px-6 py-4 text-center">
+                                                                  {canWork ? (
+                                                                      <button 
+                                                                          onClick={() => toggleWorkLog(prog, date, userPaymentConfig.role)}
+                                                                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
+                                                                      >
+                                                                          <Check size={16} className={isWorked ? 'opacity-100' : 'opacity-0'} />
+                                                                      </button>
+                                                                  ) : (
+                                                                      <span className="text-[#E8DCCF]/10">-</span>
+                                                                  )}
+                                                              </td>
+                                                          );
+                                                      })}
+                                                  </tr>
                                               );
                                           })}
-                                      </tr>
-                                  ))}
-                                  {programsList.length === 0 && (
-                                      <tr>
-                                          <td colSpan={dates.length + 1} className="px-6 py-8 text-center text-[#E8DCCF]/50">
-                                              No hay programas registrados. Importa fichas o catálogo primero.
-                                          </td>
-                                      </tr>
-                                  )}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
+                                          {programsList.length === 0 && (
+                                              <tr>
+                                                  <td colSpan={dates.length + 1} className="px-6 py-8 text-center text-[#E8DCCF]/50">
+                                                      No hay programas registrados. Importa fichas o catálogo primero.
+                                                  </td>
+                                              </tr>
+                                          )}
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </div>
+                          <div className="mt-4 flex justify-end">
+                              <button 
+                                  onClick={() => {
+                                      alert('Selección guardada en el Acumulado.');
+                                      setShowAccumulated(true);
+                                  }}
+                                  className="bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2 shadow-lg"
+                              >
+                                  <Save size={18} />
+                                  Guardar Selección
+                              </button>
+                          </div>
+                      </>
+                  )}
               </div>
           </div>
       );
@@ -1232,13 +1380,6 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
               Guardar base de datos
             </button>
           )}
-          <button 
-            onClick={handleUpdateGestionData}
-            className={`flex-1 flex items-center justify-center gap-2 ${isAdmin ? 'bg-[#2C1B15] border border-[#9E7649]/30 text-[#9E7649] hover:bg-[#3E1E16]' : 'bg-[#9E7649] text-white hover:bg-[#8B653D]'} py-4 rounded-xl font-bold transition-colors shadow-lg`}
-          >
-            <Download size={20} />
-            Actualizar
-          </button>
         </div>
       </div>
     </div>

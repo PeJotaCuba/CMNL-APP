@@ -210,6 +210,25 @@ const App: React.FC = () => {
             setNews(processedNews);
             changes++;
           }
+          
+          if (json.fichas) {
+              localStorage.setItem('rcm_data_fichas', JSON.stringify(json.fichas));
+              changes++;
+          }
+          if (json.catalogo) {
+              localStorage.setItem('rcm_data_catalogo', JSON.stringify(json.catalogo));
+              changes++;
+          }
+          if (json.worklogs) {
+              localStorage.setItem('rcm_data_worklogs', JSON.stringify(json.worklogs));
+              changes++;
+          }
+          if (json.scripts) {
+              Object.entries(json.scripts).forEach(([key, value]) => {
+                  localStorage.setItem(key, JSON.stringify(value));
+              });
+              changes++;
+          }
 
           alert('¡Sincronización completada! Los datos están actualizados.');
       } catch (error) {

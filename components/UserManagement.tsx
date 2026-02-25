@@ -185,11 +185,42 @@ const UserManagement: React.FC<Props> = ({
   // --- LÓGICA DE RESPALDO Y RESTAURACIÓN ---
 
   const handleDownloadBackup = () => {
+    // Recopilar datos de guiones
+    const scriptData: Record<string, any> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('guionbd_data_')) {
+            try {
+                scriptData[key] = JSON.parse(localStorage.getItem(key) || '[]');
+            } catch (e) {}
+        }
+    }
+
+    // Recopilar datos de Gestión
+    let fichas = [];
+    try {
+        fichas = JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]');
+    } catch (e) {}
+
+    let catalogo = [];
+    try {
+        catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]');
+    } catch (e) {}
+    
+    let worklogs = [];
+    try {
+        worklogs = JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]');
+    } catch (e) {}
+
     const data = {
         users,
         historyContent,
         aboutContent,
-        news
+        news,
+        fichas,
+        catalogo,
+        worklogs,
+        scripts: scriptData
     };
     
     // Nombre fijo solicitado para coincidir con el repositorio
