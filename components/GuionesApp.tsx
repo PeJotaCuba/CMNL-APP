@@ -216,7 +216,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
         });
     }, [searchQuery, availablePrograms]);
 
-    const distributeScripts = (newScripts: Script[]) => {
+    const distributeScripts = (newScripts: Script[], useIdAsKey = false) => {
         const groupedByProgram: Record<string, Script[]> = {};
 
         newScripts.forEach(script => {
@@ -246,7 +246,10 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
             } catch(e) {}
             
             const mergedMap = new Map<string, Script>();
-            const generateKey = (s: Script) => `${s.dateAdded}|${normalize(s.title)}`;
+            const generateKey = (s: Script) => {
+                if (useIdAsKey) return s.id;
+                return `${s.dateAdded}|${normalize(s.title)}|${normalize(s.writer || '')}|${normalize(s.themes.join(','))}`;
+            };
 
             existing.forEach(s => mergedMap.set(generateKey(s), s));
             incomingScripts.forEach(s => mergedMap.set(generateKey(s), s));
@@ -278,7 +281,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                 return;
             }
 
-            distributeScripts(parsedScripts);
+            distributeScripts(parsedScripts, false);
             alert(`Carga global completada. Se procesaron ${parsedScripts.length} guiones.`);
         } catch (error) {
             alert("Error al procesar los archivos.");
@@ -301,7 +304,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                 localStorage.removeItem(`guionbd_data_${p.file}`);
             });
             
-            distributeScripts(allScripts);
+            distributeScripts(allScripts, true);
             alert("Base de datos actualizada.");
         } catch (error) {
             alert("Error al actualizar desde el servidor.");
