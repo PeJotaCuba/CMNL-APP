@@ -355,7 +355,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                 localStorage.removeItem(`guionbd_data_${p.file}`);
             });
             // trigger re-render
-            setSearchQuery('');
+            setSearchQuery(' ');
+            setTimeout(() => setSearchQuery(''), 0);
         }
     };
 
@@ -1005,46 +1006,46 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                     <button
                                         onClick={handleRemoteUpdate}
                                         disabled={isProcessing}
-                                        className="flex items-center gap-2 px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm disabled:opacity-50"
+                                        className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm disabled:opacity-50"
                                     >
                                         <RefreshCw size={18} className={isProcessing ? "animate-spin" : ""} />
-                                        <span className="text-sm font-bold">Actualizar</span>
+                                        <span className="hidden md:inline text-sm font-bold">Actualizar</span>
                                     </button>
 
                                     <button
                                         onClick={() => setShowStats(true)}
-                                        className="flex items-center gap-2 px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
+                                        className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
                                     >
                                         <FileText size={18} />
-                                        <span className="text-sm font-bold">Informes</span>
+                                        <span className="hidden md:inline text-sm font-bold">Informes</span>
                                     </button>
 
                                     {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (
                                         <>
                                             <button
                                                 onClick={handleClearAllData}
-                                                className="flex items-center gap-2 px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
+                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
                                             >
                                                 <Trash2 size={18} />
-                                                <span className="text-sm font-bold">Limpiar BD</span>
+                                                <span className="hidden md:inline text-sm font-bold">Limpiar BD</span>
                                             </button>
 
                                             <button
                                                 onClick={handleDownloadDatabase}
-                                                className="flex items-center gap-2 px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
+                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
                                             >
                                                 <Database size={18} />
-                                                <span className="text-sm font-bold">Descargar</span>
+                                                <span className="hidden md:inline text-sm font-bold">Descargar</span>
                                             </button>
 
                                             <div className="shrink-0 relative">
                                                 <button 
                                                     onClick={() => globalUploadRef.current?.click()}
                                                     disabled={isProcessing}
-                                                    className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all disabled:opacity-50"
+                                                    className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-4 md:px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all disabled:opacity-50"
                                                 >
                                                     <Upload size={18} />
-                                                    <span className="text-sm font-bold">Carga TXT</span>
+                                                    <span className="hidden md:inline text-sm font-bold">Carga TXT</span>
                                                 </button>
                                                 <input type="file" multiple ref={globalUploadRef} className="hidden" accept=".txt" onChange={handleGlobalUpload} />
                                             </div>
