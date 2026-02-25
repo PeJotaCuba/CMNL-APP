@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus } from 'lucide-react';
+import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
@@ -17,6 +17,14 @@ interface WorkLog {
     programName: string;
     date: string; // YYYY-MM-DD
     amount: number;
+}
+
+interface ConsolidatedPayment {
+    id: string;
+    userId: string;
+    month: string; // YYYY-MM
+    amount: number;
+    dateConsolidated: string;
 }
 
 interface RoleConfig {
@@ -44,6 +52,10 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   });
   const [workLogs, setWorkLogs] = useState<WorkLog[]>(() => {
       const saved = localStorage.getItem('rcm_data_worklogs');
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [consolidatedPayments, setConsolidatedPayments] = useState<ConsolidatedPayment[]>(() => {
+      const saved = localStorage.getItem('rcm_data_consolidated');
       return saved ? JSON.parse(saved) : [];
   });
   const [userPaymentConfig, setUserPaymentConfig] = useState<UserPaymentConfig | null>(() => {
@@ -78,6 +90,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [workLogDate, setWorkLogDate] = useState(new Date().toISOString().split('T')[0]);
   const [workLogView, setWorkLogView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [showAccumulated, setShowAccumulated] = useState(false);
+  const [showMonthlyPayments, setShowMonthlyPayments] = useState(false);
   
   // Payment Config State
   const [configForm, setConfigForm] = useState<UserPaymentConfig>({ 
@@ -104,6 +117,10 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   }, [workLogs]);
 
   useEffect(() => {
+      localStorage.setItem('rcm_data_consolidated', JSON.stringify(consolidatedPayments));
+  }, [consolidatedPayments]);
+
+  useEffect(() => {
       if (currentUser && userPaymentConfig) {
           localStorage.setItem(`rcm_payment_config_${currentUser.username}`, JSON.stringify(userPaymentConfig));
       }
@@ -112,10 +129,10 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const menuItems = [
     { id: 'transmision', icon: <Radio size={32} />, label: 'Transmisión', color: 'bg-red-900/40 text-red-400 border-red-500/30' },
     { id: 'reportes', icon: <FileBarChart size={32} />, label: 'Reportes', color: 'bg-blue-900/40 text-blue-400 border-blue-500/30' },
+    { id: 'pagos', icon: <CreditCard size={32} />, label: 'Pagos', color: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30' },
     { id: 'catalogo', icon: <Library size={32} />, label: 'Catálogo', color: 'bg-amber-900/40 text-amber-400 border-amber-500/30' },
     { id: 'fichas', icon: <FileText size={32} />, label: 'Fichas', color: 'bg-emerald-900/40 text-emerald-400 border-emerald-500/30' },
     { id: 'equipo', icon: <Users size={32} />, label: 'Equipo', color: 'bg-purple-900/40 text-purple-400 border-purple-500/30' },
-    { id: 'pagos', icon: <CreditCard size={32} />, label: 'Pagos', color: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30' },
   ];
 
   const isAdmin = currentUser?.role === 'admin';
@@ -523,36 +540,109 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       }
   };
 
-  const calculateTotalPayment = () => {
-      if (!userPaymentConfig || !currentUser) return 0;
+  const calculateTotalPayment = (dates: string[]) => {
+      if (!userPaymentConfig || !currentUser) return { periodTotal: 0, monthTotal: 0 };
       
-      // Sum existing work logs
-      const logsTotal = workLogs
-          .filter(l => l.userId === currentUser.username && userPaymentConfig.roles.some(r => r.role === l.role))
-          .reduce((acc, log) => acc + log.amount, 0);
+      const userId = currentUser.username;
+      const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
 
-      // Sum habitual earnings for the current month
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      let habitualTotal = 0;
-      userPaymentConfig.roles.forEach(role => {
-          if (role.isHabitual) {
-              for (let d = 1; d <= daysInMonth; d++) {
-                  const date = new Date(year, month, d);
-                  const dayOfWeek = date.getDay();
-                  if (role.habitualDays.includes(dayOfWeek)) {
-                      role.habitualPrograms.forEach(prog => {
-                          habitualTotal += getProgramRate(prog, role.role, role.level);
-                      });
-                  }
+      let periodTotal = 0;
+      let monthTotal = 0;
+
+      workLogs.forEach(log => {
+          if (log.userId === userId && userPaymentConfig.roles.some(r => r.role === log.role)) {
+              if (dates.includes(log.date)) {
+                  periodTotal += log.amount;
+              }
+              if (log.date.startsWith(currentMonth)) {
+                  monthTotal += log.amount;
               }
           }
       });
 
-      return logsTotal + habitualTotal;
+      return { periodTotal, monthTotal };
+  };
+
+  const autoCompleteHabitual = (role: RoleConfig, dates: string[]) => {
+      if (!currentUser) return;
+      const newLogs = [...workLogs];
+      let added = 0;
+
+      dates.forEach(date => {
+          // Adjust for local timezone to get correct day
+          const d = new Date(date + 'T12:00:00');
+          const day = d.getDay();
+          if (role.habitualDays.includes(day)) {
+              role.habitualPrograms.forEach(prog => {
+                  const exists = newLogs.some(l => 
+                      l.userId === currentUser.username && 
+                      l.role === role.role && 
+                      l.programName === prog && 
+                      l.date === date
+                  );
+                  if (!exists) {
+                      const amount = getProgramRate(prog, role.role, role.level);
+                      newLogs.push({
+                          id: Date.now().toString() + Math.random(),
+                          userId: currentUser.username,
+                          role: role.role,
+                          programName: prog,
+                          date: date,
+                          amount
+                      });
+                      added++;
+                  }
+              });
+          }
+      });
+
+      if (added > 0) {
+          setWorkLogs(newLogs);
+          alert(`Se han autocompletado ${added} registros habituales en este periodo.`);
+      } else {
+          alert('No hay nuevos registros habituales para añadir en este periodo.');
+      }
+  };
+
+  const consolidateMonth = () => {
+      if (!currentUser || !userPaymentConfig) return;
+      const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
+      
+      if (consolidatedPayments.some(c => c.userId === currentUser.username && c.month === currentMonth)) {
+          alert('Este mes ya ha sido consolidado.');
+          return;
+      }
+
+      const monthTotal = workLogs
+          .filter(l => l.userId === currentUser.username && l.date.startsWith(currentMonth) && userPaymentConfig.roles.some(r => r.role === l.role))
+          .reduce((acc, log) => acc + log.amount, 0);
+
+      if (monthTotal === 0) {
+          alert('No hay pagos registrados para consolidar en este mes.');
+          return;
+      }
+
+      if (window.confirm(`¿Desea consolidar el mes de ${currentMonth} con un total de $${monthTotal.toFixed(2)}? Esta acción guardará la cifra definitiva.`)) {
+          const newConsolidation: ConsolidatedPayment = {
+              id: Date.now().toString(),
+              userId: currentUser.username,
+              month: currentMonth,
+              amount: monthTotal,
+              dateConsolidated: new Date().toISOString()
+          };
+          setConsolidatedPayments([...consolidatedPayments, newConsolidation]);
+          alert(`Mes consolidado exitosamente.`);
+      }
+  };
+
+  const clearMonth = () => {
+      if (!currentUser) return;
+      const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
+      if (window.confirm(`¿Está seguro de que desea eliminar todos los registros del mes de ${currentMonth}? Esta acción no se puede deshacer.`)) {
+          const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(currentMonth)));
+          setWorkLogs(newLogs);
+          alert('Registros del mes eliminados.');
+      }
   };
 
   // Render Pagos Section
@@ -758,15 +848,22 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
           if (workLogView === 'daily') return [workLogDate];
           if (workLogView === 'weekly') {
               const dates = [];
-              const start = new Date(currentDate);
-              const day = start.getDay();
-              const diff = start.getDate() - day + (day === 0 ? -6 : 1); 
-              start.setDate(diff);
+              const current = new Date(workLogDate + 'T12:00:00');
+              const year = current.getFullYear();
+              const month = current.getMonth();
+              const date = current.getDate();
               
-              for(let i=0; i<7; i++) {
-                  const d = new Date(start);
-                  d.setDate(start.getDate() + i);
-                  dates.push(d.toISOString().split('T')[0]);
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              const weekIndex = Math.floor((date - 1) / 7);
+              const startDay = weekIndex * 7 + 1;
+              const endDay = Math.min(startDay + 6, daysInMonth);
+              
+              for(let i = startDay; i <= endDay; i++) {
+                  const d = new Date(year, month, i, 12, 0, 0);
+                  const yyyy = d.getFullYear();
+                  const mm = String(d.getMonth() + 1).padStart(2, '0');
+                  const dd = String(d.getDate()).padStart(2, '0');
+                  dates.push(`${yyyy}-${mm}-${dd}`);
               }
               return dates;
           }
@@ -774,7 +871,17 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       };
 
       const dates = getDates();
-      const totalGenerated = calculateTotalPayment();
+      const { periodTotal, monthTotal } = calculateTotalPayment(dates);
+
+      const formatDateRange = (dates: string[]) => {
+          if (dates.length === 0) return '';
+          if (dates.length === 1) {
+              return new Date(dates[0]).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          }
+          const start = new Date(dates[0]);
+          const end = new Date(dates[dates.length - 1]);
+          return `${start.getDate()} ${start.toLocaleDateString('es-ES', { month: 'short' })} - ${end.getDate()} ${end.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}`;
+      };
 
       return (
           <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
@@ -789,15 +896,24 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                   </div>
                   <div className="flex gap-2">
                        <button 
-                          onClick={() => setShowAccumulated(!showAccumulated)}
-                          className={`text-xs px-3 py-1 rounded border ${showAccumulated ? 'bg-[#9E7649] text-white border-[#9E7649]' : 'border-[#9E7649]/30 text-[#9E7649]'}`}
+                          onClick={() => { setShowAccumulated(!showAccumulated); setShowMonthlyPayments(false); }}
+                          className={`flex items-center gap-2 text-xs px-4 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
                       >
+                          <FileBarChart size={14} />
                           {showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}
                       </button>
                       <button 
-                          onClick={() => setUserPaymentConfig(null)}
-                          className="text-xs text-[#9E7649] hover:text-white underline"
+                          onClick={() => { setShowMonthlyPayments(!showMonthlyPayments); setShowAccumulated(false); }}
+                          className={`flex items-center gap-2 text-xs px-4 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
                       >
+                          <CalendarCheck size={14} />
+                          Pagos Mensuales
+                      </button>
+                      <button 
+                          onClick={() => setUserPaymentConfig(null)}
+                          className="flex items-center gap-2 text-xs px-4 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                      >
+                          <Settings size={14} />
                           Configuración
                       </button>
                   </div>
@@ -805,65 +921,110 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
 
               <div className="p-6 max-w-6xl mx-auto w-full">
                   {/* Summary Card */}
-                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                      <div>
-                          <p className="text-[#9E7649] text-sm uppercase tracking-wider mb-1">Total Generado</p>
-                          <h2 className="text-4xl font-bold text-white">${totalGenerated.toFixed(2)}</h2>
-                          <p className="text-xs text-[#E8DCCF]/50 mt-1">Antes de impuestos</p>
+                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
+                      <div className="flex gap-8">
+                          <div>
+                              <p className="text-[#9E7649] text-sm uppercase tracking-wider mb-1">Total del Periodo</p>
+                              <h2 className="text-4xl font-bold text-white">${periodTotal.toFixed(2)}</h2>
+                              <p className="text-xs text-[#E8DCCF]/50 mt-1">Según registro actual</p>
+                          </div>
+                          <div className="border-l border-[#9E7649]/20 pl-8">
+                              <p className="text-[#9E7649] text-sm uppercase tracking-wider mb-1">Acumulado del Mes</p>
+                              <h2 className="text-4xl font-bold text-white">${monthTotal.toFixed(2)}</h2>
+                              <p className="text-xs text-[#E8DCCF]/50 mt-1">Total guardado en el mes</p>
+                          </div>
                       </div>
-                      <div className="text-right">
-                          <div className="text-sm text-[#E8DCCF]">
-                              <span className="text-[#9E7649]">Cargo:</span> {userPaymentConfig.role}
-                          </div>
-                          <div className="text-sm text-[#E8DCCF]">
-                              <span className="text-[#9E7649]">Nivel:</span> {userPaymentConfig.level}
-                          </div>
+                      <div className="grid grid-cols-1 gap-2">
+                          {userPaymentConfig.roles.map(role => (
+                              <div key={role.id} className="text-right">
+                                  <div className="text-xs text-[#E8DCCF]">
+                                      <span className="text-[#9E7649] font-bold">{role.role}:</span> {role.level}
+                                      {role.isHabitual && <span className="ml-2 text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1 rounded">Habitual</span>}
+                                  </div>
+                              </div>
+                          ))}
                       </div>
                   </div>
 
                   {showAccumulated ? (
-                      <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden p-4">
-                          <div className="flex justify-between items-center mb-4">
-                              <h3 className="text-white font-bold">Historial Acumulado</h3>
-                              <button onClick={generatePDF} className="flex items-center gap-2 bg-[#9E7649] text-white px-3 py-1 rounded text-sm hover:bg-[#8B653D]">
-                                  <FileDown size={16} /> Descargar PDF
-                              </button>
-                          </div>
-                          <div className="overflow-x-auto">
-                              <table className="w-full text-sm text-left">
-                                  <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
-                                      <tr>
-                                          <th className="px-6 py-3">Fecha</th>
-                                          <th className="px-6 py-3">Programa</th>
-                                          <th className="px-6 py-3 text-right">Monto</th>
-                                          <th className="px-6 py-3 text-center">Acciones</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody>
-                                      {workLogs
-                                          .filter(l => l.userId === currentUser?.username && l.role === userPaymentConfig.role)
-                                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                          .map(log => (
-                                          <tr key={log.id} className="border-b border-[#9E7649]/10 hover:bg-white/5">
-                                              <td className="px-6 py-4 text-white">{log.date}</td>
-                                              <td className="px-6 py-4 text-white">{log.programName}</td>
-                                              <td className="px-6 py-4 text-right font-mono text-[#9E7649]">${log.amount.toFixed(2)}</td>
-                                              <td className="px-6 py-4 text-center">
-                                                  <button 
-                                                      onClick={() => toggleWorkLog(log.programName, log.date, log.role)}
-                                                      className="text-red-400 hover:text-red-300 p-1"
-                                                  >
-                                                      <Trash2 size={16} />
-                                                  </button>
-                                              </td>
+                      <div className="space-y-6">
+                          <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden p-4">
+                              <div className="flex justify-between items-center mb-4">
+                                  <h3 className="text-white font-bold">Historial Acumulado (Mes Actual)</h3>
+                                  <div className="flex gap-2">
+                                      <button onClick={consolidateMonth} className="flex items-center gap-2 bg-[#9E7649] text-white px-3 py-1 rounded text-sm hover:bg-[#8B653D]">
+                                          <Save size={16} /> Consolidar Mes
+                                      </button>
+                                      <button onClick={generatePDF} className="flex items-center gap-2 bg-black/20 text-[#9E7649] border border-[#9E7649]/30 px-3 py-1 rounded text-sm hover:bg-[#9E7649]/10">
+                                          <FileDown size={16} /> Descargar PDF
+                                      </button>
+                                      <button onClick={clearMonth} className="flex items-center gap-2 bg-red-900/50 text-red-200 border border-red-900/50 px-3 py-1 rounded text-sm hover:bg-red-900/80">
+                                          <Trash2 size={16} /> Limpiar Mes
+                                      </button>
+                                  </div>
+                              </div>
+                              <div className="overflow-x-auto">
+                                  <table className="w-full text-sm text-left">
+                                      <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
+                                          <tr>
+                                              <th className="px-6 py-3">Fecha</th>
+                                              <th className="px-6 py-3">Cargo</th>
+                                              <th className="px-6 py-3">Programa</th>
+                                              <th className="px-6 py-3 text-right">Monto</th>
+                                              <th className="px-6 py-3 text-center">Acciones</th>
                                           </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
+                                      </thead>
+                                      <tbody>
+                                          {workLogs
+                                              .filter(l => l.userId === currentUser?.username && userPaymentConfig.roles.some(r => r.role === l.role))
+                                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                              .map(log => (
+                                              <tr key={log.id} className="border-b border-[#9E7649]/10 hover:bg-white/5">
+                                                  <td className="px-6 py-4 text-white">{log.date}</td>
+                                                  <td className="px-6 py-4 text-[#9E7649]">{log.role}</td>
+                                                  <td className="px-6 py-4 text-white">{log.programName}</td>
+                                                  <td className="px-6 py-4 text-right font-mono text-[#9E7649]">${log.amount.toFixed(2)}</td>
+                                                  <td className="px-6 py-4 text-center">
+                                                      <button 
+                                                          onClick={() => toggleWorkLog(log.programName, log.date, log.role)}
+                                                          className="text-red-400 hover:text-red-300 p-1"
+                                                      >
+                                                          <Trash2 size={16} />
+                                                      </button>
+                                                  </td>
+                                              </tr>
+                                          ))}
+                                      </tbody>
+                                  </table>
+                              </div>
                           </div>
                       </div>
+                  ) : showMonthlyPayments ? (
+                      <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden p-6">
+                          <h3 className="text-xl font-bold text-white mb-6">Pagos Mensuales Consolidados</h3>
+                          {consolidatedPayments.filter(c => c.userId === currentUser?.username).length > 0 ? (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  {consolidatedPayments
+                                      .filter(c => c.userId === currentUser?.username)
+                                      .sort((a, b) => b.month.localeCompare(a.month))
+                                      .map(c => (
+                                          <div key={c.id} className="bg-black/20 p-4 rounded-lg border border-[#9E7649]/20 flex justify-between items-center">
+                                              <div>
+                                                  <p className="text-[#9E7649] font-bold text-lg">{c.month}</p>
+                                                  <p className="text-xs text-[#E8DCCF]/50">Consolidado el {new Date(c.dateConsolidated).toLocaleDateString()}</p>
+                                              </div>
+                                              <p className="text-2xl font-bold text-white">${c.amount.toFixed(2)}</p>
+                                          </div>
+                                      ))}
+                              </div>
+                          ) : (
+                              <div className="text-center py-12 text-[#E8DCCF]/50">
+                                  No hay pagos mensuales consolidados aún.
+                              </div>
+                          )}
+                      </div>
                   ) : (
-                      <>
+                      <div className="space-y-8">
                           {/* Controls */}
                           <div className="flex flex-wrap gap-4 mb-6 bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10">
                               <div className="flex items-center gap-2 bg-black/20 rounded p-1 border border-[#9E7649]/30">
@@ -879,7 +1040,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                                   }} className="p-2 hover:bg-white/10 rounded-full"><ChevronLeft size={20}/></button>
                                   
                                   <span className="font-mono font-bold text-white">
-                                      {workLogView === 'daily' ? workLogDate : `Semana del ${dates[0]}`}
+                                      {workLogView === 'daily' ? new Date(workLogDate).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : `Semana: ${formatDateRange(dates)}`}
                                   </span>
 
                                   <button onClick={() => {
@@ -890,73 +1051,82 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                               </div>
                           </div>
 
-                          {/* Grid */}
-                          <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
-                              <div className="overflow-x-auto">
-                                  <table className="w-full text-sm text-left">
-                                      <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
-                                          <tr>
-                                              <th className="px-6 py-3">Programa</th>
-                                              {dates.map(date => (
-                                                  <th key={date} className="px-6 py-3 text-center">
-                                                      {workLogView === 'daily' ? 'Selección' : new Date(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
-                                                  </th>
-                                              ))}
-                                          </tr>
-                                      </thead>
-                                      <tbody>
-                                          {programsList.map(prog => {
-                                              // Check if program is aired on any of the selected dates
-                                              const isAired = dates.some(date => {
-                                                  const ficha = fichas.find(f => f.name === prog);
-                                                  return ficha ? isProgramOnDay(ficha, date) : true; // If no ficha, assume yes
-                                              });
-
-                                              if (!isAired) return null;
-
-                                              return (
-                                                  <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
-                                                      <td className="px-6 py-4 font-medium text-white">{prog}</td>
-                                                      {dates.map(date => {
-                                                          const isWorked = workLogs.some(l => 
-                                                              l.userId === currentUser?.username && 
-                                                              l.role === userPaymentConfig.role && 
-                                                              l.programName === prog && 
-                                                              l.date === date
-                                                          );
-                                                          
-                                                          const ficha = fichas.find(f => f.name === prog);
-                                                          const canWork = ficha ? isProgramOnDay(ficha, date) : true;
-
-                                                          return (
-                                                              <td key={date} className="px-6 py-4 text-center">
-                                                                  {canWork ? (
-                                                                      <button 
-                                                                          onClick={() => toggleWorkLog(prog, date, userPaymentConfig.role)}
-                                                                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
-                                                                      >
-                                                                          <Check size={16} className={isWorked ? 'opacity-100' : 'opacity-0'} />
-                                                                      </button>
-                                                                  ) : (
-                                                                      <span className="text-[#E8DCCF]/10">-</span>
-                                                                  )}
-                                                              </td>
-                                                          );
-                                                      })}
-                                                  </tr>
-                                              );
-                                          })}
-                                          {programsList.length === 0 && (
-                                              <tr>
-                                                  <td colSpan={dates.length + 1} className="px-6 py-8 text-center text-[#E8DCCF]/50">
-                                                      No hay programas registrados. Importa fichas o catálogo primero.
-                                                  </td>
-                                              </tr>
+                          {userPaymentConfig.roles.map(role => {
+                              return (
+                                  <div key={role.id} className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
+                                      <div className="bg-[#3E1E16] px-6 py-3 border-b border-[#9E7649]/10 flex justify-between items-center">
+                                          <div>
+                                              <h3 className="text-white font-bold">{role.role}</h3>
+                                              <p className="text-[10px] text-[#9E7649]">{role.isHabitual ? 'Habitualidad Activa' : 'Selección Manual'}</p>
+                                          </div>
+                                          {role.isHabitual && (
+                                              <button 
+                                                  onClick={() => autoCompleteHabitual(role, dates)}
+                                                  className="flex items-center gap-2 bg-[#9E7649]/20 text-[#9E7649] hover:bg-[#9E7649] hover:text-white px-3 py-1 rounded text-xs transition-colors border border-[#9E7649]/30"
+                                              >
+                                                  ✨ Autocompletar Habituales
+                                              </button>
                                           )}
-                                      </tbody>
-                                  </table>
-                              </div>
-                          </div>
+                                      </div>
+                                      <div className="overflow-x-auto">
+                                          <table className="w-full text-sm text-left">
+                                              <thead className="text-xs text-[#9E7649] uppercase bg-black/20">
+                                                  <tr>
+                                                      <th className="px-6 py-3">Programa</th>
+                                                      {dates.map(date => (
+                                                          <th key={date} className="px-6 py-3 text-center">
+                                                              {workLogView === 'daily' ? 'Selección' : new Date(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
+                                                          </th>
+                                                      ))}
+                                                  </tr>
+                                              </thead>
+                                              <tbody>
+                                                  {programsList.map(prog => {
+                                                      const isAired = dates.some(date => {
+                                                          const ficha = fichas.find(f => f.name === prog);
+                                                          return ficha ? isProgramOnDay(ficha, date) : true;
+                                                      });
+
+                                                      if (!isAired) return null;
+
+                                                      return (
+                                                          <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
+                                                              <td className="px-6 py-4 font-medium text-white">{prog}</td>
+                                                              {dates.map(date => {
+                                                                  const isWorked = workLogs.some(l => 
+                                                                      l.userId === currentUser?.username && 
+                                                                      l.role === role.role && 
+                                                                      l.programName === prog && 
+                                                                      l.date === date
+                                                                  );
+                                                                  
+                                                                  const ficha = fichas.find(f => f.name === prog);
+                                                                  const canWork = ficha ? isProgramOnDay(ficha, date) : true;
+
+                                                                  return (
+                                                                      <td key={date} className="px-6 py-4 text-center">
+                                                                          {canWork ? (
+                                                                              <button 
+                                                                                  onClick={() => toggleWorkLog(prog, date, role.role)}
+                                                                                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
+                                                                              >
+                                                                                  <Check size={16} className={isWorked ? 'opacity-100' : 'opacity-0'} />
+                                                                              </button>
+                                                                          ) : (
+                                                                              <span className="text-[#E8DCCF]/10">-</span>
+                                                                          )}
+                                                                      </td>
+                                                                  );
+                                                              })}
+                                                          </tr>
+                                                      );
+                                                  })}
+                                              </tbody>
+                                          </table>
+                                      </div>
+                                  </div>
+                              );
+                          })}
                           <div className="mt-4 flex justify-end">
                               <button 
                                   onClick={() => {
@@ -969,7 +1139,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                                   Guardar Selección
                               </button>
                           </div>
-                      </>
+                      </div>
                   )}
               </div>
           </div>
