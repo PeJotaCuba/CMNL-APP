@@ -4,7 +4,7 @@ export const appData = {
       "name": "Pedro José Reyes Acuña",
       "username": "admin",
       "mobile": "54413935",
-      "password": "RCMM26",
+      "password": "RadioCiudad0026",
       "role": "admin",
       "classification": "Administrador"
     },

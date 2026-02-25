@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Download, Save, X, Edit2, Check } from 'lucide-react';
+import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Download, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 
 interface Props {
   onBack: () => void;
   currentUser: User | null;
+}
+
+interface WorkLog {
+    id: string;
+    userId: string;
+    role: string;
+    programName: string;
+    date: string; // YYYY-MM-DD
+}
+
+interface UserPaymentConfig {
+    role: string;
+    level: string;
 }
 
 const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
@@ -18,10 +31,27 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       const saved = localStorage.getItem('rcm_data_catalogo');
       return saved ? JSON.parse(saved) : [];
   });
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>(() => {
+      const saved = localStorage.getItem('rcm_data_worklogs');
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [userPaymentConfig, setUserPaymentConfig] = useState<UserPaymentConfig | null>(() => {
+      if (!currentUser) return null;
+      const saved = localStorage.getItem(`rcm_payment_config_${currentUser.username}`);
+      return saved ? JSON.parse(saved) : null;
+  });
+
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<ProgramCatalog | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<ProgramFicha | null>(null);
+
+  // Work Log State
+  const [workLogDate, setWorkLogDate] = useState(new Date().toISOString().split('T')[0]);
+  const [workLogView, setWorkLogView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  
+  // Payment Config State
+  const [configForm, setConfigForm] = useState<UserPaymentConfig>({ role: 'Director', level: 'I' });
 
   useEffect(() => {
     localStorage.setItem('rcm_data_fichas', JSON.stringify(fichas));
@@ -30,6 +60,16 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   useEffect(() => {
     localStorage.setItem('rcm_data_catalogo', JSON.stringify(catalogo));
   }, [catalogo]);
+
+  useEffect(() => {
+      localStorage.setItem('rcm_data_worklogs', JSON.stringify(workLogs));
+  }, [workLogs]);
+
+  useEffect(() => {
+      if (currentUser && userPaymentConfig) {
+          localStorage.setItem(`rcm_payment_config_${currentUser.username}`, JSON.stringify(userPaymentConfig));
+      }
+  }, [userPaymentConfig, currentUser]);
 
   const menuItems = [
     { id: 'transmision', icon: <Radio size={32} />, label: 'Transmisión', color: 'bg-red-900/40 text-red-400 border-red-500/30' },
@@ -41,6 +81,14 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   ];
 
   const isAdmin = currentUser?.role === 'admin';
+
+  const formatPercentage = (value: string) => {
+      if (!value) return '';
+      const num = parseFloat(value);
+      if (isNaN(num)) return value;
+      if (num <= 1 && num > 0) return `${Math.round(num * 100)}%`;
+      return `${num}%`;
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'fichas' | 'catalogo') => {
     const file = e.target.files?.[0];
@@ -317,6 +365,277 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       }
   };
 
+  const toggleWorkLog = (programName: string, date: string, role: string) => {
+      if (!currentUser) return;
+      const userId = currentUser.username;
+      
+      const existingIndex = workLogs.findIndex(l => 
+          l.userId === userId && 
+          l.role === role && 
+          l.programName === programName && 
+          l.date === date
+      );
+
+      if (existingIndex >= 0) {
+          const newLogs = [...workLogs];
+          newLogs.splice(existingIndex, 1);
+          setWorkLogs(newLogs);
+      } else {
+          setWorkLogs([...workLogs, {
+              id: Date.now().toString() + Math.random(),
+              userId,
+              role,
+              programName,
+              date
+          }]);
+      }
+  };
+
+  const calculateTotalPayment = () => {
+      if (!userPaymentConfig || !currentUser) return 0;
+      let total = 0;
+      
+      const userLogs = workLogs.filter(l => 
+          l.userId === currentUser.username && 
+          l.role === userPaymentConfig.role
+      );
+
+      userLogs.forEach(log => {
+          const program = catalogo.find(p => p.name === log.programName);
+          if (!program) return;
+
+          // Find main role rate
+          const roleInfo = program.roles.find(r => r.role === userPaymentConfig.role);
+          if (roleInfo) {
+               const rateObj = roleInfo.rates.find(r => r.level === userPaymentConfig.level);
+               if (rateObj) {
+                   total += parseFloat(rateObj.amount) || 0;
+               }
+          }
+
+          // If Director, add Musical Production
+          if (userPaymentConfig.role === 'Director') {
+              const musicRole = program.roles.find(r => r.role.includes('Producción Musical'));
+              if (musicRole) {
+                  const rateObj = musicRole.rates.find(r => r.level === userPaymentConfig.level);
+                  if (rateObj) {
+                      total += parseFloat(rateObj.amount) || 0;
+                  }
+              }
+          }
+      });
+
+      return total;
+  };
+
+  // Render Pagos Section
+  if (activeSection === 'pagos') {
+      // Configuration View
+      if (!userPaymentConfig) {
+          return (
+              <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+                  <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
+                      <button onClick={() => setActiveSection(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
+                          <ArrowLeft size={20} className="text-[#F5EFE6]" />
+                      </button>
+                      <div className="flex-1">
+                          <h1 className="text-lg font-bold text-white leading-none">Configuración de Pagos</h1>
+                          <p className="text-[10px] text-[#9E7649]">Información requerida</p>
+                      </div>
+                  </div>
+                  <div className="p-6 max-w-md mx-auto w-full mt-10">
+                      <div className="bg-[#2C1B15] p-6 rounded-xl border border-[#9E7649]/10 shadow-lg">
+                          <h2 className="text-xl font-bold text-white mb-4">Configure su Perfil</h2>
+                          <p className="text-sm text-[#E8DCCF]/70 mb-6">Seleccione su cargo y nivel para calcular sus pagos correctamente. Esta información se guardará para futuras sesiones.</p>
+                          
+                          <div className="space-y-4">
+                              <div>
+                                  <label className="block text-xs text-[#9E7649] uppercase mb-1">Cargo</label>
+                                  <select 
+                                      value={configForm.role}
+                                      onChange={(e) => setConfigForm({...configForm, role: e.target.value})}
+                                      className="w-full bg-black/20 border border-[#9E7649]/30 rounded p-3 text-white"
+                                  >
+                                      <option value="Director">Director</option>
+                                      <option value="Asesor">Asesor</option>
+                                      <option value="Locutor">Locutor</option>
+                                      <option value="Realizador de sonido">Realizador de sonido</option>
+                                  </select>
+                              </div>
+                              <div>
+                                  <label className="block text-xs text-[#9E7649] uppercase mb-1">Nivel</label>
+                                  <select 
+                                      value={configForm.level}
+                                      onChange={(e) => setConfigForm({...configForm, level: e.target.value})}
+                                      className="w-full bg-black/20 border border-[#9E7649]/30 rounded p-3 text-white"
+                                  >
+                                      <option value="I">Nivel I</option>
+                                      <option value="II">Nivel II</option>
+                                      <option value="III">Nivel III</option>
+                                  </select>
+                              </div>
+                              <button 
+                                  onClick={() => setUserPaymentConfig(configForm)}
+                                  className="w-full bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-3 rounded-lg transition-colors mt-4"
+                              >
+                                  Guardar Configuración
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          );
+      }
+
+      // Main Pagos View (Work Log)
+      const programsList = fichas.map(f => f.name).sort();
+      if (programsList.length === 0 && catalogo.length > 0) {
+          catalogo.forEach(c => {
+              if (!programsList.includes(c.name)) programsList.push(c.name);
+          });
+      }
+      
+      const currentDate = new Date(workLogDate);
+      
+      const getDates = () => {
+          if (workLogView === 'daily') return [workLogDate];
+          if (workLogView === 'weekly') {
+              const dates = [];
+              const start = new Date(currentDate);
+              const day = start.getDay();
+              const diff = start.getDate() - day + (day === 0 ? -6 : 1); 
+              start.setDate(diff);
+              
+              for(let i=0; i<7; i++) {
+                  const d = new Date(start);
+                  d.setDate(start.getDate() + i);
+                  dates.push(d.toISOString().split('T')[0]);
+              }
+              return dates;
+          }
+          return [workLogDate];
+      };
+
+      const dates = getDates();
+      const totalGenerated = calculateTotalPayment();
+
+      return (
+          <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+              {/* Header */}
+              <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
+                  <button onClick={() => setActiveSection(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
+                      <ArrowLeft size={20} className="text-[#F5EFE6]" />
+                  </button>
+                  <div className="flex-1">
+                      <h1 className="text-lg font-bold text-white leading-none">Pagos</h1>
+                      <p className="text-[10px] text-[#9E7649]">Control y Cálculo de Salarios</p>
+                  </div>
+                  <button 
+                      onClick={() => setUserPaymentConfig(null)}
+                      className="text-xs text-[#9E7649] hover:text-white underline"
+                  >
+                      Configuración
+                  </button>
+              </div>
+
+              <div className="p-6 max-w-6xl mx-auto w-full">
+                  {/* Summary Card */}
+                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                      <div>
+                          <p className="text-[#9E7649] text-sm uppercase tracking-wider mb-1">Total Generado</p>
+                          <h2 className="text-4xl font-bold text-white">${totalGenerated.toFixed(2)}</h2>
+                          <p className="text-xs text-[#E8DCCF]/50 mt-1">Antes de impuestos</p>
+                      </div>
+                      <div className="text-right">
+                          <div className="text-sm text-[#E8DCCF]">
+                              <span className="text-[#9E7649]">Cargo:</span> {userPaymentConfig.role}
+                          </div>
+                          <div className="text-sm text-[#E8DCCF]">
+                              <span className="text-[#9E7649]">Nivel:</span> {userPaymentConfig.level}
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex flex-wrap gap-4 mb-6 bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10">
+                      <div className="flex items-center gap-2 bg-black/20 rounded p-1 border border-[#9E7649]/30">
+                          <button onClick={() => setWorkLogView('daily')} className={`px-3 py-1 rounded ${workLogView === 'daily' ? 'bg-[#9E7649] text-white' : 'text-[#9E7649]'}`}>Diario</button>
+                          <button onClick={() => setWorkLogView('weekly')} className={`px-3 py-1 rounded ${workLogView === 'weekly' ? 'bg-[#9E7649] text-white' : 'text-[#9E7649]'}`}>Semanal</button>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-auto">
+                          <button onClick={() => {
+                              const d = new Date(workLogDate);
+                              d.setDate(d.getDate() - (workLogView === 'weekly' ? 7 : 1));
+                              setWorkLogDate(d.toISOString().split('T')[0]);
+                          }} className="p-2 hover:bg-white/10 rounded-full"><ChevronLeft size={20}/></button>
+                          
+                          <span className="font-mono font-bold text-white">
+                              {workLogView === 'daily' ? workLogDate : `Semana del ${dates[0]}`}
+                          </span>
+
+                          <button onClick={() => {
+                              const d = new Date(workLogDate);
+                              d.setDate(d.getDate() + (workLogView === 'weekly' ? 7 : 1));
+                              setWorkLogDate(d.toISOString().split('T')[0]);
+                          }} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight size={20}/></button>
+                      </div>
+                  </div>
+
+                  {/* Grid */}
+                  <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
+                      <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                              <thead className="text-xs text-[#9E7649] uppercase bg-[#3E1E16]">
+                                  <tr>
+                                      <th className="px-6 py-3">Programa</th>
+                                      {dates.map(date => (
+                                          <th key={date} className="px-6 py-3 text-center">
+                                              {new Date(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
+                                          </th>
+                                      ))}
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {programsList.map(prog => (
+                                      <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
+                                          <td className="px-6 py-4 font-medium text-white">{prog}</td>
+                                          {dates.map(date => {
+                                              const isWorked = workLogs.some(l => 
+                                                  l.userId === currentUser?.username && 
+                                                  l.role === userPaymentConfig.role && 
+                                                  l.programName === prog && 
+                                                  l.date === date
+                                              );
+                                              return (
+                                                  <td key={date} className="px-6 py-4 text-center">
+                                                      <button 
+                                                          onClick={() => toggleWorkLog(prog, date, userPaymentConfig.role)}
+                                                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
+                                                      >
+                                                          <Check size={16} className={isWorked ? 'opacity-100' : 'opacity-0'} />
+                                                      </button>
+                                                  </td>
+                                              );
+                                          })}
+                                      </tr>
+                                  ))}
+                                  {programsList.length === 0 && (
+                                      <tr>
+                                          <td colSpan={dates.length + 1} className="px-6 py-8 text-center text-[#E8DCCF]/50">
+                                              No hay programas registrados. Importa fichas o catálogo primero.
+                                          </td>
+                                      </tr>
+                                  )}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   // Render Catalog Section
   if (activeSection === 'catalogo') {
       if (selectedCatalogItem) {
@@ -339,7 +658,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                                   <div className="bg-[#3E1E16]/50 p-4 border-b border-[#9E7649]/10 flex justify-between items-center">
                                       <h3 className="text-white font-bold text-lg">{role.role}</h3>
                                       <div className="flex gap-4 text-xs">
-                                          {role.percentage && <span className="bg-[#9E7649]/20 text-[#9E7649] px-2 py-1 rounded">Porcentaje: {role.percentage}</span>}
+                                          {role.percentage && <span className="bg-[#9E7649]/20 text-[#9E7649] px-2 py-1 rounded">Porcentaje: {formatPercentage(role.percentage)}</span>}
                                           {role.tr && <span className="bg-[#9E7649]/20 text-[#9E7649] px-2 py-1 rounded">T/R: {role.tr}</span>}
                                       </div>
                                   </div>
