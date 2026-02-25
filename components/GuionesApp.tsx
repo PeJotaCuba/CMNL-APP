@@ -320,7 +320,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = "global_guiones.json";
+        link.download = "guiones.json";
         link.click();
     };
 
@@ -1023,14 +1023,6 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                     {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (
                                         <>
                                             <button
-                                                onClick={handleClearAllData}
-                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
-                                            >
-                                                <Trash2 size={18} />
-                                                <span className="hidden md:inline text-sm font-bold">Limpiar BD</span>
-                                            </button>
-
-                                            <button
                                                 onClick={handleDownloadDatabase}
                                                 className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
                                             >
@@ -1049,6 +1041,14 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                                 </button>
                                                 <input type="file" multiple ref={globalUploadRef} className="hidden" accept=".txt" onChange={handleGlobalUpload} />
                                             </div>
+
+                                            <button
+                                                onClick={handleClearAllData}
+                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
+                                            >
+                                                <Trash2 size={18} />
+                                                <span className="hidden md:inline text-sm font-bold">Limpiar BD</span>
+                                            </button>
                                         </>
                                     )}
                                 </div>
