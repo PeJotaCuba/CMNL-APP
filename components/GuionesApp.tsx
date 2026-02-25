@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { User, Script } from '../types';
-import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, RefreshCw, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag } from 'lucide-react';
+import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, RefreshCw, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
 import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
 
@@ -256,19 +256,22 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
     };
 
     const handleGlobalUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
 
         setIsProcessing(true);
         try {
-            const text = await file.text();
-            const rawEntries = text.split(/_{4,}/);
             const parsedScripts: Script[] = [];
 
-            rawEntries.forEach(raw => {
-                const script = parseRawEntry(raw);
-                if (script) parsedScripts.push(script);
-            });
+            for (const file of files) {
+                const text = await file.text();
+                const rawEntries = text.split(/_{4,}/);
+
+                rawEntries.forEach(raw => {
+                    const script = parseRawEntry(raw);
+                    if (script) parsedScripts.push(script);
+                });
+            }
 
             if (parsedScripts.length === 0) {
                 alert("No se encontraron registros válidos.");
@@ -276,9 +279,9 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
             }
 
             distributeScripts(parsedScripts);
-            alert("Carga global completada.");
+            alert(`Carga global completada. Se procesaron ${parsedScripts.length} guiones.`);
         } catch (error) {
-            alert("Error al procesar el archivo.");
+            alert("Error al procesar los archivos.");
         } finally {
             setIsProcessing(false);
             if (globalUploadRef.current) globalUploadRef.current.value = '';
@@ -346,14 +349,13 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
         );
     };
 
-    const handleDeleteProgram = () => {
-        if (!selectedProgram) return;
-        if (window.confirm(`¿Estás seguro de que deseas eliminar TODOS los guiones de ${selectedProgram}? Esta acción no se puede deshacer.`)) {
-            const program = PROGRAMS.find(p => p.name === selectedProgram);
-            if (program) {
-                localStorage.removeItem(`guionbd_data_${program.file}`);
-                setSelectedProgram(null);
-            }
+    const handleClearAllData = () => {
+        if (window.confirm(`¿Estás seguro de que deseas eliminar TODOS los guiones de la base de datos local? Esta acción no se puede deshacer.`)) {
+            PROGRAMS.forEach(p => {
+                localStorage.removeItem(`guionbd_data_${p.file}`);
+            });
+            // trigger re-render
+            setSearchQuery('');
         }
     };
 
@@ -756,7 +758,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
             ].join(' ').toLowerCase();
 
             return queryWords.every(word => searchableText.includes(word));
-        });
+        }).sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
 
         return (
             <div className="space-y-6 animate-in fade-in duration-300">
@@ -782,9 +784,6 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                         <button onClick={() => setShowPulir(true)} className="flex items-center gap-2 px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold">
                             <Wand2 size={16} /> Pulir
                         </button>
-                        <button onClick={handleDeleteProgram} className="flex items-center gap-2 px-4 py-2 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-colors text-sm font-bold">
-                            <Trash2 size={16} /> Eliminar
-                        </button>
                     </div>
                 </div>
 
@@ -798,6 +797,11 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                         onChange={(e) => setScriptSearchQuery(e.target.value)}
                         className="w-full pl-12 pr-4 py-3.5 bg-[#2C1B15] border border-[#9E7649]/20 rounded-2xl shadow-sm focus:border-[#9E7649] outline-none transition-all text-white placeholder:text-[#E8DCCF]/30"
                     />
+                    {scriptSearchQuery.trim() !== '' && (
+                        <div className="absolute right-4 top-3.5 text-xs font-bold text-[#9E7649] bg-[#9E7649]/10 px-2 py-1 rounded-md">
+                            {filteredScripts.length} resultados
+                        </div>
+                    )}
                 </div>
 
                 {renderYearAgoCarousel(scripts)}
@@ -982,6 +986,18 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         className="w-full pl-12 pr-4 py-3.5 bg-[#2C1B15] border border-[#9E7649]/20 rounded-2xl shadow-sm focus:border-[#9E7649] outline-none transition-all text-white placeholder:text-[#E8DCCF]/30"
                                     />
+                                    {searchQuery.trim() !== '' && (
+                                        <div className="absolute right-4 top-3.5 text-xs font-bold text-[#9E7649] bg-[#9E7649]/10 px-2 py-1 rounded-md">
+                                            {filteredPrograms.reduce((acc, p) => acc + getProgramScripts(p).filter(s => {
+                                                const q = searchQuery.toLowerCase().trim();
+                                                return s.title.toLowerCase().includes(q) || 
+                                                    s.dateAdded.includes(q) ||
+                                                    s.writer?.toLowerCase().includes(q) ||
+                                                    s.advisor?.toLowerCase().includes(q) ||
+                                                    s.themes.some(t => t.toLowerCase().includes(q));
+                                            }).length, 0)} resultados
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Botones de Acción */}
@@ -1006,6 +1022,14 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                     {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (
                                         <>
                                             <button
+                                                onClick={handleClearAllData}
+                                                className="flex items-center gap-2 px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
+                                            >
+                                                <Trash2 size={18} />
+                                                <span className="text-sm font-bold">Limpiar BD</span>
+                                            </button>
+
+                                            <button
                                                 onClick={handleDownloadDatabase}
                                                 className="flex items-center gap-2 px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
                                             >
@@ -1022,7 +1046,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                                                     <Upload size={18} />
                                                     <span className="text-sm font-bold">Carga TXT</span>
                                                 </button>
-                                                <input type="file" ref={globalUploadRef} className="hidden" accept=".txt" onChange={handleGlobalUpload} />
+                                                <input type="file" multiple ref={globalUploadRef} className="hidden" accept=".txt" onChange={handleGlobalUpload} />
                                             </div>
                                         </>
                                     )}
@@ -1030,7 +1054,61 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                             </div>
                         </div>
 
-                        {filteredPrograms.length > 0 ? (
+                        {searchQuery.trim() !== '' ? (
+                            <div className="space-y-8">
+                                {filteredPrograms.map(program => {
+                                    const matchingScripts = getProgramScripts(program).filter(s => {
+                                        const q = searchQuery.toLowerCase().trim();
+                                        return s.title.toLowerCase().includes(q) || 
+                                            s.dateAdded.includes(q) ||
+                                            s.writer?.toLowerCase().includes(q) ||
+                                            s.advisor?.toLowerCase().includes(q) ||
+                                            s.themes.some(t => t.toLowerCase().includes(q));
+                                    }).sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+
+                                    if (matchingScripts.length === 0) return null;
+
+                                    return (
+                                        <div key={program.name} className="bg-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/20">
+                                            <h4 className="text-lg font-bold text-[#9E7649] mb-4 flex items-center gap-2">
+                                                {program.icon} {program.name} ({matchingScripts.length})
+                                            </h4>
+                                            <div className="flex flex-col gap-4">
+                                                {matchingScripts.map(s => (
+                                                    <div key={s.id} className="bg-[#1A100C] p-4 rounded-xl border border-[#9E7649]/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between items-start gap-4 mb-2">
+                                                                <div>
+                                                                    <h4 className="text-white font-bold text-base uppercase leading-tight">
+                                                                        {s.themes && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
+                                                                    </h4>
+                                                                    <p className="text-[#E8DCCF]/60 text-xs mt-1 font-medium italic">
+                                                                        {s.title}
+                                                                    </p>
+                                                                </div>
+                                                                <span className="shrink-0 text-[#9E7649] text-xs font-mono font-bold bg-[#9E7649]/10 px-2.5 py-1 rounded-lg border border-[#9E7649]/20">
+                                                                    {formatSpanishDate(s.dateAdded)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-medium">
+                                                                <span className="flex items-center gap-1.5 text-[#E8DCCF]/70">
+                                                                    <UserIcon size={14} className="text-[#9E7649]" />
+                                                                    <span className="text-[#E8DCCF]/40">Escritor:</span> {s.writer || 'No especificado'}
+                                                                </span>
+                                                                <span className="flex items-center gap-1.5 text-[#E8DCCF]/70">
+                                                                    <Shield size={14} className="text-[#9E7649]" />
+                                                                    <span className="text-[#E8DCCF]/40">Asesor:</span> {s.advisor || 'No especificado'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : filteredPrograms.length > 0 ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                                 {filteredPrograms.map((program) => {
                                     const scriptCount = getProgramScripts(program).length;
