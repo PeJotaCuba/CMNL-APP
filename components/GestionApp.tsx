@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown } from 'lucide-react';
+import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
@@ -19,9 +19,17 @@ interface WorkLog {
     amount: number;
 }
 
-interface UserPaymentConfig {
+interface RoleConfig {
+    id: string;
     role: string;
     level: string;
+    isHabitual: boolean;
+    habitualPrograms: string[];
+    habitualDays: number[]; // 0=Sun, 1=Mon, etc.
+}
+
+interface UserPaymentConfig {
+    roles: RoleConfig[];
 }
 
 const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
@@ -41,7 +49,24 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [userPaymentConfig, setUserPaymentConfig] = useState<UserPaymentConfig | null>(() => {
       if (!currentUser) return null;
       const saved = localStorage.getItem(`rcm_payment_config_${currentUser.username}`);
-      return saved ? JSON.parse(saved) : null;
+      // Migrate old config if necessary
+      if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.role && !parsed.roles) {
+              return {
+                  roles: [{
+                      id: '1',
+                      role: parsed.role,
+                      level: parsed.level,
+                      isHabitual: false,
+                      habitualPrograms: [],
+                      habitualDays: []
+                  }]
+              };
+          }
+          return parsed;
+      }
+      return null;
   });
 
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
@@ -55,7 +80,16 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [showAccumulated, setShowAccumulated] = useState(false);
   
   // Payment Config State
-  const [configForm, setConfigForm] = useState<UserPaymentConfig>({ role: 'Director', level: 'I' });
+  const [configForm, setConfigForm] = useState<UserPaymentConfig>({ 
+      roles: [{ 
+          id: '1', 
+          role: 'Director', 
+          level: 'I', 
+          isHabitual: false, 
+          habitualPrograms: [], 
+          habitualDays: [] 
+      }] 
+  });
 
   useEffect(() => {
     localStorage.setItem('rcm_data_fichas', JSON.stringify(fichas));
@@ -118,8 +152,10 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   };
 
   const getProgramRate = (programName: string, role: string, level: string) => {
-      // Normalize names for better matching
-      const normalize = (s: string) => s.trim().toLowerCase();
+      if (!programName || !role || !level) return 0;
+      // Normalize names for better matching (remove accents, lowercase, trim)
+      const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+      
       const program = catalogo.find(p => normalize(p.name) === normalize(programName) || normalize(p.name).includes(normalize(programName)) || normalize(programName).includes(normalize(p.name)));
       
       if (!program) return 0;
@@ -131,7 +167,8 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       if (normalize(role) === 'realizador de sonido') searchRole = 'Realizador';
 
       // Find main role rate
-      const roleInfo = program.roles.find(r => normalize(r.role) === normalize(searchRole));
+      const roleInfo = program.roles.find(r => normalize(r.role) === normalize(searchRole) || normalize(r.role).includes(normalize(searchRole)));
+      
       if (roleInfo) {
            const rateObj = roleInfo.rates.find(r => r.level === level);
            if (rateObj) {
@@ -141,7 +178,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
 
       // If Director, add Musical Production if available
       if (role === 'Director') {
-          const musicRole = program.roles.find(r => r.role.toLowerCase().includes('producción musical'));
+          const musicRole = program.roles.find(r => normalize(r.role).includes('produccion musical'));
           if (musicRole) {
               const rateObj = musicRole.rates.find(r => r.level === level);
               if (rateObj) {
@@ -158,7 +195,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       
       const doc = new jsPDF();
       const title = `Reporte de Pagos - ${currentUser.name}`;
-      const subtitle = `Cargo: ${userPaymentConfig.role} | Nivel: ${userPaymentConfig.level}`;
+      const subtitle = `Cargos: ${userPaymentConfig.roles.map(r => `${r.role} (${r.level})`).join(', ')}`;
       const date = `Fecha de emisión: ${new Date().toLocaleDateString()}`;
 
       doc.setFontSize(18);
@@ -168,13 +205,13 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       doc.setFontSize(10);
       doc.text(date, 14, 36);
 
-      const tableColumn = ["Fecha", "Programa", "Monto"];
+      const tableColumn = ["Fecha", "Cargo", "Programa", "Monto"];
       const tableRows: any[] = [];
 
-      // Filter logs for current user and role
+      // Filter logs for current user and roles
       const userLogs = workLogs.filter(l => 
           l.userId === currentUser.username && 
-          l.role === userPaymentConfig.role
+          userPaymentConfig.roles.some(r => r.role === l.role)
       ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       let totalAmount = 0;
@@ -182,6 +219,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       userLogs.forEach(log => {
           const logData = [
               log.date,
+              log.role,
               log.programName,
               `$${log.amount.toFixed(2)}`
           ];
@@ -190,7 +228,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       });
 
       // Add total row
-      tableRows.push(["", "TOTAL", `$${totalAmount.toFixed(2)}`]);
+      tableRows.push(["", "", "TOTAL", `$${totalAmount.toFixed(2)}`]);
 
       autoTable(doc, {
           head: [tableColumn],
@@ -458,6 +496,9 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       if (!currentUser || !userPaymentConfig) return;
       const userId = currentUser.username;
       
+      const roleConfig = userPaymentConfig.roles.find(r => r.role === role);
+      if (!roleConfig) return;
+
       const existingIndex = workLogs.findIndex(l => 
           l.userId === userId && 
           l.role === role && 
@@ -470,7 +511,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
           newLogs.splice(existingIndex, 1);
           setWorkLogs(newLogs);
       } else {
-          const amount = getProgramRate(programName, role, userPaymentConfig.level);
+          const amount = getProgramRate(programName, role, roleConfig.level);
           setWorkLogs([...workLogs, {
               id: Date.now().toString() + Math.random(),
               userId,
@@ -485,18 +526,96 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const calculateTotalPayment = () => {
       if (!userPaymentConfig || !currentUser) return 0;
       
-      const userLogs = workLogs.filter(l => 
-          l.userId === currentUser.username && 
-          l.role === userPaymentConfig.role
-      );
+      // Sum existing work logs
+      const logsTotal = workLogs
+          .filter(l => l.userId === currentUser.username && userPaymentConfig.roles.some(r => r.role === l.role))
+          .reduce((acc, log) => acc + log.amount, 0);
 
-      return userLogs.reduce((acc, log) => acc + log.amount, 0);
+      // Sum habitual earnings for the current month
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      
+      let habitualTotal = 0;
+      userPaymentConfig.roles.forEach(role => {
+          if (role.isHabitual) {
+              for (let d = 1; d <= daysInMonth; d++) {
+                  const date = new Date(year, month, d);
+                  const dayOfWeek = date.getDay();
+                  if (role.habitualDays.includes(dayOfWeek)) {
+                      role.habitualPrograms.forEach(prog => {
+                          habitualTotal += getProgramRate(prog, role.role, role.level);
+                      });
+                  }
+              }
+          }
+      });
+
+      return logsTotal + habitualTotal;
   };
 
   // Render Pagos Section
   if (activeSection === 'pagos') {
       // Configuration View
       if (!userPaymentConfig) {
+          const addRole = () => {
+              if (configForm.roles.length < 3) {
+                  setConfigForm({
+                      ...configForm,
+                      roles: [...configForm.roles, {
+                          id: Date.now().toString(),
+                          role: 'Director',
+                          level: 'I',
+                          isHabitual: false,
+                          habitualPrograms: [],
+                          habitualDays: []
+                      }]
+                  });
+              }
+          };
+
+          const removeRole = (id: string) => {
+              if (configForm.roles.length > 1) {
+                  setConfigForm({
+                      ...configForm,
+                      roles: configForm.roles.filter(r => r.id !== id)
+                  });
+              }
+          };
+
+          const updateRole = (id: string, updates: Partial<RoleConfig>) => {
+              setConfigForm({
+                  ...configForm,
+                  roles: configForm.roles.map(r => r.id === id ? { ...r, ...updates } : r)
+              });
+          };
+
+          const toggleHabitualDay = (roleId: string, day: number) => {
+              const role = configForm.roles.find(r => r.id === roleId);
+              if (!role) return;
+              const newDays = role.habitualDays.includes(day)
+                  ? role.habitualDays.filter(d => d !== day)
+                  : [...role.habitualDays, day];
+              updateRole(roleId, { habitualDays: newDays });
+          };
+
+          const toggleHabitualProgram = (roleId: string, program: string) => {
+              const role = configForm.roles.find(r => r.id === roleId);
+              if (!role) return;
+              const newProgs = role.habitualPrograms.includes(program)
+                  ? role.habitualPrograms.filter(p => p !== program)
+                  : [...role.habitualPrograms, program];
+              updateRole(roleId, { habitualPrograms: newProgs });
+          };
+
+          const programsList = fichas.map(f => f.name).sort();
+          if (programsList.length === 0 && catalogo.length > 0) {
+              catalogo.forEach(c => {
+                  if (!programsList.includes(c.name)) programsList.push(c.name);
+              });
+          }
+
           return (
               <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
                   <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
@@ -508,40 +627,113 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                           <p className="text-[10px] text-[#9E7649]">Información requerida</p>
                       </div>
                   </div>
-                  <div className="p-6 max-w-md mx-auto w-full mt-10">
+                  <div className="p-6 max-w-2xl mx-auto w-full mt-4">
                       <div className="bg-[#2C1B15] p-6 rounded-xl border border-[#9E7649]/10 shadow-lg">
                           <h2 className="text-xl font-bold text-white mb-4">Configure su Perfil</h2>
-                          <p className="text-sm text-[#E8DCCF]/70 mb-6">Seleccione su cargo y nivel para calcular sus pagos correctamente. Esta información se guardará para futuras sesiones.</p>
+                          <p className="text-sm text-[#E8DCCF]/70 mb-6">Seleccione sus cargos (hasta 3) y niveles. Puede configurar la habitualidad para cada uno.</p>
                           
-                          <div className="space-y-4">
-                              <div>
-                                  <label className="block text-xs text-[#9E7649] uppercase mb-1">Cargo</label>
-                                  <select 
-                                      value={configForm.role}
-                                      onChange={(e) => setConfigForm({...configForm, role: e.target.value})}
-                                      className="w-full bg-black/20 border border-[#9E7649]/30 rounded p-3 text-white"
+                          <div className="space-y-8">
+                              {configForm.roles.map((role, index) => (
+                                  <div key={role.id} className="p-4 bg-black/20 rounded-lg border border-[#9E7649]/20 relative">
+                                      <div className="flex justify-between items-center mb-4">
+                                          <h3 className="text-[#9E7649] font-bold uppercase text-xs tracking-widest">Función {index + 1}</h3>
+                                          {configForm.roles.length > 1 && (
+                                              <button onClick={() => removeRole(role.id)} className="text-red-400 hover:text-red-300">
+                                                  <Trash2 size={16} />
+                                              </button>
+                                          )}
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                          <div>
+                                              <label className="block text-[10px] text-[#9E7649] uppercase mb-1">Cargo</label>
+                                              <select 
+                                                  value={role.role}
+                                                  onChange={(e) => updateRole(role.id, { role: e.target.value })}
+                                                  className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded p-2 text-sm text-white"
+                                              >
+                                                  <option value="Director">Director</option>
+                                                  <option value="Asesor">Asesor</option>
+                                                  <option value="Locutor">Locutor</option>
+                                                  <option value="Realizador de sonido">Realizador de sonido</option>
+                                              </select>
+                                          </div>
+                                          <div>
+                                              <label className="block text-[10px] text-[#9E7649] uppercase mb-1">Nivel</label>
+                                              <select 
+                                                  value={role.level}
+                                                  onChange={(e) => updateRole(role.id, { level: e.target.value })}
+                                                  className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded p-2 text-sm text-white"
+                                              >
+                                                  <option value="I">Nivel I</option>
+                                                  <option value="II">Nivel II</option>
+                                                  <option value="III">Nivel III</option>
+                                              </select>
+                                          </div>
+                                      </div>
+
+                                      <div className="mt-4 pt-4 border-t border-[#9E7649]/10">
+                                          <div className="flex items-center justify-between mb-4">
+                                              <div className="flex items-center gap-2">
+                                                  <input 
+                                                      type="checkbox" 
+                                                      id={`habitual-${role.id}`}
+                                                      checked={role.isHabitual}
+                                                      onChange={(e) => updateRole(role.id, { isHabitual: e.target.checked })}
+                                                      className="w-4 h-4 accent-[#9E7649]"
+                                                  />
+                                                  <label htmlFor={`habitual-${role.id}`} className="text-sm font-bold text-white cursor-pointer">Activar Habitualidad</label>
+                                              </div>
+                                          </div>
+
+                                          {role.isHabitual && (
+                                              <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                  <div>
+                                                      <label className="block text-[10px] text-[#9E7649] uppercase mb-2">Días Habituales</label>
+                                                      <div className="flex flex-wrap gap-2">
+                                                          {['D', 'L', 'M', 'X', 'J', 'V', 'S'].map((day, i) => (
+                                                              <button
+                                                                  key={i}
+                                                                  onClick={() => toggleHabitualDay(role.id, i)}
+                                                                  className={`w-8 h-8 rounded-full text-[10px] font-bold transition-all ${role.habitualDays.includes(i) ? 'bg-[#9E7649] text-white' : 'bg-black/40 text-[#9E7649] border border-[#9E7649]/20'}`}
+                                                              >
+                                                                  {day}
+                                                              </button>
+                                                          ))}
+                                                      </div>
+                                                  </div>
+                                                  <div>
+                                                      <label className="block text-[10px] text-[#9E7649] uppercase mb-2">Programas Habituales</label>
+                                                      <div className="max-h-40 overflow-y-auto bg-black/40 rounded border border-[#9E7649]/20 p-2 grid grid-cols-1 gap-1">
+                                                          {programsList.map(prog => (
+                                                              <button
+                                                                  key={prog}
+                                                                  onClick={() => toggleHabitualProgram(role.id, prog)}
+                                                                  className={`text-left px-2 py-1 rounded text-xs transition-colors ${role.habitualPrograms.includes(prog) ? 'bg-[#9E7649]/20 text-white border border-[#9E7649]/30' : 'text-[#E8DCCF]/60 hover:bg-white/5'}`}
+                                                              >
+                                                                  {prog}
+                                                              </button>
+                                                          ))}
+                                                      </div>
+                                                  </div>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                              ))}
+
+                              {configForm.roles.length < 3 && (
+                                  <button 
+                                      onClick={addRole}
+                                      className="w-full py-3 border-2 border-dashed border-[#9E7649]/30 rounded-lg text-[#9E7649] hover:bg-[#9E7649]/10 hover:border-[#9E7649]/50 transition-all flex items-center justify-center gap-2 font-bold text-sm"
                                   >
-                                      <option value="Director">Director</option>
-                                      <option value="Asesor">Asesor</option>
-                                      <option value="Locutor">Locutor</option>
-                                      <option value="Realizador de sonido">Realizador de sonido</option>
-                                  </select>
-                              </div>
-                              <div>
-                                  <label className="block text-xs text-[#9E7649] uppercase mb-1">Nivel</label>
-                                  <select 
-                                      value={configForm.level}
-                                      onChange={(e) => setConfigForm({...configForm, level: e.target.value})}
-                                      className="w-full bg-black/20 border border-[#9E7649]/30 rounded p-3 text-white"
-                                  >
-                                      <option value="I">Nivel I</option>
-                                      <option value="II">Nivel II</option>
-                                      <option value="III">Nivel III</option>
-                                  </select>
-                              </div>
+                                      <Plus size={18} /> Añadir Función
+                                  </button>
+                              )}
+
                               <button 
                                   onClick={() => setUserPaymentConfig(configForm)}
-                                  className="w-full bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-3 rounded-lg transition-colors mt-4"
+                                  className="w-full bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-4 rounded-xl shadow-lg transition-all mt-8"
                               >
                                   Guardar Configuración
                               </button>
