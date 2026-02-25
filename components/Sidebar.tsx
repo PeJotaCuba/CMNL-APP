@@ -122,7 +122,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <SidebarItem 
                   icon={<FileText size={20} />} 
                   label="Guiones" 
-                  onClick={() => handleExternalApp('https://guion-bd.vercel.app/')} 
+                  onClick={() => handleNavigation(AppView.APP_GUIONES)} 
                 />
                 <SidebarItem 
                   icon={<Podcast size={20} />} 

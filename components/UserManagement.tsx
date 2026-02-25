@@ -22,36 +22,43 @@ const UserManagement: React.FC<Props> = ({
     news, setNews
 }) => {
   const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'users' | 'content'>('users');
-  const [isEditing, setIsEditing] = useState(false);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleNewUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setNewUser(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditingUser(prev => prev ? ({ ...prev, [name]: value }) : null);
   };
 
   const addUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (newUser.username && newUser.password) {
-      if (isEditing) {
-         setUsers(prev => prev.map(u => u.username === newUser.username ? newUser : u));
-         setIsEditing(false);
-      } else {
          if (users.find(u => u.username === newUser.username)) {
             alert('El nombre de usuario ya existe');
             return;
          }
          setUsers([...users, newUser]);
-      }
-      setNewUser({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
+         setNewUser({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
+    }
+  };
+
+  const saveEditedUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingUser && editingUser.username && editingUser.password) {
+         setUsers(prev => prev.map(u => u.username === editingUser.username ? editingUser : u));
+         setEditingUser(null);
     }
   };
 
   const startEditUser = (user: User) => {
-    setNewUser(user);
-    setIsEditing(true);
+    setEditingUser(user);
   };
 
   const removeUser = (username: string) => {
@@ -316,16 +323,16 @@ const UserManagement: React.FC<Props> = ({
                 {/* Form & Upload Section */}
                 <div className="w-full md:w-1/3 bg-[#2C1B15] p-6 shrink-0 md:h-full md:overflow-y-auto border-b md:border-b-0 md:border-l border-[#9E7649]/10">
                     <div className="mb-10">
-                        <h2 className="text-sm font-bold text-[#9E7649] uppercase tracking-wider mb-4">{isEditing ? 'Editar Usuario' : 'Crear Usuario'}</h2>
+                        <h2 className="text-sm font-bold text-[#9E7649] uppercase tracking-wider mb-4">Crear Usuario</h2>
                         
                         <form onSubmit={addUser} className="flex flex-col gap-3">
-                            <input name="name" placeholder="Nombre completo" value={newUser.name} onChange={handleInputChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
+                            <input name="name" placeholder="Nombre completo" value={newUser.name} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
                             <div className="flex gap-2">
-                                <input name="username" placeholder="Usuario" value={newUser.username} onChange={handleInputChange} disabled={isEditing} className={`flex-1 bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none ${isEditing ? 'opacity-50' : ''}`} required />
-                                <input name="mobile" placeholder="Móvil" value={newUser.mobile} onChange={handleInputChange} className="flex-1 bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" />
+                                <input name="username" placeholder="Usuario" value={newUser.username} onChange={handleNewUserChange} className="flex-1 bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
+                                <input name="mobile" placeholder="Móvil" value={newUser.mobile} onChange={handleNewUserChange} className="flex-1 bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" />
                             </div>
                             
-                            <select name="classification" value={newUser.classification} onChange={handleInputChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]">
+                            <select name="classification" value={newUser.classification} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]">
                                 <option value="Usuario">Usuario</option>
                                 <option value="Director">Director</option>
                                 <option value="Asesor">Asesor</option>
@@ -334,16 +341,11 @@ const UserManagement: React.FC<Props> = ({
                                 <option value="Administrador">Administrador</option>
                             </select>
 
-                            <input name="password" type="text" placeholder="Contraseña" value={newUser.password} onChange={handleInputChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
+                            <input name="password" type="text" placeholder="Contraseña" value={newUser.password} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
                             <div className="flex gap-2">
                                 <button type="submit" className="flex-1 bg-[#9E7649] hover:bg-[#8B653D] text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 mt-2 transition-colors">
-                                    <UserPlus size={18} /> {isEditing ? 'Guardar' : 'Crear'}
+                                    <UserPlus size={18} /> Crear
                                 </button>
-                                {isEditing && (
-                                    <button type="button" onClick={() => { setIsEditing(false); setNewUser({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' }); }} className="bg-white/10 text-white px-4 rounded-lg mt-2 font-bold">
-                                        Cancelar
-                                    </button>
-                                )}
                             </div>
                         </form>
                     </div>
@@ -500,6 +502,62 @@ const UserManagement: React.FC<Props> = ({
           </div>
         )}
       </div>
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+              <Edit2 size={20} className="text-[#9E7649]" />
+              Editar Usuario
+            </h2>
+            
+            <form onSubmit={saveEditedUser} className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Nombre completo</label>
+                <input name="name" placeholder="Nombre completo" value={editingUser.name} onChange={handleEditUserChange} className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-white" required />
+              </div>
+              
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Usuario</label>
+                  <input name="username" placeholder="Usuario" value={editingUser.username} disabled className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm outline-none text-white opacity-50 cursor-not-allowed" required />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Móvil</label>
+                  <input name="mobile" placeholder="Móvil" value={editingUser.mobile} onChange={handleEditUserChange} className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-white" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Clasificación</label>
+                <select name="classification" value={editingUser.classification} onChange={handleEditUserChange} className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]">
+                    <option value="Usuario">Usuario</option>
+                    <option value="Director">Director</option>
+                    <option value="Asesor">Asesor</option>
+                    <option value="Realizador de sonido">Realizador</option>
+                    <option value="Locutor">Locutor</option>
+                    <option value="Administrador">Administrador</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Contraseña</label>
+                <input name="password" type="text" placeholder="Contraseña" value={editingUser.password} onChange={handleEditUserChange} className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-white" required />
+              </div>
+
+              <div className="flex gap-3 mt-4">
+                  <button type="button" onClick={() => setEditingUser(null)} className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold transition-colors">
+                      Cancelar
+                  </button>
+                  <button type="submit" className="flex-1 bg-[#9E7649] hover:bg-[#8B653D] text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg">
+                      <UserPlus size={18} /> Guardar
+                  </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

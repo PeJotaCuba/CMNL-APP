@@ -60,6 +60,17 @@ export interface ProgramCatalog {
   roles: RolePaymentInfo[];
 }
 
+export interface Script {
+  id: string;
+  title: string;
+  genre: string;
+  dateAdded: string;
+  writer: string;
+  advisor: string;
+  themes: string[];
+  content?: string;
+}
+
 export interface ProgramFicha {
   name: string;
   schedule: string;

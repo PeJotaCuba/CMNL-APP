@@ -6,6 +6,7 @@ import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
 import UserManagement from './components/UserManagement';
 import GestionApp from './components/GestionApp';
+import GuionesApp from './components/GuionesApp';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
@@ -294,7 +295,7 @@ const App: React.FC = () => {
       case AppView.APP_MUSICA:
         return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} />;
       case AppView.APP_GUIONES:
-        return <CMNLAppView title="Guiones CMNL" type="scripts" onBack={handleBack} />;
+        return <GuionesApp onBack={handleBack} currentUser={currentUser} />;
       case AppView.APP_PROGRAMACION:
         return <GestionApp onBack={handleBack} currentUser={currentUser} />;
 
