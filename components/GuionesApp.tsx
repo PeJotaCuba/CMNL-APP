@@ -756,15 +756,15 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
                     </div>
                     
                     {/* Botones de Acción del Programa */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <button onClick={() => setShowBalance(true)} className="flex items-center gap-2 px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold">
-                            <BarChart3 size={16} /> Balance
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                        <button onClick={() => setShowBalance(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Balance">
+                            <BarChart3 size={16} /> <span className="hidden sm:inline">Balance</span>
                         </button>
-                        <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors text-sm font-bold shadow-lg">
-                            <Plus size={16} /> Nuevo
+                        <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors text-sm font-bold shadow-lg" title="Nuevo">
+                            <Plus size={16} /> <span className="hidden sm:inline">Nuevo</span>
                         </button>
-                        <button onClick={() => setShowPulir(true)} className="flex items-center gap-2 px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold">
-                            <Wand2 size={16} /> Pulir
+                        <button onClick={() => setShowPulir(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Pulir">
+                            <Wand2 size={16} /> <span className="hidden sm:inline">Pulir</span>
                         </button>
                     </div>
                 </div>
@@ -994,26 +994,6 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
 
                                     {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (
                                         <>
-                                            <button
-                                                onClick={handleDownloadDatabase}
-                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
-                                            >
-                                                <Database size={18} />
-                                                <span className="hidden md:inline text-sm font-bold">Descargar</span>
-                                            </button>
-
-                                            <div className="shrink-0 relative">
-                                                <button 
-                                                    onClick={() => globalUploadRef.current?.click()}
-                                                    disabled={isProcessing}
-                                                    className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-4 md:px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all disabled:opacity-50"
-                                                >
-                                                    <Upload size={18} />
-                                                    <span className="hidden md:inline text-sm font-bold">Carga TXT</span>
-                                                </button>
-                                                <input type="file" multiple ref={globalUploadRef} className="hidden" accept=".txt" onChange={handleGlobalUpload} />
-                                            </div>
-
                                             <button
                                                 onClick={handleClearAllData}
                                                 className="flex items-center gap-2 px-4 md:px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"

@@ -894,27 +894,30 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       <h1 className="text-lg font-bold text-white leading-none">Pagos</h1>
                       <p className="text-[10px] text-[#9E7649]">Control y Cálculo de Salarios</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 sm:gap-2">
                        <button 
                           onClick={() => { setShowAccumulated(!showAccumulated); setShowMonthlyPayments(false); }}
-                          className={`flex items-center gap-2 text-xs px-4 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          className={`flex items-center gap-1 sm:gap-2 text-xs px-2 sm:px-4 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          title={showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}
                       >
-                          <FileBarChart size={14} />
-                          {showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}
+                          <FileBarChart size={16} />
+                          <span className="hidden sm:inline">{showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}</span>
                       </button>
                       <button 
                           onClick={() => { setShowMonthlyPayments(!showMonthlyPayments); setShowAccumulated(false); }}
-                          className={`flex items-center gap-2 text-xs px-4 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          className={`flex items-center gap-1 sm:gap-2 text-xs px-2 sm:px-4 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          title="Pagos Mensuales"
                       >
-                          <CalendarCheck size={14} />
-                          Pagos Mensuales
+                          <CalendarCheck size={16} />
+                          <span className="hidden sm:inline">Pagos Mensuales</span>
                       </button>
                       <button 
                           onClick={() => setUserPaymentConfig(null)}
-                          className="flex items-center gap-2 text-xs px-4 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                          className="flex items-center gap-1 sm:gap-2 text-xs px-2 sm:px-4 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                          title="Configuración"
                       >
-                          <Settings size={14} />
-                          Configuración
+                          <Settings size={16} />
+                          <span className="hidden sm:inline">Configuración</span>
                       </button>
                   </div>
               </div>
@@ -1218,14 +1221,6 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       <h1 className="text-lg font-bold text-white leading-none">Catálogo</h1>
                       <p className="text-[10px] text-[#9E7649]">Gestión de Pagos Artísticos</p>
                   </div>
-                  {isAdmin && (
-                      <div className="flex gap-2">
-                          <label className="p-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] rounded-lg cursor-pointer transition-colors border border-[#9E7649]/30" title="Importar TXT">
-                              <Upload size={20} />
-                              <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'catalogo')} className="hidden" />
-                          </label>
-                      </div>
-                  )}
               </div>
 
               <div className="p-6 overflow-y-auto pb-20">
@@ -1664,14 +1659,6 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       <h1 className="text-lg font-bold text-white leading-none">Fichas de Programas</h1>
                       <p className="text-[10px] text-[#9E7649]">Catálogo Técnico</p>
                   </div>
-                  {isAdmin && (
-                      <div className="flex gap-2">
-                          <label className="p-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] rounded-lg cursor-pointer transition-colors border border-[#9E7649]/30" title="Importar TXT">
-                              <Upload size={20} />
-                              <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'fichas')} className="hidden" />
-                          </label>
-                      </div>
-                  )}
               </div>
 
               <div className="p-6 overflow-y-auto pb-20">
@@ -1729,19 +1716,6 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
               <span className="font-bold text-sm uppercase tracking-wide">{item.label}</span>
             </button>
           ))}
-        </div>
-
-        {/* Global Admin/Update Buttons */}
-        <div className="mt-auto pt-10 pb-6 flex flex-col sm:flex-row gap-4 max-w-4xl mx-auto w-full">
-          {isAdmin && (
-            <button 
-              onClick={handleSaveGestionData}
-              className="flex-1 flex items-center justify-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white py-4 rounded-xl font-bold transition-colors shadow-lg"
-            >
-              <Save size={20} />
-              Guardar base de datos
-            </button>
-          )}
         </div>
       </div>
     </div>
