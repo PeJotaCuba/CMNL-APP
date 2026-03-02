@@ -6,14 +6,16 @@ interface AgendaHeaderProps {
   title: string;
   user: UserProfile;
   onMenuClick?: () => void;
+  onBack?: () => void;
 }
 
-const AgendaHeader: React.FC<AgendaHeaderProps> = ({ title, user, onMenuClick }) => {
+const AgendaHeader: React.FC<AgendaHeaderProps> = ({ title, user, onMenuClick, onBack }) => {
   return (
     <CMNLHeader 
       user={user} 
       sectionTitle={title} 
       onMenuClick={onMenuClick} 
+      onBack={onBack}
     />
   );
 };

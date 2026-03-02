@@ -6,9 +6,11 @@ import { UserProfile } from '../types';
 
 interface ThemeDetailsProps {
   user: UserProfile;
+  onMenuClick?: () => void;
+  onBack?: () => void;
 }
 
-const ThemeDetails: React.FC<ThemeDetailsProps> = ({ user }) => {
+const ThemeDetails: React.FC<ThemeDetailsProps> = ({ user, onMenuClick, onBack }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, instructions, program } = location.state || {};
@@ -19,7 +21,8 @@ const ThemeDetails: React.FC<ThemeDetailsProps> = ({ user }) => {
 
   useEffect(() => {
     if (!theme) {
-      navigate('/home');
+      if (onBack) onBack();
+      else navigate('/home');
       return;
     }
     loadIdeas();
@@ -41,17 +44,13 @@ const ThemeDetails: React.FC<ThemeDetailsProps> = ({ user }) => {
 
   return (
     <div className="flex-1 flex flex-col pb-24 bg-background-dark min-h-screen">
-      <AgendaHeader title="Detalles" user={user} onMenuClick={() => navigate('/home')} />
+      <AgendaHeader title="Detalles" user={user} onMenuClick={onMenuClick} onBack={onBack} />
 
       <header className="sticky top-0 z-50 flex items-center justify-between bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5">
-        <button onClick={() => navigate(-1)} className="flex size-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
-          <span className="material-symbols-outlined text-white">arrow_back</span>
-        </button>
         <div className="flex-1 px-4 text-center">
              <h1 className="text-white text-xs font-bold uppercase tracking-wider truncate">{program}</h1>
              <p className="text-[9px] text-primary font-bold truncate">{theme}</p>
         </div>
-        <div className="size-10"></div>
       </header>
 
       <main className="flex-1 px-4 py-6 overflow-y-auto no-scrollbar">

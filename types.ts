@@ -23,6 +23,26 @@ export enum AppView {
 
 export type UserClassification = 'Director' | 'Asesor' | 'Realizador de sonido' | 'Locutor' | 'Administrador' | 'Usuario';
 
+export interface NewsItem {
+  id: string;
+  title: string;
+  category: string;
+  date: string;
+  excerpt?: string;
+  content: string;
+  image?: string;
+  author?: string;
+}
+
+export interface ProgramItem {
+  id: string;
+  name: string;
+  time: string;
+  days: string[];
+  description: string;
+  image?: string;
+}
+
 export interface User {
   username: string;
   role: 'admin' | 'worker' | 'listener';
@@ -31,7 +51,6 @@ export interface User {
   avatar?: string;
   mobile?: string;
   password?: string;
-  paymentRoles?: string[];
 }
 
 export interface ProgramSchedule {

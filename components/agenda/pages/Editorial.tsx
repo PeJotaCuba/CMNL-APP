@@ -17,6 +17,8 @@ interface EditorialProps {
   onUpdateDayThemes: (themes: DayThemeData) => void;
   onClearAll: () => void;
   filterEnabled: boolean;
+  onMenuClick?: () => void;
+  onBack?: () => void;
 }
 
 const ContentModal: React.FC<{ title: string; content: string; onClose: () => void }> = ({ title, content, onClose }) => {
@@ -84,7 +86,7 @@ const ContentModal: React.FC<{ title: string; content: string; onClose: () => vo
 };
 
 const Editorial: React.FC<EditorialProps> = ({ 
-  user, programs, dayThemes, efemerides, conmemoraciones, onUpdateProgram, onUpdateMany, onUpdateDayThemes, onClearAll, filterEnabled
+  user, programs, dayThemes, efemerides, conmemoraciones, onUpdateProgram, onUpdateMany, onUpdateDayThemes, onClearAll, filterEnabled, onMenuClick, onBack
 }) => {
   const navigate = useNavigate();
   const dateInfo = getCurrentDateInfo(); 
@@ -114,9 +116,12 @@ const Editorial: React.FC<EditorialProps> = ({
   const activeWeek = weeks.find(w => w.id === selectedWeekId);
   
   // Filtrado de usuario
-  const applyFilter = user.role === UserRole.ESCRITOR && user.interests && filterEnabled;
+  const applyFilter = user.interests && filterEnabled && (
+    (user.interests.days?.length || 0) > 0 || 
+    (user.interests.programIds?.length || 0) > 0
+  );
   const searchablePrograms = applyFilter
-    ? programs.filter(p => user.interests?.programIds.includes(p.id))
+    ? programs.filter(p => (user.interests?.programIds || []).includes(p.id))
     : programs;
 
   const normalize = (str: string) => 
@@ -172,9 +177,14 @@ const Editorial: React.FC<EditorialProps> = ({
         // Volver de Vista de Semana a Lista de Semanas
         setSelectedWeekId(null);
         setProgSearch('');
-    } else {
+    } else if (!isMonthSelection) {
         // Volver de Lista de Semanas a Selección de Mes
         setIsMonthSelection(true);
+    } else if (onBack) {
+        // Volver de Selección de Mes a Home
+        onBack();
+    } else {
+        navigate('/home');
     }
   };
 
@@ -342,8 +352,8 @@ const Editorial: React.FC<EditorialProps> = ({
     if (!activeWeek) return [];
     let days = activeWeek.days;
     // Filtro de días según perfil de usuario
-    if (applyFilter && user.interests && user.interests.days.length > 0) {
-      days = days.filter(d => d && user.interests!.days.includes(d.name));
+    if (applyFilter && user.interests && (user.interests.days?.length || 0) > 0) {
+      days = days.filter(d => d && (user.interests!.days || []).includes(d.name));
     }
     return days;
   };
@@ -378,7 +388,7 @@ const Editorial: React.FC<EditorialProps> = ({
           width: { size: 100, type: WidthType.PERCENTAGE },
           borders: { top: { style: BorderStyle.SINGLE, size: 1 }, bottom: { style: BorderStyle.SINGLE, size: 1 }, left: { style: BorderStyle.SINGLE, size: 1 }, right: { style: BorderStyle.SINGLE, size: 1 }, insideHorizontal: { style: BorderStyle.SINGLE, size: 1 }, insideVertical: { style: BorderStyle.SINGLE, size: 1 } },
           rows: [
-              new TableRow({ children: [ new TableCell({ children: [new Paragraph({ text: "MES", bold: true })] }), new TableCell({ children: [new Paragraph(currentMonthLabel)] }), new TableCell({ children: [new Paragraph({ text: "Semana", bold: true })] }), new TableCell({ children: [new Paragraph(weekNumber)] }) ] }),
+              new TableRow({ children: [ new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "MES", bold: true })] })] }), new TableCell({ children: [new Paragraph({ text: currentMonthLabel })] }), new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Semana", bold: true })] })] }), new TableCell({ children: [new Paragraph({ text: weekNumber })] }) ] }),
               new TableRow({ children: [ new TableCell({ children: [new Paragraph({ text: dateRange, alignment: AlignmentType.CENTER })], columnSpan: 4 }) ] })
           ]
       });
@@ -419,7 +429,7 @@ const Editorial: React.FC<EditorialProps> = ({
           dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ text: "TEMÁTICA CENTRAL", alignment: AlignmentType.CENTER })], columnSpan: 2 })] }));
           dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ text: dayTheme || " ", alignment: AlignmentType.LEFT })], columnSpan: 2 })] }));
 
-          dayRows.push(new TableRow({ children: [ new TableCell({ children: [new Paragraph({ text: "PROGRAMA", bold: true })], width: { size: 40, type: WidthType.PERCENTAGE } }), new TableCell({ children: [new Paragraph({ text: "Temática", bold: true, alignment: AlignmentType.CENTER })], width: { size: 60, type: WidthType.PERCENTAGE } }) ] }));
+          dayRows.push(new TableRow({ children: [ new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "PROGRAMA", bold: true })] })], width: { size: 40, type: WidthType.PERCENTAGE } }), new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Temática", bold: true })], alignment: AlignmentType.CENTER })], width: { size: 60, type: WidthType.PERCENTAGE } }) ] }));
 
           // Filtro de programas también aquí para la exportación
           const dayProgs = searchablePrograms.filter(p => p.days.includes(day.name));
@@ -489,13 +499,16 @@ const Editorial: React.FC<EditorialProps> = ({
 
     return (
       <div className="h-full flex flex-col bg-background-dark">
-        <AgendaHeader title="Editor de Contenido" user={user} onMenuClick={() => navigate('/home')} />
+        <AgendaHeader 
+          title="Editor de Contenido" 
+          user={user} 
+          onMenuClick={onMenuClick} 
+          onBack={handleBack}
+        />
 
         <div className="flex-none bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 shadow-xl z-20">
-          <div className="flex items-center justify-between">
-             <button onClick={handleBack} className="size-10 flex items-center justify-center rounded-full hover:bg-white/10"><span className="material-symbols-outlined text-white">arrow_back</span></button>
+          <div className="flex items-center justify-center">
              <div className="text-center"><h1 className="text-white text-xs font-bold uppercase">{selectedDay.name} {selectedDay.date}</h1><p className="text-[9px] text-primary font-bold uppercase tracking-widest">{currentMonthLabel}</p></div>
-             <div className="size-10"></div>
           </div>
         </div>
 
@@ -595,13 +608,15 @@ const Editorial: React.FC<EditorialProps> = ({
 
       return (
         <div className="h-full flex flex-col bg-background-dark">
-            <AgendaHeader title={`Agenda - ${currentMonthLabel}`} user={user} onMenuClick={() => navigate('/home')} />
+            <AgendaHeader 
+              title={`Agenda - ${currentMonthLabel}`} 
+              user={user} 
+              onMenuClick={onMenuClick} 
+              onBack={handleBack}
+            />
 
             <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20 space-y-3">
                 <div className="flex items-center gap-3">
-                    <button onClick={handleBack} className="size-10 flex items-center justify-center rounded-full hover:bg-white/5">
-                        <span className="material-symbols-outlined text-white">arrow_back</span>
-                    </button>
                     <div>
                         <h1 className="text-lg font-bold leading-none">{activeWeek?.label}</h1>
                         <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-1">{currentMonthLabel}</p>
@@ -706,13 +721,15 @@ const Editorial: React.FC<EditorialProps> = ({
   // Nivel 0 y 1
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <AgendaHeader title="Agenda Editorial" user={user} onMenuClick={() => navigate('/home')} />
+      <AgendaHeader 
+        title="Agenda Editorial" 
+        user={user} 
+        onMenuClick={onMenuClick} 
+        onBack={handleBack}
+      />
 
       <div className="flex-none p-4 border-b border-white/5 flex items-center justify-between bg-card-dark/50 z-20 backdrop-blur">
         <div className="flex items-center gap-3">
-          <button onClick={() => isMonthSelection ? navigate('/home') : handleBack()} className="size-10 flex items-center justify-center rounded-full hover:bg-white/5">
-            <span className="material-symbols-outlined text-white">arrow_back</span>
-          </button>
           <div>
             <h1 className="text-lg font-bold leading-none">{isMonthSelection ? "Selección de Mes" : "Semanas"}</h1>
             <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-1">{isMonthSelection ? dateInfo.year : currentMonthLabel}</p>

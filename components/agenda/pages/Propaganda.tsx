@@ -6,6 +6,8 @@ interface Props {
   user: UserProfile;
   data: PropagandaData;
   onUpdate: (data: PropagandaData) => void;
+  onMenuClick?: () => void;
+  onBack?: () => void;
 }
 
 const THEMES = [
@@ -15,9 +17,10 @@ const THEMES = [
 
 import AgendaHeader from '../components/AgendaHeader';
 
-const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
+const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack }) => {
   const [selectedTheme, setSelectedTheme] = useState<string>(THEMES[0]);
   const [searchQuery, setSearchQuery] = useState('');
+  // ... (rest of state remains same)
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('rcm_propaganda_search_history');
@@ -34,8 +37,6 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
 
   const canEdit = user.role === 'admin'; 
   
-  // ... (handleSearch logic remains same)
-
   const handleSearch = (term: string) => {
     setSearchQuery(term);
     setShowSuggestions(false);
@@ -56,8 +57,6 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
     }
   };
 
-  // ... (handleFileUpload, handleClear, handleDownloadDocx remain same)
-  
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) return;
     const file = e.target.files?.[0];
@@ -70,11 +69,12 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
       
       const lines = text.split('\n');
       const newData = { ...data };
-      let currentTheme = "Historia"; 
+      let currentTheme = selectedTheme !== "Todas" ? selectedTheme : "Historia"; 
       let pendingTitle: string | null = null;
 
-      const titleRegex = /^\((\d+)\)\s*(.*?)\.mp3\s*$/i;
-      const pathRegex = /^Ruta:\s*(.*)$/i;
+      // More flexible regex
+      const titleRegex = /^\(?(\d+)\)?\s*(.*?)(?:\.mp3)?\s*$/i;
+      const pathRegex = /^(?:Ruta|Path):\s*(.*)$/i;
 
       lines.forEach(line => {
         const trimmed = line.trim();
@@ -84,7 +84,8 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
             t !== "Todas" && (
               trimmed.toLowerCase() === t.toLowerCase() || 
               trimmed.toLowerCase() === `temática: ${t.toLowerCase()}` ||
-              trimmed.toLowerCase() === `# ${t.toLowerCase()}`
+              trimmed.toLowerCase() === `# ${t.toLowerCase()}` ||
+              trimmed.toLowerCase() === `[${t.toLowerCase()}]`
             )
         );
 
@@ -96,7 +97,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
         }
 
         const titleMatch = trimmed.match(titleRegex);
-        if (titleMatch) {
+        if (titleMatch && !trimmed.toLowerCase().startsWith("ruta:") && !trimmed.toLowerCase().startsWith("path:")) {
             pendingTitle = `${titleMatch[1]} ${titleMatch[2].trim()}`;
             return;
         }
@@ -116,6 +117,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
 
       onUpdate(newData);
       alert('Propaganda cargada exitosamente.');
+      if (e.target) e.target.value = '';
     };
     reader.readAsText(file);
   };
@@ -205,7 +207,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
     let items: string[] = [];
 
     if (selectedTheme === "Todas") {
-        Object.values(data).forEach(themeItems => {
+        (Object.values(data) as string[][]).forEach(themeItems => {
             items = [...items, ...themeItems];
         });
         items = Array.from(new Set(items));
@@ -229,7 +231,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
 
   return (
     <div className="flex-1 flex flex-col bg-background-dark overflow-hidden h-full">
-      <AgendaHeader title="Propaganda" user={user} />
+      <AgendaHeader title="Propaganda" user={user} onMenuClick={onMenuClick} onBack={onBack} />
 
       {/* Controls & Search */}
       <div className="bg-card-dark border-b border-white/5 px-6 py-4 flex flex-col gap-4 shrink-0">

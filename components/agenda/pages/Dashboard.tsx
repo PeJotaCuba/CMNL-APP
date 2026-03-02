@@ -8,6 +8,7 @@ interface DashboardProps {
   programs: Program[];
   filterEnabled: boolean;
   onToggleFilter: () => void;
+  onBack?: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = (props) => {

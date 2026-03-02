@@ -9,11 +9,12 @@ interface ConmemoracionesProps {
   user: UserProfile;
   data: ConmemoracionesData;
   onUpdate: (data: ConmemoracionesData) => void;
+  onMenuClick?: () => void;
 }
 
 import AgendaHeader from '../components/AgendaHeader';
 
-const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate }) => {
+const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate, onMenuClick }) => {
   const navigate = useNavigate();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [daySearch, setDaySearch] = useState('');
@@ -21,7 +22,71 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate 
   const dateInfo = getCurrentDateInfo();
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Upload logic
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n');
+      const newData: ConmemoracionesData = { ...data };
+      
+      let currentMonth = "";
+      let currentDay = 0;
+      let currentNational = "";
+      let currentInternational = "";
+
+      const saveCurrent = () => {
+        if (currentMonth && currentDay > 0 && (currentNational || currentInternational)) {
+          if (!newData[currentMonth]) newData[currentMonth] = [];
+          
+          const existsIdx = newData[currentMonth].findIndex(c => c.day === currentDay);
+          if (existsIdx >= 0) {
+            newData[currentMonth][existsIdx] = {
+              day: currentDay,
+              national: currentNational || newData[currentMonth][existsIdx].national,
+              international: currentInternational || newData[currentMonth][existsIdx].international
+            };
+          } else {
+            newData[currentMonth].push({
+              day: currentDay,
+              national: currentNational,
+              international: currentInternational
+            });
+          }
+        }
+      };
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // Match "Día 10 de Octubre"
+        const dayMonthMatch = trimmed.match(/Día\s+(\d+)\s+de\s+([a-zA-ZáéíóúÁÉÍÓÚ]+)/i);
+        if (dayMonthMatch) {
+          saveCurrent(); // Save previous if any
+          currentDay = parseInt(dayMonthMatch[1]);
+          currentMonth = dayMonthMatch[2].charAt(0).toUpperCase() + dayMonthMatch[2].slice(1).toLowerCase();
+          currentNational = "";
+          currentInternational = "";
+          return;
+        }
+
+        // Match "Conmemoraciones Nacionales: ..."
+        if (trimmed.toLowerCase().startsWith("conmemoraciones nacionales:")) {
+          currentNational = trimmed.split(":")[1].trim();
+        } else if (trimmed.toLowerCase().startsWith("conmemoraciones internacionales:")) {
+          currentInternational = trimmed.split(":")[1].trim();
+        }
+      });
+
+      saveCurrent(); // Save last one
+
+      onUpdate(newData);
+      alert("Conmemoraciones cargadas con éxito.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
   };
 
   const handleDownloadDocx = () => {
@@ -62,13 +127,15 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate 
 
     return (
       <div className="h-full flex flex-col bg-background-dark">
-        <AgendaHeader title={`Conmemoraciones - ${selectedMonth}`} user={user} onMenuClick={() => navigate('/home')} />
+        <AgendaHeader 
+          title={`Conmemoraciones - ${selectedMonth}`} 
+          user={user} 
+          onMenuClick={onMenuClick} 
+          onBack={() => { setSelectedMonth(null); setDaySearch(''); }}
+        />
         
         <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
           <div className="flex items-center justify-between mb-2">
-            <button onClick={() => { setSelectedMonth(null); setDaySearch(''); }} className="flex size-10 items-center justify-center rounded-full hover:bg-white/10">
-              <span className="material-symbols-outlined text-white">arrow_back</span>
-            </button>
             <div className="flex-1"></div>
             <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-admin-red/20 text-admin-red hover:bg-admin-red hover:text-white transition-all">
                 <span className="material-symbols-outlined text-sm">description</span>
@@ -124,7 +191,12 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate 
 
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <AgendaHeader title="Conmemoraciones" user={user} onMenuClick={() => navigate('/home')} />
+      <AgendaHeader 
+        title="Conmemoraciones" 
+        user={user} 
+        onMenuClick={onMenuClick} 
+        onBack={() => navigate('/home')}
+      />
 
       <main className="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-32">
         <div className="px-4 pt-8 pb-4 text-center">

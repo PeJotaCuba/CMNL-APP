@@ -10,22 +10,26 @@ interface HomeProps {
   programs: Program[];
   filterEnabled: boolean;
   onToggleFilter: () => void;
+  onBack?: () => void;
 }
 
-const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, onToggleFilter }) => {
+const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, onToggleFilter, onBack }) => {
   const navigate = useNavigate();
   const dateInfo = getCurrentDateInfo();
   
   const dayName = dateInfo.fullDate.split(',')[0].trim().split(' ')[0];
   const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
   
-  const hasInterests = user.role === UserRole.ESCRITOR && user.interests;
+  const hasInterests = user.interests && (
+    (user.interests.days?.length || 0) > 0 || 
+    (user.interests.programIds?.length || 0) > 0
+  );
   const isFilterActive = hasInterests && filterEnabled;
-  const isTodayRelevant = !isFilterActive || user.interests?.days.includes(capitalizedDay);
+  const isTodayRelevant = !isFilterActive || (user.interests?.days || []).includes(capitalizedDay);
 
   return (
     <div className="flex-1 flex flex-col bg-background-dark h-full">
-      <AgendaHeader title="Panel de Control" user={user} onMenuClick={onLogout} />
+      <AgendaHeader title="Panel de Control" user={user} onMenuClick={onLogout} onBack={onBack} />
 
       <main className="flex-1 px-4 py-6 space-y-5 overflow-y-auto no-scrollbar pb-40">
         <section className="flex justify-between items-start">
@@ -41,19 +45,29 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, on
           </div>
         </section>
 
-        {hasInterests && (
+        <div className="flex items-center gap-3">
+          {hasInterests && (
+            <button 
+              onClick={onToggleFilter}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all active:scale-95 ${filterEnabled ? 'bg-primary/10 border-primary/20' : 'bg-white/5 border-white/10'}`}
+            >
+              <span className={`material-symbols-outlined text-[14px] filled-icon ${filterEnabled ? 'text-primary' : 'text-text-secondary'}`}>
+                  {filterEnabled ? 'filter_alt' : 'filter_alt_off'}
+              </span>
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${filterEnabled ? 'text-primary' : 'text-text-secondary'}`}>
+                  {filterEnabled ? 'Mis Intereses' : 'Ver Todo'}
+              </span>
+            </button>
+          )}
+          
           <button 
-            onClick={onToggleFilter}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full w-fit border transition-all active:scale-95 ${filterEnabled ? 'bg-primary/10 border-primary/20' : 'bg-white/5 border-white/10'}`}
+            onClick={() => navigate('/interests')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-white/5 border-white/10 text-text-secondary hover:text-white transition-all active:scale-95"
           >
-            <span className={`material-symbols-outlined text-[14px] filled-icon ${filterEnabled ? 'text-primary' : 'text-text-secondary'}`}>
-                {filterEnabled ? 'filter_alt' : 'filter_alt_off'}
-            </span>
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${filterEnabled ? 'text-primary' : 'text-text-secondary'}`}>
-                {filterEnabled ? 'Mis Intereses' : 'Ver Todo'}
-            </span>
+            <span className="material-symbols-outlined text-[14px]">settings</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest">Configurar Intereses</span>
           </button>
-        )}
+        </div>
 
         <div className="grid grid-cols-1 gap-3">
           {/* BOTÓN AGENDA - Rediseñado para ser horizontal y ahorrar espacio */}

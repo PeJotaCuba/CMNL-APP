@@ -7,30 +7,69 @@ interface InterestsProps {
   user: UserProfile;
   programs: Program[];
   onUpdateUser: (u: UserProfile) => void;
+  onMenuClick?: () => void;
+  onBack?: () => void;
 }
 
-const Interests: React.FC<InterestsProps> = ({ user, programs, onUpdateUser }) => {
-  const navigate = useNavigate();
-  // ... (state and logic)
+const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-  // ... (handleToggleDay, handleToggleProg, toggleAllDays, toggleAllProgs, handlePhotoUpload)
+const Interests: React.FC<InterestsProps> = ({ user, programs, onUpdateUser, onMenuClick, onBack }) => {
+  const navigate = useNavigate();
+  const [selectedDays, setSelectedDays] = useState<string[]>(user.interests?.days || []);
+  const [selectedProgs, setSelectedProgs] = useState<string[]>(user.interests?.programIds || []);
+  const [userPhoto, setUserPhoto] = useState<string | null>(user.photo || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleToggleDay = (day: string) => {
+    setSelectedDays(prev => 
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const handleToggleProg = (id: string) => {
+    setSelectedProgs(prev => 
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  };
+
+  const toggleAllDays = () => {
+    if (selectedDays.length === weekDays.length) setSelectedDays([]);
+    else setSelectedDays([...weekDays]);
+  };
+
+  const toggleAllProgs = () => {
+    if (selectedProgs.length === programs.length) setSelectedProgs([]);
+    else setSelectedProgs(programs.map(p => p.id));
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setUserPhoto(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Guardar configuración de intereses
   const handleSavePreferences = () => {
     onUpdateUser({
       ...user,
-      photo: userPhoto,
+      photo: userPhoto || user.photo,
       interests: {
         days: selectedDays,
         programIds: selectedProgs
       }
     });
-    navigate('/home');
+    if (onBack) onBack();
+    else navigate('/home');
   };
 
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <AgendaHeader title="Mi Perfil" user={user} onMenuClick={() => navigate('/home')} />
+      <AgendaHeader title="Mi Perfil" user={user} onMenuClick={onMenuClick} onBack={onBack} />
 
       <main className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8 pb-24">
         {/* Sección de Identidad */}

@@ -9,11 +9,12 @@ interface EfemeridesProps {
   user: UserProfile;
   data: EfemeridesData;
   onUpdate: (data: EfemeridesData) => void;
+  onMenuClick?: () => void;
 }
 
 import AgendaHeader from '../components/AgendaHeader';
 
-const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate }) => {
+const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate, onMenuClick }) => {
   const navigate = useNavigate();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [daySearch, setDaySearch] = useState('');
@@ -21,7 +22,54 @@ const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate }) => {
   const dateInfo = getCurrentDateInfo();
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Upload logic
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n');
+      const newData: EfemeridesData = { ...data };
+      
+      let currentMonth = "";
+      let currentDay = 0;
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // Match "Día 1 de Enero" or similar
+        const dayMonthMatch = trimmed.match(/Día\s+(\d+)\s+de\s+([a-zA-ZáéíóúÁÉÍÓÚ]+)/i);
+        if (dayMonthMatch) {
+          currentDay = parseInt(dayMonthMatch[1]);
+          currentMonth = dayMonthMatch[2].charAt(0).toUpperCase() + dayMonthMatch[2].slice(1).toLowerCase();
+          if (!newData[currentMonth]) newData[currentMonth] = [];
+          return;
+        }
+
+        // Match "1959: Triunfo..."
+        const eventMatch = trimmed.match(/^(\d+):\s*(.*)/);
+        if (eventMatch && currentMonth) {
+          const year = eventMatch[1];
+          const description = eventMatch[2];
+          
+          // Avoid duplicates
+          const exists = newData[currentMonth].some(e => e.day === currentDay && e.event === year && e.description === description);
+          if (!exists) {
+            newData[currentMonth].push({
+              day: currentDay,
+              event: year,
+              description: description
+            });
+          }
+        }
+      });
+
+      onUpdate(newData);
+      alert("Efemérides cargadas con éxito.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
   };
 
   const handleDownloadDocx = () => {
@@ -61,13 +109,15 @@ const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate }) => {
 
     return (
       <div className="h-full flex flex-col bg-background-dark">
-        <AgendaHeader title={`Efemérides - ${selectedMonth}`} user={user} onMenuClick={() => navigate('/home')} />
+        <AgendaHeader 
+          title={`Efemérides - ${selectedMonth}`} 
+          user={user} 
+          onMenuClick={onMenuClick} 
+          onBack={() => { setSelectedMonth(null); setDaySearch(''); }}
+        />
         
         <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
           <div className="flex items-center justify-between mb-2">
-            <button onClick={() => { setSelectedMonth(null); setDaySearch(''); }} className="flex size-10 items-center justify-center rounded-full hover:bg-white/10">
-              <span className="material-symbols-outlined text-white">arrow_back</span>
-            </button>
             <div className="flex-1"></div>
             <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all">
                 <span className="material-symbols-outlined text-sm">description</span>
@@ -118,7 +168,12 @@ const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate }) => {
 
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <AgendaHeader title="Efemérides" user={user} onMenuClick={() => navigate('/home')} />
+      <AgendaHeader 
+        title="Efemérides" 
+        user={user} 
+        onMenuClick={onMenuClick} 
+        onBack={() => navigate('/home')}
+      />
 
       <main className="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-32">
         <div className="px-4 pt-8 pb-4 text-center">
