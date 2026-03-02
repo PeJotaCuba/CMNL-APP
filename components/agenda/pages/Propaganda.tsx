@@ -15,8 +15,48 @@ const THEMES = [
 
 const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
   const [selectedTheme, setSelectedTheme] = useState<string>(THEMES[0]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('rcm_propaganda_search_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Filter out entries older than 24 hours
+        const now = Date.now();
+        const valid = parsed.filter((item: { term: string, timestamp: number }) => now - item.timestamp < 24 * 60 * 60 * 1000);
+        return valid.map((item: { term: string }) => item.term);
+      }
+      return [];
+    } catch { return []; }
+  });
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const canEdit = user.role === 'admin'; 
+
+  const handleSearch = (term: string) => {
+    setSearchQuery(term);
+    setShowSuggestions(false);
+    
+    if (term.trim()) {
+      const now = Date.now();
+      const historyItem = { term: term.trim(), timestamp: now };
+      
+      try {
+        const saved = localStorage.getItem('rcm_propaganda_search_history');
+        let history = saved ? JSON.parse(saved) : [];
+        
+        // Remove duplicates and keep only recent
+        history = history.filter((item: { term: string }) => item.term !== term.trim());
+        history.unshift(historyItem);
+        
+        // Limit to last 10 items
+        if (history.length > 10) history = history.slice(0, 10);
+        
+        localStorage.setItem('rcm_propaganda_search_history', JSON.stringify(history));
+        setSearchHistory(history.map((item: { term: string }) => item.term));
+      } catch (e) { console.error(e); }
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) return;
@@ -187,6 +227,12 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
         items = data[selectedTheme] || [];
     }
 
+    // Apply Search Filter
+    if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        items = items.filter(item => item.toLowerCase().includes(query));
+    }
+
     // Sort by number prefix
     // Expected format: "104 Title..."
     return items.sort((a, b) => {
@@ -201,28 +247,81 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
   return (
     <div className="flex-1 flex flex-col bg-background-dark overflow-hidden">
       {/* Header */}
-      <header className="bg-card-dark border-b border-white/5 px-6 py-4 flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-xl font-bold text-white">Propaganda</h1>
-          <p className="text-text-secondary text-xs uppercase tracking-widest">Base de Datos Institucional</p>
-        </div>
-        
-        {canEdit && (
-          <div className="flex gap-2">
-             <label className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-white/10">
-                <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                <span className="hidden sm:inline">Cargar TXT</span>
-                <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-             </label>
-             <button 
-                onClick={handleDownloadDocx}
-                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-primary/20"
-             >
-                <span className="material-symbols-outlined text-[18px]">download</span>
-                <span className="hidden sm:inline">Descargar DOCX</span>
-             </button>
+      <header className="bg-card-dark border-b border-white/5 px-6 py-4 flex flex-col gap-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-white">Propaganda</h1>
+            <p className="text-text-secondary text-xs uppercase tracking-widest">Base de Datos Institucional</p>
           </div>
-        )}
+          
+          {canEdit && (
+            <div className="flex gap-2">
+               <label className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-white/10">
+                  <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                  <span className="hidden sm:inline">Cargar TXT</span>
+                  <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+               </label>
+               <button 
+                  onClick={handleDownloadDocx}
+                  className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-primary/20"
+               >
+                  <span className="material-symbols-outlined text-[18px]">download</span>
+                  <span className="hidden sm:inline">Descargar DOCX</span>
+               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative w-full">
+            <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary">search</span>
+                <input 
+                    type="text" 
+                    placeholder="Buscar propaganda..." 
+                    value={searchQuery}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleSearch(searchQuery);
+                        }
+                    }}
+                    className="w-full bg-background-dark border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white text-sm focus:border-primary outline-none transition-colors"
+                />
+                {searchQuery && (
+                    <button 
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
+                    >
+                        <span className="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                )}
+            </div>
+
+            {/* Search Suggestions / History */}
+            {showSuggestions && searchHistory.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-card-dark border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <div className="px-3 py-2 text-[10px] uppercase font-bold text-text-secondary tracking-widest border-b border-white/5 bg-white/5">
+                        Búsquedas Recientes
+                    </div>
+                    {searchHistory.map((term, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => handleSearch(term)}
+                            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 flex items-center gap-2 transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-[16px] text-text-secondary">history</span>
+                            {term}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
       </header>
 
       {/* Controls */}
