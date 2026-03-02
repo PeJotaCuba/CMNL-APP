@@ -91,7 +91,10 @@ const App: React.FC = () => {
     const handlePopState = (event: PopStateEvent) => {
       // If in AgendaApp, GestionApp, or GuionesApp and navigating internally (hash exists), ignore this event
       // to prevent App.tsx from unmounting the app
-      if ((currentView === AppView.APP_AGENDA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_GUIONES) && window.location.hash.length > 1) {
+      // Exception: allow back navigation if hash is #menu (root of sub-app)
+      if ((currentView === AppView.APP_AGENDA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_GUIONES) && 
+          window.location.hash.length > 1 && 
+          window.location.hash !== '#menu') {
         return;
       }
 

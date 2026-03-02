@@ -1,206 +1,85 @@
 import React from 'react';
-import { AppView, User } from '../types';
-import { 
-  X, 
-  ScrollText, 
-  Mic, 
-  Users, 
-  RefreshCw, 
-  Settings, 
-  LogOut, 
-  LogIn, 
-  CalendarDays, 
-  Music, 
-  FileText, 
-  Podcast, 
-  Newspaper 
-} from 'lucide-react';
+import { AppView } from '../types';
+import { Home, History, Info, Newspaper, Radio, User, LogOut, X } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (view: AppView) => void;
-  currentUser: User | null;
-  onSync?: () => void;
-  isSyncing?: boolean;
-  onLogout?: () => void;
-  onLogin?: () => void;
+  currentView: AppView;
+  userRole?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  isOpen, 
-  onClose, 
-  onNavigate, 
-  currentUser, 
-  onSync, 
-  isSyncing, 
-  onLogout,
-  onLogin
-}) => {
-  
-  const handleNavigation = (view: AppView) => {
-    onNavigate(view);
-    onClose();
-  };
-
-  const handleExternalApp = (url: string) => {
-    let finalUrl = url;
-    if (currentUser) {
-        const separator = url.includes('?') ? '&' : '?';
-        finalUrl = `${url}${separator}username=${encodeURIComponent(currentUser.username)}&password=${encodeURIComponent(currentUser.password || '')}`;
-    }
-    window.location.href = finalUrl;
-    onClose();
-  };
-
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onNavigate, currentView, userRole }) => {
   return (
     <>
       {/* Overlay */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
-          onClick={onClose}
-        />
-      )}
+      <div 
+        className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
 
-      {/* Drawer */}
-      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        
-        {/* Header */}
-        <div className="p-6 flex items-center justify-between border-b border-white/5">
-          <h2 className="text-[#C69C6D] font-serif font-bold text-xl">Menú</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-white transition-colors">
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="py-4 overflow-y-auto h-[calc(100%-80px)]">
-          
-          {/* Section 1: Main Info */}
-          <div className="px-4 flex flex-col gap-2">
-            <SidebarItem 
-              icon={<ScrollText size={20} />} 
-              label="Historia" 
-              onClick={() => handleNavigation(AppView.SECTION_HISTORY)} 
-            />
-            <SidebarItem 
-              icon={<Mic size={20} />} 
-              label="Programación" 
-              onClick={() => handleNavigation(AppView.SECTION_PROGRAMMING_PUBLIC)} 
-            />
-            <SidebarItem 
-              icon={<Users size={20} />} 
-              label="Quiénes Somos" 
-              onClick={() => handleNavigation(AppView.SECTION_ABOUT)} 
-            />
-            <SidebarItem 
-              icon={<Podcast size={20} />} 
-              label="Podcast" 
-              onClick={() => handleNavigation(AppView.SECTION_PODCAST)} 
-            />
+      {/* Sidebar */}
+      <div className={`fixed top-0 left-0 h-full w-64 bg-[#1A100C] border-r border-[#9E7649]/20 z-[70] transform transition-transform duration-300 shadow-2xl ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex flex-col h-full">
+          <div className="flex items-center justify-between mb-8">
+             <h2 className="text-xl font-bold text-white">Menú</h2>
+             <button onClick={onClose} className="text-[#9E7649] hover:text-white transition-colors">
+                <X size={24} />
+             </button>
           </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-white/5 mx-4"></div>
+          <nav className="flex-1 space-y-2">
+            <button 
+                onClick={() => { onNavigate(AppView.LISTENER_HOME); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[#E8DCCF] hover:bg-[#9E7649]/10 hover:text-[#9E7649] transition-all font-bold"
+            >
+                <Home size={20} />
+                Inicio
+            </button>
 
-          {/* Section 2: Apps */}
-          <div className="px-4 flex flex-col gap-2">
-            {currentUser ? (
-              // Worker/Admin Apps
-              <>
-                <SidebarItem 
-                  icon={<CalendarDays size={20} />} 
-                  label="Agenda" 
-                  onClick={() => handleNavigation(AppView.APP_AGENDA)} 
-                />
-                <SidebarItem 
-                  icon={<Music size={20} />} 
-                  label="Música" 
-                  onClick={() => handleExternalApp('https://rcm-musica.vercel.app/')} 
-                />
-                <SidebarItem 
-                  icon={<FileText size={20} />} 
-                  label="Guiones" 
-                  onClick={() => handleNavigation(AppView.APP_GUIONES)} 
-                />
-                <SidebarItem 
-                  icon={<Podcast size={20} />} 
-                  label="Gestión" 
-                  onClick={() => handleNavigation(AppView.APP_PROGRAMACION)} 
-                />
-              </>
-            ) : (
-              // Listener Apps
-              <>
-                 {/* No specific apps for listeners in sidebar currently, as Noticias is removed */}
-              </>
-            )}
+            <button 
+                onClick={() => { onNavigate(AppView.SECTION_HISTORY); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[#E8DCCF] hover:bg-[#9E7649]/10 hover:text-[#9E7649] transition-all font-bold"
+            >
+                <History size={20} />
+                Historia
+            </button>
+
+            <button 
+                onClick={() => { onNavigate(AppView.SECTION_ABOUT); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[#E8DCCF] hover:bg-[#9E7649]/10 hover:text-[#9E7649] transition-all font-bold"
+            >
+                <Info size={20} />
+                Quiénes Somos
+            </button>
+
+            <button 
+                onClick={() => { onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[#E8DCCF] hover:bg-[#9E7649]/10 hover:text-[#9E7649] transition-all font-bold"
+            >
+                <Radio size={20} />
+                Programación
+            </button>
+
+            <button 
+                onClick={() => { onNavigate(AppView.SECTION_NEWS); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-[#E8DCCF] hover:bg-[#9E7649]/10 hover:text-[#9E7649] transition-all font-bold"
+            >
+                <Newspaper size={20} />
+                Noticias
+            </button>
+          </nav>
+
+          <div className="border-t border-[#9E7649]/20 pt-6 mt-auto">
+             <p className="text-[10px] text-[#9E7649] uppercase tracking-widest text-center opacity-50">
+                Radio Ciudad Monumento<br/>v1.0.0
+             </p>
           </div>
-
-          {/* Divider */}
-          <div className="my-4 border-t border-white/5 mx-4"></div>
-
-          {/* Section 3: System */}
-          <div className="px-4 flex flex-col gap-2">
-            {onSync && (
-              <SidebarItem 
-                icon={<RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} />} 
-                label="Actualizar" 
-                onClick={() => { onSync(); onClose(); }} 
-                disabled={isSyncing}
-              />
-            )}
-            
-            {currentUser?.role === 'admin' && (
-              <SidebarItem 
-                icon={<Settings size={20} />} 
-                label="Configuración" 
-                onClick={() => handleNavigation(AppView.APP_USER_MANAGEMENT)} 
-              />
-            )}
-
-            {currentUser ? (
-              <SidebarItem 
-                icon={<LogOut size={20} />} 
-                label="Cerrar Sesión" 
-                onClick={() => { if(onLogout) onLogout(); onClose(); }} 
-                className="text-red-400 hover:bg-red-900/20 hover:text-red-300"
-              />
-            ) : (
-              <SidebarItem 
-                icon={<LogIn size={20} />} 
-                label="Iniciar Sesión" 
-                onClick={() => { if(onLogin) onLogin(); onClose(); }} 
-              />
-            )}
-          </div>
-
         </div>
       </div>
     </>
   );
 };
-
-interface SidebarItemProps {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  className?: string;
-  disabled?: boolean;
-}
-
-const SidebarItem: React.FC<SidebarItemProps> = ({ icon, label, onClick, className, disabled }) => (
-  <button 
-    onClick={onClick} 
-    disabled={disabled}
-    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-sm font-medium ${
-      disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 active:scale-[0.98]'
-    } ${className || 'text-stone-300 hover:text-[#C69C6D]'}`}
-  >
-    {icon}
-    <span>{label}</span>
-  </button>
-);
 
 export default Sidebar;

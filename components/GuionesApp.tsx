@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { User, Script } from '../types';
 import CMNLHeader from './CMNLHeader';
 import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
@@ -6,7 +6,7 @@ import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
 
 export const parseSpanishDate = (dateStr: string): Date => {
-    if (!dateStr) return new Date();
+    if (!dateStr || typeof dateStr !== 'string') return new Date();
     
     const str = dateStr.toLowerCase().trim();
 
