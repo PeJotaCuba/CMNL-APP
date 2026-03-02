@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { User, Script } from '../types';
+import CMNLHeader from './CMNLHeader';
 import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
 import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
@@ -147,6 +148,44 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
     const [showBalance, setShowBalance] = useState(false);
     const [balanceStep, setBalanceStep] = useState<'config' | 'results'>('config');
     const [balanceYear, setBalanceYear] = useState('Todos');
+
+    // Hash Navigation Logic
+    useEffect(() => {
+        const handleHashChange = () => {
+            const hash = window.location.hash;
+            if (hash === '#stats') {
+                setShowStats(true);
+                setSelectedProgram(null);
+            } else if (hash.startsWith('#program-')) {
+                const programId = decodeURIComponent(hash.replace('#program-', ''));
+                setSelectedProgram(programId);
+                setShowStats(false);
+            } else {
+                setShowStats(false);
+                setSelectedProgram(null);
+            }
+        };
+
+        if (!window.location.hash) {
+             window.history.replaceState(null, '', '#menu');
+        } else {
+            handleHashChange();
+        }
+
+        window.addEventListener('hashchange', handleHashChange);
+        return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
+
+    // Sync state to hash
+    useEffect(() => {
+        let targetHash = '#menu';
+        if (showStats) targetHash = '#stats';
+        else if (selectedProgram) targetHash = `#program-${encodeURIComponent(selectedProgram)}`;
+
+        if (window.location.hash !== targetHash) {
+            window.location.hash = targetHash;
+        }
+    }, [showStats, selectedProgram]);
     const [balanceMonth, setBalanceMonth] = useState('Todos');
     const [balanceSearch, setBalanceSearch] = useState('');
 
@@ -899,50 +938,29 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
     return (
         <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-sans transition-colors duration-300 flex flex-col">
             {/* Navbar Superior (Mantiene el diseño de CMNL App) */}
-            <nav className="sticky top-0 z-40 bg-[#3E1E16] border-b border-[#9E7649]/20 shadow-md">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6">
-                    <div className="flex justify-between items-center h-16">
-                        
-                        <div className="flex items-center gap-4">
-                            <div 
-                                className="flex items-center gap-3 cursor-pointer" 
-                                onClick={() => { setSelectedProgram(null); setShowStats(false); setScriptSearchQuery(''); }}
-                            >
-                                <div className="bg-[#9E7649] p-2 rounded-xl shadow-lg">
-                                    <FileStack className="text-white h-5 w-5" />
-                                </div>
-                                <div>
-                                    <span className="font-bold text-lg text-white tracking-tight leading-none block">CMNL Guiones</span>
-                                    <span className="text-[10px] font-medium text-[#9E7649] uppercase tracking-widest leading-none mt-0.5 block">Gestor</span>
-                                </div>
-                            </div>
-
-                            {(selectedProgram || showStats) && (
-                                <button 
-                                    onClick={() => { setSelectedProgram(null); setShowStats(false); setScriptSearchQuery(''); }}
-                                    className="hidden md:flex items-center gap-1.5 text-sm font-semibold text-[#9E7649] hover:text-white transition-colors ml-4 border-l border-white/10 pl-4"
-                                >
-                                    <ChevronLeft size={18} />
-                                    Volver
-                                </button>
-                            )}
-                        </div>
-                        
-                        <div className="flex items-center gap-3">
-                            <span className="hidden sm:block text-xs font-bold px-3 py-1.5 bg-[#2C1B15] border border-[#9E7649]/20 rounded-lg text-[#9E7649]">
-                                {currentUser.classification || currentUser.role}: {currentUser.username}
-                            </span>
-                            <button 
-                                onClick={onBack}
-                                className="p-2 text-[#9E7649] hover:text-white hover:bg-[#2C1B15] rounded-lg transition-all border border-transparent hover:border-[#9E7649]/30"
-                                title="Volver al Menú Principal"
-                            >
-                                <X size={20} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </nav>
+            <CMNLHeader 
+                user={currentUser ? { name: currentUser.name, role: currentUser.classification || currentUser.role } : null}
+                sectionTitle={selectedProgram || (showStats ? "Estadísticas" : "Guiones")}
+                onMenuClick={() => {
+                    if (selectedProgram || showStats) {
+                        setSelectedProgram(null);
+                        setShowStats(false);
+                        setScriptSearchQuery('');
+                    } else {
+                        onBack();
+                    }
+                }}
+            >
+                {(selectedProgram || showStats) && (
+                    <button 
+                        onClick={() => { setSelectedProgram(null); setShowStats(false); setScriptSearchQuery(''); }}
+                        className="hidden md:flex items-center gap-1.5 text-sm font-semibold text-[#9E7649] hover:text-white transition-colors ml-4 border-l border-white/10 pl-4"
+                    >
+                        <ChevronLeft size={18} />
+                        Volver
+                    </button>
+                )}
+            </CMNLHeader>
 
             <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full">
                 {showStats ? (

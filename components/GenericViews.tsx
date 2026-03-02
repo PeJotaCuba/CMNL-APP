@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X } from 'lucide-react';
 import { NewsItem } from '../types';
+import CMNLHeader from './CMNLHeader';
 
 interface ViewProps {
   title: string;
@@ -9,6 +10,7 @@ interface ViewProps {
   type?: 'agenda' | 'music' | 'scripts' | 'schedule';
   customContent?: string;
   newsItem?: NewsItem | null;
+  user?: { name: string; role: string; photo?: string } | null;
 }
 
 const newsColors = [
@@ -168,7 +170,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
   );
 };
 
-export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack }) => {
+export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, user }) => {
   const getIcon = () => {
     switch(type) {
       case 'agenda': return <Calendar size={48} />;
@@ -191,12 +193,11 @@ export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack }) => {
 
   return (
     <div className={`flex flex-col h-full w-full ${getBgColor()} text-white`}>
-      <div className="bg-black/20 backdrop-blur-md p-4 pt-12 flex items-center gap-4 border-b border-white/10">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-          <ArrowLeft size={24} />
-        </button>
-        <h2 className="font-bold text-xl tracking-wider uppercase">{title}</h2>
-      </div>
+      <CMNLHeader 
+          user={user || null}
+          sectionTitle={title}
+          onMenuClick={onBack}
+      />
 
       <div className="flex-1 flex flex-col p-6">
         <div className="w-full h-40 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center mb-6 shadow-inner">

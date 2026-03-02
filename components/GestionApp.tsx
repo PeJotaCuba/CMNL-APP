@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
+import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -42,6 +43,36 @@ interface UserPaymentConfig {
 
 const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  // Hash Navigation Logic
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (['pagos', 'catalogo', 'fichas'].includes(hash)) {
+        setActiveSection(hash);
+      } else {
+        setActiveSection(null);
+      }
+    };
+
+    // Set initial hash if empty
+    if (!window.location.hash) {
+         window.history.replaceState(null, '', '#menu');
+    } else {
+        handleHashChange();
+    }
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Sync state to hash
+  useEffect(() => {
+    const targetHash = activeSection ? `#${activeSection}` : '#menu';
+    if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+    }
+  }, [activeSection]);
   const [fichas, setFichas] = useState<ProgramFicha[]>(() => {
       const saved = localStorage.getItem('rcm_data_fichas');
       return saved ? JSON.parse(saved) : INITIAL_FICHAS;
@@ -708,15 +739,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
 
           return (
               <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
-                  <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-                      <button onClick={() => setActiveSection(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-                          <ArrowLeft size={20} className="text-[#F5EFE6]" />
-                      </button>
-                      <div className="flex-1">
-                          <h1 className="text-lg font-bold text-white leading-none">Configuración de Pagos</h1>
-                          <p className="text-[10px] text-[#9E7649]">Información requerida</p>
-                      </div>
-                  </div>
+                  <CMNLHeader 
+                      user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                      sectionTitle="Configuración de Pagos"
+                      onMenuClick={() => setActiveSection(null)}
+                  />
                   <div className="p-6 max-w-2xl mx-auto w-full mt-4">
                       <div className="bg-[#2C1B15] p-6 rounded-xl border border-[#9E7649]/10 shadow-lg">
                           <h2 className="text-xl font-bold text-white mb-4">Configure su Perfil</h2>
@@ -885,15 +912,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
 
       return (
           <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
-              {/* Header */}
-              <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-                  <button onClick={() => setActiveSection(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-                      <ArrowLeft size={20} className="text-[#F5EFE6]" />
-                  </button>
-                  <div className="flex-1">
-                      <h1 className="text-lg font-bold text-white leading-none">Pagos</h1>
-                      <p className="text-[10px] text-[#9E7649]">Control y Cálculo de Salarios</p>
-                  </div>
+              <CMNLHeader 
+                  user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                  sectionTitle="Pagos"
+                  onMenuClick={() => setActiveSection(null)}
+              >
                   <div className="flex gap-1 sm:gap-2">
                        <button 
                           onClick={() => { setShowAccumulated(!showAccumulated); setShowMonthlyPayments(false); }}
@@ -920,7 +943,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                           <span className="hidden sm:inline">Configuración</span>
                       </button>
                   </div>
-              </div>
+              </CMNLHeader>
 
               <div className="p-6 max-w-6xl mx-auto w-full">
                   {/* Summary Card */}
@@ -1213,15 +1236,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
 
       return (
           <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
-              <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-                  <button onClick={() => setActiveSection(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-                      <ArrowLeft size={20} className="text-[#F5EFE6]" />
-                  </button>
-                  <div className="flex-1">
-                      <h1 className="text-lg font-bold text-white leading-none">Catálogo</h1>
-                      <p className="text-[10px] text-[#9E7649]">Gestión de Pagos Artísticos</p>
-                  </div>
-              </div>
+              <CMNLHeader 
+                  user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                  sectionTitle="Catálogo"
+                  onMenuClick={() => setActiveSection(null)}
+              />
 
               <div className="p-6 overflow-y-auto pb-20">
                   {catalogo.length === 0 ? (
@@ -1262,14 +1281,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
           // Detail View
           return (
               <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
-                  <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-                      <button onClick={() => { setSelectedFicha(null); setIsEditing(false); }} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-                          <ArrowLeft size={20} className="text-[#F5EFE6]" />
-                      </button>
-                      <div className="flex-1">
-                          <h1 className="text-lg font-bold text-white leading-none">{selectedFicha.name}</h1>
-                          <p className="text-[10px] text-[#9E7649]">Ficha Técnica</p>
-                      </div>
+                  <CMNLHeader 
+                      user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                      sectionTitle={selectedFicha.name}
+                      onMenuClick={() => { setSelectedFicha(null); setIsEditing(false); }}
+                  >
                       {isAdmin && !isEditing && (
                           <button onClick={handleEdit} className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm" title="Editar Ficha">
                               <Edit2 size={20} />
@@ -1285,7 +1301,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                               </button>
                           </div>
                       )}
-                  </div>
+                  </CMNLHeader>
                   
                   <div className="p-6 max-w-4xl mx-auto w-full overflow-y-auto pb-20">
                       {/* Header Card */}
@@ -1651,15 +1667,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       // List View
       return (
           <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
-              <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-                  <button onClick={() => setActiveSection(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-                      <ArrowLeft size={20} className="text-[#F5EFE6]" />
-                  </button>
-                  <div className="flex-1">
-                      <h1 className="text-lg font-bold text-white leading-none">Fichas de Programas</h1>
-                      <p className="text-[10px] text-[#9E7649]">Catálogo Técnico</p>
-                  </div>
-              </div>
+              <CMNLHeader 
+                  user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                  sectionTitle="Fichas de Programas"
+                  onMenuClick={() => setActiveSection(null)}
+              />
 
               <div className="p-6 overflow-y-auto pb-20">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
@@ -1691,15 +1703,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   return (
     <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
       {/* Header */}
-      <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-        <button onClick={onBack} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-          <ArrowLeft size={20} className="text-[#F5EFE6]" />
-        </button>
-        <div>
-          <h1 className="text-lg font-bold text-white leading-none">Gestión</h1>
-          <p className="text-[10px] text-[#9E7649]">Sistema de Control Interno</p>
-        </div>
-      </div>
+      <CMNLHeader 
+          user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+          sectionTitle="Gestión"
+          onMenuClick={onBack}
+      />
 
       {/* Grid Menu */}
       <div className="flex-1 p-6 overflow-y-auto flex flex-col">

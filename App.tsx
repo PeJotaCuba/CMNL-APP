@@ -89,9 +89,9 @@ const App: React.FC = () => {
   // Back Button Logic
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      // If in AgendaApp and navigating internally (hash exists), ignore this event
-      // to prevent App.tsx from unmounting AgendaApp
-      if (currentView === AppView.APP_AGENDA && window.location.hash.length > 1) {
+      // If in AgendaApp, GestionApp, or GuionesApp and navigating internally (hash exists), ignore this event
+      // to prevent App.tsx from unmounting the app
+      if ((currentView === AppView.APP_AGENDA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_GUIONES) && window.location.hash.length > 1) {
         return;
       }
 
@@ -343,7 +343,7 @@ const App: React.FC = () => {
       case AppView.APP_AGENDA:
         return <AgendaApp onBack={handleBack} currentUser={currentUser} />;
       case AppView.APP_MUSICA:
-        return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} />;
+        return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} user={currentUser} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} currentUser={currentUser} />;
       case AppView.APP_PROGRAMACION:
