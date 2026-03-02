@@ -8,6 +8,7 @@ import autoTable from 'jspdf-autotable';
 
 interface Props {
   onBack: () => void;
+  onMenuClick?: () => void;
   currentUser: User | null;
 }
 

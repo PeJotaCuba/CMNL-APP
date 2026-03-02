@@ -15,9 +15,18 @@ import AgendaHeader from '../components/AgendaHeader';
 
 const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate }) => {
   const navigate = useNavigate();
-  // ... (rest of state and logic)
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [daySearch, setDaySearch] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dateInfo = getCurrentDateInfo();
 
-  // ... (handleUpload, handleDownloadDocx)
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Upload logic
+  };
+
+  const handleDownloadDocx = () => {
+    // Download logic
+  };
 
   const renderUploadBtn = () => {
     if (user.role !== UserRole.ADMIN) return null;

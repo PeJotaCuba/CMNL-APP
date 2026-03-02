@@ -32,9 +32,32 @@ const UserManagement: React.FC<Props> = ({
     setNewUser(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleNewUserPaymentRolesChange = (role: string) => {
+    setNewUser(prev => {
+      const currentRoles = prev.paymentRoles || [];
+      if (currentRoles.includes(role)) {
+        return { ...prev, paymentRoles: currentRoles.filter(r => r !== role) };
+      } else {
+        return { ...prev, paymentRoles: [...currentRoles, role] };
+      }
+    });
+  };
+
   const handleEditUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setEditingUser(prev => prev ? ({ ...prev, [name]: value }) : null);
+  };
+
+  const handleEditUserPaymentRolesChange = (role: string) => {
+    setEditingUser(prev => {
+      if (!prev) return null;
+      const currentRoles = prev.paymentRoles || [];
+      if (currentRoles.includes(role)) {
+        return { ...prev, paymentRoles: currentRoles.filter(r => r !== role) };
+      } else {
+        return { ...prev, paymentRoles: [...currentRoles, role] };
+      }
+    });
   };
 
   const addUser = (e: React.FormEvent) => {
@@ -421,6 +444,23 @@ const UserManagement: React.FC<Props> = ({
                                 <option value="Administrador">Administrador</option>
                             </select>
 
+                            <div className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3">
+                                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Funciones para Pagos</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {['Director', 'Asesor', 'Locutor', 'Realizador de sonido'].map(role => (
+                                        <label key={role} className="flex items-center gap-2 text-sm text-[#E8DCCF]">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={(newUser.paymentRoles || []).includes(role)}
+                                                onChange={() => handleNewUserPaymentRolesChange(role)}
+                                                className="accent-[#9E7649]"
+                                            />
+                                            {role}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
                             <input name="password" type="text" placeholder="Contraseña" value={newUser.password} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
                             <div className="flex gap-2">
                                 <button type="submit" className="flex-1 bg-[#9E7649] hover:bg-[#8B653D] text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 mt-2 transition-colors">
@@ -460,8 +500,13 @@ const UserManagement: React.FC<Props> = ({
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-white text-sm">{user.name}</h3>
-                                        <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                              <span className="text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1.5 py-0.5 rounded">{user.classification || 'Usuario'}</span>
+                                             {user.paymentRoles && user.paymentRoles.length > 0 && (
+                                                 <span className="text-[10px] bg-cyan-900/40 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-500/20">
+                                                     Pagos: {user.paymentRoles.join(', ')}
+                                                 </span>
+                                             )}
                                              <span className="text-[10px] text-[#E8DCCF]/50">@{user.username}</span>
                                         </div>
                                     </div>
@@ -619,6 +664,23 @@ const UserManagement: React.FC<Props> = ({
                     <option value="Locutor">Locutor</option>
                     <option value="Administrador">Administrador</option>
                 </select>
+              </div>
+
+              <div className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3">
+                  <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Funciones para Pagos</label>
+                  <div className="grid grid-cols-2 gap-2">
+                      {['Director', 'Asesor', 'Locutor', 'Realizador de sonido'].map(role => (
+                          <label key={role} className="flex items-center gap-2 text-sm text-white">
+                              <input 
+                                  type="checkbox" 
+                                  checked={(editingUser.paymentRoles || []).includes(role)}
+                                  onChange={() => handleEditUserPaymentRolesChange(role)}
+                                  className="accent-[#9E7649]"
+                              />
+                              {role}
+                          </label>
+                      ))}
+                  </div>
               </div>
 
               <div>

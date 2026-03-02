@@ -8,6 +8,7 @@ import UserManagement from './components/UserManagement';
 import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
+import Sidebar from './components/Sidebar';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
@@ -46,6 +47,7 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
 
@@ -308,6 +310,7 @@ const App: React.FC = () => {
                 isRefreshing={isRefreshing}
                 onRefreshLive={handleRefreshLive}
                 currentProgram={currentProgram}
+                onMenuClick={() => setIsSidebarOpen(true)}
             />
         );
       case AppView.ADMIN_DASHBOARD:
@@ -325,6 +328,7 @@ const App: React.FC = () => {
             isRefreshing={isRefreshing}
             onRefreshLive={handleRefreshLive}
             currentProgram={currentProgram}
+            onMenuClick={() => setIsSidebarOpen(true)}
           />
         );
       case AppView.APP_USER_MANAGEMENT:
@@ -346,30 +350,30 @@ const App: React.FC = () => {
       case AppView.APP_AGENDA:
         return <AgendaApp onBack={handleBack} currentUser={currentUser} />;
       case AppView.APP_MUSICA:
-        return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} user={currentUser} />;
+        return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} user={currentUser} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} currentUser={currentUser} />;
       case AppView.APP_PROGRAMACION:
-        return <GestionApp onBack={handleBack} currentUser={currentUser} />;
+        return <GestionApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
 
       // Public Sections
       case AppView.SECTION_HISTORY:
-        return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} customContent={historyContent} />;
+        return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} />;
       case AppView.SECTION_PROGRAMMING_PUBLIC:
-        return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} />;
+        return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_ABOUT:
-        return <PlaceholderView title="Quiénes Somos" subtitle="Nuestro equipo y misión" onBack={handleBack} customContent={aboutContent} />;
+        return <PlaceholderView title="Quiénes Somos" subtitle="Nuestro equipo y misión" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={aboutContent} />;
       case AppView.SECTION_NEWS:
-        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} />; 
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />; 
       case AppView.SECTION_NEWS_DETAIL:
-        return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} newsItem={selectedNews} />;
+        return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} newsItem={selectedNews} />;
       case AppView.SECTION_PODCAST:
-        return <PlaceholderView title="Podcasts" subtitle="Escucha a tu ritmo" onBack={handleBack} />;
+        return <PlaceholderView title="Podcasts" subtitle="Escucha a tu ritmo" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_PROFILE:
-        return <PlaceholderView title="Mi Perfil" subtitle="Configuración de usuario" onBack={handleBack} />;
+        return <PlaceholderView title="Mi Perfil" subtitle="Configuración de usuario" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
         
       default:
-        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} />;
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
     }
   };
 
@@ -382,6 +386,17 @@ const App: React.FC = () => {
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       ></audio>
+
+      <Sidebar 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+        onNavigate={handleNavigate}
+        currentUser={currentUser}
+        onSync={handleCloudSync}
+        isSyncing={isSyncing}
+        onLogout={handleLogout}
+        onLogin={() => setCurrentView(AppView.LISTENER_HOME)}
+      />
 
       {renderView()}
 

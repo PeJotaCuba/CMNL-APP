@@ -7,6 +7,7 @@ interface ViewProps {
   title: string;
   subtitle?: string;
   onBack: () => void;
+  onMenuClick?: () => void;
   type?: 'agenda' | 'music' | 'scripts' | 'schedule';
   customContent?: string;
   newsItem?: NewsItem | null;
@@ -170,7 +171,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
   );
 };
 
-export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, user }) => {
+export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, onMenuClick, user }) => {
   const getIcon = () => {
     switch(type) {
       case 'agenda': return <Calendar size={48} />;
@@ -196,7 +197,7 @@ export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, user }) 
       <CMNLHeader 
           user={user || null}
           sectionTitle={title}
-          onMenuClick={onBack}
+          onMenuClick={onMenuClick || onBack}
       />
 
       <div className="flex-1 flex flex-col p-6">

@@ -16,6 +16,7 @@ interface Props {
   isRefreshing: boolean;
   onRefreshLive: () => void;
   currentProgram: ProgramItem;
+  onMenuClick?: () => void;
 }
 
 const newsColors = [
@@ -38,10 +39,10 @@ const WorkerHome: React.FC<Props> = ({
     togglePlay,
     isRefreshing,
     onRefreshLive,
-    currentProgram
+    currentProgram,
+    onMenuClick
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Carousel logic
   useEffect(() => {
@@ -70,16 +71,6 @@ const WorkerHome: React.FC<Props> = ({
   
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white overflow-y-auto no-scrollbar pb-10">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        onNavigate={onNavigate}
-        currentUser={currentUser}
-        onSync={onSync}
-        isSyncing={isSyncing}
-        onLogout={onLogout}
-      />
-
       {/* Background Image overlay */}
       <div 
         className="absolute inset-0 z-0 opacity-20 pointer-events-none bg-cover bg-center mix-blend-overlay fixed" 
@@ -91,7 +82,7 @@ const WorkerHome: React.FC<Props> = ({
       <header className="sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#2a1b12]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <button 
-              onClick={() => setIsSidebarOpen(true)}
+              onClick={onMenuClick}
               className="text-[#FFF8DC]/80 hover:text-white transition-colors p-1"
           >
               <Menu size={24} />

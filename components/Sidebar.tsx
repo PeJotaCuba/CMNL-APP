@@ -13,7 +13,8 @@ import {
   Music, 
   FileText, 
   Podcast, 
-  Newspaper 
+  Newspaper,
+  Home
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -64,10 +65,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Drawer */}
-      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         
         {/* Header */}
-        <div className="p-6 flex items-center justify-between border-b border-white/5">
+        <div className="p-6 flex items-center justify-between border-b border-white/5 shrink-0">
           <h2 className="text-[#C69C6D] font-serif font-bold text-xl">Menú</h2>
           <button onClick={onClose} className="text-stone-400 hover:text-white transition-colors">
             <X size={24} />
@@ -75,19 +76,19 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Content */}
-        <div className="py-4 overflow-y-auto h-[calc(100%-80px)]">
+        <div className="py-4 overflow-y-auto flex-1">
           
           {/* Section 1: Main Info */}
           <div className="px-4 flex flex-col gap-2">
             <SidebarItem 
+              icon={<Home size={20} />} 
+              label="Inicio" 
+              onClick={() => handleNavigation(AppView.LISTENER_HOME)} 
+            />
+            <SidebarItem 
               icon={<ScrollText size={20} />} 
               label="Historia" 
               onClick={() => handleNavigation(AppView.SECTION_HISTORY)} 
-            />
-            <SidebarItem 
-              icon={<Mic size={20} />} 
-              label="Programación" 
-              onClick={() => handleNavigation(AppView.SECTION_PROGRAMMING_PUBLIC)} 
             />
             <SidebarItem 
               icon={<Users size={20} />} 
@@ -95,9 +96,14 @@ const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => handleNavigation(AppView.SECTION_ABOUT)} 
             />
             <SidebarItem 
-              icon={<Podcast size={20} />} 
-              label="Podcast" 
-              onClick={() => handleNavigation(AppView.SECTION_PODCAST)} 
+              icon={<Mic size={20} />} 
+              label="Programación" 
+              onClick={() => handleNavigation(AppView.SECTION_PROGRAMMING_PUBLIC)} 
+            />
+            <SidebarItem 
+              icon={<Newspaper size={20} />} 
+              label="Noticias" 
+              onClick={() => handleNavigation(AppView.SECTION_NEWS)} 
             />
           </div>
 
@@ -133,7 +139,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             ) : (
               // Listener Apps
               <>
-                 {/* No specific apps for listeners in sidebar currently, as Noticias is removed */}
+                 {/* No specific apps for listeners in sidebar currently */}
               </>
             )}
           </div>
@@ -176,6 +182,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 border-t border-white/5 shrink-0">
+           <p className="text-[10px] font-bold text-[#9E7649] uppercase tracking-widest text-center">Radio Ciudad Monumento</p>
+           <p className="text-[9px] text-stone-500 text-center mt-1">V1.0.0</p>
         </div>
       </div>
     </>

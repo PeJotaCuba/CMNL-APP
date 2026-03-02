@@ -17,6 +17,7 @@ interface Props {
   isRefreshing: boolean;
   onRefreshLive: () => void;
   currentProgram: ProgramItem;
+  onMenuClick?: () => void;
 }
 
 const newsColors = [
@@ -40,10 +41,10 @@ const AdminDashboard: React.FC<Props> = ({
     togglePlay,
     isRefreshing,
     onRefreshLive,
-    currentProgram
+    currentProgram,
+    onMenuClick
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // News Carousel Interval
   useEffect(() => {
@@ -72,21 +73,11 @@ const AdminDashboard: React.FC<Props> = ({
 
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-10 overflow-y-auto no-scrollbar">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        onNavigate={onNavigate}
-        currentUser={currentUser}
-        onLogout={onLogout}
-        onSync={onSync}
-        isSyncing={isSyncing}
-      />
-      
       {/* Mobile Sticky Header */}
       <header className="sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#3E1E16] border-b border-[#9E7649]/20 shadow-md">
         <div className="flex items-center gap-3">
           <button 
-              onClick={() => setIsSidebarOpen(true)}
+              onClick={onMenuClick}
               className="text-[#F5EFE6] hover:text-[#9E7649] transition-colors p-1"
           >
               <Menu size={24} />

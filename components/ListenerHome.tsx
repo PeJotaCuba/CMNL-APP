@@ -9,6 +9,7 @@ interface Props {
   news: NewsItem[];
   onSync?: () => void;
   isSyncing?: boolean;
+  onMenuClick?: () => void;
 }
 
 const newsColors = [
@@ -20,10 +21,9 @@ const newsColors = [
   'bg-[#263238]', // Dark Blue Grey
 ];
 
-const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) => {
+const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, onMenuClick }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (news.length > 1) {
@@ -51,16 +51,6 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) 
 
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col md:flex-row bg-[#1E1815] font-display text-stone-100 overflow-y-auto no-scrollbar">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        onNavigate={onNavigate}
-        currentUser={null} // Listener is technically logged in but has limited role
-        onSync={onSync}
-        isSyncing={isSyncing || false}
-        onLogin={() => onNavigate(AppView.LANDING)}
-      />
-
       {/* Header Pattern Background */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none fixed"></div>
 
@@ -68,7 +58,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) 
       <header className="md:hidden sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#1E1815]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <button 
-              onClick={() => setIsSidebarOpen(true)}
+              onClick={onMenuClick}
               className="text-[#C69C6D] hover:text-white transition-colors p-1"
           >
               <Menu size={24} />
@@ -105,10 +95,11 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing }) 
          </div>
 
          <div className="flex flex-col gap-2 flex-1">
+             <SidebarLink icon={<Home size={18} />} label="Inicio" onClick={() => onNavigate(AppView.LISTENER_HOME)} />
              <SidebarLink icon={<ScrollText size={18} />} label="Historia" onClick={() => onNavigate(AppView.SECTION_HISTORY)} />
-             <SidebarLink icon={<Mic size={18} />} label="Programación" onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} />
              <SidebarLink icon={<Users size={18} />} label="Quiénes Somos" onClick={() => onNavigate(AppView.SECTION_ABOUT)} />
-             <SidebarLink icon={<Podcast size={18} />} label="Podcast" onClick={() => onNavigate(AppView.SECTION_PODCAST)} />
+             <SidebarLink icon={<Mic size={18} />} label="Programación" onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} />
+             <SidebarLink icon={<Newspaper size={18} />} label="Noticias" onClick={() => onNavigate(AppView.SECTION_NEWS)} />
          </div>
 
          <div className="mt-auto pt-6 border-t border-white/5">

@@ -13,10 +13,11 @@ import ChatAssistant from './pages/ChatAssistant.tsx';
 
 interface Props {
   onBack: () => void;
+  onMenuClick?: () => void;
   currentUser: any; // From main app
 }
 
-const AgendaApp: React.FC<Props> = ({ onBack, currentUser }) => {
+const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   // Map main app user to Agenda user profile
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (currentUser) {
@@ -178,18 +179,18 @@ const AgendaApp: React.FC<Props> = ({ onBack, currentUser }) => {
             <Route path="/home" element={
                 <Dashboard 
                     user={user} 
-                    onLogout={handleLogout} 
+                    onLogout={onMenuClick || handleLogout} 
                     programs={programs} 
                     filterEnabled={filterEnabled}
                     onToggleFilter={() => setFilterEnabled(!filterEnabled)}
                 />
             } />
-            <Route path="/efemerides" element={<Efemerides user={user} data={efemerides} onUpdate={setEfemerides} />} />
-            <Route path="/conmemoraciones" element={<Conmemoraciones user={user} data={conmemoraciones} onUpdate={setConmemoraciones} />} />
-            <Route path="/propaganda" element={<Propaganda user={user} data={propaganda} onUpdate={setPropaganda} />} />
-            <Route path="/interests" element={<Interests user={user} programs={programs} onUpdateUser={handleUpdateCurrentUser} />} />
-            <Route path="/details" element={<ThemeDetails user={user} />} />
-            <Route path="/assistant" element={<ChatAssistant user={user} />} />
+            <Route path="/efemerides" element={<Efemerides user={user} data={efemerides} onUpdate={setEfemerides} onMenuClick={onMenuClick} />} />
+            <Route path="/conmemoraciones" element={<Conmemoraciones user={user} data={conmemoraciones} onUpdate={setConmemoraciones} onMenuClick={onMenuClick} />} />
+            <Route path="/propaganda" element={<Propaganda user={user} data={propaganda} onUpdate={setPropaganda} onMenuClick={onMenuClick} />} />
+            <Route path="/interests" element={<Interests user={user} programs={programs} onUpdateUser={handleUpdateCurrentUser} onMenuClick={onMenuClick} />} />
+            <Route path="/details" element={<ThemeDetails user={user} onMenuClick={onMenuClick} />} />
+            <Route path="/assistant" element={<ChatAssistant user={user} onMenuClick={onMenuClick} />} />
             <Route path="/editorial" element={<Editorial 
               user={user} 
               programs={programs} 
@@ -200,6 +201,7 @@ const AgendaApp: React.FC<Props> = ({ onBack, currentUser }) => {
               onUpdateMany={setPrograms}
               onUpdateDayThemes={setDayThemes}
               filterEnabled={filterEnabled}
+              onMenuClick={onMenuClick}
               onClearAll={() => {
                 if (confirm("¿Borrar todo?")) {
                   setPrograms(prev => prev.map(p => ({ ...p, dailyData: {} })));
