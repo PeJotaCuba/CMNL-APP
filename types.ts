@@ -28,7 +28,6 @@ export interface User {
   role: 'admin' | 'worker' | 'listener';
   name: string;
   classification?: UserClassification;
-  classifications?: UserClassification[];
   avatar?: string;
   mobile?: string;
   password?: string;

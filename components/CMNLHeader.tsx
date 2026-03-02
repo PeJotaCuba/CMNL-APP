@@ -20,7 +20,10 @@ const CMNLHeader: React.FC<CMNLHeaderProps> = ({ user, sectionTitle, onMenuClick
              <span className="material-symbols-outlined text-3xl">menu</span>
           </button>
           <div className="flex items-center gap-3">
-             {/* Logo Removed */}
+             {/* Logo Placeholder */}
+             <div className="size-10 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-lg">
+                <span className="text-[#3E1E16] font-black text-2xl leading-none pb-1 font-sans">m</span>
+             </div>
              <div>
                 <h1 className="text-white font-bold text-lg leading-none tracking-tight">CMNL App</h1>
                 <p className="text-[#9E7649] text-[10px] font-bold uppercase tracking-widest mt-0.5">PANEL INTERNO</p>

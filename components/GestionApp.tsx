@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings } from 'lucide-react';
-import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo, AppView } from '../types';
+import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import CMNLHeader from './CMNLHeader';
-import Sidebar from './Sidebar';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -44,7 +43,6 @@ interface UserPaymentConfig {
 
 const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Hash Navigation Logic
   useEffect(() => {
@@ -94,12 +92,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [userPaymentConfig, setUserPaymentConfig] = useState<UserPaymentConfig | null>(() => {
       if (!currentUser) return null;
       const saved = localStorage.getItem(`rcm_payment_config_${currentUser.username}`);
-      
-      let config: UserPaymentConfig | null = null;
+      // Migrate old config if necessary
       if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed.role && !parsed.roles) {
-              config = {
+              return {
                   roles: [{
                       id: '1',
                       role: parsed.role,
@@ -109,48 +106,10 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       habitualDays: []
                   }]
               };
-          } else {
-              config = parsed;
           }
+          return parsed;
       }
-
-      // Sync with user classifications if not admin
-      if (currentUser.role !== 'admin') {
-          const userRoles = currentUser.classifications || (currentUser.classification ? [currentUser.classification] : []);
-          
-          if (!config) {
-              config = {
-                  roles: userRoles.map((role, idx) => ({
-                      id: idx.toString(),
-                      role,
-                      level: 'I',
-                      isHabitual: false,
-                      habitualPrograms: [],
-                      habitualDays: []
-                  }))
-              };
-          } else {
-              const existingRoles = config.roles.map(r => r.role);
-              const rolesToAdd = userRoles.filter(r => !existingRoles.includes(r));
-              const rolesToRemove = existingRoles.filter(r => !userRoles.includes(r));
-
-              if (rolesToAdd.length > 0 || rolesToRemove.length > 0) {
-                  const newRoles = config.roles.filter(r => !rolesToRemove.includes(r.role));
-                  rolesToAdd.forEach((role, idx) => {
-                      newRoles.push({
-                          id: (Date.now() + idx).toString(),
-                          role,
-                          level: 'I',
-                          isHabitual: false,
-                          habitualPrograms: [],
-                          habitualDays: []
-                      });
-                  });
-                  config = { ...config, roles: newRoles };
-              }
-          }
-      }
-      return config;
+      return null;
   });
 
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
@@ -600,16 +559,6 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
           newLogs.splice(existingIndex, 1);
           setWorkLogs(newLogs);
       } else {
-          // Check for conflicts
-          if (role === 'Director' && workLogs.some(l => l.userId === userId && l.programName === programName && l.date === date && l.role === 'Asesor')) {
-              alert('No se puede ser Director y Asesor del mismo programa el mismo día.');
-              return;
-          }
-          if (role === 'Asesor' && workLogs.some(l => l.userId === userId && l.programName === programName && l.date === date && l.role === 'Director')) {
-              alert('No se puede ser Director y Asesor del mismo programa el mismo día.');
-              return;
-          }
-
           const amount = getProgramRate(programName, role, roleConfig.level);
           setWorkLogs([...workLogs, {
               id: Date.now().toString() + Math.random(),

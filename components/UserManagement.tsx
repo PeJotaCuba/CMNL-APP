@@ -21,7 +21,7 @@ const UserManagement: React.FC<Props> = ({
     aboutContent, setAboutContent,
     news, setNews
 }) => {
-  const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario', classifications: ['Usuario'] });
+  const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'users' | 'content'>('users');
@@ -29,38 +29,7 @@ const UserManagement: React.FC<Props> = ({
 
   const handleNewUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'classification') {
-        // Single select for backward compatibility, but we should probably use classifications
-        setNewUser(prev => ({ ...prev, classification: value as UserClassification, classifications: [value as UserClassification] }));
-    } else {
-        setNewUser(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleClassificationToggle = (role: UserClassification, isEditing: boolean) => {
-      if (isEditing && editingUser) {
-          const current = editingUser.classifications || (editingUser.classification ? [editingUser.classification] : []);
-          const updated = current.includes(role) 
-              ? current.filter(r => r !== role)
-              : [...current, role];
-          
-          setEditingUser({ 
-              ...editingUser, 
-              classifications: updated,
-              classification: updated.length > 0 ? updated[0] : 'Usuario' // Fallback
-          });
-      } else if (!isEditing) {
-          const current = newUser.classifications || [];
-          const updated = current.includes(role)
-              ? current.filter(r => r !== role)
-              : [...current, role];
-          
-          setNewUser({
-              ...newUser,
-              classifications: updated,
-              classification: updated.length > 0 ? updated[0] : 'Usuario'
-          });
-      }
+    setNewUser(prev => ({ ...prev, [name]: value }));
   };
 
   const handleEditUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -75,14 +44,8 @@ const UserManagement: React.FC<Props> = ({
             alert('El nombre de usuario ya existe');
             return;
          }
-         // Ensure classifications is set
-         const userToAdd = {
-             ...newUser,
-             classifications: newUser.classifications && newUser.classifications.length > 0 ? newUser.classifications : ['Usuario'] as UserClassification[],
-             classification: newUser.classifications && newUser.classifications.length > 0 ? newUser.classifications[0] : 'Usuario' as UserClassification
-         };
-         setUsers([...users, userToAdd]);
-         setNewUser({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario', classifications: ['Usuario'] });
+         setUsers([...users, newUser]);
+         setNewUser({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
     }
   };
 
@@ -449,22 +412,14 @@ const UserManagement: React.FC<Props> = ({
                                 <input name="mobile" placeholder="Móvil" value={newUser.mobile} onChange={handleNewUserChange} className="flex-1 bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" />
                             </div>
                             
-                            <div className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3">
-                                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Funciones</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {['Director', 'Asesor', 'Realizador de sonido', 'Locutor', 'Administrador', 'Usuario'].map((role) => (
-                                        <label key={role} className="flex items-center gap-2 cursor-pointer">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={(newUser.classifications || []).includes(role as UserClassification)}
-                                                onChange={() => handleClassificationToggle(role as UserClassification, false)}
-                                                className="accent-[#9E7649]"
-                                            />
-                                            <span className="text-xs text-[#E8DCCF]">{role}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+                            <select name="classification" value={newUser.classification} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]">
+                                <option value="Usuario">Usuario</option>
+                                <option value="Director">Director</option>
+                                <option value="Asesor">Asesor</option>
+                                <option value="Realizador de sonido">Realizador</option>
+                                <option value="Locutor">Locutor</option>
+                                <option value="Administrador">Administrador</option>
+                            </select>
 
                             <input name="password" type="text" placeholder="Contraseña" value={newUser.password} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
                             <div className="flex gap-2">
@@ -505,10 +460,8 @@ const UserManagement: React.FC<Props> = ({
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-white text-sm">{user.name}</h3>
-                                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                                             {(user.classifications && user.classifications.length > 0 ? user.classifications : [user.classification || 'Usuario']).map((role, i) => (
-                                                 <span key={i} className="text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1.5 py-0.5 rounded">{role}</span>
-                                             ))}
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                             <span className="text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1.5 py-0.5 rounded">{user.classification || 'Usuario'}</span>
                                              <span className="text-[10px] text-[#E8DCCF]/50">@{user.username}</span>
                                         </div>
                                     </div>
@@ -657,22 +610,15 @@ const UserManagement: React.FC<Props> = ({
               </div>
               
               <div>
-                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Funciones</label>
-                <div className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3">
-                    <div className="grid grid-cols-2 gap-2">
-                        {['Director', 'Asesor', 'Realizador de sonido', 'Locutor', 'Administrador', 'Usuario'].map((role) => (
-                            <label key={role} className="flex items-center gap-2 cursor-pointer">
-                                <input 
-                                    type="checkbox" 
-                                    checked={(editingUser.classifications || (editingUser.classification ? [editingUser.classification] : [])).includes(role as UserClassification)}
-                                    onChange={() => handleClassificationToggle(role as UserClassification, true)}
-                                    className="accent-[#9E7649]"
-                                />
-                                <span className="text-xs text-[#E8DCCF]">{role}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
+                <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Clasificación</label>
+                <select name="classification" value={editingUser.classification} onChange={handleEditUserChange} className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]">
+                    <option value="Usuario">Usuario</option>
+                    <option value="Director">Director</option>
+                    <option value="Asesor">Asesor</option>
+                    <option value="Realizador de sonido">Realizador</option>
+                    <option value="Locutor">Locutor</option>
+                    <option value="Administrador">Administrador</option>
+                </select>
               </div>
 
               <div>
