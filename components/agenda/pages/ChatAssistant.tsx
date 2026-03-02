@@ -1,10 +1,9 @@
 import React from 'react';
 
 interface ChatAssistantProps {
-  onSync: () => Promise<boolean>;
 }
 
-const ChatAssistant: React.FC<ChatAssistantProps> = ({ onSync }) => {
+const ChatAssistant: React.FC<ChatAssistantProps> = () => {
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
       <span className="material-symbols-outlined text-6xl text-primary mb-4">smart_toy</span>

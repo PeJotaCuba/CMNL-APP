@@ -6,7 +6,6 @@ interface DashboardProps {
   user: UserProfile;
   onLogout: () => void;
   programs: Program[];
-  onSync: () => Promise<boolean>;
   filterEnabled: boolean;
   onToggleFilter: () => void;
 }

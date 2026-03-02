@@ -65,3 +65,4 @@ export interface Conmemoracion {
 
 export type EfemeridesData = Record<string, Efemeride[]>; 
 export type ConmemoracionesData = Record<string, Conmemoracion[]>;
+export type PropagandaData = Record<string, string[]>;

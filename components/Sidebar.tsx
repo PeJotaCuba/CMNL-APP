@@ -112,7 +112,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <SidebarItem 
                   icon={<CalendarDays size={20} />} 
                   label="Agenda" 
-                  onClick={() => handleExternalApp('https://rcmagenda.vercel.app/#/home')} 
+                  onClick={() => handleNavigation(AppView.APP_AGENDA)} 
                 />
                 <SidebarItem 
                   icon={<Music size={20} />} 

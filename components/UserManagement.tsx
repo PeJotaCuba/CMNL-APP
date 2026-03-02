@@ -212,6 +212,24 @@ const UserManagement: React.FC<Props> = ({
         worklogs = JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]');
     } catch (e) {}
 
+    let agendaPrograms = [];
+    try { agendaPrograms = JSON.parse(localStorage.getItem('rcm_programs') || '[]'); } catch (e) {}
+
+    let agendaEfemerides = {};
+    try { agendaEfemerides = JSON.parse(localStorage.getItem('rcm_efemerides') || '{}'); } catch (e) {}
+
+    let agendaConmemoraciones = {};
+    try { agendaConmemoraciones = JSON.parse(localStorage.getItem('rcm_conmemoraciones') || '{}'); } catch (e) {}
+
+    let agendaDayThemes = {};
+    try { agendaDayThemes = JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'); } catch (e) {}
+
+    let agendaUsers = [];
+    try { agendaUsers = JSON.parse(localStorage.getItem('rcm_users') || '[]'); } catch (e) {}
+
+    let agendaPropaganda = {};
+    try { agendaPropaganda = JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'); } catch (e) {}
+
     const data = {
         users,
         historyContent,
@@ -220,7 +238,13 @@ const UserManagement: React.FC<Props> = ({
         fichas,
         catalogo,
         worklogs,
-        scripts: scriptData
+        scripts: scriptData,
+        agendaPrograms,
+        agendaEfemerides,
+        agendaConmemoraciones,
+        agendaDayThemes,
+        agendaUsers,
+        agendaPropaganda
     };
     
     // Nombre fijo solicitado para coincidir con el repositorio
@@ -276,6 +300,31 @@ const UserManagement: React.FC<Props> = ({
             }));
             setNews(processedNews);
             restoredCount++;
+          }
+
+          if (json.agendaPrograms) {
+              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
+              restoredCount++;
+          }
+          if (json.agendaEfemerides) {
+              localStorage.setItem('rcm_efemerides', JSON.stringify(json.agendaEfemerides));
+              restoredCount++;
+          }
+          if (json.agendaConmemoraciones) {
+              localStorage.setItem('rcm_conmemoraciones', JSON.stringify(json.agendaConmemoraciones));
+              restoredCount++;
+          }
+          if (json.agendaDayThemes) {
+              localStorage.setItem('rcm_day_themes', JSON.stringify(json.agendaDayThemes));
+              restoredCount++;
+          }
+          if (json.agendaUsers) {
+              localStorage.setItem('rcm_users', JSON.stringify(json.agendaUsers));
+              restoredCount++;
+          }
+          if (json.agendaPropaganda) {
+              localStorage.setItem('rcm_propaganda', JSON.stringify(json.agendaPropaganda));
+              restoredCount++;
           }
 
           if (restoredCount > 0) {

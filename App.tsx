@@ -230,6 +230,30 @@ const App: React.FC = () => {
               });
               changes++;
           }
+          if (json.agendaPrograms) {
+              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
+              changes++;
+          }
+          if (json.agendaEfemerides) {
+              localStorage.setItem('rcm_efemerides', JSON.stringify(json.agendaEfemerides));
+              changes++;
+          }
+          if (json.agendaConmemoraciones) {
+              localStorage.setItem('rcm_conmemoraciones', JSON.stringify(json.agendaConmemoraciones));
+              changes++;
+          }
+          if (json.agendaDayThemes) {
+              localStorage.setItem('rcm_day_themes', JSON.stringify(json.agendaDayThemes));
+              changes++;
+          }
+          if (json.agendaUsers) {
+              localStorage.setItem('rcm_users', JSON.stringify(json.agendaUsers));
+              changes++;
+          }
+          if (json.agendaPropaganda) {
+              localStorage.setItem('rcm_propaganda', JSON.stringify(json.agendaPropaganda));
+              changes++;
+          }
 
           alert('¡Sincronización completada! Los datos están actualizados.');
       } catch (error) {

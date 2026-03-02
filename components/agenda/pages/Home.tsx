@@ -7,12 +7,11 @@ interface HomeProps {
   user: UserProfile;
   onLogout: () => void;
   programs: Program[];
-  onSync: () => Promise<boolean>;
   filterEnabled: boolean;
   onToggleFilter: () => void;
 }
 
-const Home: React.FC<HomeProps> = ({ user, onLogout, programs, onSync, filterEnabled, onToggleFilter }) => {
+const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, onToggleFilter }) => {
   const navigate = useNavigate();
   const dateInfo = getCurrentDateInfo();
   
@@ -43,8 +42,9 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, programs, onSync, filterEna
           <button 
             onClick={onLogout}
             className="flex items-center justify-center size-10 rounded-full bg-card-dark hover:bg-white/10 transition-colors"
+            title="Volver a la aplicación principal"
           >
-            <span className="material-symbols-outlined text-white text-xl">logout</span>
+            <span className="material-symbols-outlined text-white text-xl">arrow_back</span>
           </button>
         </div>
       </header>
@@ -123,6 +123,21 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, programs, onSync, filterEna
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-bold text-white truncate">Conmemoraciones</h3>
               <p className="text-text-secondary text-xs uppercase font-bold tracking-widest opacity-60 truncate">Fechas Especiales</p>
+            </div>
+            <span className="material-symbols-outlined text-text-secondary group-hover:text-white opacity-20">chevron_right</span>
+          </button>
+
+          {/* PROPAGANDA */}
+          <button 
+            onClick={() => navigate('/propaganda')}
+            className="group relative h-24 overflow-hidden rounded-[2rem] bg-card-dark border border-white/5 hover:border-primary/50 transition-all shadow-md active:scale-[0.98] w-full flex items-center p-6 gap-5 text-left"
+          >
+            <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center group-hover:bg-primary transition-colors shrink-0">
+              <span className="material-symbols-outlined text-primary group-hover:text-white text-2xl">campaign</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-white truncate">Propaganda</h3>
+              <p className="text-text-secondary text-xs uppercase font-bold tracking-widest opacity-60 truncate">Base de Datos</p>
             </div>
             <span className="material-symbols-outlined text-text-secondary group-hover:text-white opacity-20">chevron_right</span>
           </button>
