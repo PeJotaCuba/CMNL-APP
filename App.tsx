@@ -89,6 +89,12 @@ const App: React.FC = () => {
   // Back Button Logic
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
+      // If in AgendaApp and navigating internally (hash exists), ignore this event
+      // to prevent App.tsx from unmounting AgendaApp
+      if (currentView === AppView.APP_AGENDA && window.location.hash.length > 1) {
+        return;
+      }
+
       if (history.length > 0) {
         const prevView = history[history.length - 1];
         setHistory((prev) => prev.slice(0, -1));

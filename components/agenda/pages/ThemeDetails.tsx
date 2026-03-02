@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getDeepSeekIdeas } from '../services/deepSeekService';
+import AgendaHeader from '../components/AgendaHeader';
+import { UserProfile } from '../types';
 
-const ThemeDetails: React.FC = () => {
+interface ThemeDetailsProps {
+  user: UserProfile;
+}
+
+const ThemeDetails: React.FC<ThemeDetailsProps> = ({ user }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, instructions, program } = location.state || {};
@@ -35,6 +41,8 @@ const ThemeDetails: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col pb-24 bg-background-dark min-h-screen">
+      <AgendaHeader title="Detalles" user={user} onMenuClick={() => navigate('/home')} />
+
       <header className="sticky top-0 z-50 flex items-center justify-between bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5">
         <button onClick={() => navigate(-1)} className="flex size-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
           <span className="material-symbols-outlined text-white">arrow_back</span>

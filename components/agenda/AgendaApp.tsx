@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MemoryRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Program, UserProfile, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData } from './types.ts';
 import { INITIAL_USERS, INITIAL_PROGRAMS, INITIAL_EFEMERIDES, INITIAL_CONMEMORACIONES, INITIAL_DAY_THEMES, INITIAL_PROPAGANDA } from './database.ts';
 import Dashboard from './pages/Dashboard.tsx';
@@ -188,8 +188,8 @@ const AgendaApp: React.FC<Props> = ({ onBack, currentUser }) => {
             <Route path="/conmemoraciones" element={<Conmemoraciones user={user} data={conmemoraciones} onUpdate={setConmemoraciones} />} />
             <Route path="/propaganda" element={<Propaganda user={user} data={propaganda} onUpdate={setPropaganda} />} />
             <Route path="/interests" element={<Interests user={user} programs={programs} onUpdateUser={handleUpdateCurrentUser} />} />
-            <Route path="/details" element={<ThemeDetails />} />
-            <Route path="/assistant" element={<ChatAssistant />} />
+            <Route path="/details" element={<ThemeDetails user={user} />} />
+            <Route path="/assistant" element={<ChatAssistant user={user} />} />
             <Route path="/editorial" element={<Editorial 
               user={user} 
               programs={programs} 

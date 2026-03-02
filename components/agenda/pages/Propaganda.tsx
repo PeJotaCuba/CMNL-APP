@@ -13,6 +13,8 @@ const THEMES = [
   "Naturaleza", "Radio", "Bayamo", "Fidel", "Martí"
 ];
 
+import AgendaHeader from '../components/AgendaHeader';
+
 const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
   const [selectedTheme, setSelectedTheme] = useState<string>(THEMES[0]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,7 +23,6 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
       const saved = localStorage.getItem('rcm_propaganda_search_history');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Filter out entries older than 24 hours
         const now = Date.now();
         const valid = parsed.filter((item: { term: string, timestamp: number }) => now - item.timestamp < 24 * 60 * 60 * 1000);
         return valid.map((item: { term: string }) => item.term);
@@ -32,6 +33,8 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   const canEdit = user.role === 'admin'; 
+  
+  // ... (handleSearch logic remains same)
 
   const handleSearch = (term: string) => {
     setSearchQuery(term);
@@ -44,20 +47,17 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
       try {
         const saved = localStorage.getItem('rcm_propaganda_search_history');
         let history = saved ? JSON.parse(saved) : [];
-        
-        // Remove duplicates and keep only recent
         history = history.filter((item: { term: string }) => item.term !== term.trim());
         history.unshift(historyItem);
-        
-        // Limit to last 10 items
         if (history.length > 10) history = history.slice(0, 10);
-        
         localStorage.setItem('rcm_propaganda_search_history', JSON.stringify(history));
         setSearchHistory(history.map((item: { term: string }) => item.term));
       } catch (e) { console.error(e); }
     }
   };
 
+  // ... (handleFileUpload, handleClear, handleDownloadDocx remain same)
+  
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) return;
     const file = e.target.files?.[0];
@@ -70,21 +70,16 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
       
       const lines = text.split('\n');
       const newData = { ...data };
-      let currentTheme = "Historia"; // Default fallback if no theme found first
+      let currentTheme = "Historia"; 
       let pendingTitle: string | null = null;
 
-      // Regex to match: (104) Carlos M De Cespedes.mp3 -> 104 Carlos M De Cespedes
-      // Captures number and name separately, then we combine.
       const titleRegex = /^\((\d+)\)\s*(.*?)\.mp3\s*$/i;
-      
-      // Regex to match: Ruta: D:\...
       const pathRegex = /^Ruta:\s*(.*)$/i;
 
       lines.forEach(line => {
         const trimmed = line.trim();
         if (!trimmed) return;
 
-        // 1. Check for Theme
         const themeMatch = THEMES.find(t => 
             t !== "Todas" && (
               trimmed.toLowerCase() === t.toLowerCase() || 
@@ -100,27 +95,20 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
           return;
         }
 
-        // 2. Check for File Name (Title)
         const titleMatch = trimmed.match(titleRegex);
         if (titleMatch) {
-            // titleMatch[1] is number (e.g. 104), titleMatch[2] is name (e.g. Carlos M De Cespedes)
             pendingTitle = `${titleMatch[1]} ${titleMatch[2].trim()}`;
             return;
         }
 
-        // 3. Check for Path
         const pathMatch = trimmed.match(pathRegex);
         if (pathMatch && pendingTitle) {
             const path = pathMatch[1].trim();
             const fullItem = `${pendingTitle}|${path}`;
-            
             if (!newData[currentTheme]) newData[currentTheme] = [];
-            
-            // Avoid duplicates
             if (!newData[currentTheme].includes(fullItem)) {
                 newData[currentTheme].push(fullItem);
             }
-            
             pendingTitle = null; 
             return;
         }
@@ -217,24 +205,19 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
     let items: string[] = [];
 
     if (selectedTheme === "Todas") {
-        // Collect ALL items from ALL themes
         Object.values(data).forEach(themeItems => {
             items = [...items, ...themeItems];
         });
-        // Deduplicate
         items = Array.from(new Set(items));
     } else {
         items = data[selectedTheme] || [];
     }
 
-    // Apply Search Filter
     if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         items = items.filter(item => item.toLowerCase().includes(query));
     }
 
-    // Sort by number prefix
-    // Expected format: "104 Title..."
     return items.sort((a, b) => {
         const numA = parseInt(a.split(' ')[0]) || 0;
         const numB = parseInt(b.split(' ')[0]) || 0;
@@ -245,17 +228,13 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
   const currentItems = getFilteredItems();
 
   return (
-    <div className="flex-1 flex flex-col bg-background-dark overflow-hidden">
-      {/* Header */}
-      <header className="bg-card-dark border-b border-white/5 px-6 py-4 flex flex-col gap-4 shrink-0">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white">Propaganda</h1>
-            <p className="text-text-secondary text-xs uppercase tracking-widest">Base de Datos Institucional</p>
-          </div>
-          
-          {canEdit && (
-            <div className="flex gap-2">
+    <div className="flex-1 flex flex-col bg-background-dark overflow-hidden h-full">
+      <AgendaHeader title="Propaganda" user={user} />
+
+      {/* Controls & Search */}
+      <div className="bg-card-dark border-b border-white/5 px-6 py-4 flex flex-col gap-4 shrink-0">
+        {canEdit && (
+            <div className="flex justify-end gap-2">
                <label className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-white/10">
                   <span className="material-symbols-outlined text-[18px]">upload_file</span>
                   <span className="hidden sm:inline">Cargar TXT</span>
@@ -269,8 +248,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
                   <span className="hidden sm:inline">Descargar DOCX</span>
                </button>
             </div>
-          )}
-        </div>
+        )}
 
         {/* Search Bar */}
         <div className="relative w-full">
@@ -322,7 +300,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate }) => {
                 </div>
             )}
         </div>
-      </header>
+      </div>
 
       {/* Controls */}
       <div className="p-4 border-b border-white/5 bg-background-dark flex flex-wrap items-center gap-4 shrink-0">

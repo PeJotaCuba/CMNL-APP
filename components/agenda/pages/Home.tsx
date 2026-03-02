@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserRole, Program, UserProfile } from '../types';
 import { getCurrentDateInfo } from '../utils/dateUtils';
+import AgendaHeader from '../components/AgendaHeader';
 
 interface HomeProps {
   user: UserProfile;
@@ -23,31 +24,8 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, on
   const isTodayRelevant = !isFilterActive || user.interests?.days.includes(capitalizedDay);
 
   return (
-    <div className="flex-1 flex flex-col bg-background-dark">
-      <header className="sticky top-0 z-50 bg-background-dark/95 backdrop-blur-md border-b border-white/5">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="size-10 shrink-0 overflow-hidden rounded-full border border-white/10 bg-primary/20 flex items-center justify-center relative">
-              {user.photo ? (
-                <img src={user.photo} alt={user.name} className="absolute inset-0 size-full object-cover" />
-              ) : (
-                <span className="material-symbols-outlined text-primary">person</span>
-              )}
-            </div>
-            <div>
-              <h1 className="text-[10px] font-bold text-text-secondary leading-none uppercase tracking-widest">Radio Ciudad</h1>
-              <h2 className="text-sm font-bold text-white leading-tight tracking-tight">RCM Agenda</h2>
-            </div>
-          </div>
-          <button 
-            onClick={onLogout}
-            className="flex items-center justify-center size-10 rounded-full bg-card-dark hover:bg-white/10 transition-colors"
-            title="Volver a la aplicación principal"
-          >
-            <span className="material-symbols-outlined text-white text-xl">arrow_back</span>
-          </button>
-        </div>
-      </header>
+    <div className="flex-1 flex flex-col bg-background-dark h-full">
+      <AgendaHeader title="Panel de Control" user={user} onMenuClick={onLogout} />
 
       <main className="flex-1 px-4 py-6 space-y-5 overflow-y-auto no-scrollbar pb-40">
         <section className="flex justify-between items-start">

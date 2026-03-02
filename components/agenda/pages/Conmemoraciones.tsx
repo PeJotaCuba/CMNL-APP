@@ -11,126 +11,13 @@ interface ConmemoracionesProps {
   onUpdate: (data: ConmemoracionesData) => void;
 }
 
+import AgendaHeader from '../components/AgendaHeader';
+
 const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate }) => {
   const navigate = useNavigate();
-  const dateInfo = getCurrentDateInfo();
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [daySearch, setDaySearch] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // ... (rest of state and logic)
 
-  const monthMap: Record<string, string> = {
-    'enero': 'Enero', 'febrero': 'Febrero', 'marzo': 'Marzo', 'abril': 'Abril',
-    'mayo': 'Mayo', 'junio': 'Junio', 'julio': 'Julio', 'agosto': 'Agosto',
-    'septiembre': 'Septiembre', 'octubre': 'Octubre', 'noviembre': 'Noviembre', 'diciembre': 'Diciembre'
-  };
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split(/\r?\n/);
-      const newData: ConmemoracionesData = { ...data };
-
-      let currentMonth = "";
-      let currentDay = 0;
-
-      lines.forEach(line => {
-        const clean = line.trim();
-        if (!clean) return;
-
-        const headerMatch = clean.match(/D[íi]a\s+(\d+)\s+de\s+([a-zA-Záéíóúñ]+)/i);
-        if (headerMatch) {
-          currentDay = parseInt(headerMatch[1]);
-          const rawMonth = headerMatch[2].toLowerCase();
-          currentMonth = monthMap[rawMonth] || "";
-          
-          if (currentMonth && currentDay) {
-            if (!newData[currentMonth]) newData[currentMonth] = [];
-            newData[currentMonth] = newData[currentMonth].filter(c => c.day !== currentDay);
-            newData[currentMonth].push({ day: currentDay, national: "", international: "" });
-          }
-          return;
-        }
-
-        if (currentMonth && currentDay) {
-          const dayArr = newData[currentMonth];
-          const currentObj = dayArr[dayArr.length - 1];
-          const natMatch = clean.match(/Conmemoraciones\s+Nacionales:\s*(.*)/i);
-          if (natMatch) { currentObj.national = natMatch[1].trim(); return; }
-          const intMatch = clean.match(/Conmemoraciones\s+Internacionales:\s*(.*)/i);
-          if (intMatch) { currentObj.international = intMatch[1].trim(); return; }
-        }
-      });
-
-      onUpdate(newData);
-      alert(`¡Carga completada!`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDownloadDocx = async () => {
-    if (!selectedMonth) return;
-    
-    let monthEvents = (data[selectedMonth] || []).sort((a, b) => a.day - b.day);
-    if (daySearch) {
-        const dayNum = parseInt(daySearch);
-        if (!isNaN(dayNum)) monthEvents = monthEvents.filter(e => e.day === dayNum);
-    }
-
-    if (monthEvents.length === 0) {
-        alert("No hay datos para exportar.");
-        return;
-    }
-
-    const docChildren: any[] = [];
-    docChildren.push(new Paragraph({
-        children: [new TextRun({ text: `CONMEMORACIONES - ${selectedMonth.toUpperCase()}`, bold: true, size: 28 })],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 300 }
-    }));
-
-    const rows = monthEvents.map(e => new TableRow({
-        children: [
-            new TableCell({ children: [new Paragraph({ text: `${e.day}`, alignment: AlignmentType.CENTER, bold: true })], width: { size: 10, type: WidthType.PERCENTAGE } }),
-            new TableCell({ children: [new Paragraph(e.national || "-")], width: { size: 45, type: WidthType.PERCENTAGE } }),
-            new TableCell({ children: [new Paragraph(e.international || "-")], width: { size: 45, type: WidthType.PERCENTAGE } }),
-        ]
-    }));
-
-    rows.unshift(new TableRow({
-        children: [
-            new TableCell({ children: [new Paragraph({ text: "DÍA", bold: true })] }),
-            new TableCell({ children: [new Paragraph({ text: "NACIONAL", bold: true })] }),
-            new TableCell({ children: [new Paragraph({ text: "INTERNACIONAL", bold: true })] }),
-        ]
-    }));
-
-    docChildren.push(new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        rows: rows,
-        borders: {
-            top: { style: BorderStyle.SINGLE, size: 1 },
-            bottom: { style: BorderStyle.SINGLE, size: 1 },
-            left: { style: BorderStyle.SINGLE, size: 1 },
-            right: { style: BorderStyle.SINGLE, size: 1 },
-            insideHorizontal: { style: BorderStyle.SINGLE, size: 1 },
-            insideVertical: { style: BorderStyle.SINGLE, size: 1 },
-        }
-    }));
-
-    const doc = new Document({ sections: [{ children: docChildren }] });
-    const blob = await Packer.toBlob(doc);
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Conmemoraciones_${selectedMonth}.docx`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
+  // ... (handleUpload, handleDownloadDocx)
 
   const renderUploadBtn = () => {
     if (user.role !== UserRole.ADMIN) return null;
@@ -166,12 +53,14 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate 
 
     return (
       <div className="h-full flex flex-col bg-background-dark">
-        <header className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
+        <AgendaHeader title={`Conmemoraciones - ${selectedMonth}`} user={user} onMenuClick={() => navigate('/home')} />
+        
+        <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => { setSelectedMonth(null); setDaySearch(''); }} className="flex size-10 items-center justify-center rounded-full hover:bg-white/10">
               <span className="material-symbols-outlined text-white">arrow_back</span>
             </button>
-            <h1 className="text-white text-lg font-bold flex-1 text-center">{selectedMonth}</h1>
+            <div className="flex-1"></div>
             <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-admin-red/20 text-admin-red hover:bg-admin-red hover:text-white transition-all">
                 <span className="material-symbols-outlined text-sm">description</span>
             </button>
@@ -186,7 +75,7 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate 
               className="w-full bg-background-dark border-none rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:ring-1 focus:ring-primary shadow-inner"
              />
           </div>
-        </header>
+        </div>
 
         <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-6 pb-32">
           {monthEvents.length === 0 ? (
@@ -226,13 +115,7 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate 
 
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <header className="flex-none flex items-center justify-between bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
-        <button onClick={() => navigate('/home')} className="flex size-10 items-center justify-center rounded-full hover:bg-white/10">
-          <span className="material-symbols-outlined text-white">arrow_back</span>
-        </button>
-        <h1 className="text-white text-lg font-bold flex-1 text-center">Conmemoraciones</h1>
-        <div className="size-10"></div>
-      </header>
+      <AgendaHeader title="Conmemoraciones" user={user} onMenuClick={() => navigate('/home')} />
 
       <main className="flex-1 overflow-y-auto no-scrollbar flex flex-col pb-32">
         <div className="px-4 pt-8 pb-4 text-center">

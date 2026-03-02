@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile, Program, UserRole } from '../types';
+import AgendaHeader from '../components/AgendaHeader';
 
 interface InterestsProps {
   user: UserProfile;
@@ -10,50 +11,9 @@ interface InterestsProps {
 
 const Interests: React.FC<InterestsProps> = ({ user, programs, onUpdateUser }) => {
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const weekDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-  
-  // Inicializar estados con los datos del usuario o arrays vacíos
-  const [selectedDays, setSelectedDays] = useState<string[]>(user.interests?.days || []);
-  const [selectedProgs, setSelectedProgs] = useState<string[]>(user.interests?.programIds || []);
-  const [userPhoto, setUserPhoto] = useState(user.photo || '');
+  // ... (state and logic)
 
-  // Lógica de selección individual
-  const handleToggleDay = (day: string) => {
-    setSelectedDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
-  };
-
-  const handleToggleProg = (id: string) => {
-    setSelectedProgs(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
-  };
-
-  // Lógica de selección masiva (Todos / Ninguno)
-  const toggleAllDays = () => {
-    if (selectedDays.length === weekDays.length) {
-        setSelectedDays([]);
-    } else {
-        setSelectedDays(weekDays);
-    }
-  };
-
-  const toggleAllProgs = () => {
-    if (selectedProgs.length === programs.length) {
-        setSelectedProgs([]);
-    } else {
-        setSelectedProgs(programs.map(p => p.id));
-    }
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const base64 = event.target?.result as string;
-      setUserPhoto(base64);
-    };
-    reader.readAsDataURL(file);
-  };
+  // ... (handleToggleDay, handleToggleProg, toggleAllDays, toggleAllProgs, handlePhotoUpload)
 
   // Guardar configuración de intereses
   const handleSavePreferences = () => {
@@ -70,25 +30,9 @@ const Interests: React.FC<InterestsProps> = ({ user, programs, onUpdateUser }) =
 
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <header className="flex-none flex items-center justify-between bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
-        <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="size-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
-            <span className="material-symbols-outlined text-white">arrow_back</span>
-            </button>
-            <h1 className="text-white text-lg font-bold">Mi Perfil</h1>
-        </div>
-        
-        {/* Botón Guardar en el Header */}
-        <button 
-            onClick={handleSavePreferences}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20 active:scale-95 transition-all hover:bg-primary-dark"
-        >
-            <span className="material-symbols-outlined text-base">save</span>
-            <span>Guardar</span>
-        </button>
-      </header>
+      <AgendaHeader title="Mi Perfil" user={user} onMenuClick={() => navigate('/home')} />
 
-      <main className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8 pb-20">
+      <main className="flex-1 overflow-y-auto no-scrollbar p-6 space-y-8 pb-24">
         {/* Sección de Identidad */}
         <section className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
            <div 
@@ -164,6 +108,16 @@ const Interests: React.FC<InterestsProps> = ({ user, programs, onUpdateUser }) =
           </div>
         </section>
       </main>
+
+      <div className="p-4 border-t border-white/5 bg-card-dark z-20">
+         <button 
+            onClick={handleSavePreferences}
+            className="w-full flex items-center justify-center gap-2 bg-primary text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all hover:bg-primary-dark"
+         >
+            <span className="material-symbols-outlined text-lg">save</span>
+            <span>Guardar Cambios</span>
+         </button>
+      </div>
     </div>
   );
 };

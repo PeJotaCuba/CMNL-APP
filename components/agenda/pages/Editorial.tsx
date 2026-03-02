@@ -4,6 +4,7 @@ import { UserRole, Program, DailyContent, UserProfile, DayThemeData, EfemeridesD
 import { getWeeksInMonth, DayInfo, getCurrentDateInfo } from '../utils/dateUtils.ts';
 import { MONTHS_DATA } from '../constants.ts';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType } from "docx";
+import AgendaHeader from '../components/AgendaHeader';
 
 interface EditorialProps {
   user: UserProfile;
@@ -488,13 +489,15 @@ const Editorial: React.FC<EditorialProps> = ({
 
     return (
       <div className="h-full flex flex-col bg-background-dark">
-        <header className="flex-none bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 shadow-xl z-20">
+        <AgendaHeader title="Editor de Contenido" user={user} onMenuClick={() => navigate('/home')} />
+
+        <div className="flex-none bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 shadow-xl z-20">
           <div className="flex items-center justify-between">
              <button onClick={handleBack} className="size-10 flex items-center justify-center rounded-full hover:bg-white/10"><span className="material-symbols-outlined text-white">arrow_back</span></button>
              <div className="text-center"><h1 className="text-white text-xs font-bold uppercase">{selectedDay.name} {selectedDay.date}</h1><p className="text-[9px] text-primary font-bold uppercase tracking-widest">{currentMonthLabel}</p></div>
              <div className="size-10"></div>
           </div>
-        </header>
+        </div>
 
         <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 pb-32">
           <div className="bg-primary/10 border border-primary/20 p-6 rounded-[2rem] relative group">
@@ -592,7 +595,9 @@ const Editorial: React.FC<EditorialProps> = ({
 
       return (
         <div className="h-full flex flex-col bg-background-dark">
-            <header className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20 space-y-3">
+            <AgendaHeader title={`Agenda - ${currentMonthLabel}`} user={user} onMenuClick={() => navigate('/home')} />
+
+            <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20 space-y-3">
                 <div className="flex items-center gap-3">
                     <button onClick={handleBack} className="size-10 flex items-center justify-center rounded-full hover:bg-white/5">
                         <span className="material-symbols-outlined text-white">arrow_back</span>
@@ -606,7 +611,7 @@ const Editorial: React.FC<EditorialProps> = ({
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-secondary">search</span>
                     <input type="text" placeholder="Filtrar por programa..." value={progSearch} onChange={(e) => setProgSearch(e.target.value)} className="w-full bg-background-dark border-none rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:ring-1 focus:ring-primary shadow-inner placeholder:text-text-secondary/50" />
                 </div>
-            </header>
+            </div>
 
             <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3 pb-32">
                 {filteredDays.length === 0 ? (
@@ -701,17 +706,19 @@ const Editorial: React.FC<EditorialProps> = ({
   // Nivel 0 y 1
   return (
     <div className="h-full flex flex-col bg-background-dark">
-      <header className="flex-none p-4 border-b border-white/5 flex items-center justify-between bg-card-dark/50 z-20 backdrop-blur">
+      <AgendaHeader title="Agenda Editorial" user={user} onMenuClick={() => navigate('/home')} />
+
+      <div className="flex-none p-4 border-b border-white/5 flex items-center justify-between bg-card-dark/50 z-20 backdrop-blur">
         <div className="flex items-center gap-3">
           <button onClick={() => isMonthSelection ? navigate('/home') : handleBack()} className="size-10 flex items-center justify-center rounded-full hover:bg-white/5">
             <span className="material-symbols-outlined text-white">arrow_back</span>
           </button>
           <div>
-            <h1 className="text-lg font-bold leading-none">{isMonthSelection ? "Agenda Anual" : "Planificación"}</h1>
+            <h1 className="text-lg font-bold leading-none">{isMonthSelection ? "Selección de Mes" : "Semanas"}</h1>
             <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-1">{isMonthSelection ? dateInfo.year : currentMonthLabel}</p>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 pb-32">
         {/* VISTA SELECCIÓN DE MES (Nivel 0) */}
