@@ -7,6 +7,7 @@ import AdminDashboard from './components/AdminDashboard';
 import UserManagement from './components/UserManagement';
 import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
+import AgendaApp from './components/agenda/AgendaApp';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
@@ -310,7 +311,7 @@ const App: React.FC = () => {
       
       // CMNL Apps
       case AppView.APP_AGENDA:
-        return <CMNLAppView title="Agenda CMNL" type="agenda" onBack={handleBack} />;
+        return <AgendaApp onBack={handleBack} currentUser={currentUser} />;
       case AppView.APP_MUSICA:
         return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} />;
       case AppView.APP_GUIONES:
