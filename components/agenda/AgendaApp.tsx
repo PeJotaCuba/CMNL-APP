@@ -14,10 +14,9 @@ import ChatAssistant from './pages/ChatAssistant.tsx';
 interface Props {
   onBack: () => void;
   currentUser: any; // From main app
-  onMenuClick?: () => void;
 }
 
-const AgendaApp: React.FC<Props> = ({ onBack, currentUser, onMenuClick }) => {
+const AgendaApp: React.FC<Props> = ({ onBack, currentUser }) => {
   // Map main app user to Agenda user profile
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (currentUser) {

@@ -31,7 +31,6 @@ export interface User {
   avatar?: string;
   mobile?: string;
   password?: string;
-  paymentRoles?: string[];
 }
 
 export interface ProgramSchedule {

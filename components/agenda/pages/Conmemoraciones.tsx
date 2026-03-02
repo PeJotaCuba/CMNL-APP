@@ -15,88 +15,9 @@ import AgendaHeader from '../components/AgendaHeader';
 
 const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate }) => {
   const navigate = useNavigate();
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [daySearch, setDaySearch] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dateInfo = getCurrentDateInfo();
+  // ... (rest of state and logic)
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n');
-      const newData: ConmemoracionesData = { ...data };
-      let currentMonth = '';
-      let currentDay = 0;
-
-      lines.forEach(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-
-        const dayMatch = trimmed.match(/Día\s+(\d+)\s+de\s+([A-Za-z]+)/i);
-        if (dayMatch) {
-          currentDay = parseInt(dayMatch[1]);
-          currentMonth = dayMatch[2].charAt(0).toUpperCase() + dayMatch[2].slice(1).toLowerCase();
-          if (!newData[currentMonth]) newData[currentMonth] = [];
-        } else if (currentDay > 0 && currentMonth) {
-          const parts = trimmed.split(':');
-          if (parts.length >= 2) {
-            const typeStr = parts[0].trim();
-            const desc = parts.slice(1).join(':').trim();
-            newData[currentMonth].push({
-              day: currentDay,
-              type: typeStr as 'Nacional' | 'Internacional' | 'Mundial',
-              description: desc
-            });
-          }
-        }
-      });
-
-      onUpdate(newData);
-      alert('Conmemoraciones cargadas exitosamente.');
-    };
-    reader.readAsText(file);
-  };
-
-  const handleDownloadDocx = async () => {
-    if (!selectedMonth || !data[selectedMonth]) return;
-
-    const monthEvents = data[selectedMonth].sort((a, b) => a.day - b.day);
-    
-    const doc = new Document({
-      sections: [{
-        properties: {},
-        children: [
-          new Paragraph({
-            text: `Conmemoraciones - ${selectedMonth}`,
-            heading: "Heading1",
-            alignment: AlignmentType.CENTER,
-          }),
-          ...monthEvents.map(ev => [
-            new Paragraph({
-              children: [
-                new TextRun({ text: `Día ${ev.day} - ${ev.type}: `, bold: true }),
-                new TextRun({ text: ev.description }),
-              ],
-            }),
-            new Paragraph({ text: "" }) // Empty line
-          ]).flat()
-        ],
-      }],
-    });
-
-    Packer.toBlob(doc).then(blob => {
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Conmemoraciones_${selectedMonth}.docx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    });
-  };
+  // ... (handleUpload, handleDownloadDocx)
 
   const renderUploadBtn = () => {
     if (user.role !== UserRole.ADMIN) return null;

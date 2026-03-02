@@ -92,12 +92,11 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [userPaymentConfig, setUserPaymentConfig] = useState<UserPaymentConfig | null>(() => {
       if (!currentUser) return null;
       const saved = localStorage.getItem(`rcm_payment_config_${currentUser.username}`);
-      let config: UserPaymentConfig | null = null;
-      
+      // Migrate old config if necessary
       if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed.role && !parsed.roles) {
-              config = {
+              return {
                   roles: [{
                       id: '1',
                       role: parsed.role,
@@ -107,38 +106,10 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                       habitualDays: []
                   }]
               };
-          } else {
-              config = parsed;
           }
+          return parsed;
       }
-
-      // Sync with currentUser.paymentRoles for non-admins
-      if (currentUser.role !== 'admin' && currentUser.paymentRoles) {
-          const allowedRoles = currentUser.paymentRoles;
-          let syncedRoles = config ? config.roles.filter(r => allowedRoles.includes(r.role)) : [];
-          
-          // Add missing roles
-          allowedRoles.forEach((role, index) => {
-              if (!syncedRoles.some(r => r.role === role)) {
-                  syncedRoles.push({
-                      id: Date.now().toString() + index,
-                      role: role,
-                      level: 'I',
-                      isHabitual: false,
-                      habitualPrograms: [],
-                      habitualDays: []
-                  });
-              }
-          });
-          
-          if (!config) {
-              config = { roles: syncedRoles };
-          } else {
-              config.roles = syncedRoles;
-          }
-      }
-
-      return config;
+      return null;
   });
 
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
@@ -153,47 +124,16 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
   const [showMonthlyPayments, setShowMonthlyPayments] = useState(false);
   
   // Payment Config State
-  const [configForm, setConfigForm] = useState<UserPaymentConfig>(() => {
-      if (currentUser && currentUser.role !== 'admin' && currentUser.paymentRoles && currentUser.paymentRoles.length > 0) {
-          return {
-              roles: currentUser.paymentRoles.map((role, index) => ({
-                  id: Date.now().toString() + index,
-                  role: role,
-                  level: 'I',
-                  isHabitual: false,
-                  habitualPrograms: [],
-                  habitualDays: []
-              }))
-          };
-      }
-      return { 
-          roles: [{ 
-              id: '1', 
-              role: 'Director', 
-              level: 'I', 
-              isHabitual: false, 
-              habitualPrograms: [], 
-              habitualDays: [] 
-          }] 
-      };
+  const [configForm, setConfigForm] = useState<UserPaymentConfig>({ 
+      roles: [{ 
+          id: '1', 
+          role: 'Director', 
+          level: 'I', 
+          isHabitual: false, 
+          habitualPrograms: [], 
+          habitualDays: [] 
+      }] 
   });
-
-  useEffect(() => {
-      if (userPaymentConfig) {
-          setConfigForm(userPaymentConfig);
-      } else if (currentUser && currentUser.role !== 'admin' && currentUser.paymentRoles && currentUser.paymentRoles.length > 0) {
-          setConfigForm({
-              roles: currentUser.paymentRoles.map((role, index) => ({
-                  id: Date.now().toString() + index,
-                  role: role,
-                  level: 'I',
-                  isHabitual: false,
-                  habitualPrograms: [],
-                  habitualDays: []
-              }))
-          });
-      }
-  }, [userPaymentConfig, currentUser]);
 
   useEffect(() => {
     localStorage.setItem('rcm_data_fichas', JSON.stringify(fichas));
@@ -814,7 +754,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                                   <div key={role.id} className="p-4 bg-black/20 rounded-lg border border-[#9E7649]/20 relative">
                                       <div className="flex justify-between items-center mb-4">
                                           <h3 className="text-[#9E7649] font-bold uppercase text-xs tracking-widest">Función {index + 1}</h3>
-                                          {configForm.roles.length > 1 && currentUser?.role === 'admin' && (
+                                          {configForm.roles.length > 1 && (
                                               <button onClick={() => removeRole(role.id)} className="text-red-400 hover:text-red-300">
                                                   <Trash2 size={16} />
                                               </button>
@@ -827,8 +767,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                                               <select 
                                                   value={role.role}
                                                   onChange={(e) => updateRole(role.id, { role: e.target.value })}
-                                                  disabled={currentUser?.role !== 'admin'}
-                                                  className={`w-full bg-[#1A100C] border border-[#9E7649]/30 rounded p-2 text-sm text-white ${currentUser?.role !== 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                  className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded p-2 text-sm text-white"
                                               >
                                                   <option value="Director">Director</option>
                                                   <option value="Asesor">Asesor</option>
@@ -900,7 +839,7 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                                   </div>
                               ))}
 
-                              {configForm.roles.length < 3 && currentUser?.role === 'admin' && (
+                              {configForm.roles.length < 3 && (
                                   <button 
                                       onClick={addRole}
                                       className="w-full py-3 border-2 border-dashed border-[#9E7649]/30 rounded-lg text-[#9E7649] hover:bg-[#9E7649]/10 hover:border-[#9E7649]/50 transition-all flex items-center justify-center gap-2 font-bold text-sm"
