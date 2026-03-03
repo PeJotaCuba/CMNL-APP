@@ -197,7 +197,8 @@ export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, onMenuCl
       <CMNLHeader 
           user={user || null}
           sectionTitle={title}
-          onMenuClick={onMenuClick || onBack}
+          onMenuClick={onMenuClick}
+          onBack={onBack}
       />
 
       <div className="flex-1 flex flex-col p-6">

@@ -127,7 +127,7 @@ const Interests: React.FC<InterestsProps> = ({ user, programs, onUpdateUser, onM
                 {selectedProgs.length === programs.length ? 'Ninguno' : 'Todos'}
             </button>
           </div>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {programs.map(prog => (
               <button 
                 key={prog.id} 

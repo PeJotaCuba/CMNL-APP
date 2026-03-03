@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper, DownloadCloud, RefreshCw } from 'lucide-react';
 import { User, NewsItem, UserClassification } from '../types';
 import { getCategoryVector } from '../utils/scheduleData';
+import CMNLHeader from './CMNLHeader';
 
 interface Props {
   onBack: () => void;
+  onMenuClick?: () => void;
   users: User[];
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
   historyContent: string;
@@ -13,19 +15,21 @@ interface Props {
   setAboutContent: React.Dispatch<React.SetStateAction<string>>;
   news: NewsItem[];
   setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
+  isSyncing: boolean;
+  setIsSyncing: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const UserManagement: React.FC<Props> = ({ 
-    onBack, users, setUsers, 
+    onBack, onMenuClick, users, setUsers, 
     historyContent, setHistoryContent, 
     aboutContent, setAboutContent,
-    news, setNews
+    news, setNews,
+    isSyncing, setIsSyncing
 }) => {
   const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'users' | 'content'>('users');
-  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
 
   const handleNewUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -283,7 +287,7 @@ const UserManagement: React.FC<Props> = ({
           return;
       }
 
-      setIsLoadingCloud(true);
+      setIsSyncing(true);
       const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/actualcmnl.json';
 
       try {
@@ -382,7 +386,7 @@ const UserManagement: React.FC<Props> = ({
           console.error("Error cargando desde GitHub:", error);
           alert('Error al conectar con GitHub. Verifique su conexión a internet.');
       } finally {
-          setIsLoadingCloud(false);
+          setIsSyncing(false);
       }
   };
 
@@ -394,23 +398,20 @@ const UserManagement: React.FC<Props> = ({
   return (
     <div className="flex flex-col h-screen bg-[#1A100C] text-[#E8DCCF] font-display overflow-hidden">
        {/* Header */}
-      <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20 shrink-0">
-        <button onClick={onBack} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-          <ArrowLeft size={20} className="text-[#F5EFE6]" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-lg font-bold text-white leading-none">Ajustes & Gestión</h1>
-          <p className="text-[10px] text-[#9E7649]">Administración de sistema</p>
-        </div>
-        
+      <CMNLHeader 
+        user={null}
+        sectionTitle="Ajustes & Gestión"
+        onMenuClick={onMenuClick}
+        onBack={onBack}
+      >
         <div className="flex gap-2">
             <button 
                 onClick={handleLoadFromGithub} 
-                disabled={isLoadingCloud}
+                disabled={isSyncing}
                 className="flex items-center gap-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] px-3 py-2 rounded-lg text-xs font-bold transition-colors border border-[#9E7649]/30 disabled:opacity-50" 
                 title="Cargar actualcmnl.json desde GitHub"
             >
-                {isLoadingCloud ? <RefreshCw size={16} className="animate-spin"/> : <DownloadCloud size={16} />}
+                {isSyncing ? <RefreshCw size={16} className="animate-spin"/> : <DownloadCloud size={16} />}
                 <span className="hidden sm:inline">Sincronizar</span>
             </button>
             <button 
@@ -422,7 +423,7 @@ const UserManagement: React.FC<Props> = ({
                 <span className="hidden sm:inline">Respaldar</span>
             </button>
         </div>
-      </div>
+      </CMNLHeader>
 
       {/* Tabs */}
       <div className="flex border-b border-[#9E7649]/20 shrink-0">

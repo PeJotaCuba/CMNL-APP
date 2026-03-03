@@ -55,13 +55,14 @@ const InnerAgendaApp: React.FC<{
   }
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col bg-background-dark text-white max-w-md mx-auto relative shadow-2xl overflow-hidden font-sans">
+    <div className="h-[100dvh] w-full flex flex-col bg-background-dark text-white relative shadow-2xl overflow-hidden font-sans">
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <Routes>
           <Route path="/home" element={
               <Dashboard 
                   user={user} 
                   onLogout={onMenuClick || handleLogout} 
+                  onMenuClick={onMenuClick}
                   programs={programs} 
                   filterEnabled={filterEnabled}
                   onToggleFilter={() => setFilterEnabled(!filterEnabled)}

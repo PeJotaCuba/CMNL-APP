@@ -42,7 +42,7 @@ interface UserPaymentConfig {
     roles: RoleConfig[];
 }
 
-const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
+const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
 
   // Hash Navigation Logic
@@ -743,7 +743,8 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                   <CMNLHeader 
                       user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                       sectionTitle="Configuración de Pagos"
-                      onMenuClick={() => setActiveSection(null)}
+                      onMenuClick={onMenuClick}
+                      onBack={() => setActiveSection(null)}
                   />
                   <div className="p-6 max-w-2xl mx-auto w-full mt-4">
                       <div className="bg-[#2C1B15] p-6 rounded-xl border border-[#9E7649]/10 shadow-lg">
@@ -916,7 +917,8 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                   sectionTitle="Pagos"
-                  onMenuClick={() => setActiveSection(null)}
+                  onMenuClick={onMenuClick}
+                  onBack={() => setActiveSection(null)}
               >
                   <div className="flex gap-1 sm:gap-2">
                        <button 
@@ -1240,7 +1242,8 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                   sectionTitle="Catálogo"
-                  onMenuClick={() => setActiveSection(null)}
+                  onMenuClick={onMenuClick}
+                  onBack={() => setActiveSection(null)}
               />
 
               <div className="p-6 overflow-y-auto pb-20">
@@ -1285,7 +1288,8 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
                   <CMNLHeader 
                       user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                       sectionTitle={selectedFicha.name}
-                      onMenuClick={() => { setSelectedFicha(null); setIsEditing(false); }}
+                      onMenuClick={onMenuClick}
+                      onBack={() => { setSelectedFicha(null); setIsEditing(false); }}
                   >
                       {isAdmin && !isEditing && (
                           <button onClick={handleEdit} className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm" title="Editar Ficha">
@@ -1707,7 +1711,8 @@ const GestionApp: React.FC<Props> = ({ onBack, currentUser }) => {
       <CMNLHeader 
           user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
           sectionTitle="Gestión"
-          onMenuClick={onBack}
+          onMenuClick={onMenuClick}
+          onBack={onBack}
       />
 
       {/* Grid Menu */}

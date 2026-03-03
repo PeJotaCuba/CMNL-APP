@@ -740,7 +740,7 @@ const Editorial: React.FC<EditorialProps> = ({
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 pb-32">
         {/* VISTA SELECCIÓN DE MES (Nivel 0) */}
         {isMonthSelection ? (
-            <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-300">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 animate-in fade-in duration-300">
                 {MONTHS_DATA.map((month, index) => {
                     const isCurrent = index === new Date().getMonth();
                     return (
@@ -757,7 +757,7 @@ const Editorial: React.FC<EditorialProps> = ({
             </div>
         ) : (
           /* VISTA LISTA DE SEMANAS (Nivel 1) */
-          <div className="space-y-4 animate-in slide-in-from-right duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in slide-in-from-right duration-300">
             {weeks.map(w => (
               <button key={w.id} onClick={() => { setSelectedWeekId(w.id); setProgSearch(''); }} className="w-full flex items-center justify-between bg-card-dark p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group active:scale-[0.98] transition-transform">
                 <div className="text-left relative z-10">

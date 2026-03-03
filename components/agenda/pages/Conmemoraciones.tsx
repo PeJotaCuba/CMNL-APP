@@ -207,7 +207,7 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
           <p className="text-text-secondary text-sm font-medium px-8">Fechas patrias y efemérides mundiales.</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 p-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
           {MONTHS_DATA.map((month) => {
             const isCurrent = month.name.toLowerCase() === dateInfo.monthName.toLowerCase();
             const hasData = data[month.name]?.length > 0;

@@ -345,6 +345,7 @@ const App: React.FC = () => {
         return (
           <UserManagement 
             onBack={handleBack} 
+            onMenuClick={() => setIsSidebarOpen(true)}
             users={users} 
             setUsers={setUsers} 
             historyContent={historyContent}
@@ -353,16 +354,18 @@ const App: React.FC = () => {
             setAboutContent={setAboutContent}
             news={news}
             setNews={setNews}
+            isSyncing={isSyncing}
+            setIsSyncing={setIsSyncing}
           />
         );
       
       // CMNL Apps
       case AppView.APP_AGENDA:
-        return <AgendaApp onBack={handleBack} currentUser={currentUser} />;
+        return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_MUSICA:
         return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} user={currentUser} />;
       case AppView.APP_GUIONES:
-        return <GuionesApp onBack={handleBack} currentUser={currentUser} />;
+        return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_PROGRAMACION:
         return <GestionApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
 
@@ -409,6 +412,19 @@ const App: React.FC = () => {
       />
 
       {renderView()}
+
+      {isSyncing && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[300] flex flex-col items-center justify-center animate-in fade-in duration-300">
+          <div className="relative">
+            <div className="size-24 rounded-full border-4 border-[#9E7649]/20 border-t-[#9E7649] animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <RefreshCw size={32} className="text-[#9E7649] animate-pulse" />
+            </div>
+          </div>
+          <p className="mt-6 text-[#E8DCCF] font-bold tracking-widest uppercase text-sm animate-pulse">Sincronizando datos...</p>
+          <p className="mt-2 text-[#9E7649] text-xs">Por favor, espere un momento</p>
+        </div>
+      )}
 
       {showPlayer && (
          <div className="fixed bottom-0 left-0 right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 px-4 py-3 pb-safe-bottom">

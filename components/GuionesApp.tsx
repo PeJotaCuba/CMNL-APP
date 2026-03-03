@@ -106,6 +106,7 @@ export const PROGRAMS = [
 interface GuionesAppProps {
     currentUser: User | null;
     onBack: () => void;
+    onMenuClick?: () => void;
 }
 
 const parseRawEntry = (raw: string): Script | null => {
@@ -137,7 +138,7 @@ const parseRawEntry = (raw: string): Script | null => {
   };
 };
 
-const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
+const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClick }) => {
     const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showStats, setShowStats] = useState(false);
@@ -941,7 +942,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack }) => {
             <CMNLHeader 
                 user={currentUser ? { name: currentUser.name, role: currentUser.classification || currentUser.role } : null}
                 sectionTitle={selectedProgram || (showStats ? "Estadísticas" : "Guiones")}
-                onMenuClick={() => {
+                onMenuClick={onMenuClick}
+                onBack={() => {
                     if (selectedProgram || showStats) {
                         setSelectedProgram(null);
                         setShowStats(false);

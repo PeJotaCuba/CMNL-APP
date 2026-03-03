@@ -335,7 +335,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
       </div>
 
       {/* Content List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-max">
         {currentItems.length > 0 ? (
           currentItems.map((item, idx) => {
             const parts = item.split('|');

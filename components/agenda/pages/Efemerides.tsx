@@ -184,7 +184,7 @@ const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate, onMenuCli
           <p className="text-text-secondary text-sm font-medium px-8">Archivo histórico de efemérides para RCM.</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 p-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-4 mb-4">
           {MONTHS_DATA.map((month) => {
             const hasData = data[month.name]?.length > 0;
             const isCurrent = month.name.toLowerCase() === dateInfo.monthName.toLowerCase();

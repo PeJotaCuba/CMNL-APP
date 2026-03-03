@@ -44,6 +44,18 @@ const Sidebar: React.FC<SidebarProps> = ({
     onClose();
   };
 
+  const handleInicio = () => {
+    if (currentUser) {
+      if (currentUser.role === 'admin') {
+        handleNavigation(AppView.ADMIN_DASHBOARD);
+      } else {
+        handleNavigation(AppView.WORKER_HOME);
+      }
+    } else {
+      handleNavigation(AppView.LISTENER_HOME);
+    }
+  };
+
   const handleExternalApp = (url: string) => {
     let finalUrl = url;
     if (currentUser) {
@@ -59,13 +71,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Overlay */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] transition-opacity"
           onClick={onClose}
         />
       )}
 
       {/* Drawer */}
-      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-[200] transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         
         {/* Header */}
         <div className="p-6 flex items-center justify-between border-b border-white/5 shrink-0">
@@ -83,7 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <SidebarItem 
               icon={<Home size={20} />} 
               label="Inicio" 
-              onClick={() => handleNavigation(AppView.LISTENER_HOME)} 
+              onClick={handleInicio} 
             />
             <SidebarItem 
               icon={<ScrollText size={20} />} 

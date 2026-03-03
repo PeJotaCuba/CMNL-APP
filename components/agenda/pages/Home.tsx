@@ -7,13 +7,14 @@ import AgendaHeader from '../components/AgendaHeader';
 interface HomeProps {
   user: UserProfile;
   onLogout: () => void;
+  onMenuClick?: () => void;
   programs: Program[];
   filterEnabled: boolean;
   onToggleFilter: () => void;
   onBack?: () => void;
 }
 
-const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, onToggleFilter, onBack }) => {
+const Home: React.FC<HomeProps> = ({ user, onLogout, onMenuClick, programs, filterEnabled, onToggleFilter, onBack }) => {
   const navigate = useNavigate();
   const dateInfo = getCurrentDateInfo();
   
@@ -29,7 +30,7 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, on
 
   return (
     <div className="flex-1 flex flex-col bg-background-dark h-full">
-      <AgendaHeader title="Panel de Control" user={user} onMenuClick={onLogout} onBack={onBack} />
+      <AgendaHeader title="Panel de Control" user={user} onMenuClick={onMenuClick || onLogout} onBack={onBack} />
 
       <main className="flex-1 px-4 py-6 space-y-5 overflow-y-auto no-scrollbar pb-40">
         <section className="flex justify-between items-start">
@@ -69,11 +70,11 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, programs, filterEnabled, on
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* BOTÓN AGENDA - Rediseñado para ser horizontal y ahorrar espacio */}
           <button 
             onClick={() => navigate('/editorial')}
-            className={`group relative h-28 overflow-hidden rounded-[2rem] bg-gradient-to-r from-primary to-primary-dark shadow-lg shadow-primary/20 w-full flex items-center p-6 gap-5 transition-transform active:scale-[0.98] ${!isTodayRelevant ? 'opacity-75 grayscale-[0.5]' : ''}`}
+            className={`group relative h-28 overflow-hidden rounded-[2rem] bg-gradient-to-r from-primary to-primary-dark shadow-lg shadow-primary/20 w-full flex items-center p-6 gap-5 transition-transform active:scale-[0.98] md:col-span-2 lg:col-span-1 ${!isTodayRelevant ? 'opacity-75 grayscale-[0.5]' : ''}`}
           >
             <div className="size-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm shadow-inner shrink-0">
               <span className="material-symbols-outlined text-white text-3xl">calendar_month</span>
