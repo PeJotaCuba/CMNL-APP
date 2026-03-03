@@ -235,6 +235,16 @@ const App: React.FC = () => {
               localStorage.setItem('rcm_data_worklogs', JSON.stringify(json.worklogs));
               changes++;
           }
+          if (json.consolidated) {
+              localStorage.setItem('rcm_data_consolidated', JSON.stringify(json.consolidated));
+              changes++;
+          }
+          if (json.paymentConfigs) {
+              Object.entries(json.paymentConfigs).forEach(([key, value]) => {
+                  localStorage.setItem(key, JSON.stringify(value));
+              });
+              changes++;
+          }
           if (json.scripts) {
               Object.entries(json.scripts).forEach(([key, value]) => {
                   localStorage.setItem(key, JSON.stringify(value));
