@@ -193,7 +193,7 @@ export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, onMenuCl
   };
 
   return (
-    <div className={`flex flex-col h-full w-full ${getBgColor()} text-white`}>
+    <div className={`flex flex-col h-full w-full ${getBgColor()} text-white overflow-hidden`}>
       <CMNLHeader 
           user={user || null}
           sectionTitle={title}
@@ -201,20 +201,22 @@ export const CMNLAppView: React.FC<ViewProps> = ({ title, type, onBack, onMenuCl
           onBack={onBack}
       />
 
-      <div className="flex-1 flex flex-col p-6">
-        <div className="w-full h-40 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center mb-6 shadow-inner">
-           {getIcon()}
-        </div>
-        
-        <div className="flex flex-col gap-3">
-          <div className="h-12 w-full bg-white/5 rounded-lg animate-pulse"></div>
-          <div className="h-24 w-full bg-white/5 rounded-lg animate-pulse"></div>
-          <div className="h-12 w-full bg-white/5 rounded-lg animate-pulse"></div>
-        </div>
+      <div className="flex-1 relative">
+          <div className="flex flex-col p-6 h-full">
+            <div className="w-full h-40 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center mb-6 shadow-inner">
+               {getIcon()}
+            </div>
+            
+            <div className="flex flex-col gap-3">
+              <div className="h-12 w-full bg-white/5 rounded-lg animate-pulse"></div>
+              <div className="h-24 w-full bg-white/5 rounded-lg animate-pulse"></div>
+              <div className="h-12 w-full bg-white/5 rounded-lg animate-pulse"></div>
+            </div>
 
-        <div className="mt-auto text-center opacity-60 text-xs uppercase tracking-widest">
-           Módulo de Gestión Interna
-        </div>
+            <div className="mt-auto text-center opacity-60 text-xs uppercase tracking-widest">
+               Módulo de Gestión Interna
+            </div>
+          </div>
       </div>
     </div>
   );

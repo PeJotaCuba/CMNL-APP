@@ -8,6 +8,7 @@ import UserManagement from './components/UserManagement';
 import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
+import MusicaApp from './components/MusicaApp';
 import Sidebar from './components/Sidebar';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
@@ -363,7 +364,7 @@ const App: React.FC = () => {
       case AppView.APP_AGENDA:
         return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_MUSICA:
-        return <CMNLAppView title="Música CMNL" type="music" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} user={currentUser} />;
+        return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_PROGRAMACION:

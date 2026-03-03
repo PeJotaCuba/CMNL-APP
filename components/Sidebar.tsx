@@ -135,7 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <SidebarItem 
                   icon={<Music size={20} />} 
                   label="Música" 
-                  onClick={() => handleExternalApp('https://rcm-musica.vercel.app/')} 
+                  onClick={() => handleNavigation(AppView.APP_MUSICA)} 
                 />
                 <SidebarItem 
                   icon={<FileText size={20} />} 
