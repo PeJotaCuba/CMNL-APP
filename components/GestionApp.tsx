@@ -391,8 +391,19 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       });
 
       if (programs.length > 0) {
-          setCatalogo(programs);
-          alert(`Se han importado ${programs.length} programas al catálogo.`);
+          setCatalogo(prev => {
+              const newCatalogo = [...prev];
+              programs.forEach(newProg => {
+                  const existingIndex = newCatalogo.findIndex(p => p.name === newProg.name);
+                  if (existingIndex >= 0) {
+                      newCatalogo[existingIndex] = newProg;
+                  } else {
+                      newCatalogo.push(newProg);
+                  }
+              });
+              return newCatalogo;
+          });
+          alert(`Se han importado/actualizado ${programs.length} programas en el catálogo.`);
       } else {
           alert('No se pudieron encontrar datos válidos en el archivo.');
       }
@@ -402,7 +413,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
     // Basic parser based on the provided format
     // This assumes the text format matches the provided example
     const programs: ProgramFicha[] = [];
-    const blocks = text.split('________________________________________________________');
+    const blocks = text.split(/_{10,}/); // Split by 10 or more underscores
     
     blocks.forEach(block => {
         if(!block.trim()) return;
@@ -469,8 +480,19 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
     });
 
     if(programs.length > 0) {
-        setFichas(programs);
-        alert(`Se han importado ${programs.length} fichas de programas.`);
+        setFichas(prev => {
+            const newFichas = [...prev];
+            programs.forEach(newProg => {
+                const existingIndex = newFichas.findIndex(p => p.name === newProg.name);
+                if (existingIndex >= 0) {
+                    newFichas[existingIndex] = newProg;
+                } else {
+                    newFichas.push(newProg);
+                }
+            });
+            return newFichas;
+        });
+        alert(`Se han importado/actualizado ${programs.length} fichas de programas.`);
     } else {
         alert('No se pudieron encontrar programas en el archivo de texto.');
     }
@@ -1244,7 +1266,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                   sectionTitle="Catálogo"
                   onMenuClick={onMenuClick}
                   onBack={() => setActiveSection(null)}
-              />
+              >
+                  {isAdmin && (
+                      <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center" title="Importar Catálogo (TXT)">
+                          <span className="material-symbols-outlined text-2xl">upload_file</span>
+                          <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'catalogo')} className="hidden" />
+                      </label>
+                  )}
+              </CMNLHeader>
 
               <div className="p-6 overflow-y-auto pb-20">
                   {catalogo.length === 0 ? (
@@ -1675,8 +1704,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                   sectionTitle="Fichas de Programas"
-                  onMenuClick={() => setActiveSection(null)}
-              />
+                  onMenuClick={onMenuClick}
+                  onBack={() => setActiveSection(null)}
+              >
+                  {isAdmin && (
+                      <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center" title="Importar Fichas (TXT)">
+                          <span className="material-symbols-outlined text-2xl">upload_file</span>
+                          <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'fichas')} className="hidden" />
+                      </label>
+                  )}
+              </CMNLHeader>
 
               <div className="p-6 overflow-y-auto pb-20">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">

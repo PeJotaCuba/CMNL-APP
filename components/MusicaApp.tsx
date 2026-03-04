@@ -386,7 +386,19 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         sectionTitle="Música CMNL"
         onMenuClick={onMenuClick}
         onBack={onBack}
-      />
+      >
+        {(authMode === 'admin' || authMode === 'director') && (
+            <div className="flex gap-4 items-center">
+                <button onClick={handleExportBackup} className="text-[#9E7649] hover:text-white transition-colors flex items-center justify-center" title="Exportar Copia de Seguridad">
+                    <span className="material-symbols-outlined text-2xl">cloud_download</span>
+                </button>
+                <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center" title="Restaurar Copia de Seguridad">
+                    <span className="material-symbols-outlined text-2xl">cloud_upload</span>
+                    <input type="file" accept=".json" onChange={(e) => { if (e.target.files && e.target.files[0]) handleImportBackup(e.target.files[0]); e.target.value = ''; }} className="hidden" />
+                </label>
+            </div>
+        )}
+      </CMNLHeader>
       
       <div className="flex-1 overflow-hidden relative flex flex-col">
             {view === ViewState.LIST && (

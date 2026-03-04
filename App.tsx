@@ -306,7 +306,7 @@ const App: React.FC = () => {
             }
         }} />;
       case AppView.LISTENER_HOME:
-        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} />;
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.WORKER_HOME:
         return (
             <WorkerHome 
@@ -409,7 +409,7 @@ const App: React.FC = () => {
         onSync={handleCloudSync}
         isSyncing={isSyncing}
         onLogout={handleLogout}
-        onLogin={() => setCurrentView(AppView.LISTENER_HOME)}
+        onLogin={() => setCurrentView(AppView.LANDING)}
       />
 
       {renderView()}
