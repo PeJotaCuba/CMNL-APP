@@ -10,7 +10,7 @@ import Settings from './musica/Settings';
 import Productions from './musica/Productions';
 import ReportsViewer from './musica/ReportsViewer';
 import Guide from './musica/Guide';
-import { loadTracksFromDB, saveTracksToDB, saveReportToDB } from './musica/services/db'; 
+import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB } from './musica/services/db'; 
 import { generateReportPDF } from './musica/services/pdfService';
 
 const USERS_KEY = 'rcm_users_db';
@@ -148,6 +148,112 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       const link = document.createElement('a');
       link.href = url; link.download = "musuarios.json";
       document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+      });
+  };
+
+  const base64ToBlob = async (base64: string): Promise<Blob> => {
+      const res = await fetch(base64);
+      return await res.blob();
+  };
+
+  const handleExportBackup = async () => {
+      if (!currentUser) return;
+      setIsUpdating(true);
+      try {
+          const dbTracks = await loadTracksFromDB();
+          const dbReports = await loadReportsFromDB();
+          const dbProductions = await loadProductionsFromDB();
+          
+          const reportsForExport = await Promise.all(dbReports.map(async r => {
+              const base64 = r.pdfBlob ? await blobToBase64(r.pdfBlob) : null;
+              const { pdfBlob, ...rest } = r;
+              return { ...rest, pdfBlobBase64: base64 };
+          }));
+
+          const backup = {
+              tracks: dbTracks,
+              reports: reportsForExport,
+              productions: dbProductions,
+              savedSelections: savedSelections,
+              currentSelection: selectedTracksList,
+              timestamp: new Date().toISOString(),
+              user: currentUser.username
+          };
+
+          const dateStr = new Date().toISOString().split('T')[0];
+          const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `RCM_Backup_${currentUser.username}_${dateStr}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+      } catch (e) {
+          console.error("Error exporting backup:", e);
+          alert("Error al exportar la copia de seguridad.");
+      } finally {
+          setIsUpdating(false);
+      }
+  };
+
+  const handleImportBackup = (file: File) => {
+      if (!file) return;
+      setIsUpdating(true);
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+          try {
+              const backup = JSON.parse(e.target?.result as string);
+              
+              if (backup.tracks && Array.isArray(backup.tracks)) {
+                  await saveTracksToDB(backup.tracks);
+                  setTracks(backup.tracks);
+              }
+              
+              if (backup.reports && Array.isArray(backup.reports)) {
+                  for (const r of backup.reports) {
+                      if (r.pdfBlobBase64) {
+                          r.pdfBlob = await base64ToBlob(r.pdfBlobBase64);
+                          delete r.pdfBlobBase64;
+                      } else {
+                          r.pdfBlob = new Blob();
+                      }
+                      await saveReportToDB(r);
+                  }
+              }
+              
+              if (backup.productions && Array.isArray(backup.productions)) {
+                  for (const p of backup.productions) {
+                      await saveProductionToDB(p);
+                  }
+              }
+              
+              if (backup.savedSelections) {
+                  setSavedSelections(backup.savedSelections);
+                  localStorage.setItem(SAVED_SELECTIONS_KEY, JSON.stringify(backup.savedSelections));
+              }
+              
+              if (backup.currentSelection) {
+                  setSelectedTracksList(backup.currentSelection);
+                  localStorage.setItem(SELECTION_KEY, JSON.stringify(backup.currentSelection));
+              }
+              
+              alert("Copia de seguridad restaurada con éxito.");
+          } catch (err) {
+              console.error("Error importing backup:", err);
+              alert("Error al restaurar la copia de seguridad. El archivo puede estar corrupto.");
+          } finally {
+              setIsUpdating(false);
+          }
+      };
+      reader.readAsText(file);
   };
 
   const handleSyncRoot = async (rootName: string) => {
@@ -339,7 +445,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             )}
 
-            {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
+            {view === ViewState.SETTINGS && (authMode === 'admin' || authMode === 'director') && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} onExportBackup={handleExportBackup} onImportBackup={handleImportBackup} />}
             {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} />}
             {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
@@ -454,7 +560,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             <NavButton icon="checklist" label="Selección" active={view === ViewState.SELECTION} onClick={() => setView(ViewState.SELECTION)} />
             {authMode === 'director' && <NavButton icon="description" label="Reportes" active={view === ViewState.REPORTS} onClick={() => setView(ViewState.REPORTS)} />}
             {authMode === 'admin' && <NavButton icon="playlist_add" label="Producción" active={view === ViewState.PRODUCTIONS} onClick={() => setView(ViewState.PRODUCTIONS)} />}
-            {authMode === 'admin' && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => setView(ViewState.SETTINGS)} />}
+            {(authMode === 'admin' || authMode === 'director') && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => setView(ViewState.SETTINGS)} />}
             {authMode !== 'admin' && <NavButton icon="help" label="Guía" active={view === ViewState.GUIDE} onClick={() => setView(ViewState.GUIDE)} />}
         </nav>
     </div>

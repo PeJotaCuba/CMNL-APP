@@ -186,6 +186,16 @@ export const loadProductionsFromDB = async (): Promise<Production[]> => {
     }
 };
 
+export const deleteProductionFromDB = async (id: string): Promise<void> => {
+    const db = await openDB();
+    return new Promise((resolve) => {
+        const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
+        const store = tx.objectStore(PRODUCTIONS_STORE);
+        store.delete(id);
+        tx.oncomplete = () => resolve();
+    });
+};
+
 export const clearTracksDB = async (): Promise<void> => {
     const db = await openDB();
     return new Promise((resolve, reject) => {

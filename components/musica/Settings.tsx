@@ -11,9 +11,11 @@ interface SettingsProps {
   onExportUsers: () => void;
   onImportUsers: (users: User[]) => void;
   currentUser?: User | null;
+  onExportBackup: () => void;
+  onImportBackup: (file: File) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUser, onDeleteUser, onExportUsers, onImportUsers, currentUser }) => {
+const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUser, onDeleteUser, onExportUsers, onImportUsers, currentUser, onExportBackup, onImportBackup }) => {
   const [formData, setFormData] = useState({
       username: '',
       fullName: '',
@@ -181,6 +183,25 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
             </button>
         </div>
 
+        <div className="mb-8 p-6 bg-[#2C1B15] rounded-2xl shadow-sm border border-[#9E7649]/20">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-white">Respaldo y Sincronización</h3>
+            </div>
+            <p className="text-xs text-[#E8DCCF]/60 mb-4">
+                Guarda o restaura una copia de seguridad completa de la base de datos (temas, reportes, producciones y selecciones).
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+                <button onClick={onExportBackup} className="bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-colors w-full sm:w-auto justify-center">
+                    <span className="material-symbols-outlined">cloud_download</span> Exportar Copia
+                </button>
+                <label className="bg-[#1A100C] border border-[#9E7649]/30 text-[#E8DCCF]/80 hover:text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 transition-colors w-full sm:w-auto justify-center cursor-pointer">
+                    <span className="material-symbols-outlined">cloud_upload</span> Restaurar Copia
+                    <input type="file" accept=".json" onChange={(e) => { if (e.target.files && e.target.files[0]) onImportBackup(e.target.files[0]); e.target.value = ''; }} className="hidden" />
+                </label>
+            </div>
+        </div>
+
+        {currentUser?.role === 'admin' && (
         <div className="mb-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -235,6 +256,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
                 ))}
             </div>
         </div>
+        )}
 
         {showUserModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={handleResetForm}>
