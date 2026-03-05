@@ -21,11 +21,11 @@ const CUSTOM_ROOTS_KEY = 'rcm_custom_roots';
 const USERS_DB_URL = 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/musuarios.json';
 
 const ROOT_DB_CONFIG: Record<string, { url: string, filename: string }> = {
-    'Música 1': { url: 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/mdatos1.json', filename: 'mdatos1.json' },
-    'Música 2': { url: 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/mdatos2.json', filename: 'mdatos2.json' },
-    'Música 3': { url: 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/mdatos3.json', filename: 'mdatos3.json' },
-    'Música 4': { url: 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/mdatos4.json', filename: 'mdatos4.json' },
-    'Música 5': { url: 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/mdatos5.json', filename: 'mdatos5.json' },
+    'Música 1': { url: 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/mdatos1.json', filename: 'mdatos1.json' },
+    'Música 2': { url: 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/mdatos2.json', filename: 'mdatos2.json' },
+    'Música 3': { url: 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/mdatos3.json', filename: 'mdatos3.json' },
+    'Música 4': { url: 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/mdatos4.json', filename: 'mdatos4.json' },
+    'Música 5': { url: 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/mdatos5.json', filename: 'mdatos5.json' },
     'Otros':    { url: 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/motros.json', filename: 'motros.json' }
 };
 
@@ -362,26 +362,138 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleSelectTrack = (track: Track) => { setSelectedTrack(track); };
   const handleToggleSelection = (track: Track) => { setSelectedTracksList(prev => prev.find(t => t.id === track.id) ? prev.filter(t => t.id !== track.id) : [...prev, track]); };
-  const handleClearSelection = () => { if (window.confirm('¿Limpiar selección?')) { setSelectedTracksList([]); localStorage.removeItem(SELECTION_KEY); } };
 
-  const handleSaveSelectionPersist = () => {
-    if (selectedTracksList.length === 0) return alert("Selección vacía.");
-    if (savedSelections.length >= 5) return alert("Límite de 5 selecciones.");
-    const name = window.prompt("Nombre:");
-    if (!name) return;
-    const newSelection: SavedSelection = { id: `sel-${Date.now()}`, name: name.trim(), date: new Date().toISOString(), tracks: [...selectedTracksList] };
-    setSavedSelections(prev => [newSelection, ...prev]);
-    setSelectedTracksList([]); localStorage.removeItem(SELECTION_KEY);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const [pendingSelectionToLoad, setPendingSelectionToLoad] = useState<SavedSelection | null>(null);
+  const [showLoadConflictModal, setShowLoadConflictModal] = useState(false);
+  const [currentSelectionId, setCurrentSelectionId] = useState<string | null>(null);
+  const [selectionToDelete, setSelectionToDelete] = useState<string | null>(null);
+
+  const handleSaveSelectionClick = () => {
+      if (selectedTracksList.length === 0) return alert("Selección vacía.");
+      
+      // UPDATE EXISTING SELECTION
+      if (currentSelectionId) {
+          setSavedSelections(prev => {
+              const updated = prev.map(s => 
+                  s.id === currentSelectionId 
+                      ? { ...s, tracks: [...selectedTracksList], date: new Date().toISOString() }
+                      : s
+              );
+              saveSavedSelectionsListToDB(updated);
+              return updated;
+          });
+          
+          // Clear selection after update
+          setSelectedTracksList([]);
+          setCurrentSelectionId(null);
+          localStorage.removeItem(SELECTION_KEY);
+          
+          alert("Selección actualizada correctamente.");
+          return;
+      }
+
+      // SAVE NEW SELECTION
+      if (savedSelections.length >= 5) return alert("Límite de 5 selecciones.");
+      setPendingSelectionToLoad(null);
+      setSaveName('');
+      setShowSaveModal(true);
+  };
+
+  const confirmSaveSelection = () => {
+      if (!saveName.trim()) return;
+      
+      const newSelection: SavedSelection = { 
+          id: `sel-${Date.now()}`, 
+          name: saveName.trim(), 
+          date: new Date().toISOString(), 
+          tracks: [...selectedTracksList] 
+      };
+      
+      setSavedSelections(prev => {
+          const updated = [newSelection, ...prev];
+          saveSavedSelectionsListToDB(updated);
+          return updated;
+      });
+      
+      if (pendingSelectionToLoad) {
+          setSelectedTracksList(pendingSelectionToLoad.tracks);
+          setCurrentSelectionId(pendingSelectionToLoad.id);
+          setPendingSelectionToLoad(null);
+          alert("Selección actual guardada y nueva selección cargada.");
+      } else {
+          // Clear selection after save
+          setSelectedTracksList([]);
+          setCurrentSelectionId(null);
+          localStorage.removeItem(SELECTION_KEY);
+          
+          alert("Selección guardada correctamente.");
+      }
+      
+      setShowSaveModal(false);
+  };
+
+  const handleClearSelectionClick = () => {
+      setShowClearConfirm(true);
+  };
+
+  const confirmClearSelection = () => {
+      setSelectedTracksList([]);
+      setCurrentSelectionId(null);
+      localStorage.removeItem(SELECTION_KEY);
+      setShowClearConfirm(false);
   };
 
   const handleLoadSavedSelection = (sel: SavedSelection) => {
-      if (selectedTracksList.length > 0 && !window.confirm("¿Fusionar con selección actual?")) return;
-      const currentIds = new Set(selectedTracksList.map(t => t.id));
-      const toAdd = sel.tracks.filter(t => !currentIds.has(t.id));
-      setSelectedTracksList(prev => [...prev, ...toAdd]);
+      if (selectedTracksList.length > 0 && currentSelectionId !== sel.id) {
+          setPendingSelectionToLoad(sel);
+          setShowLoadConflictModal(true);
+      } else {
+          setSelectedTracksList(sel.tracks);
+          setCurrentSelectionId(sel.id);
+      }
   };
 
-  const handleDeleteSavedSelection = (id: string) => { if (window.confirm("¿Eliminar?")) setSavedSelections(prev => prev.filter(s => s.id !== id)); };
+  const handleMergeSelection = () => {
+      if (!pendingSelectionToLoad) return;
+      const currentIds = new Set(selectedTracksList.map(t => t.id));
+      const toAdd = pendingSelectionToLoad.tracks.filter(t => !currentIds.has(t.id));
+      setSelectedTracksList(prev => [...prev, ...toAdd]);
+      // When merging, we lose the "identity" of the loaded selection, it becomes a new mix
+      // or we could argue it remains the current one if we were already in one?
+      // Safest is to treat as modified/new if we are merging into something else.
+      // But if we were "New", we stay "New".
+      setPendingSelectionToLoad(null);
+      setShowLoadConflictModal(false);
+      alert("Selecciones integradas.");
+  };
+
+  const handleSaveAndReplaceClick = () => {
+      setShowLoadConflictModal(false);
+      setSaveName('');
+      setShowSaveModal(true);
+  };
+
+  const handleDeleteSavedSelectionClick = (id: string) => { 
+      setSelectionToDelete(id); 
+  };
+
+  const confirmDeleteSelection = () => {
+      if (selectionToDelete) {
+          setSavedSelections(prev => {
+              const updated = prev.filter(s => s.id !== selectionToDelete);
+              saveSavedSelectionsListToDB(updated);
+              return updated;
+          });
+          if (currentSelectionId === selectionToDelete) {
+              setCurrentSelectionId(null);
+          }
+          setSelectionToDelete(null);
+      }
+  };
 
   const handleProcessWishlist = () => {
       if (!wishlistText.trim()) return;
@@ -462,47 +574,123 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             
             {view === ViewState.SELECTION && (
                 <div className="h-full bg-[#1A100C] flex flex-col">
-                    <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 flex items-center justify-between">
-                         <h2 className="font-bold text-white flex items-center gap-2"><span className="material-symbols-outlined text-[#9E7649]">checklist</span> Selección</h2>
-                         <div className="flex gap-2">
-                             <button onClick={() => setShowWishlist(true)} className="text-[9px] font-bold uppercase bg-[#9E7649]/10 text-[#9E7649] px-3 py-1.5 rounded-lg flex items-center gap-1">Deseos</button>
-                             <button onClick={handleClearSelection} className="text-[9px] font-bold uppercase bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg flex items-center gap-1">Limpiar</button>
-                         </div>
-                    </div>
-                    
-                    {savedSelections.length > 0 && (
+                     <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 flex items-center justify-between">
+                          <div className="flex flex-col">
+                              <h2 className="font-bold text-white flex items-center gap-2"><span className="material-symbols-outlined text-[#9E7649]">checklist</span> Selección</h2>
+                              {currentSelectionId && (
+                                  <span className="text-xs text-[#9E7649] font-bold ml-8">
+                                      {savedSelections.find(s => s.id === currentSelectionId)?.name}
+                                  </span>
+                              )}
+                          </div>
+                          <div className="flex gap-2">
+                              <button onClick={() => setShowWishlist(true)} className="text-[9px] font-bold uppercase bg-[#9E7649]/10 text-[#9E7649] px-3 py-1.5 rounded-lg flex items-center gap-1">Deseos</button>
+                              <button onClick={handleClearSelectionClick} className="text-[9px] font-bold uppercase bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg flex items-center gap-1">Limpiar</button>
+                          </div>
+                     </div>
+                     
+                     {savedSelections.length > 0 && (
                         <div className="bg-[#2C1B15] border-b border-[#9E7649]/10 p-2">
                             <p className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase tracking-widest px-2 mb-2">Guardadas ({savedSelections.length}/5)</p>
                             <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 px-2">
                                 {savedSelections.map(sel => (
-                                    <div key={sel.id} className="flex-none bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 min-w-[120px] flex flex-col gap-1">
+                                    <div key={sel.id} className={`flex-none border rounded-lg p-2 min-w-[120px] flex flex-col gap-1 ${currentSelectionId === sel.id ? 'bg-[#9E7649]/10 border-[#9E7649]' : 'bg-[#1A100C] border-[#9E7649]/20'}`}>
                                         <div className="flex justify-between items-start">
                                             <span className="font-bold text-xs text-white truncate w-20">{sel.name}</span>
-                                            <button onClick={() => handleDeleteSavedSelection(sel.id)} className="text-[#E8DCCF]/40 hover:text-red-400"><span className="material-symbols-outlined text-xs">close</span></button>
+                                            <button onClick={() => handleDeleteSavedSelectionClick(sel.id)} className="text-[#E8DCCF]/40 hover:text-red-400"><span className="material-symbols-outlined text-xs">close</span></button>
                                         </div>
                                         <div className="text-[9px] text-[#E8DCCF]/60">{sel.tracks.length} temas</div>
-                                        <button onClick={() => handleLoadSavedSelection(sel)} className="text-[9px] bg-[#2C1B15] border border-[#9E7649]/30 rounded py-1 font-bold text-[#9E7649] hover:bg-[#9E7649] hover:text-white transition-colors">Cargar</button>
+                                        <button onClick={() => handleLoadSavedSelection(sel)} className={`text-[9px] border rounded py-1 font-bold transition-colors ${currentSelectionId === sel.id ? 'bg-[#9E7649] text-white border-[#9E7649]' : 'bg-[#2C1B15] border-[#9E7649]/30 text-[#9E7649] hover:bg-[#9E7649] hover:text-white'}`}>
+                                            {currentSelectionId === sel.id ? 'Actualizar' : 'Cargar'}
+                                        </button>
                                     </div>
                                 ))}
                             </div>
                         </div>
-                    )}
+                     )}
 
-                    <div className="flex-1 overflow-y-auto">
+                     <div className="flex-1 overflow-y-auto">
                         <TrackList 
                             tracks={selectedTracksList} onSelectTrack={handleSelectTrack} onUploadTxt={() => {}} isAdmin={false} 
                             onSyncRoot={() => {}} onExportRoot={() => {}} onClearRoot={() => {}} 
                             isSelectionView={true} customRoots={[]} onAddCustomRoot={() => {}} onRenameRoot={() => {}}
                             onToggleSelection={handleToggleSelection} selectedTrackIds={new Set(selectedTracksList.map(t => t.id))}
                         />
+                     </div>
+                     <div className="p-4 bg-[#2C1B15] border-t border-[#9E7649]/20 flex flex-col gap-2">
+                          <button onClick={handleSaveSelectionClick} className={`w-full text-white py-3 rounded-xl font-bold text-xs shadow-md flex items-center justify-center gap-2 ${currentSelectionId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                              <span className="material-symbols-outlined text-sm">{currentSelectionId ? 'sync' : 'save'}</span> 
+                              {currentSelectionId ? 'Actualizar Selección' : 'Guardar Selección'}
+                          </button>
+                          <button onClick={handleOpenExportModal} className="w-full bg-[#9E7649] text-white py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#8B653D]">
+                             <span className="material-symbols-outlined">ios_share</span> Exportar / Compartir ({selectedTracksList.length})
+                          </button>
+                     </div>
+                </div>
+            )}
+
+            {/* Modals */}
+            {selectionToDelete && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSelectionToDelete(null)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-lg mb-2 text-white">¿Eliminar Selección?</h3>
+                        <p className="text-sm text-[#E8DCCF]/60 mb-6">Se eliminará la selección guardada "{savedSelections.find(s => s.id === selectionToDelete)?.name}". Esta acción no se puede deshacer.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setSelectionToDelete(null)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cancelar</button>
+                            <button onClick={confirmDeleteSelection} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg hover:bg-red-700">Eliminar</button>
+                        </div>
                     </div>
-                    <div className="p-4 bg-[#2C1B15] border-t border-[#9E7649]/20 flex flex-col gap-2">
-                         <button onClick={handleSaveSelectionPersist} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold text-xs shadow-md flex items-center justify-center gap-2 hover:bg-green-700">
-                             <span className="material-symbols-outlined text-sm">save</span> Guardar Selección
-                         </button>
-                         <button onClick={handleOpenExportModal} className="w-full bg-[#9E7649] text-white py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#8B653D]">
-                            <span className="material-symbols-outlined">ios_share</span> Exportar / Compartir ({selectedTracksList.length})
-                         </button>
+                </div>
+            )}
+            {showSaveModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowSaveModal(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-lg mb-4 text-white">Guardar Selección</h3>
+                        <input 
+                            autoFocus
+                            className="w-full p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-sm outline-none focus:border-[#9E7649] mb-4" 
+                            placeholder="Nombre de la selección..." 
+                            value={saveName} 
+                            onChange={e => setSaveName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && confirmSaveSelection()}
+                        />
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowSaveModal(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cancelar</button>
+                            <button onClick={confirmSaveSelection} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showClearConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowClearConfirm(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-lg mb-2 text-white">¿Limpiar selección?</h3>
+                        <p className="text-sm text-[#E8DCCF]/60 mb-6">Se eliminarán todas las pistas de la lista actual. Esta acción no se puede deshacer.</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowClearConfirm(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cancelar</button>
+                            <button onClick={confirmClearSelection} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg hover:bg-red-700">Limpiar Todo</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showLoadConflictModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowLoadConflictModal(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        <h3 className="font-bold text-lg mb-4 text-white">Selección en curso</h3>
+                        <p className="text-sm text-[#E8DCCF]/60 mb-6">Ya tienes pistas seleccionadas. ¿Qué deseas hacer con la selección guardada?</p>
+                        <div className="flex flex-col gap-3">
+                            <button onClick={handleMergeSelection} className="w-full py-3 bg-[#9E7649] text-white rounded-xl font-bold shadow-lg hover:bg-[#8B653D]">
+                                Integrar (Sumar a la actual)
+                            </button>
+                            <button onClick={handleSaveAndReplaceClick} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700">
+                                Guardar actual y Abrir nueva
+                            </button>
+                            <button onClick={() => { setShowLoadConflictModal(false); setPendingSelectionToLoad(null); }} className="w-full py-3 text-[#E8DCCF]/60 font-bold hover:text-white">
+                                Cancelar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

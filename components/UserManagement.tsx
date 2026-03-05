@@ -288,7 +288,7 @@ const UserManagement: React.FC<Props> = ({
       }
 
       setIsSyncing(true);
-      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/actualcmnl.json';
+      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json';
 
       try {
           const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });

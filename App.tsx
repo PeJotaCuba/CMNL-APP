@@ -58,6 +58,32 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('rcm_data_history', historyContent); }, [historyContent]);
   useEffect(() => { localStorage.setItem('rcm_data_about', aboutContent); }, [aboutContent]);
 
+  // Force update users from INITIAL_USERS to ensure code changes (like new passwords/roles) are applied
+  useEffect(() => {
+      setUsers(prevUsers => {
+          const updatedUsers = [...prevUsers];
+          let hasChanges = false;
+
+          INITIAL_USERS.forEach(initUser => {
+              const index = updatedUsers.findIndex(u => u.username === initUser.username);
+              if (index !== -1) {
+                  // Check if critical fields changed
+                  if (updatedUsers[index].password !== initUser.password || 
+                      updatedUsers[index].role !== initUser.role ||
+                      updatedUsers[index].classification !== initUser.classification) {
+                      updatedUsers[index] = { ...updatedUsers[index], ...initUser };
+                      hasChanges = true;
+                  }
+              } else {
+                  updatedUsers.push(initUser);
+                  hasChanges = true;
+              }
+          });
+
+          return hasChanges ? updatedUsers : prevUsers;
+      });
+  }, []);
+
   useEffect(() => {
     // Check for persistent session
     const sessionRole = localStorage.getItem('rcm_user_session');
@@ -192,7 +218,7 @@ const App: React.FC = () => {
       if(!confirmSync) return;
 
       setIsSyncing(true);
-      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/CMNL-APP/refs/heads/main/actualcmnl.json';
+      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json';
 
       try {
           const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });

@@ -17,6 +17,10 @@ const openDB = (): Promise<IDBDatabase> => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
+        request.onblocked = () => {
+            console.warn("Database upgrade blocked. Please close other tabs or reload.");
+            reject("Database blocked");
+        };
         request.onupgradeneeded = (event) => {
             const db = (event.target as IDBOpenDBRequest).result;
             
@@ -44,10 +48,11 @@ const openDB = (): Promise<IDBDatabase> => {
 // --- SAVED SELECTIONS GROUPS OPERATIONS ---
 
 export const saveSavedSelectionsListToDB = async (selections: any[]): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(SAVED_SELECTIONS_STORE, 'readwrite');
+            const tx = db!.transaction(SAVED_SELECTIONS_STORE, 'readwrite');
             const store = tx.objectStore(SAVED_SELECTIONS_STORE);
             
             const clearReq = store.clear();
@@ -56,27 +61,42 @@ export const saveSavedSelectionsListToDB = async (selections: any[]): Promise<vo
                 selections.forEach(sel => store.put(sel));
             };
 
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
         });
     } catch (error) {
+        db?.close();
         console.error("Error guardando grupos de selecciones en DB:", error);
         throw error;
     }
 };
 
 export const loadSavedSelectionsListFromDB = async (): Promise<any[]> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(SAVED_SELECTIONS_STORE, 'readonly');
+            const tx = db!.transaction(SAVED_SELECTIONS_STORE, 'readonly');
             const store = tx.objectStore(SAVED_SELECTIONS_STORE);
             const request = store.getAll();
             
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                db?.close();
+                resolve(request.result || []);
+            };
+            request.onerror = () => {
+                db?.close();
+                reject(request.error);
+            };
         });
     } catch (error) {
+        db?.close();
         console.error("Error cargando grupos de selecciones de DB:", error);
         return [];
     }
@@ -85,10 +105,11 @@ export const loadSavedSelectionsListFromDB = async (): Promise<any[]> => {
 // --- SELECTIONS OPERATIONS ---
 
 export const saveSelectionsToDB = async (selections: Track[]): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(SELECTIONS_STORE, 'readwrite');
+            const tx = db!.transaction(SELECTIONS_STORE, 'readwrite');
             const store = tx.objectStore(SELECTIONS_STORE);
             
             const clearReq = store.clear();
@@ -97,27 +118,42 @@ export const saveSelectionsToDB = async (selections: Track[]): Promise<void> => 
                 selections.forEach(track => store.put(track));
             };
 
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
         });
     } catch (error) {
+        db?.close();
         console.error("Error guardando selecciones en DB:", error);
         throw error;
     }
 };
 
 export const loadSelectionsFromDB = async (): Promise<Track[]> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(SELECTIONS_STORE, 'readonly');
+            const tx = db!.transaction(SELECTIONS_STORE, 'readonly');
             const store = tx.objectStore(SELECTIONS_STORE);
             const request = store.getAll();
             
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                db?.close();
+                resolve(request.result || []);
+            };
+            request.onerror = () => {
+                db?.close();
+                reject(request.error);
+            };
         });
     } catch (error) {
+        db?.close();
         console.error("Error cargando selecciones de DB:", error);
         return [];
     }

@@ -4,6 +4,7 @@ import CMNLHeader from './CMNLHeader';
 import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
 import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
+import { juanaPorDentroData } from '../utils/juanaPorDentroData';
 
 export const parseSpanishDate = (dateStr: string): Date => {
     if (!dateStr || typeof dateStr !== 'string') return new Date();
@@ -760,6 +761,191 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         );
     };
 
+    const [showProgramInside, setShowProgramInside] = useState(false);
+    const [programSections, setProgramSections] = useState<any[]>([]);
+    const [sectionSearch, setSectionSearch] = useState('');
+    const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+    const handleLoadSections = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedProgram) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const sections: any[] = [];
+
+            if (text.includes('### ')) {
+                const blocks = text.split(/###\s+/).filter(b => b.trim());
+                blocks.forEach(block => {
+                    const lines = block.split('\n').filter(l => l.trim());
+                    if (lines.length === 0) return;
+                    
+                    const headerMatch = lines[0].match(/^(.*?)\s*\((.*?)\)$/);
+                    let date = lines[0];
+                    let theme = '';
+                    if (headerMatch) {
+                        date = headerMatch[1].trim();
+                        theme = headerMatch[2].trim();
+                    }
+
+                    let currentSectionName = '';
+                    let currentSectionContent = '';
+
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i];
+                        const sectionMatch = line.match(/^([^:]+):\s*(.*)/);
+                        // If line starts with a section name and is not indented
+                        if (sectionMatch && !line.startsWith(' ') && !line.startsWith('\t')) {
+                            if (currentSectionName) {
+                                sections.push({
+                                    date,
+                                    theme,
+                                    name: currentSectionName.trim(),
+                                    content: currentSectionContent.trim()
+                                });
+                            }
+                            currentSectionName = sectionMatch[1];
+                            currentSectionContent = sectionMatch[2];
+                        } else {
+                            currentSectionContent += '\n' + line;
+                        }
+                    }
+                    if (currentSectionName) {
+                        sections.push({
+                            date,
+                            theme,
+                            name: currentSectionName.trim(),
+                            content: currentSectionContent.trim()
+                        });
+                    }
+                });
+            } else {
+                const blocks = text.split(/_{3,}/);
+                blocks.forEach(block => {
+                    const nameMatch = block.match(/SECCION:\s*(.+)/);
+                    const contentMatch = block.match(/CONTENIDO:\s*([\s\S]+)/);
+                    
+                    if (nameMatch && contentMatch) {
+                        sections.push({
+                            name: nameMatch[1].trim(),
+                            content: contentMatch[1].trim()
+                        });
+                    }
+                });
+            }
+
+            if (sections.length > 0) {
+                const key = `program_sections_${selectedProgram}`;
+                localStorage.setItem(key, JSON.stringify(sections));
+                setProgramSections(sections);
+                alert(`Se cargaron ${sections.length} secciones.`);
+            } else {
+                alert('No se encontraron secciones válidas.');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    useEffect(() => {
+        if (selectedProgram && showProgramInside) {
+            const key = `program_sections_${selectedProgram}`;
+            const saved = localStorage.getItem(key);
+            if (saved) {
+                setProgramSections(JSON.parse(saved));
+            } else {
+                if (selectedProgram === 'Hablando con Juana') {
+                    const flattened: any[] = [];
+                    juanaPorDentroData.forEach(day => {
+                        day.sections.forEach(sec => {
+                            flattened.push({
+                                date: day.date,
+                                theme: day.theme,
+                                name: sec.name,
+                                content: sec.content
+                            });
+                        });
+                    });
+                    setProgramSections(flattened);
+                } else {
+                    setProgramSections([]);
+                }
+            }
+        }
+    }, [selectedProgram, showProgramInside]);
+
+    const renderProgramInside = () => {
+        const filteredSections = programSections.filter(s => 
+            s.name.toLowerCase().includes(sectionSearch.toLowerCase()) || 
+            s.content.toLowerCase().includes(sectionSearch.toLowerCase()) ||
+            (s.date && s.date.toLowerCase().includes(sectionSearch.toLowerCase())) ||
+            (s.theme && s.theme.toLowerCase().includes(sectionSearch.toLowerCase()))
+        );
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="bg-[#2C1B15] rounded-3xl w-full max-w-4xl h-[90vh] shadow-2xl border border-[#9E7649]/30 flex flex-col overflow-hidden">
+                    <div className="px-6 py-5 border-b border-[#9E7649]/20 flex justify-between items-center bg-[#1A100C]/80 backdrop-blur-md">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <BookOpen size={20} className="text-[#9E7649]"/> {selectedProgram}: Por dentro
+                        </h2>
+                        <button onClick={() => setShowProgramInside(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors text-[#E8DCCF]/70"><X size={20}/></button>
+                    </div>
+                    
+                    <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-6">
+                        <div className="flex gap-4">
+                            <div className="relative flex-1">
+                                <Search size={20} className="absolute left-4 top-3.5 text-[#9E7649]" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Buscar por fecha, palabra clave o sección..." 
+                                    value={sectionSearch}
+                                    onChange={e => setSectionSearch(e.target.value)}
+                                    className="w-full pl-12 pr-4 py-3 bg-[#1A100C] border border-[#9E7649]/20 rounded-xl text-white outline-none focus:border-[#9E7649]"
+                                />
+                            </div>
+                            <label className="flex items-center gap-2 px-4 py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold cursor-pointer transition-colors shadow-lg">
+                                <Upload size={18} />
+                                <span className="hidden sm:inline">Cargar TXT</span>
+                                <input type="file" accept=".txt" onChange={handleLoadSections} className="hidden" />
+                            </label>
+                        </div>
+
+                        <div className="space-y-4">
+                            {filteredSections.map((section, idx) => (
+                                <div key={idx} className="bg-[#1A100C] rounded-xl border border-[#9E7649]/10 overflow-hidden">
+                                    <button 
+                                        onClick={() => setExpandedSection(expandedSection === idx.toString() ? null : idx.toString())}
+                                        className="w-full p-4 flex justify-between items-center hover:bg-white/5 transition-colors text-left"
+                                    >
+                                        <div>
+                                            <h3 className="text-lg font-bold text-[#9E7649]">{section.name}</h3>
+                                            {section.date && <p className="text-xs text-[#E8DCCF]/60 mt-1">{section.date} • {section.theme}</p>}
+                                        </div>
+                                        {expandedSection === idx.toString() ? <ChevronLeft size={20} className="-rotate-90 text-[#E8DCCF]/50" /> : <ChevronRight size={20} className="text-[#E8DCCF]/50" />}
+                                    </button>
+                                    
+                                    {expandedSection === idx.toString() && (
+                                        <div className="p-6 border-t border-[#9E7649]/10 bg-black/20">
+                                            <div className="prose prose-invert max-w-none text-[#E8DCCF]/80 whitespace-pre-wrap font-mono text-sm">
+                                                {section.content}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            {filteredSections.length === 0 && (
+                                <div className="text-center py-12">
+                                    <p className="text-[#E8DCCF]/50 italic">No hay secciones disponibles. Carga un archivo TXT.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderProgramDetail = () => {
         const program = PROGRAMS.find(p => p.name === selectedProgram);
         if (!program) return null;
@@ -797,6 +983,9 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                     
                     {/* Botones de Acción del Programa */}
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                        <button onClick={() => setShowProgramInside(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Por dentro">
+                            <BookOpen size={16} /> <span className="hidden sm:inline">Por dentro</span>
+                        </button>
                         <button onClick={() => setShowBalance(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Balance">
                             <BarChart3 size={16} /> <span className="hidden sm:inline">Balance</span>
                         </button>
@@ -869,6 +1058,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
                 {/* Modales de ProgramDetail */}
                 {showBalance && renderBalanceModalContent(scripts)}
+                {showProgramInside && renderProgramInside()}
                 
                 {showNewScript && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">

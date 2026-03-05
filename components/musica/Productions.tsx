@@ -116,7 +116,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const handleImportTxt = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files || e.target.files.length === 0) return;
-      const files = Array.from(e.target.files);
+      const files = Array.from(e.target.files) as File[];
       
       let allParsedTracks: TempTrack[] = [];
       let lastParsedDate = date;

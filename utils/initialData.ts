@@ -137,12 +137,12 @@ export const appData = {
       "classification": "Usuario"
     },
     {
-      "name": "Rosana María Fernández Verdecia",
+      "name": "Rosana Fernández Verdecia",
       "username": "rosana",
       "mobile": "53535793",
-      "password": "RadioCiudad1826",
+      "password": "RadioCiudad2026",
       "role": "worker",
-      "classification": "Usuario"
+      "classification": "Director"
     }
   ],
   "historyContent": "En 1998 surgió, desde Radio Bayamo, una programación destinada al municipio cabecera de la provincia Granma, la cual salió al aire a través del transmisor de AM de Radio Enciclopedia. En el año 2006 al contar con un transmisor propio se consideró pertinente otorgar la categoría de Emisora a esta transmisión originada y dirigida al municipio Bayamo. Quedó definido además que la Emisora transmitiría diariamente en el horario de 7.00 am a1.00 pm en la frecuencia de 95.3 MHZ en FM, queda así oficializada como Radio Cuidad Monumento el 1ro de febrero del 2006. La emisora de la segunda villa fundada en Cuba.",

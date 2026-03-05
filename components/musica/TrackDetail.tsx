@@ -10,6 +10,30 @@ interface TrackDetailProps {
   onSaveEdit?: (track: Track) => void;
 }
 
+const InfoBox = ({ icon, label, value, sub }: { icon: string, label: string, value?: string, sub?: string }) => (
+    <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20">
+        <div className="flex items-center gap-2 mb-1 text-[#E8DCCF]/60">
+            <span className="material-symbols-outlined text-sm">{icon}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+        </div>
+        <p className="font-bold text-white truncate">{value || '---'}</p>
+        {sub && <p className="text-xs text-[#E8DCCF]/40 truncate">{sub}</p>}
+    </div>
+);
+
+const EditField = ({ label, value, field, list, onChange }: { label: string, value: string, field: string, list?: string, onChange: (field: string, value: string) => void }) => (
+    <div className="mb-3" onClick={(e) => e.stopPropagation()}>
+        <label className="block text-xs font-bold text-[#E8DCCF]/60 mb-1">{label}</label>
+        <input 
+            className="w-full p-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-lg text-sm font-medium text-white focus:border-[#9E7649] outline-none"
+            value={value}
+            onChange={(e) => onChange(field, e.target.value)}
+            list={list}
+            autoComplete="off"
+        />
+    </div>
+);
+
 const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onSearchCredits, onSaveEdit }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
@@ -57,21 +81,13 @@ const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onS
       }
   };
 
-  const EditField = ({ label, value, field, list }: { label: string, value: string, field: keyof typeof editData, list?: string }) => (
-      <div className="mb-3">
-          <label className="block text-xs font-bold text-[#E8DCCF]/60 mb-1">{label}</label>
-          <input 
-              className="w-full p-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-lg text-sm font-medium text-white focus:border-[#9E7649] outline-none"
-              value={value}
-              onChange={(e) => setEditData({...editData, [field]: e.target.value})}
-              list={list}
-          />
-      </div>
-  );
+  const handleFieldChange = (field: string, value: string) => {
+      setEditData(prev => ({...prev, [field]: value}));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-        <div className="bg-[#2C1B15] w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+        <div className="bg-[#2C1B15] w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-[#9E7649]/30" onClick={(e) => e.stopPropagation()}>
             
             <div className="flex justify-between items-center p-5 border-b border-[#9E7649]/20 shrink-0 bg-[#1A100C] rounded-t-2xl">
                 <div className="flex items-center gap-3 overflow-hidden">
@@ -83,28 +99,28 @@ const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onS
                         <p className="text-xs text-[#E8DCCF]/60 truncate">{track.filename}</p>
                     </div>
                 </div>
-                <button onClick={onClose} className="size-8 rounded-full hover:bg-[#2C1B15] flex items-center justify-center text-[#E8DCCF]/40 hover:text-white">
+                <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="size-8 rounded-full hover:bg-[#2C1B15] flex items-center justify-center text-[#E8DCCF]/40 hover:text-white">
                     <span className="material-symbols-outlined">close</span>
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
                 {isEditing ? (
                     <div className="grid grid-cols-1 gap-1">
-                        <EditField label="Título" value={editData.title} field="title" />
+                        <EditField label="Título" value={editData.title} field="title" onChange={handleFieldChange} />
                         <div className="grid grid-cols-2 gap-3">
-                             <EditField label="Autor" value={editData.author} field="author" />
-                             <EditField label="País Autor" value={editData.authorCountry} field="authorCountry" list="country-options" />
+                             <EditField label="Autor" value={editData.author} field="author" onChange={handleFieldChange} />
+                             <EditField label="País Autor" value={editData.authorCountry} field="authorCountry" list="country-options" onChange={handleFieldChange} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                             <EditField label="Intérprete" value={editData.performer} field="performer" />
-                             <EditField label="País Intérprete" value={editData.performerCountry} field="performerCountry" list="country-options" />
+                             <EditField label="Intérprete" value={editData.performer} field="performer" onChange={handleFieldChange} />
+                             <EditField label="País Intérprete" value={editData.performerCountry} field="performerCountry" list="country-options" onChange={handleFieldChange} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                             <EditField label="Género" value={editData.genre} field="genre" list="genre-options" />
-                             <EditField label="Año" value={editData.year} field="year" />
+                             <EditField label="Género" value={editData.genre} field="genre" list="genre-options" onChange={handleFieldChange} />
+                             <EditField label="Año" value={editData.year} field="year" onChange={handleFieldChange} />
                         </div>
-                        <EditField label="Álbum / Carpeta" value={editData.album} field="album" />
+                        <EditField label="Álbum / Carpeta" value={editData.album} field="album" onChange={handleFieldChange} />
 
                         <datalist id="genre-options">
                             {GENRES_LIST.map(g => <option key={g} value={g} />)}
@@ -156,16 +172,5 @@ const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onS
     </div>
   );
 };
-
-const InfoBox = ({ icon, label, value, sub }: { icon: string, label: string, value?: string, sub?: string }) => (
-    <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20">
-        <div className="flex items-center gap-2 mb-1 text-[#E8DCCF]/60">
-            <span className="material-symbols-outlined text-sm">{icon}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-        </div>
-        <p className="font-bold text-white truncate">{value || '---'}</p>
-        {sub && <p className="text-xs text-[#E8DCCF]/40 truncate">{sub}</p>}
-    </div>
-);
 
 export default TrackDetail;
