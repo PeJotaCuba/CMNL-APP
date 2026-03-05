@@ -92,6 +92,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       }
   };
 
+  const [isLoaded, setIsLoaded] = useState(false);
+
   useEffect(() => {
     const initApp = async () => {
         try { const dbTracks = await loadTracksFromDB(); if (dbTracks.length > 0) setTracks(dbTracks); } catch (e) { console.error(e); }
@@ -111,19 +113,25 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         const savedRoots = localStorage.getItem(CUSTOM_ROOTS_KEY);
         if (savedRoots) setCustomRoots(JSON.parse(savedRoots));
 
-        const dbSelections = await loadSelectionsFromDB();
-        if (dbSelections.length > 0) setSelectedTracksList(dbSelections);
+        try {
+            const dbSelections = await loadSelectionsFromDB();
+            if (dbSelections.length > 0) setSelectedTracksList(dbSelections);
+        } catch (e) { console.error("Error loading selections", e); }
 
         const savedSels = localStorage.getItem(SAVED_SELECTIONS_KEY);
         if (savedSels) setSavedSelections(JSON.parse(savedSels));
+
+        setIsLoaded(true);
     };
     
     initApp();
   }, []);
 
   useEffect(() => {
-    saveSelectionsToDB(selectedTracksList);
-  }, [selectedTracksList]);
+    if (isLoaded) {
+        saveSelectionsToDB(selectedTracksList);
+    }
+  }, [selectedTracksList, isLoaded]);
 
   useEffect(() => { if (authMode) localStorage.setItem(SELECTION_KEY, JSON.stringify(selectedTracksList)); }, [selectedTracksList, authMode]);
   useEffect(() => { if (authMode) localStorage.setItem(SAVED_SELECTIONS_KEY, JSON.stringify(savedSelections)); }, [savedSelections, authMode]);
@@ -485,7 +493,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             )}
 
-            {view === ViewState.SETTINGS && (authMode === 'admin' || authMode === 'director') && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} onExportBackup={handleExportBackup} onImportBackup={handleImportBackup} />}
+            {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} onExportBackup={handleExportBackup} onImportBackup={handleImportBackup} />}
             {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} />}
             {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
@@ -600,7 +608,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             <NavButton icon="checklist" label="Selección" active={view === ViewState.SELECTION} onClick={() => navigateTo(ViewState.SELECTION)} />
             {authMode === 'director' && <NavButton icon="description" label="Reportes" active={view === ViewState.REPORTS} onClick={() => navigateTo(ViewState.REPORTS)} />}
             {authMode === 'admin' && <NavButton icon="playlist_add" label="Producción" active={view === ViewState.PRODUCTIONS} onClick={() => navigateTo(ViewState.PRODUCTIONS)} />}
-            {(authMode === 'admin' || authMode === 'director') && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => navigateTo(ViewState.SETTINGS)} />}
+            {authMode === 'admin' && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => navigateTo(ViewState.SETTINGS)} />}
             {authMode !== 'admin' && <NavButton icon="help" label="Guía" active={view === ViewState.GUIDE} onClick={() => navigateTo(ViewState.GUIDE)} />}
         </nav>
     </div>
