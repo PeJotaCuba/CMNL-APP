@@ -191,11 +191,17 @@ const UserManagement: React.FC<Props> = ({
   const handleDownloadBackup = () => {
     // Recopilar datos de guiones
     const scriptData: Record<string, any> = {};
+    const programSections: Record<string, any> = {};
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('guionbd_data_')) {
             try {
                 scriptData[key] = JSON.parse(localStorage.getItem(key) || '[]');
+            } catch (e) {}
+        }
+        if (key && key.startsWith('program_sections_')) {
+            try {
+                programSections[key] = JSON.parse(localStorage.getItem(key) || '[]');
             } catch (e) {}
         }
     }
@@ -260,6 +266,7 @@ const UserManagement: React.FC<Props> = ({
         consolidated,
         paymentConfigs,
         scripts: scriptData,
+        programSections,
         agendaPrograms,
         agendaEfemerides,
         agendaConmemoraciones,
@@ -347,6 +354,12 @@ const UserManagement: React.FC<Props> = ({
           }
           if (json.scripts) {
               Object.entries(json.scripts).forEach(([key, value]) => {
+                  localStorage.setItem(key, JSON.stringify(value));
+              });
+              restoredCount++;
+          }
+          if (json.programSections) {
+              Object.entries(json.programSections).forEach(([key, value]) => {
                   localStorage.setItem(key, JSON.stringify(value));
               });
               restoredCount++;

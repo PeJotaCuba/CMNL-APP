@@ -112,14 +112,15 @@ interface GuionesAppProps {
 
 const parseRawEntry = (raw: string): Script | null => {
   if (!raw.trim()) return null;
+  raw = raw.replace(/\x0B/g, '\n');
   
   const extract = (key: string) => {
-    const regex = new RegExp(`${key}\\s*(.*?)(?=\\n[A-Z][a-z]+:|$)`, 'is');
+    const regex = new RegExp(`${key}\\s*(.*?)(?=\\n(?:Programa|Fecha|Escritor|Asesor|Tema|Temas|Título|Titular|Autor):|$)`, 'is');
     const match = raw.match(regex);
     return match ? match[1].trim() : '';
   };
   
-  const title = extract('Título:') || extract('Titular:') || 'Sin título';
+  const title = extract('Título:') || extract('Titular:') || extract('Tema:') || extract('Temas:') || 'Sin título';
   const writer = extract('Escritor:') || extract('Autor:') || 'Desconocido';
   const advisor = extract('Asesor:') || 'No especificado';
   const dateAdded = extract('Fecha:') || new Date().toISOString().split('T')[0];
@@ -200,6 +201,37 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     const [pulirReplace, setPulirReplace] = useState('');
 
     const [scriptSearchQuery, setScriptSearchQuery] = useState('');
+    const [floatingPulir, setFloatingPulir] = useState<{ visible: boolean, x: number, y: number, text: string }>({ visible: false, x: 0, y: 0, text: '' });
+
+    useEffect(() => {
+        const handleSelection = () => {
+            if (!selectedProgram || showPulir || showNewScript || !currentUser || !['Administrador', 'admin'].includes(currentUser.classification || currentUser.role)) {
+                setFloatingPulir(prev => prev.visible ? { ...prev, visible: false } : prev);
+                return;
+            }
+
+            const selection = window.getSelection();
+            if (selection && selection.toString().trim().length > 0) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                setFloatingPulir({
+                    visible: true,
+                    x: rect.left + (rect.width / 2),
+                    y: rect.top - 40,
+                    text: selection.toString().trim()
+                });
+            } else {
+                setFloatingPulir(prev => prev.visible ? { ...prev, visible: false } : prev);
+            }
+        };
+
+        document.addEventListener('mouseup', handleSelection);
+        document.addEventListener('keyup', handleSelection);
+        return () => {
+            document.removeEventListener('mouseup', handleSelection);
+            document.removeEventListener('keyup', handleSelection);
+        };
+    }, [selectedProgram, currentUser, showPulir, showNewScript]);
 
     const normalize = (str: string) => 
         str.normalize("NFD")
@@ -247,13 +279,14 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         return allowed.filter(p => {
             if (p.name.toLowerCase().includes(q)) return true;
             const scripts = getProgramScripts(p);
-            return scripts.some(s => 
-                s.title.toLowerCase().includes(q) || 
+            return scripts.some(s => {
+                const themes = Array.isArray(s.themes) ? s.themes : [];
+                return s.title.toLowerCase().includes(q) || 
                 s.dateAdded.includes(q) ||
                 s.writer?.toLowerCase().includes(q) ||
                 s.advisor?.toLowerCase().includes(q) ||
-                s.themes.some(t => t.toLowerCase().includes(q))
-            );
+                themes.some(t => t.toLowerCase().includes(q));
+            });
         });
     }, [searchQuery, availablePrograms]);
 
@@ -289,7 +322,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             const mergedMap = new Map<string, Script>();
             const generateKey = (s: Script) => {
                 if (useIdAsKey) return s.id;
-                return `${s.dateAdded}|${normalize(s.title)}|${normalize(s.writer || '')}|${normalize(s.themes.join(','))}`;
+                const themes = Array.isArray(s.themes) ? s.themes : [];
+                return `${s.dateAdded}|${normalize(s.title)}|${normalize(s.writer || '')}|${normalize(themes.join(','))}`;
             };
 
             existing.forEach(s => mergedMap.set(generateKey(s), s));
@@ -450,7 +484,10 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             newS.title = replaceInStr(s.title);
             newS.writer = replaceInStr(s.writer);
             newS.advisor = replaceInStr(s.advisor);
-            newS.themes = s.themes.map(t => replaceInStr(t));
+            newS.dateAdded = replaceInStr(s.dateAdded);
+            newS.genre = replaceInStr(s.genre);
+            newS.content = replaceInStr(s.content);
+            newS.themes = Array.isArray(s.themes) ? s.themes.map(t => replaceInStr(t)) : [];
             
             if (modified) count++;
             return newS;
@@ -495,7 +532,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                             <div key={s.id} className="min-w-[250px] max-w-[300px] bg-gradient-to-br from-[#9E7649] to-[#8B653D] p-5 rounded-xl shadow-lg shrink-0 flex flex-col justify-between">
                                 <div>
                                     <h4 className="text-white font-bold text-sm mb-3 line-clamp-3 uppercase">
-                                        {s.themes && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
+                                        {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
                                     </h4>
                                 </div>
                                 <p className="text-white/80 text-xs mt-2 flex items-center gap-1.5 font-mono">
@@ -601,7 +638,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         }
 
         const todos = filtered;
-        const sinTema = filtered.filter(s => !s.themes || s.themes.length === 0 || s.themes.includes('General') || s.themes.join('').trim() === '' || s.themes.join('').toLowerCase().includes('no especificado'));
+        const sinTema = filtered.filter(s => !Array.isArray(s.themes) || s.themes.length === 0 || s.themes.includes('General') || (Array.isArray(s.themes) && s.themes.join('').trim() === '') || (Array.isArray(s.themes) && s.themes.join('').toLowerCase().includes('no especificado')));
         const sinEscritor = filtered.filter(s => !s.writer || s.writer.toLowerCase().includes('desconocido') || s.writer.toLowerCase().includes('no especificado') || s.writer.trim() === '');
         const sinAsesor = filtered.filter(s => !s.advisor || s.advisor.toLowerCase().includes('no especificado') || s.advisor.trim() === '');
 
@@ -693,7 +730,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
                     {items.map(s => {
-                        const displayTheme = s.themes && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title;
+                        const displayTheme = Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title;
                         return (
                             <div key={s.id} className="p-4 bg-[#2C1B15] rounded-xl border border-white/5 hover:border-white/10 transition-colors">
                                 <p className="text-[#E8DCCF]/60 text-[10px] font-mono mb-2">{formatSpanishDate(s.dateAdded)}</p>
@@ -966,7 +1003,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             ].join(' ').toLowerCase();
 
             return queryWords.every(word => searchableText.includes(word));
-        }).sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+        }).sort((a, b) => parseSpanishDate(b.dateAdded).getTime() - parseSpanishDate(a.dateAdded).getTime());
 
         return (
             <div className="space-y-6 animate-in fade-in duration-300">
@@ -989,12 +1026,16 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                         <button onClick={() => setShowBalance(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Balance">
                             <BarChart3 size={16} /> <span className="hidden sm:inline">Balance</span>
                         </button>
-                        <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors text-sm font-bold shadow-lg" title="Nuevo">
-                            <Plus size={16} /> <span className="hidden sm:inline">Nuevo</span>
-                        </button>
-                        <button onClick={() => setShowPulir(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Pulir">
-                            <Wand2 size={16} /> <span className="hidden sm:inline">Pulir</span>
-                        </button>
+                        {(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') && (
+                            <>
+                                <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors text-sm font-bold shadow-lg" title="Nuevo">
+                                    <Plus size={16} /> <span className="hidden sm:inline">Nuevo</span>
+                                </button>
+                                <button onClick={() => setShowPulir(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Pulir">
+                                    <Wand2 size={16} /> <span className="hidden sm:inline">Pulir</span>
+                                </button>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -1025,8 +1066,15 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                     <div className="flex justify-between items-start gap-4 mb-4">
                                         <div>
                                             <span className="text-[#9E7649] font-bold text-[10px] uppercase tracking-wider block mb-1">Tema</span>
-                                            <h3 className="text-lg font-bold text-white leading-tight group-hover:text-[#9E7649] transition-colors uppercase">
-                                                {s.themes && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
+                                            <h3 
+                                                className="text-lg font-bold text-white leading-tight group-hover:text-[#9E7649] transition-colors uppercase cursor-pointer"
+                                                onClick={() => {
+                                                    setSectionSearch(s.dateAdded);
+                                                    setShowProgramInside(true);
+                                                }}
+                                                title="Ver secciones por dentro"
+                                            >
+                                                {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
                                             </h3>
                                         </div>
                                         <span className="text-xs text-[#E8DCCF]/60 bg-black/30 px-3 py-1.5 rounded-lg font-mono flex items-center gap-1.5 border border-white/5 text-center">
@@ -1038,14 +1086,16 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                         <p className="text-[#E8DCCF]"><span className="text-[#9E7649] font-medium uppercase tracking-wider text-[10px] block mb-0.5">Asesor</span>{s.advisor}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button onClick={() => { setScriptForm({...s, themes: s.themes.join(', ')} as any); setEditingScript(s); setShowNewScript(true); }} className="p-2.5 bg-[#1A100C] text-[#9E7649] hover:text-white rounded-xl border border-[#9E7649]/20 transition-colors" title="Editar">
-                                        <Edit2 size={18} />
-                                    </button>
-                                    <button onClick={() => handleDeleteScript(s.id)} className="p-2.5 bg-[#1A100C] text-red-500 hover:text-red-400 rounded-xl border border-red-500/20 transition-colors" title="Eliminar">
-                                        <Trash2 size={18} />
-                                    </button>
-                                </div>
+                                {(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') && (
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button onClick={() => { setScriptForm({...s, themes: Array.isArray(s.themes) ? s.themes.join(', ') : (s.themes || '')} as any); setEditingScript(s); setShowNewScript(true); }} className="p-2.5 bg-[#1A100C] text-[#9E7649] hover:text-white rounded-xl border border-[#9E7649]/20 transition-colors" title="Editar">
+                                            <Edit2 size={18} />
+                                        </button>
+                                        <button onClick={() => handleDeleteScript(s.id)} className="p-2.5 bg-[#1A100C] text-red-500 hover:text-red-400 rounded-xl border border-red-500/20 transition-colors" title="Eliminar">
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -1182,11 +1232,12 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                         <div className="absolute right-4 top-3.5 text-xs font-bold text-[#9E7649] bg-[#9E7649]/10 px-2 py-1 rounded-md">
                                             {filteredPrograms.reduce((acc, p) => acc + getProgramScripts(p).filter(s => {
                                                 const q = searchQuery.toLowerCase().trim();
+                                                const themes = Array.isArray(s.themes) ? s.themes : [];
                                                 return s.title.toLowerCase().includes(q) || 
                                                     s.dateAdded.includes(q) ||
                                                     s.writer?.toLowerCase().includes(q) ||
                                                     s.advisor?.toLowerCase().includes(q) ||
-                                                    s.themes.some(t => t.toLowerCase().includes(q));
+                                                    themes.some(t => t.toLowerCase().includes(q));
                                             }).length, 0)} resultados
                                         </div>
                                     )}
@@ -1204,6 +1255,25 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
                                     {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (
                                         <>
+                                            <label className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold cursor-pointer transition-all shadow-lg">
+                                                <Upload size={18} />
+                                                <span className="hidden md:inline text-sm">Cargar TXT</span>
+                                                <input 
+                                                    type="file" 
+                                                    accept=".txt" 
+                                                    multiple 
+                                                    onChange={handleGlobalUpload} 
+                                                    className="hidden" 
+                                                    ref={globalUploadRef}
+                                                />
+                                            </label>
+                                            <button 
+                                                onClick={handleDownloadDatabase}
+                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
+                                            >
+                                                <Database size={18} />
+                                                <span className="hidden md:inline text-sm font-bold">Descargar BD</span>
+                                            </button>
                                             <button
                                                 onClick={handleClearAllData}
                                                 className="flex items-center gap-2 px-4 md:px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
@@ -1222,11 +1292,12 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                 {filteredPrograms.map(program => {
                                     const matchingScripts = getProgramScripts(program).filter(s => {
                                         const q = searchQuery.toLowerCase().trim();
+                                        const themes = Array.isArray(s.themes) ? s.themes : [];
                                         return s.title.toLowerCase().includes(q) || 
                                             s.dateAdded.includes(q) ||
                                             s.writer?.toLowerCase().includes(q) ||
                                             s.advisor?.toLowerCase().includes(q) ||
-                                            s.themes.some(t => t.toLowerCase().includes(q));
+                                            themes.some(t => t.toLowerCase().includes(q));
                                     }).sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
 
                                     if (matchingScripts.length === 0) return null;
@@ -1243,7 +1314,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                                             <div className="flex justify-between items-start gap-4 mb-2">
                                                                 <div>
                                                                     <h4 className="text-white font-bold text-base uppercase leading-tight">
-                                                                        {s.themes && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
+                                                                        {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
                                                                     </h4>
                                                                     <p className="text-[#E8DCCF]/60 text-xs mt-1 font-medium italic">
                                                                         {s.title}
@@ -1302,6 +1373,28 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                 </p>
                             </div>
                         )}
+                    </div>
+                )}
+                {floatingPulir.visible && (
+                    <div 
+                        className="fixed z-50 bg-[#1A100C] border border-[#9E7649] rounded-xl shadow-2xl p-2 flex items-center gap-2 animate-in fade-in zoom-in duration-200"
+                        style={{ 
+                            left: `${floatingPulir.x}px`, 
+                            top: `${floatingPulir.y}px`,
+                            transform: 'translate(-50%, -100%)'
+                        }}
+                    >
+                        <button 
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                setPulirSearch(floatingPulir.text);
+                                setShowPulir(true);
+                                setFloatingPulir({ ...floatingPulir, visible: false });
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-[#9E7649] text-white rounded-lg hover:bg-[#8B653D] transition-colors text-xs font-bold"
+                        >
+                            <Wand2 size={14} /> Pulir Selección
+                        </button>
                     </div>
                 )}
             </main>

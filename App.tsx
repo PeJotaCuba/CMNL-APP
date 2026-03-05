@@ -278,6 +278,12 @@ const App: React.FC = () => {
               });
               changes++;
           }
+          if (json.programSections) {
+              Object.entries(json.programSections).forEach(([key, value]) => {
+                  localStorage.setItem(key, JSON.stringify(value));
+              });
+              changes++;
+          }
           if (json.agendaPrograms) {
               localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
               changes++;
