@@ -5,7 +5,8 @@ const TRACKS_STORE = 'tracks';
 const REPORTS_STORE = 'reports';
 const PRODUCTIONS_STORE = 'productions';
 const SELECTIONS_STORE = 'selections';
-const DB_VERSION = 4; // Incremented version
+const SAVED_SELECTIONS_STORE = 'saved_selections_groups';
+const DB_VERSION = 5; // Incremented version
 
 const openDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
@@ -31,11 +32,55 @@ const openDB = (): Promise<IDBDatabase> => {
             if (!db.objectStoreNames.contains(SELECTIONS_STORE)) {
                 db.createObjectStore(SELECTIONS_STORE, { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains(SAVED_SELECTIONS_STORE)) {
+                db.createObjectStore(SAVED_SELECTIONS_STORE, { keyPath: 'id' });
+            }
         };
     });
 };
 
 // ... (existing operations)
+
+// --- SAVED SELECTIONS GROUPS OPERATIONS ---
+
+export const saveSavedSelectionsListToDB = async (selections: any[]): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(SAVED_SELECTIONS_STORE, 'readwrite');
+            const store = tx.objectStore(SAVED_SELECTIONS_STORE);
+            
+            const clearReq = store.clear();
+            
+            clearReq.onsuccess = () => {
+                selections.forEach(sel => store.put(sel));
+            };
+
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (error) {
+        console.error("Error guardando grupos de selecciones en DB:", error);
+        throw error;
+    }
+};
+
+export const loadSavedSelectionsListFromDB = async (): Promise<any[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(SAVED_SELECTIONS_STORE, 'readonly');
+            const store = tx.objectStore(SAVED_SELECTIONS_STORE);
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (error) {
+        console.error("Error cargando grupos de selecciones de DB:", error);
+        return [];
+    }
+};
 
 // --- SELECTIONS OPERATIONS ---
 

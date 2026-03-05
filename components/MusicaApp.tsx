@@ -10,7 +10,7 @@ import Settings from './musica/Settings';
 import Productions from './musica/Productions';
 import ReportsViewer from './musica/ReportsViewer';
 import Guide from './musica/Guide';
-import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB } from './musica/services/db'; 
+import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB, saveSavedSelectionsListToDB, loadSavedSelectionsListFromDB } from './musica/services/db'; 
 import { generateReportPDF } from './musica/services/pdfService';
 
 const USERS_KEY = 'rcm_users_db';
@@ -118,8 +118,16 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             if (dbSelections.length > 0) setSelectedTracksList(dbSelections);
         } catch (e) { console.error("Error loading selections", e); }
 
-        const savedSels = localStorage.getItem(SAVED_SELECTIONS_KEY);
-        if (savedSels) setSavedSelections(JSON.parse(savedSels));
+        try {
+            const dbSavedSelections = await loadSavedSelectionsListFromDB();
+            if (dbSavedSelections.length > 0) {
+                setSavedSelections(dbSavedSelections);
+            } else {
+                // Fallback to localStorage if DB is empty (migration)
+                const savedSels = localStorage.getItem(SAVED_SELECTIONS_KEY);
+                if (savedSels) setSavedSelections(JSON.parse(savedSels));
+            }
+        } catch (e) { console.error("Error loading saved selections groups", e); }
 
         setIsLoaded(true);
     };
@@ -132,6 +140,12 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         saveSelectionsToDB(selectedTracksList);
     }
   }, [selectedTracksList, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+        saveSavedSelectionsListToDB(savedSelections);
+    }
+  }, [savedSelections, isLoaded]);
 
   useEffect(() => { if (authMode) localStorage.setItem(SELECTION_KEY, JSON.stringify(selectedTracksList)); }, [selectedTracksList, authMode]);
   useEffect(() => { if (authMode) localStorage.setItem(SAVED_SELECTIONS_KEY, JSON.stringify(savedSelections)); }, [savedSelections, authMode]);
