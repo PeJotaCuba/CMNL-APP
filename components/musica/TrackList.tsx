@@ -25,6 +25,11 @@ interface TrackListProps {
   onClearMissing?: () => void;
   
   onOpenExportPreview?: () => void;
+
+  activeRoot: string;
+  setActiveRoot: (root: string) => void;
+  currentPath: string;
+  setCurrentPath: (path: string) => void;
 }
 
 const FIXED_ROOTS = ['Música 1', 'Música 2', 'Música 3', 'Música 4', 'Música 5'];
@@ -38,12 +43,11 @@ const TrackList: React.FC<TrackListProps> = ({
     onClearSelection, onBulkSelectTxt,
     customRoots, onAddCustomRoot, onRenameRoot,
     onOpenWishlist, missingQueries, onClearMissing,
-    onOpenExportPreview
+    onOpenExportPreview,
+    activeRoot, setActiveRoot, currentPath, setCurrentPath
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeRoot, setActiveRoot] = useState<string>(FIXED_ROOTS[0]); 
-  const [currentPath, setCurrentPath] = useState<string>(''); 
   const [renderLimit, setRenderLimit] = useState(ITEMS_PER_PAGE);
   const [isGlobalSearch, setIsGlobalSearch] = useState(false);
 

@@ -10,7 +10,7 @@ import Settings from './musica/Settings';
 import Productions from './musica/Productions';
 import ReportsViewer from './musica/ReportsViewer';
 import Guide from './musica/Guide';
-import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB } from './musica/services/db'; 
+import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB } from './musica/services/db'; 
 import { generateReportPDF } from './musica/services/pdfService';
 
 const USERS_KEY = 'rcm_users_db';
@@ -55,6 +55,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [selectedTracksList, setSelectedTracksList] = useState<Track[]>([]);
   const [savedSelections, setSavedSelections] = useState<SavedSelection[]>([]);
+  const [navStack, setNavStack] = useState<ViewState[]>([ViewState.LIST]);
+  const [activeRoot, setActiveRoot] = useState<string>('Música 1'); 
+  const [currentPath, setCurrentPath] = useState<string>(''); 
 
   const [customRoots, setCustomRoots] = useState<string[]>([]);
   
@@ -68,6 +71,26 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const navigateTo = (newView: ViewState) => {
+      setNavStack(prev => [...prev, newView]);
+      setView(newView);
+  };
+
+  const navigateBack = () => {
+      if (currentPath !== '') {
+          // Navigate back in folder hierarchy
+          const pathParts = currentPath.split('/');
+          pathParts.pop();
+          setCurrentPath(pathParts.join('/'));
+      } else if (navStack.length > 1) {
+          const newStack = navStack.slice(0, -1);
+          setNavStack(newStack);
+          setView(newStack[newStack.length - 1]);
+      } else {
+          onBack();
+      }
+  };
 
   useEffect(() => {
     const initApp = async () => {
@@ -88,8 +111,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         const savedRoots = localStorage.getItem(CUSTOM_ROOTS_KEY);
         if (savedRoots) setCustomRoots(JSON.parse(savedRoots));
 
-        const currentSel = localStorage.getItem(SELECTION_KEY);
-        if (currentSel) setSelectedTracksList(JSON.parse(currentSel));
+        const dbSelections = await loadSelectionsFromDB();
+        if (dbSelections.length > 0) setSelectedTracksList(dbSelections);
 
         const savedSels = localStorage.getItem(SAVED_SELECTIONS_KEY);
         if (savedSels) setSavedSelections(JSON.parse(savedSels));
@@ -97,6 +120,10 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
     
     initApp();
   }, []);
+
+  useEffect(() => {
+    saveSelectionsToDB(selectedTracksList);
+  }, [selectedTracksList]);
 
   useEffect(() => { if (authMode) localStorage.setItem(SELECTION_KEY, JSON.stringify(selectedTracksList)); }, [selectedTracksList, authMode]);
   useEffect(() => { if (authMode) localStorage.setItem(SAVED_SELECTIONS_KEY, JSON.stringify(savedSelections)); }, [savedSelections, authMode]);
@@ -385,7 +412,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         user={globalUser ? { name: globalUser.name, role: globalUser.role } : null}
         sectionTitle="Música CMNL"
         onMenuClick={onMenuClick}
-        onBack={onBack}
+        onBack={navigateBack}
       >
         {(authMode === 'admin' || authMode === 'director') && (
             <div className="flex gap-4 items-center">
@@ -407,6 +434,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                     onSyncRoot={handleSyncRoot} onExportRoot={handleExportRoot} onClearRoot={handleClearRoot} 
                     customRoots={customRoots} onAddCustomRoot={handleAddCustomRoot} onRenameRoot={handleRenameRoot}
                     selectedTrackIds={new Set(selectedTracksList.map(t => t.id))} onToggleSelection={handleToggleSelection}
+                    activeRoot={activeRoot} setActiveRoot={setActiveRoot} currentPath={currentPath} setCurrentPath={setCurrentPath}
                 />
             )}
             
@@ -568,12 +596,12 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         )}
 
         <nav className="bg-[#2C1B15] border-t border-[#9E7649]/20 h-20 px-4 flex items-center justify-between pb-2 z-20 shrink-0">
-            <NavButton icon="folder_open" label="Explorar" active={view === ViewState.LIST} onClick={() => setView(ViewState.LIST)} />
-            <NavButton icon="checklist" label="Selección" active={view === ViewState.SELECTION} onClick={() => setView(ViewState.SELECTION)} />
-            {authMode === 'director' && <NavButton icon="description" label="Reportes" active={view === ViewState.REPORTS} onClick={() => setView(ViewState.REPORTS)} />}
-            {authMode === 'admin' && <NavButton icon="playlist_add" label="Producción" active={view === ViewState.PRODUCTIONS} onClick={() => setView(ViewState.PRODUCTIONS)} />}
-            {(authMode === 'admin' || authMode === 'director') && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => setView(ViewState.SETTINGS)} />}
-            {authMode !== 'admin' && <NavButton icon="help" label="Guía" active={view === ViewState.GUIDE} onClick={() => setView(ViewState.GUIDE)} />}
+            <NavButton icon="folder_open" label="Explorar" active={view === ViewState.LIST} onClick={() => navigateTo(ViewState.LIST)} />
+            <NavButton icon="checklist" label="Selección" active={view === ViewState.SELECTION} onClick={() => navigateTo(ViewState.SELECTION)} />
+            {authMode === 'director' && <NavButton icon="description" label="Reportes" active={view === ViewState.REPORTS} onClick={() => navigateTo(ViewState.REPORTS)} />}
+            {authMode === 'admin' && <NavButton icon="playlist_add" label="Producción" active={view === ViewState.PRODUCTIONS} onClick={() => navigateTo(ViewState.PRODUCTIONS)} />}
+            {(authMode === 'admin' || authMode === 'director') && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => navigateTo(ViewState.SETTINGS)} />}
+            {authMode !== 'admin' && <NavButton icon="help" label="Guía" active={view === ViewState.GUIDE} onClick={() => navigateTo(ViewState.GUIDE)} />}
         </nav>
     </div>
   );

@@ -4,7 +4,8 @@ const DB_NAME = 'RCM_Music_DB';
 const TRACKS_STORE = 'tracks';
 const REPORTS_STORE = 'reports';
 const PRODUCTIONS_STORE = 'productions';
-const DB_VERSION = 3; 
+const SELECTIONS_STORE = 'selections';
+const DB_VERSION = 4; // Incremented version
 
 const openDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
@@ -27,9 +28,56 @@ const openDB = (): Promise<IDBDatabase> => {
             if (!db.objectStoreNames.contains(PRODUCTIONS_STORE)) {
                 db.createObjectStore(PRODUCTIONS_STORE, { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains(SELECTIONS_STORE)) {
+                db.createObjectStore(SELECTIONS_STORE, { keyPath: 'id' });
+            }
         };
     });
 };
+
+// ... (existing operations)
+
+// --- SELECTIONS OPERATIONS ---
+
+export const saveSelectionsToDB = async (selections: Track[]): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(SELECTIONS_STORE, 'readwrite');
+            const store = tx.objectStore(SELECTIONS_STORE);
+            
+            const clearReq = store.clear();
+            
+            clearReq.onsuccess = () => {
+                selections.forEach(track => store.put(track));
+            };
+
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (error) {
+        console.error("Error guardando selecciones en DB:", error);
+        throw error;
+    }
+};
+
+export const loadSelectionsFromDB = async (): Promise<Track[]> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(SELECTIONS_STORE, 'readonly');
+            const store = tx.objectStore(SELECTIONS_STORE);
+            const request = store.getAll();
+            
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (error) {
+        console.error("Error cargando selecciones de DB:", error);
+        return [];
+    }
+};
+
 
 // --- TRACKS OPERATIONS ---
 
