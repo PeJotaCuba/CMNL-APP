@@ -33,15 +33,17 @@ const CMNLHeader: React.FC<CMNLHeaderProps> = ({ user, sectionTitle, onMenuClick
         </div>
         
         {/* User Info */}
-        {user && (
-            <div className="text-right hidden sm:block">
-                <p className="text-white font-bold text-sm">{user.name}</p>
-                <div className="flex items-center justify-end gap-1.5 mt-0.5">
-                    <div className="size-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <p className="text-[#9E7649] text-xs font-medium uppercase tracking-wide">{user.role}</p>
-                </div>
-            </div>
-        )}
+        <div className="flex items-center gap-4">
+          {user && (
+              <div className="text-right hidden sm:block">
+                  <p className="text-white font-bold text-sm">{user.name}</p>
+                  <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                      <div className="size-2 rounded-full bg-green-500 animate-pulse"></div>
+                      <p className="text-[#9E7649] text-xs font-medium uppercase tracking-wide">{user.role}</p>
+                  </div>
+              </div>
+          )}
+        </div>
       </div>
 
       {/* Secondary Bar (Section Title) */}
