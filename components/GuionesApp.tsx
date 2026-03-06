@@ -1019,20 +1019,30 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                     </div>
                     
                     {/* Botones de Acción del Programa */}
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                        <button onClick={() => setShowProgramInside(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Por dentro">
-                            <BookOpen size={16} /> <span className="hidden sm:inline">Por dentro</span>
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 justify-center sm:justify-start">
+                        <button 
+                            onClick={() => setShowProgramInside(true)} 
+                            className={`flex items-center gap-2 ${(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') ? 'justify-center p-3' : 'px-3 py-2.5'} bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold`} 
+                            title="Por dentro"
+                        >
+                            <BookOpen size={20} /> 
+                            {(currentUser?.role !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Por dentro</span>}
                         </button>
-                        <button onClick={() => setShowBalance(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Balance">
-                            <BarChart3 size={16} /> <span className="hidden sm:inline">Balance</span>
+                        <button 
+                            onClick={() => setShowBalance(true)} 
+                            className={`flex items-center gap-2 ${(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') ? 'justify-center p-3' : 'px-3 py-2.5'} bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold`} 
+                            title="Balance"
+                        >
+                            <BarChart3 size={20} /> 
+                            {(currentUser?.role !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Balance</span>}
                         </button>
                         {(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') && (
                             <>
-                                <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors text-sm font-bold shadow-lg" title="Nuevo">
-                                    <Plus size={16} /> <span className="hidden sm:inline">Nuevo</span>
+                                <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center justify-center p-3 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors shadow-lg" title="Nuevo">
+                                    <Plus size={24} />
                                 </button>
-                                <button onClick={() => setShowPulir(true)} className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold" title="Pulir">
-                                    <Wand2 size={16} /> <span className="hidden sm:inline">Pulir</span>
+                                <button onClick={() => setShowPulir(true)} className="flex items-center justify-center p-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors" title="Pulir">
+                                    <Wand2 size={24} />
                                 </button>
                             </>
                         )}
