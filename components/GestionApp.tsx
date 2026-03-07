@@ -26,6 +26,8 @@ interface ConsolidatedPayment {
     userId: string;
     month: string; // YYYY-MM
     amount: number;
+    grossAmount?: number;
+    taxAmount?: number;
     dateConsolidated: string;
 }
 
@@ -40,6 +42,7 @@ interface RoleConfig {
 
 interface UserPaymentConfig {
     roles: RoleConfig[];
+    otherPayments?: number;
 }
 
 const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
@@ -614,6 +617,17 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           }
       });
 
+      // Add other payments to month total
+      if (userPaymentConfig.otherPayments) {
+          monthTotal += userPaymentConfig.otherPayments;
+          // Also add to period total if the period covers the whole month? 
+          // For simplicity, let's assume 'otherPayments' is a monthly fixed amount that is added to the "Acumulado" view.
+          // Since "Acumulado" usually shows the current month's total, adding it here makes sense.
+          // However, periodTotal depends on specific dates. If the dates cover the full month, maybe we should add it.
+          // But usually periodTotal is for "Week" or "Day" views. 
+          // Let's only add it to monthTotal as requested ("Este se agrega al Acumulado inicial").
+      }
+
       return { periodTotal, monthTotal };
   };
 
@@ -658,44 +672,76 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       }
   };
 
+  const calculateTax = (amount: number) => {
+      // 1. 5% Initial Deduction (Social Security)
+      const tax5Percent = amount * 0.05;
+      const baseAmount = amount - tax5Percent;
+
+      // 2. Personal Income Tax Scale on Base Amount
+      let scaleTax = 0;
+
+      if (baseAmount > 3260) {
+          if (baseAmount <= 9510) {
+              // Only 3% bracket on the excess over 3260
+              scaleTax = (baseAmount - 3260) * 0.03;
+          } else {
+              // Full 3% bracket (3260 to 9510) + 5% on excess over 9510
+              const firstBracketTax = (9510 - 3260) * 0.03; // 187.5
+              const secondBracketTax = (baseAmount - 9510) * 0.05;
+              scaleTax = firstBracketTax + secondBracketTax;
+          }
+      }
+
+      return tax5Percent + scaleTax;
+  };
+
   const consolidateMonth = () => {
       if (!currentUser || !userPaymentConfig) return;
-      const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
       
-      if (consolidatedPayments.some(c => c.userId === currentUser.username && c.month === currentMonth)) {
-          alert(`El mes de ${currentMonth} ya ha sido consolidado.`);
+      // Calculate the previous month relative to today
+      const today = new Date();
+      const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const prevMonth = prevMonthDate.toISOString().slice(0, 7); // YYYY-MM
+      
+      // Check if already consolidated
+      if (consolidatedPayments.some(c => c.userId === currentUser.username && c.month === prevMonth)) {
+          alert(`El mes de ${prevMonth} ya ha sido consolidado.`);
           return;
       }
 
-      const monthTotal = workLogs
-          .filter(l => l.userId === currentUser.username && l.date.startsWith(currentMonth) && userPaymentConfig.roles.some(r => r.role === l.role))
+      // Calculate total for the previous month
+      let monthTotal = workLogs
+          .filter(l => l.userId === currentUser.username && l.date.startsWith(prevMonth) && userPaymentConfig.roles.some(r => r.role === l.role))
           .reduce((acc, log) => acc + log.amount, 0);
 
-      if (monthTotal === 0) {
-          alert(`No hay pagos registrados para consolidar en el mes de ${currentMonth}.`);
+      if (monthTotal === 0 && !userPaymentConfig.otherPayments) {
+          alert(`No hay pagos registrados para consolidar en el mes de ${prevMonth}.`);
           return;
       }
 
-      // Check if we are consolidating the current real-world month
-      const realCurrentMonth = new Date().toISOString().slice(0, 7);
-      let warning = '';
-      if (currentMonth === realCurrentMonth) {
-          warning = ' ADVERTENCIA: Estás consolidando el mes en curso. ';
+      // Add other payments
+      if (userPaymentConfig.otherPayments) {
+          monthTotal += userPaymentConfig.otherPayments;
       }
 
-      if (window.confirm(`¿Desea consolidar el mes de ${currentMonth} con un total de $${monthTotal.toFixed(2)}?${warning} Esta acción guardará la cifra definitiva y limpiará los registros de ese mes.`)) {
+      const tax = calculateTax(monthTotal);
+      const netAmount = monthTotal - tax;
+
+      if (window.confirm(`¿Desea consolidar el mes de ${prevMonth}?\n\nMonto Bruto: $${monthTotal.toFixed(2)}\nImpuestos: $${tax.toFixed(2)}\nNeto a Pagar: $${netAmount.toFixed(2)}\n\nEsta acción guardará la cifra definitiva y limpiará los registros de ese mes.`)) {
           const newConsolidation: ConsolidatedPayment = {
               id: Date.now().toString(),
               userId: currentUser.username,
-              month: currentMonth,
-              amount: monthTotal,
+              month: prevMonth,
+              amount: netAmount,
+              grossAmount: monthTotal,
+              taxAmount: tax,
               dateConsolidated: new Date().toISOString()
           };
           setConsolidatedPayments([...consolidatedPayments, newConsolidation]);
           // Clear work logs for the consolidated month
-          const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(currentMonth)));
+          const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(prevMonth)));
           setWorkLogs(newLogs);
-          alert(`Mes de ${currentMonth} consolidado exitosamente.`);
+          alert(`Mes de ${prevMonth} consolidado exitosamente.`);
       }
   };
 
@@ -818,7 +864,143 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       };
 
       const dates = getDates();
+      
+      if (!userPaymentConfig) {
+          return (
+              <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col p-6">
+                  <div className="max-w-2xl mx-auto w-full bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-8 shadow-2xl">
+                      <h2 className="text-2xl font-bold text-white mb-2">Configura tus pagos</h2>
+                      <p className="text-[#9E7649] text-sm mb-8">Define tus roles y niveles para calcular tus pagos acumulados.</p>
+                      
+                      <div className="space-y-6">
+                          {configForm.roles.map((role, idx) => (
+                              <div key={role.id} className="bg-black/20 p-6 rounded-xl border border-[#9E7649]/10 relative">
+                                  <button 
+                                      onClick={() => removeRole(role.id)}
+                                      className="absolute top-4 right-4 text-red-400 hover:text-red-300"
+                                  >
+                                      <Trash2 size={18} />
+                                  </button>
+                                  
+                                  <div className="grid grid-cols-2 gap-4 mb-4">
+                                      <div>
+                                          <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Cargo</label>
+                                          <select 
+                                              value={role.role}
+                                              onChange={(e) => updateRole(role.id, { role: e.target.value })}
+                                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
+                                          >
+                                              <option value="Director">Director</option>
+                                              <option value="Locutor">Locutor</option>
+                                              <option value="Escritor">Escritor</option>
+                                              <option value="Asesor">Asesor</option>
+                                              <option value="Realizador de Sonido">Realizador de Sonido</option>
+                                          </select>
+                                      </div>
+                                      <div>
+                                          <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Nivel</label>
+                                          <select 
+                                              value={role.level}
+                                              onChange={(e) => updateRole(role.id, { level: e.target.value })}
+                                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
+                                          >
+                                              <option value="I">Nivel I</option>
+                                              <option value="II">Nivel II</option>
+                                              <option value="III">Nivel III</option>
+                                          </select>
+                                      </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3 mb-4">
+                                      <input 
+                                          type="checkbox" 
+                                          id={`habitual-${role.id}`}
+                                          checked={role.isHabitual}
+                                          onChange={(e) => updateRole(role.id, { isHabitual: e.target.checked })}
+                                          className="w-4 h-4 accent-[#9E7649]"
+                                      />
+                                      <label htmlFor={`habitual-${role.id}`} className="text-sm text-[#E8DCCF]">¿Es habitual en programas?</label>
+                                  </div>
+
+                                  {role.isHabitual && (
+                                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                                          <div>
+                                              <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Días Habituales</label>
+                                              <div className="flex gap-2">
+                                                  {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
+                                                      <button
+                                                          key={i}
+                                                          onClick={() => toggleHabitualDay(role.id, i)}
+                                                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${role.habitualDays.includes(i) ? 'bg-[#9E7649] text-white' : 'bg-black/20 text-[#9E7649]/50'}`}
+                                                      >
+                                                          {day}
+                                                      </button>
+                                                  ))}
+                                              </div>
+                                          </div>
+                                          <div>
+                                              <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Programas Habituales</label>
+                                              <div className="flex flex-wrap gap-2">
+                                                  {programsList.map(prog => (
+                                                      <button
+                                                          key={prog}
+                                                          onClick={() => toggleHabitualProgram(role.id, prog)}
+                                                          className={`px-3 py-1 rounded-full text-[10px] transition-all ${role.habitualPrograms.includes(prog) ? 'bg-[#9E7649] text-white' : 'bg-black/20 text-[#9E7649]/50 border border-[#9E7649]/10'}`}
+                                                      >
+                                                          {prog}
+                                                      </button>
+                                                  ))}
+                                              </div>
+                                          </div>
+                                      </div>
+                                  )}
+                              </div>
+                          ))}
+                          
+                          <button 
+                              onClick={addRole}
+                              className="w-full py-4 border-2 border-dashed border-[#9E7649]/20 rounded-xl text-[#9E7649] hover:bg-[#9E7649]/5 transition-all flex items-center justify-center gap-2 font-bold"
+                          >
+                              <Plus size={20} /> Añadir otro cargo
+                          </button>
+
+                          <div className="bg-black/20 p-4 rounded-lg border border-[#9E7649]/20">
+                              <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Otros Pagos Mensuales ($)</label>
+                              <input 
+                                  type="number" 
+                                  value={configForm.otherPayments === 0 ? '' : configForm.otherPayments}
+                                  onChange={(e) => setConfigForm(prev => ({ ...prev, otherPayments: e.target.value === '' ? 0 : parseFloat(e.target.value) }))}
+                                  className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
+                                  placeholder="0"
+                              />
+                              <p className="text-[10px] text-[#E8DCCF]/50 mt-1 italic">Este monto se suma al acumulado mensual antes de impuestos.</p>
+                          </div>
+                      </div>
+
+                      <div className="mt-10 flex gap-4">
+                          <button 
+                              onClick={() => {
+                                  setUserPaymentConfig(configForm);
+                              }}
+                              className="flex-1 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+                          >
+                              <Check size={20} /> Guardar Configuración
+                          </button>
+                          <button 
+                              onClick={() => setActiveSection(null)}
+                              className="px-8 bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 font-bold rounded-xl transition-all"
+                          >
+                              Cancelar
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          );
+      }
+
       const { periodTotal, monthTotal } = calculateTotalPayment(dates);
+      const monthTax = calculateTax(monthTotal);
+      const monthNet = monthTotal - monthTax;
 
       const formatDateRange = (dates: string[]) => {
           if (dates.length === 0) return '';
@@ -838,53 +1020,58 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                   onMenuClick={onMenuClick}
                   onBack={() => setActiveSection(null)}
               >
-                  <div className="flex gap-1 sm:gap-2">
+                  <div className="flex gap-1 sm:gap-1.5">
                        <button 
                           onClick={() => { setShowAccumulated(!showAccumulated); setShowMonthlyPayments(false); }}
-                          className={`flex items-center gap-1 sm:gap-2 text-xs px-2 sm:px-4 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          className={`flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
                           title={showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}
                       >
                           <FileBarChart size={16} />
-                          <span className="hidden sm:inline">{showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}</span>
+                          <span className="hidden md:inline">{showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}</span>
                       </button>
                       <button 
                           onClick={() => { setShowMonthlyPayments(!showMonthlyPayments); setShowAccumulated(false); }}
-                          className={`flex items-center gap-1 sm:gap-2 text-xs px-2 sm:px-4 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          className={`flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
                           title="Pagos Mensuales"
                       >
                           <CalendarCheck size={16} />
-                          <span className="hidden sm:inline">Pagos Mensuales</span>
+                          <span className="hidden md:inline">Pagos</span>
                       </button>
                       <button 
                           onClick={() => setUserPaymentConfig(null)}
-                          className="flex items-center gap-1 sm:gap-2 text-xs px-2 sm:px-4 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                          className="flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
                           title="Configuración"
                       >
                           <Settings size={16} />
-                          <span className="hidden sm:inline">Configuración</span>
+                          <span className="hidden md:inline">Config</span>
                       </button>
                   </div>
               </CMNLHeader>
 
               <div className="p-6 max-w-6xl mx-auto w-full">
                   {/* Summary Card */}
-                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
-                      <div className="flex gap-8">
-                          <div>
-                              <p className="text-[#9E7649] text-sm uppercase tracking-wider mb-1">Total del Periodo</p>
-                              <h2 className="text-4xl font-bold text-white">${periodTotal.toFixed(2)}</h2>
-                              <p className="text-xs text-[#E8DCCF]/50 mt-1">Según registro actual</p>
+                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-4 sm:p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 w-full">
+                          <div className="min-w-0">
+                              <p className="text-[#9E7649] text-[10px] sm:text-sm uppercase tracking-wider mb-1">Acumulado Bruto</p>
+                              <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">${monthTotal.toFixed(2)}</h2>
+                              <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Total devengado</p>
                           </div>
-                          <div className="border-l border-[#9E7649]/20 pl-8">
-                              <p className="text-[#9E7649] text-sm uppercase tracking-wider mb-1">Acumulado del Mes</p>
-                              <h2 className="text-4xl font-bold text-white">${monthTotal.toFixed(2)}</h2>
-                              <p className="text-xs text-[#E8DCCF]/50 mt-1">Total guardado en el mes</p>
+                          <div className="sm:border-l border-[#9E7649]/20 sm:pl-8 min-w-0">
+                              <p className="text-[#9E7649] text-[10px] sm:text-sm uppercase tracking-wider mb-1">Impuestos</p>
+                              <h2 className="text-2xl sm:text-3xl font-bold text-red-400 truncate">-${monthTax.toFixed(2)}</h2>
+                              <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Deducciones</p>
+                          </div>
+                          <div className="sm:border-l border-[#9E7649]/20 sm:pl-8 min-w-0">
+                              <p className="text-[#9E7649] text-[10px] sm:text-sm uppercase tracking-wider mb-1">A Pagar (Neto)</p>
+                              <h2 className="text-3xl sm:text-4xl font-bold text-green-400 truncate">${monthNet.toFixed(2)}</h2>
+                              <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Pago definitivo</p>
                           </div>
                       </div>
-                      <div className="grid grid-cols-1 gap-2">
+                      <div className="grid grid-cols-1 gap-2 w-full lg:w-auto lg:text-right border-t lg:border-t-0 border-[#9E7649]/10 pt-4 lg:pt-0">
                           {userPaymentConfig.roles.map(role => (
-                              <div key={role.id} className="text-right">
-                                  <div className="text-xs text-[#E8DCCF]">
+                              <div key={role.id}>
+                                  <div className="text-[10px] sm:text-xs text-[#E8DCCF]">
                                       <span className="text-[#9E7649] font-bold">{role.role}:</span> {role.level}
                                       {role.isHabitual && <span className="ml-2 text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1 rounded">Habitual</span>}
                                   </div>
@@ -1164,10 +1351,19 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                   onBack={() => setActiveSection(null)}
               >
                   {isAdmin && (
-                      <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center" title="Importar Catálogo (TXT)">
-                          <span className="material-symbols-outlined text-2xl">upload_file</span>
-                          <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'catalogo')} className="hidden" />
-                      </label>
+                      <div className="flex items-center gap-2">
+                          <button 
+                              onClick={() => { if(confirm('¿Eliminar todo el catálogo?')) setCatalogo([]); }}
+                              className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-900/20 transition-colors"
+                              title="Eliminar Todo"
+                          >
+                              <Trash2 size={20} />
+                          </button>
+                          <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center p-2" title="Importar Catálogo (TXT)">
+                              <span className="material-symbols-outlined text-2xl">upload_file</span>
+                              <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'catalogo')} className="hidden" />
+                          </label>
+                      </div>
                   )}
               </CMNLHeader>
 
@@ -1181,21 +1377,31 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                   ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
                           {catalogo.map((item, idx) => (
-                              <button 
-                                  key={idx}
-                                  onClick={() => setSelectedCatalogItem(item)}
-                                  className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/50 hover:bg-[#3E1E16] transition-all text-left group shadow-sm hover:shadow-md flex flex-col gap-2"
-                              >
-                                  <div className="flex justify-between items-start w-full">
-                                      <div className="p-2 bg-[#9E7649]/10 rounded-lg text-[#9E7649] group-hover:bg-[#9E7649] group-hover:text-white transition-colors">
-                                          <Library size={20} />
+                              <div key={idx} className="relative group">
+                                  <button 
+                                      onClick={() => setSelectedCatalogItem(item)}
+                                      className="w-full bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/50 hover:bg-[#3E1E16] transition-all text-left shadow-sm hover:shadow-md flex flex-col gap-2"
+                                  >
+                                      <div className="flex justify-between items-start w-full">
+                                          <div className="p-2 bg-[#9E7649]/10 rounded-lg text-[#9E7649] group-hover:bg-[#9E7649] group-hover:text-white transition-colors">
+                                              <Library size={20} />
+                                          </div>
+                                          <span className="text-[10px] bg-black/20 px-2 py-1 rounded text-[#E8DCCF]/50">{item.roles.length} Roles</span>
                                       </div>
-                                      <span className="text-[10px] bg-black/20 px-2 py-1 rounded text-[#E8DCCF]/50">{item.roles.length} Roles</span>
-                                  </div>
-                                  <div>
-                                      <h3 className="font-bold text-white text-lg leading-tight group-hover:text-[#F5EFE6]">{item.name}</h3>
-                                  </div>
-                              </button>
+                                      <div>
+                                          <h3 className="font-bold text-white text-lg leading-tight group-hover:text-[#F5EFE6]">{item.name}</h3>
+                                      </div>
+                                  </button>
+                                  {isAdmin && (
+                                      <button 
+                                          onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar item del catálogo?')) setCatalogo(prev => prev.filter((_, i) => i !== idx)); }}
+                                          className="absolute top-2 right-2 p-2 bg-red-900/80 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10"
+                                          title="Eliminar"
+                                      >
+                                          <Trash2 size={16} />
+                                      </button>
+                                  )}
+                              </div>
                           ))}
                       </div>
                   )}
@@ -1604,32 +1810,51 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                   onBack={handleBackNavigation}
               >
                   {isAdmin && (
-                      <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center" title="Importar Fichas (TXT)">
-                          <span className="material-symbols-outlined text-2xl">upload_file</span>
-                          <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'fichas')} className="hidden" />
-                      </label>
+                      <div className="flex items-center gap-2">
+                          <button 
+                              onClick={() => { if(confirm('¿Eliminar todas las fichas?')) setFichas([]); }}
+                              className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-900/20 transition-colors"
+                              title="Eliminar Todas"
+                          >
+                              <Trash2 size={20} />
+                          </button>
+                          <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center p-2" title="Importar Fichas (TXT)">
+                              <span className="material-symbols-outlined text-2xl">upload_file</span>
+                              <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'fichas')} className="hidden" />
+                          </label>
+                      </div>
                   )}
               </CMNLHeader>
 
               <div className="p-6 overflow-y-auto pb-20">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
                       {fichas.map((ficha, idx) => (
-                          <button 
-                              key={idx}
-                              onClick={() => setSelectedFicha(ficha)}
-                              className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/50 hover:bg-[#3E1E16] transition-all text-left group shadow-sm hover:shadow-md flex flex-col gap-2"
-                          >
-                              <div className="flex justify-between items-start w-full">
-                                  <div className="p-2 bg-[#9E7649]/10 rounded-lg text-[#9E7649] group-hover:bg-[#9E7649] group-hover:text-white transition-colors">
-                                      <FileText size={20} />
+                          <div key={idx} className="relative group">
+                              <button 
+                                  onClick={() => setSelectedFicha(ficha)}
+                                  className="w-full bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/50 hover:bg-[#3E1E16] transition-all text-left shadow-sm hover:shadow-md flex flex-col gap-2"
+                              >
+                                  <div className="flex justify-between items-start w-full">
+                                      <div className="p-2 bg-[#9E7649]/10 rounded-lg text-[#9E7649] group-hover:bg-[#9E7649] group-hover:text-white transition-colors">
+                                          <FileText size={20} />
+                                      </div>
+                                      <span className="text-[10px] bg-black/20 px-2 py-1 rounded text-[#E8DCCF]/50">{ficha.frequency}</span>
                                   </div>
-                                  <span className="text-[10px] bg-black/20 px-2 py-1 rounded text-[#E8DCCF]/50">{ficha.frequency}</span>
-                              </div>
-                              <div>
-                                  <h3 className="font-bold text-white text-lg leading-tight group-hover:text-[#F5EFE6]">{ficha.name}</h3>
-                                  <p className="text-xs text-[#9E7649] mt-1">{ficha.schedule}</p>
-                              </div>
-                          </button>
+                                  <div>
+                                      <h3 className="font-bold text-white text-lg leading-tight group-hover:text-[#F5EFE6]">{ficha.name}</h3>
+                                      <p className="text-xs text-[#9E7649] mt-1">{ficha.schedule}</p>
+                                  </div>
+                              </button>
+                              {isAdmin && (
+                                  <button 
+                                      onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar ficha?')) setFichas(prev => prev.filter((_, i) => i !== idx)); }}
+                                      className="absolute top-2 right-2 p-2 bg-red-900/80 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10"
+                                      title="Eliminar"
+                                  >
+                                      <Trash2 size={16} />
+                                  </button>
+                              )}
+                          </div>
                       ))}
                   </div>
               </div>

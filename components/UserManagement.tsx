@@ -189,54 +189,47 @@ const UserManagement: React.FC<Props> = ({
   // --- LÓGICA DE RESPALDO Y RESTAURACIÓN ---
 
   const handleDownloadBackup = () => {
-    // Recopilar datos de guiones
+    // Recopilar datos de guiones y secciones de programas
     const scriptData: Record<string, any> = {};
     const programSections: Record<string, any> = {};
+    
+    // Recopilar configuraciones de pago
+    const paymentConfigs: Record<string, any> = {};
+
+    // Iterar sobre todo el localStorage para capturar claves dinámicas
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith('guionbd_data_')) {
+        if (!key) continue;
+
+        if (key.startsWith('guionbd_data_')) {
             try {
                 scriptData[key] = JSON.parse(localStorage.getItem(key) || '[]');
             } catch (e) {}
-        }
-        if (key && key.startsWith('program_sections_')) {
+        } else if (key.startsWith('program_sections_')) {
             try {
                 programSections[key] = JSON.parse(localStorage.getItem(key) || '[]');
             } catch (e) {}
-        }
-    }
-
-    // Recopilar datos de Gestión
-    let fichas = [];
-    try {
-        fichas = JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]');
-    } catch (e) {}
-
-    let catalogo = [];
-    try {
-        catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]');
-    } catch (e) {}
-    
-    let worklogs = [];
-    try {
-        worklogs = JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]');
-    } catch (e) {}
-
-    let consolidated = [];
-    try {
-        consolidated = JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]');
-    } catch (e) {}
-
-    const paymentConfigs: Record<string, any> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('rcm_payment_config_')) {
+        } else if (key.startsWith('rcm_payment_config_')) {
             try {
                 paymentConfigs[key] = JSON.parse(localStorage.getItem(key) || '{}');
             } catch (e) {}
         }
     }
 
+    // Recopilar datos de Gestión (Fichas, Catálogo, Worklogs, Consolidados)
+    let fichas = [];
+    try { fichas = JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'); } catch (e) {}
+
+    let catalogo = [];
+    try { catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'); } catch (e) {}
+    
+    let worklogs = [];
+    try { worklogs = JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]'); } catch (e) {}
+
+    let consolidated = [];
+    try { consolidated = JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]'); } catch (e) {}
+
+    // Recopilar datos de Agenda
     let agendaPrograms = [];
     try { agendaPrograms = JSON.parse(localStorage.getItem('rcm_programs') || '[]'); } catch (e) {}
 
@@ -256,7 +249,7 @@ const UserManagement: React.FC<Props> = ({
     try { agendaPropaganda = JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'); } catch (e) {}
 
     const data = {
-        users,
+        users, // Usuarios del sistema principal
         historyContent,
         aboutContent,
         news,
@@ -271,7 +264,7 @@ const UserManagement: React.FC<Props> = ({
         agendaEfemerides,
         agendaConmemoraciones,
         agendaDayThemes,
-        agendaUsers,
+        agendaUsers, // Usuarios de la agenda (perfiles extendidos)
         agendaPropaganda
     };
     
@@ -304,21 +297,23 @@ const UserManagement: React.FC<Props> = ({
           const json = await response.json();
           let restoredCount = 0;
 
+          // Restaurar Usuarios Principales
           if (json.users && Array.isArray(json.users)) {
             setUsers(json.users);
             restoredCount++;
           }
           
+          // Restaurar Contenido Estático
           if (typeof json.historyContent === 'string') {
             setHistoryContent(json.historyContent);
             restoredCount++;
           }
-          
           if (typeof json.aboutContent === 'string') {
             setAboutContent(json.aboutContent);
             restoredCount++;
           }
           
+          // Restaurar Noticias
           if (json.news && Array.isArray(json.news)) {
             const processedNews = json.news.map((n: NewsItem) => ({
                 ...n,
@@ -330,6 +325,7 @@ const UserManagement: React.FC<Props> = ({
             restoredCount++;
           }
 
+          // Restaurar Gestión
           if (json.fichas) {
               localStorage.setItem('rcm_data_fichas', JSON.stringify(json.fichas));
               restoredCount++;
@@ -352,6 +348,8 @@ const UserManagement: React.FC<Props> = ({
               });
               restoredCount++;
           }
+
+          // Restaurar Guiones y Secciones
           if (json.scripts) {
               Object.entries(json.scripts).forEach(([key, value]) => {
                   localStorage.setItem(key, JSON.stringify(value));
@@ -364,6 +362,8 @@ const UserManagement: React.FC<Props> = ({
               });
               restoredCount++;
           }
+
+          // Restaurar Agenda
           if (json.agendaPrograms) {
               localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
               restoredCount++;
@@ -390,7 +390,7 @@ const UserManagement: React.FC<Props> = ({
           }
 
           if (restoredCount > 0) {
-            alert('¡Sincronización exitosa! Los datos se han actualizado desde el repositorio oficial.');
+            alert('¡Sincronización exitosa! Los datos se han actualizado desde el repositorio oficial. Por favor, recargue la página si es necesario para ver todos los cambios.');
           } else {
             alert('El archivo descargado no tiene el formato esperado.');
           }

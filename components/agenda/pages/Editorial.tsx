@@ -284,7 +284,22 @@ const Editorial: React.FC<EditorialProps> = ({
       const progMatch = clean.match(/^\*\*?Programa:\*\*?\s*(.*)/i) || clean.match(/^Programa:\s*(.*)/i);
       if (progMatch) {
          const progNameInput = progMatch[1].trim();
-         currentProgIndex = updatedPrograms.findIndex((p: Program) => matchProgramName(p, progNameInput));
+         
+         // Prioridad 1: Buscar programa que coincida en nombre Y que se emita ese día
+         let foundIndex = -1;
+         if (currentDayName) {
+             foundIndex = updatedPrograms.findIndex((p: Program) => 
+                 matchProgramName(p, progNameInput) && p.days.includes(currentDayName!)
+             );
+         }
+
+         // Prioridad 2: Si no se encuentra para ese día específico, buscar solo por nombre (fallback)
+         if (foundIndex === -1) {
+             foundIndex = updatedPrograms.findIndex((p: Program) => matchProgramName(p, progNameInput));
+         }
+
+         currentProgIndex = foundIndex;
+         
          if (currentProgIndex !== -1 && currentKey) {
              ensureDailyData(currentProgIndex, currentKey!);
          } else {

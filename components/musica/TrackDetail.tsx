@@ -162,9 +162,6 @@ const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onS
                                 <span className="material-symbols-outlined">edit</span> Editar
                             </button>
                         )}
-                        <button onClick={onSearchCredits} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-blue-700">
-                             <span className="material-symbols-outlined">smart_toy</span> Completar con IA
-                        </button>
                     </>
                 )}
             </div>
