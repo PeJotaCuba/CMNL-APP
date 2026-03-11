@@ -319,6 +319,20 @@ const App: React.FC = () => {
       }
   };
 
+  const handleUpdateFromCoor = async () => {
+    try {
+        const response = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/coorbd.json');
+        const data = await response.json();
+        Object.entries(data).forEach(([key, value]) => {
+            localStorage.setItem(key, JSON.stringify(value));
+        });
+        alert('Actualización completada');
+    } catch (error) {
+        console.error(error);
+        alert('Error al actualizar');
+    }
+  };
+
   // Determine if Player should be visible
   const isAppView = currentView.startsWith('APP_') && currentView !== AppView.APP_USER_MANAGEMENT;
   const isLoginScreen = currentView === AppView.LANDING; 
@@ -373,6 +387,7 @@ const App: React.FC = () => {
             onRefreshLive={handleRefreshLive}
             currentProgram={currentProgram}
             onMenuClick={() => setIsSidebarOpen(true)}
+            onUpdateFromCoor={handleUpdateFromCoor}
           />
         );
       case AppView.APP_USER_MANAGEMENT:

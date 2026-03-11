@@ -52,14 +52,25 @@ export interface ProgramItem {
   image?: string;
 }
 
+export interface UserPermissions {
+  canEditNews: boolean;
+  canEditProgramming: boolean;
+  canEditAbout: boolean;
+  canEditCatalog: boolean;
+  canEditFichas: boolean;
+  canEditHours: boolean;
+  canEditTeam: boolean;
+}
+
 export interface User {
   username: string;
-  role: 'admin' | 'worker' | 'listener';
+  role: 'admin' | 'worker' | 'listener' | 'coordinator';
   name: string;
   classification?: UserClassification;
   avatar?: string;
   mobile?: string;
   password?: string;
+  permissions?: UserPermissions;
 }
 
 export interface ProgramSchedule {

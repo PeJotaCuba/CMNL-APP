@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Upload, Trash2, UserPlus, Search, FileText, Info, Edit2, Download, Newspaper, DownloadCloud, RefreshCw } from 'lucide-react';
-import { User, NewsItem, UserClassification } from '../types';
+import { User, NewsItem, UserClassification, UserPermissions } from '../types';
 import { getCategoryVector } from '../utils/scheduleData';
 import CMNLHeader from './CMNLHeader';
 
@@ -26,7 +26,7 @@ const UserManagement: React.FC<Props> = ({
     news, setNews,
     isSyncing, setIsSyncing
 }) => {
-  const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
+  const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario', permissions: { canEditNews: false, canEditProgramming: false, canEditAbout: false, canEditCatalog: false, canEditFichas: false, canEditHours: false, canEditTeam: false } });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'users' | 'content'>('users');
@@ -36,9 +36,29 @@ const UserManagement: React.FC<Props> = ({
     setNewUser(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleNewUserPermissionChange = (permission: keyof UserPermissions) => {
+      setNewUser(prev => ({
+          ...prev,
+          permissions: {
+              ...(prev.permissions || { canEditNews: false, canEditProgramming: false, canEditAbout: false }),
+              [permission]: !prev.permissions?.[permission]
+          }
+      }));
+  };
+
   const handleEditUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setEditingUser(prev => prev ? ({ ...prev, [name]: value }) : null);
+  };
+
+  const handleEditUserPermissionChange = (permission: keyof UserPermissions) => {
+      setEditingUser(prev => prev ? ({
+          ...prev,
+          permissions: {
+              ...(prev.permissions || { canEditNews: false, canEditProgramming: false, canEditAbout: false }),
+              [permission]: !prev.permissions?.[permission]
+          }
+      }) : null);
   };
 
   const addUser = (e: React.FormEvent) => {
@@ -428,12 +448,12 @@ const UserManagement: React.FC<Props> = ({
                 <span className="hidden sm:inline">Sincronizar</span>
             </button>
             <button 
-                onClick={handleDownloadBackup} 
+                onClick={handleDownloadCoorBackup} 
                 className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" 
-                title="Descargar actualcmnl.json localmente"
+                title="Descargar coorbd.json"
             >
                 <Download size={16} /> 
-                <span className="hidden sm:inline">Respaldar</span>
+                <span className="hidden sm:inline">Respaldar Coordinador</span>
             </button>
         </div>
       </CMNLHeader>
@@ -478,7 +498,41 @@ const UserManagement: React.FC<Props> = ({
                                 <option value="Realizador de sonido">Realizador</option>
                                 <option value="Locutor">Locutor</option>
                                 <option value="Administrador">Administrador</option>
+                                <option value="Coordinador">Coordinador</option>
                             </select>
+
+                            {newUser.classification === 'Coordinador' && (
+                                <div className="flex flex-col gap-2 mt-2">
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditNews} onChange={() => handleNewUserPermissionChange('canEditNews')} className="accent-[#9E7649]" />
+                                        Editar Noticias
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditProgramming} onChange={() => handleNewUserPermissionChange('canEditProgramming')} className="accent-[#9E7649]" />
+                                        Editar Programación
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditAbout} onChange={() => handleNewUserPermissionChange('canEditAbout')} className="accent-[#9E7649]" />
+                                        Editar Quiénes Somos
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditCatalog} onChange={() => handleNewUserPermissionChange('canEditCatalog')} className="accent-[#9E7649]" />
+                                        Catálogo
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditFichas} onChange={() => handleNewUserPermissionChange('canEditFichas')} className="accent-[#9E7649]" />
+                                        Fichas técnicas
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditHours} onChange={() => handleNewUserPermissionChange('canEditHours')} className="accent-[#9E7649]" />
+                                        Horas de transmisión
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                                        <input type="checkbox" checked={newUser.permissions?.canEditTeam} onChange={() => handleNewUserPermissionChange('canEditTeam')} className="accent-[#9E7649]" />
+                                        Equipo
+                                    </label>
+                                </div>
+                            )}
 
                             <input name="password" type="text" placeholder="Contraseña" value={newUser.password} onChange={handleNewUserChange} className="bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none" required />
                             <div className="flex gap-2">
@@ -677,8 +731,42 @@ const UserManagement: React.FC<Props> = ({
                     <option value="Realizador de sonido">Realizador</option>
                     <option value="Locutor">Locutor</option>
                     <option value="Administrador">Administrador</option>
+                    <option value="Coordinador">Coordinador</option>
                 </select>
               </div>
+
+              {editingUser.classification === 'Coordinador' && (
+                  <div className="flex flex-col gap-2 mt-2">
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditNews} onChange={() => handleEditUserPermissionChange('canEditNews')} className="accent-[#9E7649]" />
+                          Editar Noticias
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditProgramming} onChange={() => handleEditUserPermissionChange('canEditProgramming')} className="accent-[#9E7649]" />
+                          Editar Programación
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditAbout} onChange={() => handleEditUserPermissionChange('canEditAbout')} className="accent-[#9E7649]" />
+                          Editar Quiénes Somos
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditCatalog} onChange={() => handleEditUserPermissionChange('canEditCatalog')} className="accent-[#9E7649]" />
+                          Catálogo
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditFichas} onChange={() => handleEditUserPermissionChange('canEditFichas')} className="accent-[#9E7649]" />
+                          Fichas técnicas
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditHours} onChange={() => handleEditUserPermissionChange('canEditHours')} className="accent-[#9E7649]" />
+                          Horas de transmisión
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-[#E8DCCF]">
+                          <input type="checkbox" checked={editingUser.permissions?.canEditTeam} onChange={() => handleEditUserPermissionChange('canEditTeam')} className="accent-[#9E7649]" />
+                          Equipo
+                      </label>
+                  </div>
+              )}
 
               <div>
                 <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-1 block">Contraseña</label>
@@ -700,5 +788,24 @@ const UserManagement: React.FC<Props> = ({
     </div>
   );
 };
+
+  const handleDownloadCoorBackup = () => {
+    const data: Record<string, any> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+            try {
+                data[key] = JSON.parse(localStorage.getItem(key) || 'null');
+            } catch (e) {}
+        }
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'coorbd.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
 export default UserManagement;
