@@ -5,6 +5,7 @@ import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getAccumulatedData, getMonthlyTotalData, DAY_MINUTES, TransmissionBreakdown } from '../src/services/transmissionService';
 
 interface Props {
   onBack: () => void;
@@ -52,7 +53,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['pagos', 'catalogo', 'fichas'].includes(hash)) {
+      if (['pagos', 'catalogo', 'fichas', 'transmision'].includes(hash)) {
         setActiveSection(hash);
       } else {
         setActiveSection(null);
@@ -826,6 +827,129 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
 
   // Render Pagos Section
+  if (activeSection === 'transmision') {
+      const today = new Date();
+      const accumulated = getAccumulatedData(today);
+      const monthly = getMonthlyTotalData(today.getMonth(), today.getFullYear());
+
+      const categories: (keyof TransmissionBreakdown)[] = [
+          'informativos', 'boletines', 'publicidad', 'orientacion', 
+          'cienciaTecnica', 'variados', 'historicos', 
+          'literaturaArte', 'musicales', 'reposiciones'
+      ];
+
+      const categoryLabels: Record<keyof TransmissionBreakdown, string> = {
+          informativos: 'Informativos',
+          boletines: 'Boletines',
+          publicidad: 'Publicidad',
+          orientacion: 'Orientación',
+          cienciaTecnica: 'Ciencia/Técnica',
+          variados: 'Variados',
+          historicos: 'Históricos',
+          literaturaArte: 'Literatura/Arte',
+          musicales: 'Musicales',
+          reposiciones: 'Reposiciones',
+          total: 'Total'
+      };
+
+      return (
+          <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+              <CMNLHeader 
+                  user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                  sectionTitle="Transmisión"
+                  onMenuClick={onMenuClick}
+                  onBack={() => setActiveSection(null)}
+              />
+
+              <div className="p-6 max-w-6xl mx-auto w-full space-y-8">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-gradient-to-br from-[#2C1B15] to-[#3E1E16] p-6 rounded-2xl border border-[#9E7649]/20 shadow-xl">
+                          <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Acumulado del Mes</p>
+                          <h2 className="text-5xl font-bold text-white mb-1">{accumulated.hours.toFixed(2)} <span className="text-xl font-normal text-[#9E7649]">h</span></h2>
+                          <p className="text-xs text-[#E8DCCF]/50">Hasta hoy, {today.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}</p>
+                      </div>
+                      <div className="bg-gradient-to-br from-[#1A100C] to-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/10 shadow-xl">
+                          <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Proyección Mensual</p>
+                          <h2 className="text-5xl font-bold text-[#9E7649] mb-1">{monthly.hours.toFixed(2)} <span className="text-xl font-normal text-[#E8DCCF]/30">h</span></h2>
+                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {today.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
+                      </div>
+                  </div>
+
+                  {/* Breakdown Table */}
+                  <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/10 overflow-hidden shadow-2xl">
+                      <div className="bg-[#3E1E16] px-6 py-4 border-b border-[#9E7649]/10 flex justify-between items-center">
+                          <h3 className="text-white font-bold flex items-center gap-2">
+                              <FileBarChart size={20} className="text-[#9E7649]" />
+                              Desglose por Categoría (Minutos)
+                          </h3>
+                      </div>
+                      <div className="overflow-x-auto">
+                          <table className="w-full text-sm text-left">
+                              <thead className="text-xs text-[#9E7649] uppercase bg-black/20">
+                                  <tr>
+                                      <th className="px-6 py-4">Categoría</th>
+                                      <th className="px-6 py-4 text-center">Acumulado (min)</th>
+                                      <th className="px-6 py-4 text-center">Proyectado (min)</th>
+                                      <th className="px-6 py-4 text-right">Progreso</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#9E7649]/10">
+                                  {categories.map(cat => {
+                                      const accMin = accumulated.breakdown[cat];
+                                      const totalMin = monthly.breakdown[cat];
+                                      const percentage = totalMin > 0 ? (accMin / totalMin) * 100 : 0;
+
+                                      return (
+                                          <tr key={cat} className="hover:bg-white/5 transition-colors">
+                                              <td className="px-6 py-4 font-medium text-white">{categoryLabels[cat]}</td>
+                                              <td className="px-6 py-4 text-center font-mono">{accMin}</td>
+                                              <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">{totalMin}</td>
+                                              <td className="px-6 py-4 text-right">
+                                                  <div className="flex items-center justify-end gap-3">
+                                                      <div className="w-24 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                                                          <div 
+                                                              className="h-full bg-[#9E7649] rounded-full" 
+                                                              style={{ width: `${Math.min(percentage, 100)}%` }}
+                                                          />
+                                                      </div>
+                                                      <span className="text-[10px] font-bold text-[#9E7649] w-8">{Math.round(percentage)}%</span>
+                                                  </div>
+                                              </td>
+                                          </tr>
+                                      );
+                                  })}
+                                  <tr className="bg-[#3E1E16]/50 font-bold">
+                                      <td className="px-6 py-4 text-[#9E7649]">TOTAL GENERAL</td>
+                                      <td className="px-6 py-4 text-center text-white">{accumulated.breakdown.total}</td>
+                                      <td className="px-6 py-4 text-center text-[#E8DCCF]/50">{monthly.breakdown.total}</td>
+                                      <td className="px-6 py-4 text-right">
+                                          <span className="text-[#9E7649]">{Math.round((accumulated.breakdown.total / monthly.breakdown.total) * 100)}%</span>
+                                      </td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  {/* Info Card */}
+                  <div className="bg-blue-900/10 border border-blue-500/20 p-4 rounded-xl flex gap-4 items-start">
+                      <div className="p-2 bg-blue-500/20 rounded-lg text-blue-400">
+                          <Settings size={20} />
+                      </div>
+                      <div>
+                          <h4 className="text-blue-400 font-bold text-sm mb-1">Información del Sistema</h4>
+                          <p className="text-xs text-[#E8DCCF]/60 leading-relaxed">
+                              Los cálculos se basan en la matriz de programación fija de Radio Ciudad Monumento. 
+                              Se detectan automáticamente años bisiestos y la distribución de días laborables, sábados y domingos para el mes en curso.
+                          </p>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   if (activeSection === 'pagos') {
       // Main Pagos View (Work Log)
       const programsList = fichas.map(f => f.name).sort();
