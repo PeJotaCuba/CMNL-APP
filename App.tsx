@@ -9,6 +9,7 @@ import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
 import MusicaApp from './components/MusicaApp';
+import HistoryEvolutionView from './src/components/HistoryEvolutionView';
 import Sidebar from './components/Sidebar';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
@@ -405,6 +406,8 @@ const App: React.FC = () => {
       // Public Sections
       case AppView.SECTION_HISTORY:
         return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} />;
+      case AppView.SECTION_HISTORY_EVOLUTION:
+        return <HistoryEvolutionView currentUser={currentUser} onBack={handleBack} />;
       case AppView.SECTION_PROGRAMMING_PUBLIC:
         return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_ABOUT:

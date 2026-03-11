@@ -13,7 +13,9 @@ export interface TransmissionBreakdown {
     total: number;
 }
 
-export const DAY_MINUTES: Record<string, TransmissionBreakdown> = {
+export type DayType = 'WEEKDAY' | 'SATURDAY' | 'SUNDAY';
+
+export const DEFAULT_DAY_MINUTES: Record<DayType, TransmissionBreakdown> = {
     WEEKDAY: {
         informativos: 69,
         boletines: 20,
@@ -55,12 +57,38 @@ export const DAY_MINUTES: Record<string, TransmissionBreakdown> = {
     }
 };
 
+export const getDayMinutesConfig = (): Record<DayType, TransmissionBreakdown> => {
+    const saved = localStorage.getItem('rcm_transmission_config');
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    return DEFAULT_DAY_MINUTES;
+};
+
+export const saveDayMinutesConfig = (config: Record<DayType, TransmissionBreakdown>) => {
+    for (const key of Object.keys(config) as DayType[]) {
+        const day = config[key];
+        let total = 0;
+        for (const cat of Object.keys(day) as (keyof TransmissionBreakdown)[]) {
+            if (cat !== 'total') {
+                total += Number(day[cat]) || 0;
+            }
+        }
+        day.total = total;
+    }
+    localStorage.setItem('rcm_transmission_config', JSON.stringify(config));
+};
+
 /**
  * Determines the type of day for a given date.
  * @param date The date to check.
  * @returns 'WEEKDAY', 'SATURDAY', or 'SUNDAY'.
  */
-export const getDayType = (date: Date): keyof typeof DAY_MINUTES => {
+export const getDayType = (date: Date): DayType => {
     const day = date.getDay(); // 0 = Sunday, 6 = Saturday
     if (day === 0) return 'SUNDAY';
     if (day === 6) return 'SATURDAY';
@@ -68,14 +96,15 @@ export const getDayType = (date: Date): keyof typeof DAY_MINUTES => {
 };
 
 /**
- * Calculates accumulated transmission data from the start of the month to the target date.
+ * Calculates accumulated transmission data from the start of the month to the target date (D-1).
  * @param targetDate The end date for accumulation.
+ * @param config The configuration matrix.
  * @returns An object with total hours and breakdown.
  */
-export const getAccumulatedData = (targetDate: Date) => {
+export const getAccumulatedData = (targetDate: Date, config: Record<DayType, TransmissionBreakdown>) => {
     const year = targetDate.getFullYear();
     const month = targetDate.getMonth();
-    const dayOfMonth = targetDate.getDate();
+    const dayOfMonth = targetDate.getDate() - 1; // Calculate up to D-1
 
     const accumulated: TransmissionBreakdown = {
         informativos: 0,
@@ -94,16 +123,16 @@ export const getAccumulatedData = (targetDate: Date) => {
     for (let d = 1; d <= dayOfMonth; d++) {
         const current = new Date(year, month, d);
         const dayType = getDayType(current);
-        const minutes = DAY_MINUTES[dayType];
+        const minutes = config[dayType] || DEFAULT_DAY_MINUTES[dayType];
 
         Object.keys(accumulated).forEach((key) => {
             const k = key as keyof TransmissionBreakdown;
-            accumulated[k] += minutes[k];
+            accumulated[k] += Number(minutes[k]) || 0;
         });
     }
 
     return {
-        hours: parseFloat((accumulated.total / 60).toFixed(2)),
+        hours: parseFloat((accumulated.total / 60).toFixed(2)) || 0,
         breakdown: accumulated
     };
 };
@@ -112,9 +141,10 @@ export const getAccumulatedData = (targetDate: Date) => {
  * Calculates total transmission data for a specific month.
  * @param month 0-indexed month (0 = Jan).
  * @param year The year.
+ * @param config The configuration matrix.
  * @returns An object with total hours and breakdown.
  */
-export const getMonthlyTotalData = (month: number, year: number) => {
+export const getMonthlyTotalData = (month: number, year: number, config: Record<DayType, TransmissionBreakdown>) => {
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const total: TransmissionBreakdown = {
@@ -134,16 +164,16 @@ export const getMonthlyTotalData = (month: number, year: number) => {
     for (let d = 1; d <= daysInMonth; d++) {
         const current = new Date(year, month, d);
         const dayType = getDayType(current);
-        const minutes = DAY_MINUTES[dayType];
+        const minutes = config[dayType] || DEFAULT_DAY_MINUTES[dayType];
 
         Object.keys(total).forEach((key) => {
             const k = key as keyof TransmissionBreakdown;
-            total[k] += minutes[k];
+            total[k] += Number(minutes[k]) || 0;
         });
     }
 
     return {
-        hours: parseFloat((total.total / 60).toFixed(2)),
+        hours: parseFloat((total.total / 60).toFixed(2)) || 0,
         breakdown: total
     };
 };

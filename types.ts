@@ -13,6 +13,7 @@ export enum AppView {
 
   // Sections
   SECTION_HISTORY = 'SECTION_HISTORY',
+  SECTION_HISTORY_EVOLUTION = 'SECTION_HISTORY_EVOLUTION', // Nueva vista
   SECTION_PROGRAMMING_PUBLIC = 'SECTION_PROGRAMMING_PUBLIC',
   SECTION_ABOUT = 'SECTION_ABOUT',
   SECTION_NEWS = 'SECTION_NEWS',
@@ -21,7 +22,15 @@ export enum AppView {
   SECTION_PROFILE = 'SECTION_PROFILE',
 }
 
-export type UserClassification = 'Director' | 'Asesor' | 'Realizador de sonido' | 'Locutor' | 'Administrador' | 'Usuario';
+export interface HistoricalMonthData {
+  month: number; // 0-11
+  year: number;
+  scheduledHours: number;
+  interruptionsMinutes: number;
+  consolidated: boolean;
+}
+
+export type UserClassification = 'Director' | 'Asesor' | 'Realizador de sonido' | 'Locutor' | 'Administrador' | 'Coordinador' | 'Usuario';
 
 export interface NewsItem {
   id: string;

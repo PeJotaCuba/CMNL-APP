@@ -5,7 +5,11 @@ import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getAccumulatedData, getMonthlyTotalData, DAY_MINUTES, TransmissionBreakdown } from '../src/services/transmissionService';
+import { getAccumulatedData, getMonthlyTotalData, getDayMinutesConfig, saveDayMinutesConfig, DayType, TransmissionBreakdown } from '../src/services/transmissionService';
+import * as XLSX from 'xlsx';
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType } from 'docx';
+import { saveAs } from 'file-saver';
+import { InterruptionModal } from './InterruptionModal';
 
 interface Props {
   onBack: () => void;
@@ -43,7 +47,25 @@ interface RoleConfig {
 
 interface UserPaymentConfig {
     roles: RoleConfig[];
-    otherPayments?: number;
+    otherPayments?: number | string;
+}
+
+interface Interruption {
+    id: string;
+    date: string;
+    programName: string;
+    category: keyof TransmissionBreakdown;
+    affectedMinutes: number;
+    percentage: number;
+}
+
+interface ConsolidatedMonth {
+    id: string;
+    month: string; // YYYY-MM
+    accumulated: TransmissionBreakdown;
+    interruptions: Record<keyof TransmissionBreakdown, number>;
+    totalRealMinutes: number;
+    dateConsolidated: string;
 }
 
 const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
@@ -140,6 +162,36 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       }] 
   });
 
+  // Transmission State
+  const [transmissionConfig, setTransmissionConfig] = useState(getDayMinutesConfig());
+  const [interruptions, setInterruptions] = useState<Interruption[]>(() => {
+      const saved = localStorage.getItem('rcm_interruptions');
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [consolidatedMonths, setConsolidatedMonths] = useState<ConsolidatedMonth[]>(() => {
+      const saved = localStorage.getItem('rcm_consolidated_months');
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
+  const [showConsolidateModal, setShowConsolidateModal] = useState(false);
+  const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<keyof TransmissionBreakdown | null>(null);
+  const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0 });
+  
+  const todayForState = new Date();
+  const [manualMonth, setManualMonth] = useState(todayForState.getMonth() === 0 ? 11 : todayForState.getMonth() - 1);
+  const [manualYear, setManualYear] = useState(todayForState.getMonth() === 0 ? todayForState.getFullYear() - 1 : todayForState.getFullYear());
+  const [manualInterruptions, setManualInterruptions] = useState(0);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('rcm_interruptions', JSON.stringify(interruptions));
+  }, [interruptions]);
+
+  useEffect(() => {
+    localStorage.setItem('rcm_consolidated_months', JSON.stringify(consolidatedMonths));
+  }, [consolidatedMonths]);
+
   useEffect(() => {
     localStorage.setItem('rcm_data_fichas', JSON.stringify(fichas));
   }, [fichas]);
@@ -171,7 +223,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
     { id: 'equipo', icon: <Users size={32} />, label: 'Equipo', color: 'bg-purple-900/40 text-purple-400 border-purple-500/30' },
   ];
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
 
   const formatPercentage = (value: string) => {
       if (!value) return '';
@@ -620,7 +672,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
       // Add other payments to month total
       if (userPaymentConfig.otherPayments) {
-          monthTotal += userPaymentConfig.otherPayments;
+          monthTotal += Number(userPaymentConfig.otherPayments) || 0;
           // Also add to period total if the period covers the whole month? 
           // For simplicity, let's assume 'otherPayments' is a monthly fixed amount that is added to the "Acumulado" view.
           // Since "Acumulado" usually shows the current month's total, adding it here makes sense.
@@ -722,7 +774,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
       // Add other payments
       if (userPaymentConfig.otherPayments) {
-          monthTotal += userPaymentConfig.otherPayments;
+          monthTotal += Number(userPaymentConfig.otherPayments) || 0;
       }
 
       const tax = calculateTax(monthTotal);
@@ -829,8 +881,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   // Render Pagos Section
   if (activeSection === 'transmision') {
       const today = new Date();
-      const accumulated = getAccumulatedData(today);
-      const monthly = getMonthlyTotalData(today.getMonth(), today.getFullYear());
+      const accumulated = getAccumulatedData(today, transmissionConfig);
+      const monthly = getMonthlyTotalData(today.getMonth(), today.getFullYear(), transmissionConfig);
 
       const categories: (keyof TransmissionBreakdown)[] = [
           'informativos', 'boletines', 'publicidad', 'orientacion', 
@@ -852,22 +904,336 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           total: 'Total'
       };
 
+      const currentMonthInterruptions = interruptions.filter(i => {
+          if (!i.date) return false;
+          const [year, month] = i.date.split('-');
+          return parseInt(month) - 1 === today.getMonth() && parseInt(year) === today.getFullYear();
+      });
+
+      const interruptionsByCategory = categories.reduce((acc, cat) => {
+          acc[cat] = currentMonthInterruptions.filter(i => i.category === cat).reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+          return acc;
+      }, {} as Record<keyof TransmissionBreakdown, number>);
+      interruptionsByCategory.total = Object.values(interruptionsByCategory).reduce((a, b) => a + b, 0);
+
+      const handleSaveCategoryEdit = () => {
+          if (editingCategory) {
+              const newConfig = { ...transmissionConfig };
+              newConfig.WEEKDAY[editingCategory] = categoryEditForm.WEEKDAY;
+              newConfig.SATURDAY[editingCategory] = categoryEditForm.SATURDAY;
+              newConfig.SUNDAY[editingCategory] = categoryEditForm.SUNDAY;
+              saveDayMinutesConfig(newConfig);
+              setTransmissionConfig(newConfig);
+              setEditingCategory(null);
+          }
+      };
+
+      const handleConsolidate = () => {
+          const now = new Date();
+          const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          
+          // Verificar si el mes actual ha terminado (último día a las 23:59 o es un mes pasado)
+          const isCurrentMonth = now.getMonth() === today.getMonth() && now.getFullYear() === today.getFullYear();
+          if (isCurrentMonth) {
+              const isLastDay = now.getDate() === lastDayOfMonth.getDate();
+              const isLateEnough = now.getHours() === 23 && now.getMinutes() >= 59;
+              
+              if (!isLastDay || !isLateEnough) {
+                  alert("Restricción de Cierre: No se puede consolidar el mes en curso hasta que este haya finalizado cronológicamente (último día del mes a las 23:59h).");
+                  return;
+              }
+          }
+
+          const newConsolidated: ConsolidatedMonth = {
+              id: Date.now().toString(),
+              month: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`,
+              accumulated: accumulated.breakdown,
+              interruptions: interruptionsByCategory,
+              totalRealMinutes: accumulated.breakdown.total - interruptionsByCategory.total,
+              dateConsolidated: new Date().toISOString()
+          };
+          setConsolidatedMonths([...consolidatedMonths, newConsolidated]);
+          setShowConsolidateModal(false);
+          // Clear current month interruptions
+          setInterruptions(interruptions.filter(i => {
+              if (!i.date) return true;
+              const [year, month] = i.date.split('-');
+              return !(parseInt(month) - 1 === today.getMonth() && parseInt(year) === today.getFullYear());
+          }));
+      };
+
+      const exportToExcel = (monthData: ConsolidatedMonth) => {
+          const data = categories.map(cat => ({
+              'Categoría': categoryLabels[cat],
+              'Programado (horas)': Number((monthData.accumulated[cat] / 60).toFixed(2)),
+              'Interrupciones (horas)': Number((monthData.interruptions[cat] / 60).toFixed(2)),
+              'Real (horas)': Number(((monthData.accumulated[cat] - monthData.interruptions[cat]) / 60).toFixed(2))
+          }));
+          data.push({
+              'Categoría': 'TOTAL GENERAL',
+              'Programado (horas)': Number((monthData.accumulated.total / 60).toFixed(2)),
+              'Interrupciones (horas)': Number((monthData.interruptions.total / 60).toFixed(2)),
+              'Real (horas)': Number((monthData.totalRealMinutes / 60).toFixed(2))
+          });
+
+          const ws = XLSX.utils.json_to_sheet(data);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Transmisión");
+          XLSX.writeFile(wb, `Transmision_${monthData.month}.xlsx`);
+      };
+
+      const exportToWord = async (monthData: ConsolidatedMonth) => {
+          const createCell = (text: string, bold: boolean = false) => new TableCell({
+              children: [new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text, font: "Arial", size: 26, bold })]
+              })],
+              verticalAlign: "center",
+          });
+
+          const tableRows = [
+              new TableRow({
+                  children: [
+                      createCell("Categoría", true),
+                      createCell("Programado (horas)", true),
+                      createCell("Interrupciones (horas)", true),
+                      createCell("Real (horas)", true),
+                  ],
+              }),
+              ...categories.map(cat => new TableRow({
+                  children: [
+                      createCell(categoryLabels[cat]),
+                      createCell((monthData.accumulated[cat] / 60).toFixed(2)),
+                      createCell((monthData.interruptions[cat] / 60).toFixed(2)),
+                      createCell(((monthData.accumulated[cat] - monthData.interruptions[cat]) / 60).toFixed(2)),
+                  ],
+              })),
+              new TableRow({
+                  children: [
+                      createCell("TOTAL GENERAL", true),
+                      createCell((monthData.accumulated.total / 60).toFixed(2), true),
+                      createCell((monthData.interruptions.total / 60).toFixed(2), true),
+                      createCell((monthData.totalRealMinutes / 60).toFixed(2), true),
+                  ],
+              })
+          ];
+
+          const doc = new Document({
+              sections: [{
+                  properties: {},
+                  children: [
+                      new Paragraph({
+                          alignment: AlignmentType.CENTER,
+                          spacing: { after: 400 },
+                          children: [new TextRun({ text: `Reporte de Transmisión - ${monthData.month}`, font: "Arial", size: 26, bold: true })]
+                      }),
+                      new Table({ 
+                          rows: tableRows,
+                          alignment: AlignmentType.CENTER,
+                          width: { size: 100, type: WidthType.PERCENTAGE }
+                      }),
+                  ],
+              }],
+          });
+
+          const blob = await Packer.toBlob(doc);
+          saveAs(blob, `Transmision_${monthData.month}.docx`);
+      };
+
+      const handleAddManualMonth = () => {
+          const monthlyData = getMonthlyTotalData(manualMonth, manualYear, transmissionConfig);
+          const scheduledMinutes = monthlyData.breakdown.total;
+          const realMinutes = scheduledMinutes - manualInterruptions;
+          
+          const monthStr = `${manualYear}-${String(manualMonth + 1).padStart(2, '0')}`;
+          
+          if (consolidatedMonths.some(m => m.month === monthStr)) {
+              alert("Este mes ya ha sido consolidado.");
+              return;
+          }
+
+          const emptyBreakdown: Record<keyof TransmissionBreakdown, number> = {
+              informativos: 0, boletines: 0, publicidad: 0, orientacion: 0,
+              cienciaTecnica: 0, variados: 0, historicos: 0, literaturaArte: 0,
+              musicales: 0, reposiciones: 0, total: manualInterruptions
+          };
+
+          const newConsolidated: ConsolidatedMonth = {
+              id: Date.now().toString(),
+              month: monthStr,
+              accumulated: monthlyData.breakdown,
+              interruptions: emptyBreakdown,
+              totalRealMinutes: realMinutes,
+              dateConsolidated: new Date().toISOString()
+          };
+          setConsolidatedMonths([...consolidatedMonths, newConsolidated]);
+          alert("Mes histórico añadido correctamente.");
+      };
+
+      const handleDeleteConsolidatedMonth = (id: string) => {
+          setItemToDelete(id);
+      };
+
+      if (showAccumulatedMonths) {
+          return (
+              <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+                  <CMNLHeader 
+                      user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                      sectionTitle="Histórico / Evolución"
+                      onMenuClick={onMenuClick}
+                      onBack={() => setShowAccumulatedMonths(false)}
+                  />
+                  {itemToDelete && (
+                      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                          <div className="bg-[#2C1B15] p-6 rounded-xl border border-[#9E7649] shadow-2xl max-w-sm w-full">
+                              <h3 className="text-lg font-bold text-white mb-4">¿Confirmar eliminación?</h3>
+                              <p className="text-[#E8DCCF]/70 mb-6">Esta acción no se puede deshacer.</p>
+                              <div className="flex justify-end gap-4">
+                                  <button 
+                                      onClick={() => setItemToDelete(null)}
+                                      className="px-4 py-2 text-[#E8DCCF] hover:text-white"
+                                  >
+                                      Cancelar
+                                  </button>
+                                  <button 
+                                      onClick={() => {
+                                          setConsolidatedMonths(prev => prev.filter(m => m.id !== itemToDelete));
+                                          setItemToDelete(null);
+                                      }}
+                                      className="px-4 py-2 bg-red-900/40 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-900/60"
+                                  >
+                                      Eliminar
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+                  <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
+                      {isAdmin && (
+                          <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-xl mb-8">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                  <CalendarCheck size={20} className="text-[#9E7649]" />
+                                  Registrar Mes Histórico
+                              </h3>
+                              <p className="text-sm text-[#E8DCCF]/60 mb-4">
+                                  El sistema calculará automáticamente las horas programadas según el calendario del mes.
+                              </p>
+                              <div className="flex flex-wrap items-end gap-4">
+                                  <div>
+                                      <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Mes</label>
+                                      <select 
+                                          value={manualMonth} 
+                                          onChange={e => setManualMonth(parseInt(e.target.value))}
+                                          className="bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-2.5 text-white min-w-[120px]"
+                                      >
+                                          {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((m, i) => (
+                                              <option key={i} value={i}>{m}</option>
+                                          ))}
+                                      </select>
+                                  </div>
+                                  <div>
+                                      <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Año</label>
+                                      <input 
+                                          type="number" 
+                                          value={manualYear} 
+                                          onChange={e => setManualYear(parseInt(e.target.value))} 
+                                          className="w-24 bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-2.5 text-white" 
+                                      />
+                                  </div>
+                                  <div>
+                                      <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Interrupciones (minutos)</label>
+                                      <input 
+                                          type="number" 
+                                          value={manualInterruptions} 
+                                          onChange={e => setManualInterruptions(parseInt(e.target.value))} 
+                                          className="w-32 bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-2.5 text-white" 
+                                      />
+                                  </div>
+                                  <button 
+                                      onClick={handleAddManualMonth}
+                                      className="bg-[#9E7649] text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-[#8B653D] transition-colors flex items-center gap-2"
+                                  >
+                                      <Save size={16} /> Guardar Histórico
+                                  </button>
+                              </div>
+                          </div>
+                      )}
+
+                      <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden shadow-xl">
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-sm text-left">
+                                  <thead className="text-xs text-[#9E7649] uppercase bg-black/20">
+                                      <tr>
+                                          <th className="px-6 py-4">Mes</th>
+                                          <th className="px-6 py-4 text-center">Horas Programadas</th>
+                                          <th className="px-6 py-4 text-center text-red-400">Interrupciones</th>
+                                          <th className="px-6 py-4 text-center text-green-400">Horas Reales Transmitidas</th>
+                                          <th className="px-6 py-4 text-right">Acciones</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-[#9E7649]/10">
+                                      {consolidatedMonths.length === 0 ? (
+                                          <tr>
+                                              <td colSpan={5} className="px-6 py-8 text-center text-[#E8DCCF]/50">No hay meses consolidados aún.</td>
+                                          </tr>
+                                      ) : (
+                                          [...consolidatedMonths].sort((a, b) => b.month.localeCompare(a.month)).map(month => (
+                                              <tr key={month.id} className="hover:bg-white/5 transition-colors">
+                                                  <td className="px-6 py-4 font-bold text-white">{month.month}</td>
+                                                  <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">{(month.accumulated.total / 60).toFixed(2)} h</td>
+                                                  <td className="px-6 py-4 text-center font-mono text-red-400">{(month.interruptions.total / 60).toFixed(2)} h</td>
+                                                  <td className="px-6 py-4 text-center font-mono text-green-400 font-bold">{(month.totalRealMinutes / 60).toFixed(2)} h</td>
+                                                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                      <div className="flex justify-end gap-2">
+                                                          <button onClick={() => exportToExcel(month)} className="bg-green-900/40 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-green-900/60 transition-colors">
+                                                              Excel
+                                                          </button>
+                                                          <button onClick={() => exportToWord(month)} className="bg-blue-900/40 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-900/60 transition-colors">
+                                                              Word
+                                                          </button>
+                                                          <button onClick={() => handleDeleteConsolidatedMonth(month.id)} className="bg-red-900/40 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-red-900/60 transition-colors">
+                                                              Eliminar
+                                                          </button>
+                                                      </div>
+                                                  </td>
+                                              </tr>
+                                          ))
+                                      )}
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          );
+      }
+
       return (
-          <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+          <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col relative">
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                   sectionTitle="Transmisión"
                   onMenuClick={onMenuClick}
                   onBack={() => setActiveSection(null)}
-              />
+              >
+                  <button 
+                      onClick={() => setShowAccumulatedMonths(true)}
+                      className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                  >
+                      <Library size={16} />
+                      <span className="hidden sm:inline">Histórico</span>
+                  </button>
+              </CMNLHeader>
 
               <div className="p-6 max-w-6xl mx-auto w-full space-y-8">
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="bg-gradient-to-br from-[#2C1B15] to-[#3E1E16] p-6 rounded-2xl border border-[#9E7649]/20 shadow-xl">
-                          <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Acumulado del Mes</p>
-                          <h2 className="text-5xl font-bold text-white mb-1">{accumulated.hours.toFixed(2)} <span className="text-xl font-normal text-[#9E7649]">h</span></h2>
-                          <p className="text-xs text-[#E8DCCF]/50">Hasta hoy, {today.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}</p>
+                          <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Acumulado Real del Mes</p>
+                          <h2 className="text-5xl font-bold text-white mb-1">{((accumulated.breakdown.total - interruptionsByCategory.total) / 60).toFixed(2)} <span className="text-xl font-normal text-[#9E7649]">h</span></h2>
+                          <p className="text-xs text-[#E8DCCF]/50">
+                              Hasta ayer {new Date(today.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Interrupciones descontadas.
+                          </p>
                       </div>
                       <div className="bg-gradient-to-br from-[#1A100C] to-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/10 shadow-xl">
                           <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Proyección Mensual</p>
@@ -889,22 +1255,48 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                               <thead className="text-xs text-[#9E7649] uppercase bg-black/20">
                                   <tr>
                                       <th className="px-6 py-4">Categoría</th>
-                                      <th className="px-6 py-4 text-center">Acumulado (min)</th>
-                                      <th className="px-6 py-4 text-center">Proyectado (min)</th>
+                                      <th className="px-6 py-4 text-center">Programado (min)</th>
+                                      <th className="px-6 py-4 text-center text-red-400">Interrupciones</th>
+                                      <th className="px-6 py-4 text-center text-green-400">Real (min)</th>
                                       <th className="px-6 py-4 text-right">Progreso</th>
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-[#9E7649]/10">
                                   {categories.map(cat => {
                                       const accMin = accumulated.breakdown[cat];
+                                      const intMin = interruptionsByCategory[cat];
+                                      const realMin = accMin - intMin;
                                       const totalMin = monthly.breakdown[cat];
-                                      const percentage = totalMin > 0 ? (accMin / totalMin) * 100 : 0;
+                                      const percentage = totalMin > 0 ? (realMin / totalMin) * 100 : 0;
 
                                       return (
                                           <tr key={cat} className="hover:bg-white/5 transition-colors">
-                                              <td className="px-6 py-4 font-medium text-white">{categoryLabels[cat]}</td>
-                                              <td className="px-6 py-4 text-center font-mono">{accMin}</td>
-                                              <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">{totalMin}</td>
+                                              <td className="px-6 py-4 font-medium text-white">
+                                                  {isAdmin ? (
+                                                      <button 
+                                                          onClick={() => {
+                                                              setEditingCategory(cat);
+                                                              setCategoryEditForm({
+                                                                  WEEKDAY: transmissionConfig.WEEKDAY[cat],
+                                                                  SATURDAY: transmissionConfig.SATURDAY[cat],
+                                                                  SUNDAY: transmissionConfig.SUNDAY[cat]
+                                                              });
+                                                          }}
+                                                          className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
+                                                          title="Editar minutos base"
+                                                      >
+                                                          {categoryLabels[cat]}
+                                                          <Edit2 size={12} className="opacity-50" />
+                                                      </button>
+                                                  ) : (
+                                                      <span className="flex items-center gap-2">
+                                                          {categoryLabels[cat]}
+                                                      </span>
+                                                  )}
+                                              </td>
+                                              <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">{accMin}</td>
+                                              <td className="px-6 py-4 text-center font-mono text-red-400">{intMin > 0 ? `-${intMin}` : '0'}</td>
+                                              <td className="px-6 py-4 text-center font-mono text-green-400 font-bold">{realMin}</td>
                                               <td className="px-6 py-4 text-right">
                                                   <div className="flex items-center justify-end gap-3">
                                                       <div className="w-24 h-1.5 bg-black/40 rounded-full overflow-hidden">
@@ -921,15 +1313,32 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                   })}
                                   <tr className="bg-[#3E1E16]/50 font-bold">
                                       <td className="px-6 py-4 text-[#9E7649]">TOTAL GENERAL</td>
-                                      <td className="px-6 py-4 text-center text-white">{accumulated.breakdown.total}</td>
-                                      <td className="px-6 py-4 text-center text-[#E8DCCF]/50">{monthly.breakdown.total}</td>
+                                      <td className="px-6 py-4 text-center text-[#E8DCCF]/50">{accumulated.breakdown.total}</td>
+                                      <td className="px-6 py-4 text-center text-red-400">-{interruptionsByCategory.total}</td>
+                                      <td className="px-6 py-4 text-center text-green-400">{accumulated.breakdown.total - interruptionsByCategory.total}</td>
                                       <td className="px-6 py-4 text-right">
-                                          <span className="text-[#9E7649]">{Math.round((accumulated.breakdown.total / monthly.breakdown.total) * 100)}%</span>
+                                          <span className="text-[#9E7649]">{monthly.breakdown.total > 0 ? Math.round(((accumulated.breakdown.total - interruptionsByCategory.total) / monthly.breakdown.total) * 100) : 0}%</span>
                                       </td>
                                   </tr>
                               </tbody>
                           </table>
                       </div>
+                      {isAdmin && (
+                          <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
+                              <button 
+                                  onClick={() => setShowInterruptionsModal(true)}
+                                  className="bg-red-900/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-900/60 transition-colors flex items-center gap-2"
+                              >
+                                  <Radio size={16} /> Registrar Interrupción
+                              </button>
+                              <button 
+                                  onClick={() => setShowConsolidateModal(true)}
+                                  className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#8B653D] transition-colors flex items-center gap-2"
+                              >
+                                  <Save size={16} /> Consolidar Mes
+                              </button>
+                          </div>
+                      )}
                   </div>
 
                   {/* Info Card */}
@@ -946,6 +1355,78 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                       </div>
                   </div>
               </div>
+
+              {/* Modals */}
+              {editingCategory && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                      <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
+                          <h3 className="text-xl font-bold text-white mb-4">Editar {categoryLabels[editingCategory]}</h3>
+                          <p className="text-sm text-[#9E7649] mb-6">Modifica los minutos base por tipo de día. Esto recalculará todo el histórico.</p>
+                          
+                          <div className="space-y-4 mb-6">
+                              <div>
+                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Lunes a Viernes (min)</label>
+                                  <input type="number" value={categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                              </div>
+                              <div>
+                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Sábados (min)</label>
+                                  <input type="number" value={categoryEditForm.SATURDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SATURDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                              </div>
+                              <div>
+                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Domingos (min)</label>
+                                  <input type="number" value={categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                              </div>
+                          </div>
+
+                          <div className="flex justify-end gap-3">
+                              <button onClick={() => setEditingCategory(null)} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">Cancelar</button>
+                              <button onClick={handleSaveCategoryEdit} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">Guardar Cambios</button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {showConsolidateModal && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                      <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
+                          <h3 className="text-xl font-bold text-white mb-2">Consolidar Mes</h3>
+                          <p className="text-sm text-[#9E7649] mb-6">Estás a punto de cerrar el mes actual. Revisa los datos antes de aceptar.</p>
+                          
+                          <div className="bg-[#1A100C] rounded-xl p-4 mb-6 border border-[#9E7649]/10 space-y-2">
+                              <div className="flex justify-between text-sm">
+                                  <span className="text-[#E8DCCF]/50">Total Programado:</span>
+                                  <span className="text-white font-mono">{accumulated.breakdown.total} min</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                  <span className="text-[#E8DCCF]/50">Total Interrupciones:</span>
+                                  <span className="text-red-400 font-mono">-{interruptionsByCategory.total} min</span>
+                              </div>
+                              <div className="flex justify-between text-base font-bold pt-2 border-t border-[#9E7649]/20">
+                                  <span className="text-[#9E7649]">Total Real:</span>
+                                  <span className="text-green-400 font-mono">{accumulated.breakdown.total - interruptionsByCategory.total} min</span>
+                              </div>
+                          </div>
+
+                          <div className="flex justify-end gap-3">
+                              <button onClick={() => setShowConsolidateModal(false)} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">Cancelar</button>
+                              <button onClick={handleConsolidate} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">Aceptar y Consolidar</button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {showInterruptionsModal && (
+                  <InterruptionModal 
+                      onClose={() => setShowInterruptionsModal(false)} 
+                      onSave={(interruption) => {
+                          setInterruptions([...interruptions, interruption]);
+                          setShowInterruptionsModal(false);
+                      }}
+                      fichas={fichas}
+                      categories={categories}
+                      categoryLabels={categoryLabels}
+                  />
+              )}
           </div>
       );
   }
@@ -1092,8 +1573,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                               <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Otros Pagos Mensuales ($)</label>
                               <input 
                                   type="number" 
-                                  value={configForm.otherPayments === 0 ? '' : configForm.otherPayments}
-                                  onChange={(e) => setConfigForm(prev => ({ ...prev, otherPayments: e.target.value === '' ? 0 : parseFloat(e.target.value) }))}
+                                  value={configForm.otherPayments || ''}
+                                  onChange={(e) => setConfigForm(prev => ({ ...prev, otherPayments: e.target.value }))}
                                   className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
                                   placeholder="0"
                               />
@@ -1144,51 +1625,51 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                   onMenuClick={onMenuClick}
                   onBack={() => setActiveSection(null)}
               >
-                  <div className="flex gap-1 sm:gap-1.5">
+                  <div className="flex gap-1">
                        <button 
                           onClick={() => { setShowAccumulated(!showAccumulated); setShowMonthlyPayments(false); }}
-                          className={`flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          className={`flex items-center gap-1 text-xs px-2 py-2 rounded-lg font-bold transition-all ${showAccumulated ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
                           title={showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}
                       >
-                          <FileBarChart size={16} />
-                          <span className="hidden md:inline">{showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}</span>
+                          <FileBarChart size={14} />
+                          <span className="hidden lg:inline">{showAccumulated ? 'Ver Registro' : 'Ver Acumulado'}</span>
                       </button>
                       <button 
                           onClick={() => { setShowMonthlyPayments(!showMonthlyPayments); setShowAccumulated(false); }}
-                          className={`flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
+                          className={`flex items-center gap-1 text-xs px-2 py-2 rounded-lg font-bold transition-all ${showMonthlyPayments ? 'bg-[#9E7649] text-white shadow-lg' : 'bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10'}`}
                           title="Pagos Mensuales"
                       >
-                          <CalendarCheck size={16} />
-                          <span className="hidden md:inline">Pagos</span>
+                          <CalendarCheck size={14} />
+                          <span className="hidden lg:inline">Pagos</span>
                       </button>
                       <button 
                           onClick={() => setUserPaymentConfig(null)}
-                          className="flex items-center gap-1 sm:gap-1.5 text-xs px-2 sm:px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                          className="flex items-center gap-1 text-xs px-2 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
                           title="Configuración"
                       >
-                          <Settings size={16} />
-                          <span className="hidden md:inline">Config</span>
+                          <Settings size={14} />
+                          <span className="hidden lg:inline">Config</span>
                       </button>
                   </div>
               </CMNLHeader>
 
-              <div className="p-6 max-w-6xl mx-auto w-full">
+              <div className="p-4 sm:p-6 max-w-6xl mx-auto w-full">
                   {/* Summary Card */}
-                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-4 sm:p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 w-full">
+                  <div className="bg-gradient-to-r from-[#2C1B15] to-[#3E1E16] p-4 sm:p-6 rounded-xl border border-[#9E7649]/20 shadow-lg mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 w-full">
                           <div className="min-w-0">
                               <p className="text-[#9E7649] text-[10px] sm:text-sm uppercase tracking-wider mb-1">Acumulado Bruto</p>
-                              <h2 className="text-2xl sm:text-3xl font-bold text-white truncate">${monthTotal.toFixed(2)}</h2>
+                              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white break-words">${monthTotal.toFixed(2)}</h2>
                               <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Total devengado</p>
                           </div>
-                          <div className="sm:border-l border-[#9E7649]/20 sm:pl-8 min-w-0">
+                          <div className="border-t sm:border-t-0 sm:border-l border-[#9E7649]/20 pt-4 sm:pt-0 sm:pl-6 lg:pl-8 min-w-0">
                               <p className="text-[#9E7649] text-[10px] sm:text-sm uppercase tracking-wider mb-1">Impuestos</p>
-                              <h2 className="text-2xl sm:text-3xl font-bold text-red-400 truncate">-${monthTax.toFixed(2)}</h2>
+                              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-400 break-words">-${monthTax.toFixed(2)}</h2>
                               <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Deducciones</p>
                           </div>
-                          <div className="sm:border-l border-[#9E7649]/20 sm:pl-8 min-w-0">
+                          <div className="border-t sm:border-t-0 sm:border-l border-[#9E7649]/20 pt-4 sm:pt-0 sm:pl-6 lg:pl-8 min-w-0">
                               <p className="text-[#9E7649] text-[10px] sm:text-sm uppercase tracking-wider mb-1">A Pagar (Neto)</p>
-                              <h2 className="text-3xl sm:text-4xl font-bold text-green-400 truncate">${monthNet.toFixed(2)}</h2>
+                              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400 break-words">${monthNet.toFixed(2)}</h2>
                               <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Pago definitivo</p>
                           </div>
                       </div>
