@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings } from 'lucide-react';
+import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings, AlertTriangle } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
@@ -174,9 +174,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   });
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
+  const [showPrematureAlert, setShowPrematureAlert] = useState(false);
   const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
   const [editingCategory, setEditingCategory] = useState<keyof TransmissionBreakdown | null>(null);
   const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0 });
+  
+  const [dialog, setDialog] = useState<{isOpen: boolean, title: string, message: string, type: 'alert' | 'confirm', onConfirm?: () => void}>({
+      isOpen: false, title: '', message: '', type: 'alert'
+  });
   
   const todayForState = new Date();
   const [manualMonth, setManualMonth] = useState(todayForState.getMonth() === 0 ? 11 : todayForState.getMonth() - 1);
@@ -758,7 +763,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       
       // Check if already consolidated
       if (consolidatedPayments.some(c => c.userId === currentUser.username && c.month === prevMonth)) {
-          alert(`El mes de ${prevMonth} ya ha sido consolidado.`);
+          setDialog({ isOpen: true, title: 'Acción no permitida', message: `El mes de ${prevMonth} ya ha sido consolidado.`, type: 'alert' });
           return;
       }
 
@@ -768,7 +773,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           .reduce((acc, log) => acc + log.amount, 0);
 
       if (monthTotal === 0 && !userPaymentConfig.otherPayments) {
-          alert(`No hay pagos registrados para consolidar en el mes de ${prevMonth}.`);
+          setDialog({ isOpen: true, title: 'Sin datos', message: `No hay pagos registrados para consolidar en el mes de ${prevMonth}.`, type: 'alert' });
           return;
       }
 
@@ -780,32 +785,45 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       const tax = calculateTax(monthTotal);
       const netAmount = monthTotal - tax;
 
-      if (window.confirm(`¿Desea consolidar el mes de ${prevMonth}?\n\nMonto Bruto: $${monthTotal.toFixed(2)}\nImpuestos: $${tax.toFixed(2)}\nNeto a Pagar: $${netAmount.toFixed(2)}\n\nEsta acción guardará la cifra definitiva y limpiará los registros de ese mes.`)) {
-          const newConsolidation: ConsolidatedPayment = {
-              id: Date.now().toString(),
-              userId: currentUser.username,
-              month: prevMonth,
-              amount: netAmount,
-              grossAmount: monthTotal,
-              taxAmount: tax,
-              dateConsolidated: new Date().toISOString()
-          };
-          setConsolidatedPayments([...consolidatedPayments, newConsolidation]);
-          // Clear work logs for the consolidated month
-          const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(prevMonth)));
-          setWorkLogs(newLogs);
-          alert(`Mes de ${prevMonth} consolidado exitosamente.`);
-      }
+      setDialog({
+          isOpen: true,
+          title: 'Confirmar Consolidación',
+          message: `¿Desea consolidar el mes de ${prevMonth}?\n\nMonto Bruto: $${monthTotal.toFixed(2)}\nImpuestos: $${tax.toFixed(2)}\nNeto a Pagar: $${netAmount.toFixed(2)}\n\nEsta acción guardará la cifra definitiva y limpiará los registros de ese mes.`,
+          type: 'confirm',
+          onConfirm: () => {
+              const newConsolidation: ConsolidatedPayment = {
+                  id: Date.now().toString(),
+                  userId: currentUser.username,
+                  month: prevMonth,
+                  amount: netAmount,
+                  grossAmount: monthTotal,
+                  taxAmount: tax,
+                  dateConsolidated: new Date().toISOString()
+              };
+              setConsolidatedPayments([...consolidatedPayments, newConsolidation]);
+              // Clear work logs for the consolidated month
+              const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(prevMonth)));
+              setWorkLogs(newLogs);
+              setDialog({ isOpen: true, title: 'Éxito', message: `Mes de ${prevMonth} consolidado exitosamente.`, type: 'alert' });
+          }
+      });
   };
 
   const clearMonth = () => {
       if (!currentUser) return;
       const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
-      if (window.confirm(`¿Está seguro de que desea eliminar todos los registros del mes de ${currentMonth}? Esta acción no se puede deshacer.`)) {
-          const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(currentMonth)));
-          setWorkLogs(newLogs);
-          alert(`Registros del mes de ${currentMonth} eliminados.`);
-      }
+      
+      setDialog({
+          isOpen: true,
+          title: 'Confirmar Eliminación',
+          message: `¿Está seguro de que desea eliminar todos los registros del mes de ${currentMonth}? Esta acción no se puede deshacer.`,
+          type: 'confirm',
+          onConfirm: () => {
+              const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(currentMonth)));
+              setWorkLogs(newLogs);
+              setDialog({ isOpen: true, title: 'Éxito', message: `Registros del mes de ${currentMonth} eliminados.`, type: 'alert' });
+          }
+      });
   };
 
   const updateRole = (id: string, updates: Partial<RoleConfig>) => {
@@ -880,14 +898,46 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
   // Render Pagos Section
   if (activeSection === 'transmision') {
-      const today = new Date();
-      const accumulated = getAccumulatedData(today, transmissionConfig);
-      const monthly = getMonthlyTotalData(today.getMonth(), today.getFullYear(), transmissionConfig);
+      const now = new Date();
+      const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      let targetYear = now.getFullYear();
+      let targetMonth = now.getMonth();
+      let isPending = false;
+
+      if (consolidatedMonths.length > 0) {
+          const sorted = [...consolidatedMonths].sort((a, b) => a.month.localeCompare(b.month));
+          const lastConsolidated = sorted[sorted.length - 1].month;
+          const [year, month] = lastConsolidated.split('-').map(Number);
+          
+          const nextMonthDate = new Date(year, month, 1);
+          const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (nextMonthStr < currentMonthStr) {
+              targetYear = nextMonthDate.getFullYear();
+              targetMonth = nextMonthDate.getMonth();
+              isPending = true;
+          }
+      } else {
+          // Si no hay meses consolidados, asumimos que el mes anterior está pendiente
+          const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+          targetYear = prevMonthDate.getFullYear();
+          targetMonth = prevMonthDate.getMonth();
+          isPending = true;
+      }
+
+      const targetMonthString = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+
+      const accumulated = isPending 
+          ? getMonthlyTotalData(targetMonth, targetYear, transmissionConfig)
+          : getAccumulatedData(now, transmissionConfig);
+          
+      const monthly = getMonthlyTotalData(targetMonth, targetYear, transmissionConfig);
 
       const categories: (keyof TransmissionBreakdown)[] = [
           'informativos', 'boletines', 'publicidad', 'orientacion', 
-          'cienciaTecnica', 'variados', 'historicos', 
-          'literaturaArte', 'musicales', 'reposiciones'
+          'cienciaTecnica', 'variados', 'historicosGrabado', 
+          'variadoInfantilGrabado', 'literaturaArte', 'musicales'
       ];
 
       const categoryLabels: Record<keyof TransmissionBreakdown, string> = {
@@ -897,17 +947,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           orientacion: 'Orientación',
           cienciaTecnica: 'Ciencia/Técnica',
           variados: 'Variados',
-          historicos: 'Históricos',
+          historicosGrabado: 'Histórico - Grabado',
+          variadoInfantilGrabado: 'Variado/Infantil - Grabado',
           literaturaArte: 'Literatura/Arte',
           musicales: 'Musicales',
-          reposiciones: 'Reposiciones',
           total: 'Total'
       };
 
       const currentMonthInterruptions = interruptions.filter(i => {
           if (!i.date) return false;
-          const [year, month] = i.date.split('-');
-          return parseInt(month) - 1 === today.getMonth() && parseInt(year) === today.getFullYear();
+          return i.date.startsWith(targetMonthString);
       });
 
       const interruptionsByCategory = categories.reduce((acc, cat) => {
@@ -915,6 +964,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           return acc;
       }, {} as Record<keyof TransmissionBreakdown, number>);
       interruptionsByCategory.total = Object.values(interruptionsByCategory).reduce((a, b) => a + b, 0);
+
+      const renderCategoryLabel = (cat: keyof TransmissionBreakdown) => {
+          if (cat === 'publicidad') return <span className="flex items-center">Publicidad<sup className="text-red-600 text-[10px] font-bold ml-1">GRABADO</sup></span>;
+          if (cat === 'historicosGrabado') return <span className="flex items-center">Histórico<sup className="text-red-600 text-[10px] font-bold ml-1">GRABADO</sup></span>;
+          if (cat === 'variadoInfantilGrabado') return <span className="flex items-center">Variado/Infantil<sup className="text-red-600 text-[10px] font-bold ml-1">GRABADO</sup></span>;
+          return categoryLabels[cat];
+      };
 
       const handleSaveCategoryEdit = () => {
           if (editingCategory) {
@@ -928,25 +984,18 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           }
       };
 
-      const handleConsolidate = () => {
-          const now = new Date();
-          const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          
-          // Verificar si el mes actual ha terminado (último día a las 23:59 o es un mes pasado)
-          const isCurrentMonth = now.getMonth() === today.getMonth() && now.getFullYear() === today.getFullYear();
-          if (isCurrentMonth) {
-              const isLastDay = now.getDate() === lastDayOfMonth.getDate();
-              const isLateEnough = now.getHours() === 23 && now.getMinutes() >= 59;
-              
-              if (!isLastDay || !isLateEnough) {
-                  alert("Restricción de Cierre: No se puede consolidar el mes en curso hasta que este haya finalizado cronológicamente (último día del mes a las 23:59h).");
-                  return;
-              }
+      const handleOpenConsolidateModal = () => {
+          if (!isPending) {
+              setShowPrematureAlert(true);
+              return;
           }
+          setShowConsolidateModal(true);
+      };
 
+      const handleConsolidate = () => {
           const newConsolidated: ConsolidatedMonth = {
               id: Date.now().toString(),
-              month: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`,
+              month: targetMonthString,
               accumulated: accumulated.breakdown,
               interruptions: interruptionsByCategory,
               totalRealMinutes: accumulated.breakdown.total - interruptionsByCategory.total,
@@ -957,23 +1006,75 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           // Clear current month interruptions
           setInterruptions(interruptions.filter(i => {
               if (!i.date) return true;
-              const [year, month] = i.date.split('-');
-              return !(parseInt(month) - 1 === today.getMonth() && parseInt(year) === today.getFullYear());
+              return !i.date.startsWith(targetMonthString);
           }));
       };
 
+      const formatMinutesToHHMMSS = (totalMinutes: number) => {
+          const h = Math.floor(totalMinutes / 60);
+          const m = Math.floor(totalMinutes % 60);
+          return `${h}:${m.toString().padStart(2, '0')}:00`;
+      };
+
+      const getExportDataRows = (monthData: ConsolidatedMonth) => {
+          const getReal = (cat: keyof TransmissionBreakdown) => monthData.accumulated[cat] - monthData.interruptions[cat];
+
+          const rows = [
+              { group: 'Información', isGroup: true, total: getReal('informativos') + getReal('boletines'), vivo: getReal('informativos') + getReal('boletines'), grabado: 0 },
+              { name: 'Espacios informativos', total: getReal('informativos'), vivo: getReal('informativos'), grabado: 0 },
+              { name: 'Boletines informativos', total: getReal('boletines'), vivo: getReal('boletines'), grabado: 0 },
+              
+              { group: 'Orientación', isGroup: true, total: getReal('publicidad') + getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados'), grabado: getReal('publicidad') + getReal('variadoInfantilGrabado') },
+              { name: 'Publicidad', total: getReal('publicidad'), vivo: 0, grabado: getReal('publicidad') },
+              { name: 'Espacios Educativos', total: 0, vivo: 0, grabado: 0 },
+              { name: 'Espacios de Orientación', total: getReal('orientacion'), vivo: getReal('orientacion'), grabado: 0 },
+              { name: 'Espacios de Ciencia y Técnica', total: getReal('cienciaTecnica'), vivo: getReal('cienciaTecnica'), grabado: 0 },
+              { name: 'Espacios Variados', total: getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('variados'), grabado: getReal('variadoInfantilGrabado') },
+              
+              { group: 'Cultura', isGroup: true, total: getReal('historicosGrabado') + getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: getReal('historicosGrabado') },
+              { name: 'Espacios Históricos', total: getReal('historicosGrabado'), vivo: 0, grabado: getReal('historicosGrabado') },
+              { name: 'Espacios Dramatizados', total: 0, vivo: 0, grabado: 0 },
+              { name: 'Espacios de Literatura y Arte', total: getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: 0 },
+              
+              { group: 'Música', isGroup: true, total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
+              { name: 'Espacios musicales', total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
+              
+              { group: 'Deportes', isGroup: true, total: 0, vivo: 0, grabado: 0 },
+              { name: 'Espacios deportivos', total: 0, vivo: 0, grabado: 0 },
+          ];
+
+          const totalGeneral = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.total, 0);
+          const totalVivo = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.vivo, 0);
+          const totalGrabado = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.grabado, 0);
+
+          return { rows, totalGeneral, totalVivo, totalGrabado };
+      };
+
       const exportToExcel = (monthData: ConsolidatedMonth) => {
-          const data = categories.map(cat => ({
-              'Categoría': categoryLabels[cat],
-              'Programado (horas)': Number((monthData.accumulated[cat] / 60).toFixed(2)),
-              'Interrupciones (horas)': Number((monthData.interruptions[cat] / 60).toFixed(2)),
-              'Real (horas)': Number(((monthData.accumulated[cat] - monthData.interruptions[cat]) / 60).toFixed(2))
+          const { rows, totalGeneral, totalVivo, totalGrabado } = getExportDataRows(monthData);
+          
+          const data = rows.map(row => ({
+              'GRUPO DE PROGRAMAS': row.isGroup ? row.group : `    ${row.name}`,
+              'Total horas emisión': formatMinutesToHHMMSS(row.total),
+              'En vivo': formatMinutesToHHMMSS(row.vivo),
+              'Grabado': formatMinutesToHHMMSS(row.grabado),
+              'OBSERVACIONES': ''
           }));
+
           data.push({
-              'Categoría': 'TOTAL GENERAL',
-              'Programado (horas)': Number((monthData.accumulated.total / 60).toFixed(2)),
-              'Interrupciones (horas)': Number((monthData.interruptions.total / 60).toFixed(2)),
-              'Real (horas)': Number((monthData.totalRealMinutes / 60).toFixed(2))
+              'GRUPO DE PROGRAMAS': 'Interrupciones:',
+              'Total horas emisión': (monthData.interruptions.total / 60).toFixed(2),
+              'En vivo': '',
+              'Grabado': '',
+              'OBSERVACIONES': ''
+          });
+
+          data.push({
+              'GRUPO DE PROGRAMAS': 'Totales:',
+              'Total horas emisión': formatMinutesToHHMMSS(totalGeneral),
+              'En vivo': formatMinutesToHHMMSS(totalVivo),
+              'Grabado': formatMinutesToHHMMSS(totalGrabado),
+              'OBSERVACIONES': ''
           });
 
           const ws = XLSX.utils.json_to_sheet(data);
@@ -983,37 +1084,51 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       };
 
       const exportToWord = async (monthData: ConsolidatedMonth) => {
-          const createCell = (text: string, bold: boolean = false) => new TableCell({
+          const createCell = (text: string, bold: boolean = false, align: any = AlignmentType.CENTER) => new TableCell({
               children: [new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text, font: "Arial", size: 26, bold })]
+                  alignment: align,
+                  children: [new TextRun({ text, font: "Arial", size: 22, bold })]
               })],
               verticalAlign: "center",
           });
 
+          const { rows, totalGeneral, totalVivo, totalGrabado } = getExportDataRows(monthData);
+
           const tableRows = [
               new TableRow({
                   children: [
-                      createCell("Categoría", true),
-                      createCell("Programado (horas)", true),
-                      createCell("Interrupciones (horas)", true),
-                      createCell("Real (horas)", true),
+                      createCell("GRUPO DE PROGRAMAS", true),
+                      createCell("Total horas emisión", true),
+                      createCell("En vivo", true),
+                      createCell("Grabado", true),
+                      createCell("OBSERVACIONES", true),
                   ],
               }),
-              ...categories.map(cat => new TableRow({
+              ...rows.map(row => new TableRow({
                   children: [
-                      createCell(categoryLabels[cat]),
-                      createCell((monthData.accumulated[cat] / 60).toFixed(2)),
-                      createCell((monthData.interruptions[cat] / 60).toFixed(2)),
-                      createCell(((monthData.accumulated[cat] - monthData.interruptions[cat]) / 60).toFixed(2)),
+                      createCell(row.isGroup ? (row.group || '') : `    ${row.name}`, row.isGroup, row.isGroup ? AlignmentType.LEFT : AlignmentType.LEFT),
+                      createCell(formatMinutesToHHMMSS(row.total), row.isGroup),
+                      createCell(formatMinutesToHHMMSS(row.vivo), row.isGroup),
+                      createCell(formatMinutesToHHMMSS(row.grabado), row.isGroup),
+                      createCell(""),
                   ],
               })),
               new TableRow({
                   children: [
-                      createCell("TOTAL GENERAL", true),
-                      createCell((monthData.accumulated.total / 60).toFixed(2), true),
+                      createCell("Interrupciones:", true, AlignmentType.RIGHT),
                       createCell((monthData.interruptions.total / 60).toFixed(2), true),
-                      createCell((monthData.totalRealMinutes / 60).toFixed(2), true),
+                      createCell("", true),
+                      createCell("", true),
+                      createCell(""),
+                  ],
+              }),
+              new TableRow({
+                  children: [
+                      createCell("Totales:", true, AlignmentType.RIGHT),
+                      createCell(formatMinutesToHHMMSS(totalGeneral), true),
+                      createCell(formatMinutesToHHMMSS(totalVivo), true),
+                      createCell(formatMinutesToHHMMSS(totalGrabado), true),
+                      createCell(""),
                   ],
               })
           ];
@@ -1054,8 +1169,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
           const emptyBreakdown: Record<keyof TransmissionBreakdown, number> = {
               informativos: 0, boletines: 0, publicidad: 0, orientacion: 0,
-              cienciaTecnica: 0, variados: 0, historicos: 0, literaturaArte: 0,
-              musicales: 0, reposiciones: 0, total: manualInterruptions
+              cienciaTecnica: 0, variados: 0, historicosGrabado: 0, variadoInfantilGrabado: 0, literaturaArte: 0,
+              musicales: 0, total: manualInterruptions
           };
 
           const newConsolidated: ConsolidatedMonth = {
@@ -1135,8 +1250,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                       <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Año</label>
                                       <input 
                                           type="number" 
-                                          value={manualYear} 
-                                          onChange={e => setManualYear(parseInt(e.target.value))} 
+                                          value={manualYear || ''} 
+                                          onChange={e => setManualYear(parseInt(e.target.value) || new Date().getFullYear())} 
                                           className="w-24 bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-2.5 text-white" 
                                       />
                                   </div>
@@ -1144,8 +1259,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                       <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Interrupciones (minutos)</label>
                                       <input 
                                           type="number" 
-                                          value={manualInterruptions} 
-                                          onChange={e => setManualInterruptions(parseInt(e.target.value))} 
+                                          value={manualInterruptions === 0 ? '' : manualInterruptions} 
+                                          onChange={e => setManualInterruptions(parseInt(e.target.value) || 0)} 
                                           className="w-32 bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-2.5 text-white" 
                                       />
                                   </div>
@@ -1226,19 +1341,34 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
               </CMNLHeader>
 
               <div className="p-6 max-w-6xl mx-auto w-full space-y-8">
+                  {isPending && (
+                      <div className="bg-red-900/40 border border-red-500/30 p-4 rounded-xl flex items-start gap-3">
+                          <AlertTriangle className="text-red-400 shrink-0 mt-0.5" size={20} />
+                          <div>
+                              <h4 className="text-red-400 font-bold mb-1">Acción Requerida</h4>
+                              <p className="text-sm text-red-200/80">
+                                  Debe consolidar el mes que acaba de finalizar ({new Date(targetYear, targetMonth).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}) antes de acceder a los datos del mes en curso.
+                              </p>
+                          </div>
+                      </div>
+                  )}
+
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="bg-gradient-to-br from-[#2C1B15] to-[#3E1E16] p-6 rounded-2xl border border-[#9E7649]/20 shadow-xl">
                           <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Acumulado Real del Mes</p>
                           <h2 className="text-5xl font-bold text-white mb-1">{((accumulated.breakdown.total - interruptionsByCategory.total) / 60).toFixed(2)} <span className="text-xl font-normal text-[#9E7649]">h</span></h2>
                           <p className="text-xs text-[#E8DCCF]/50">
-                              Hasta ayer {new Date(today.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Interrupciones descontadas.
+                              {isPending 
+                                  ? `Total final del mes de ${new Date(targetYear, targetMonth).toLocaleDateString('es-ES', { month: 'long' })}. Interrupciones descontadas.`
+                                  : `Hasta ayer ${new Date(now.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Interrupciones descontadas.`
+                              }
                           </p>
                       </div>
                       <div className="bg-gradient-to-br from-[#1A100C] to-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/10 shadow-xl">
                           <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Proyección Mensual</p>
                           <h2 className="text-5xl font-bold text-[#9E7649] mb-1">{monthly.hours.toFixed(2)} <span className="text-xl font-normal text-[#E8DCCF]/30">h</span></h2>
-                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {today.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
+                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {new Date(targetYear, targetMonth).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
                       </div>
                   </div>
 
@@ -1285,12 +1415,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                                           className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
                                                           title="Editar minutos base"
                                                       >
-                                                          {categoryLabels[cat]}
+                                                          {renderCategoryLabel(cat)}
                                                           <Edit2 size={12} className="opacity-50" />
                                                       </button>
                                                   ) : (
                                                       <span className="flex items-center gap-2">
-                                                          {categoryLabels[cat]}
+                                                          {renderCategoryLabel(cat)}
                                                       </span>
                                                   )}
                                               </td>
@@ -1332,7 +1462,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                   <Radio size={16} /> Registrar Interrupción
                               </button>
                               <button 
-                                  onClick={() => setShowConsolidateModal(true)}
+                                  onClick={handleOpenConsolidateModal}
                                   className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#8B653D] transition-colors flex items-center gap-2"
                               >
                                   <Save size={16} /> Consolidar Mes
@@ -1366,15 +1496,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                           <div className="space-y-4 mb-6">
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Lunes a Viernes (min)</label>
-                                  <input type="number" value={categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                                  <input type="number" value={categoryEditForm.WEEKDAY === 0 ? '' : categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
                               </div>
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Sábados (min)</label>
-                                  <input type="number" value={categoryEditForm.SATURDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SATURDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                                  <input type="number" value={categoryEditForm.SATURDAY === 0 ? '' : categoryEditForm.SATURDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SATURDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
                               </div>
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Domingos (min)</label>
-                                  <input type="number" value={categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                                  <input type="number" value={categoryEditForm.SUNDAY === 0 ? '' : categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
                               </div>
                           </div>
 
@@ -1410,6 +1540,25 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                           <div className="flex justify-end gap-3">
                               <button onClick={() => setShowConsolidateModal(false)} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">Cancelar</button>
                               <button onClick={handleConsolidate} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">Aceptar y Consolidar</button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {showPrematureAlert && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                      <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
+                          <div className="flex items-center gap-3 mb-4">
+                              <AlertTriangle className="text-yellow-500" size={24} />
+                              <h3 className="text-xl font-bold text-white">Acción no permitida</h3>
+                          </div>
+                          <p className="text-sm text-[#E8DCCF] mb-6">
+                              El mes aún no ha finalizado. Por favor, espere al día 1 del mes próximo para consolidar los datos.
+                          </p>
+                          <div className="flex justify-end">
+                              <button onClick={() => setShowPrematureAlert(false)} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">
+                                  Entendido
+                              </button>
                           </div>
                       </div>
                   </div>
@@ -2495,6 +2644,32 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           ))}
         </div>
       </div>
+
+      {/* Generic Dialog */}
+      {dialog.isOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4">{dialog.title}</h3>
+                  <p className="text-sm text-[#E8DCCF] mb-6 whitespace-pre-line">{dialog.message}</p>
+                  <div className="flex justify-end gap-3">
+                      {dialog.type === 'confirm' && (
+                          <button onClick={() => setDialog({ ...dialog, isOpen: false })} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">
+                              Cancelar
+                          </button>
+                      )}
+                      <button 
+                          onClick={() => {
+                              setDialog({ ...dialog, isOpen: false });
+                              if (dialog.onConfirm) dialog.onConfirm();
+                          }} 
+                          className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]"
+                      >
+                          {dialog.type === 'confirm' ? 'Aceptar' : 'Entendido'}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

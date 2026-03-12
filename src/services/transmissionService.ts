@@ -6,10 +6,10 @@ export interface TransmissionBreakdown {
     orientacion: number;
     cienciaTecnica: number;
     variados: number;
-    historicos: number;
+    historicosGrabado: number;
+    variadoInfantilGrabado: number;
     literaturaArte: number;
     musicales: number;
-    reposiciones: number;
     total: number;
 }
 
@@ -23,11 +23,11 @@ export const DEFAULT_DAY_MINUTES: Record<DayType, TransmissionBreakdown> = {
         orientacion: 171,
         cienciaTecnica: 0,
         variados: 99,
-        historicos: 0,
+        historicosGrabado: 0,
+        variadoInfantilGrabado: 0,
         literaturaArte: 43,
         musicales: 58,
-        reposiciones: 480,
-        total: 960
+        total: 480
     },
     SATURDAY: {
         informativos: 69,
@@ -36,11 +36,11 @@ export const DEFAULT_DAY_MINUTES: Record<DayType, TransmissionBreakdown> = {
         orientacion: 80,
         cienciaTecnica: 0,
         variados: 184,
-        historicos: 0,
+        historicosGrabado: 0,
+        variadoInfantilGrabado: 0,
         literaturaArte: 0,
         musicales: 101,
-        reposiciones: 480,
-        total: 954
+        total: 474
     },
     SUNDAY: {
         informativos: 28,
@@ -48,12 +48,12 @@ export const DEFAULT_DAY_MINUTES: Record<DayType, TransmissionBreakdown> = {
         publicidad: 10,
         orientacion: 139,
         cienciaTecnica: 5,
-        variados: 13,
-        historicos: 13,
+        variados: 0,
+        historicosGrabado: 13,
+        variadoInfantilGrabado: 13,
         literaturaArte: 85,
         musicales: 172,
-        reposiciones: 480,
-        total: 960
+        total: 493
     }
 };
 
@@ -113,10 +113,10 @@ export const getAccumulatedData = (targetDate: Date, config: Record<DayType, Tra
         orientacion: 0,
         cienciaTecnica: 0,
         variados: 0,
-        historicos: 0,
+        historicosGrabado: 0,
+        variadoInfantilGrabado: 0,
         literaturaArte: 0,
         musicales: 0,
-        reposiciones: 0,
         total: 0
     };
 
@@ -154,10 +154,10 @@ export const getMonthlyTotalData = (month: number, year: number, config: Record<
         orientacion: 0,
         cienciaTecnica: 0,
         variados: 0,
-        historicos: 0,
+        historicosGrabado: 0,
+        variadoInfantilGrabado: 0,
         literaturaArte: 0,
         musicales: 0,
-        reposiciones: 0,
         total: 0
     };
 
