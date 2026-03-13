@@ -175,6 +175,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [showPrematureAlert, setShowPrematureAlert] = useState(false);
+  const [showRestrictionModal, setShowRestrictionModal] = useState(false);
   const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
   const [editingCategory, setEditingCategory] = useState<keyof TransmissionBreakdown | null>(null);
   const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0 });
@@ -195,6 +196,23 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
   useEffect(() => {
     localStorage.setItem('rcm_consolidated_months', JSON.stringify(consolidatedMonths));
+  }, [consolidatedMonths]);
+
+  useEffect(() => {
+    const today = new Date();
+    // Restriction starts April 1st, 2026
+    const isApril2026OrLater = today.getFullYear() > 2026 || (today.getFullYear() === 2026 && today.getMonth() >= 3); // 3 is April
+    const isDays1To3 = today.getDate() >= 1 && today.getDate() <= 3;
+    
+    if (isApril2026OrLater && isDays1To3) {
+        // Check if previous month is consolidated
+        const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const prevMonthString = `${prevMonthDate.getFullYear()}-${(prevMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
+        const isConsolidated = consolidatedMonths.some(c => c.month === prevMonthString);
+        if (!isConsolidated) {
+            setShowRestrictionModal(true);
+        }
+    }
   }, [consolidatedMonths]);
 
   useEffect(() => {
@@ -905,25 +923,30 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       let targetMonth = now.getMonth();
       let isPending = false;
 
-      if (consolidatedMonths.length > 0) {
-          const sorted = [...consolidatedMonths].sort((a, b) => a.month.localeCompare(b.month));
-          const lastConsolidated = sorted[sorted.length - 1].month;
-          const [year, month] = lastConsolidated.split('-').map(Number);
-          
-          const nextMonthDate = new Date(year, month, 1);
-          const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
-          
-          if (nextMonthStr < currentMonthStr) {
-              targetYear = nextMonthDate.getFullYear();
-              targetMonth = nextMonthDate.getMonth();
+      // Restricción Obligatoria a partir del 1 de Abril de 2026
+      const isApril2026OrLater = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() >= 3);
+
+      if (isApril2026OrLater) {
+          if (consolidatedMonths.length > 0) {
+              const sorted = [...consolidatedMonths].sort((a, b) => a.month.localeCompare(b.month));
+              const lastConsolidated = sorted[sorted.length - 1].month;
+              const [year, month] = lastConsolidated.split('-').map(Number);
+              
+              const nextMonthDate = new Date(year, month, 1);
+              const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
+              
+              if (nextMonthStr < currentMonthStr) {
+                  targetYear = nextMonthDate.getFullYear();
+                  targetMonth = nextMonthDate.getMonth();
+                  isPending = true;
+              }
+          } else {
+              // Si no hay meses consolidados, asumimos que el mes anterior está pendiente
+              const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+              targetYear = prevMonthDate.getFullYear();
+              targetMonth = prevMonthDate.getMonth();
               isPending = true;
           }
-      } else {
-          // Si no hay meses consolidados, asumimos que el mes anterior está pendiente
-          const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          targetYear = prevMonthDate.getFullYear();
-          targetMonth = prevMonthDate.getMonth();
-          isPending = true;
       }
 
       const targetMonthString = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
@@ -947,8 +970,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           orientacion: 'Orientación',
           cienciaTecnica: 'Ciencia/Técnica',
           variados: 'Variados',
-          historicosGrabado: 'Histórico - Grabado',
-          variadoInfantilGrabado: 'Variado/Infantil - Grabado',
+          historicosGrabado: 'Histórico (Grabado)',
+          variadoInfantilGrabado: 'Variado/Infantil (Grabado)',
           literaturaArte: 'Literatura/Arte',
           musicales: 'Musicales',
           total: 'Total'
@@ -1063,7 +1086,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
           data.push({
               'GRUPO DE PROGRAMAS': 'Interrupciones:',
-              'Total horas emisión': (monthData.interruptions.total / 60).toFixed(2),
+              'Total horas emisión': formatMinutesToHHMMSS(monthData.interruptions.total),
               'En vivo': '',
               'Grabado': '',
               'OBSERVACIONES': ''
@@ -1116,7 +1139,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
               new TableRow({
                   children: [
                       createCell("Interrupciones:", true, AlignmentType.RIGHT),
-                      createCell((monthData.interruptions.total / 60).toFixed(2), true),
+                      createCell(formatMinutesToHHMMSS(monthData.interruptions.total), true),
                       createCell("", true),
                       createCell("", true),
                       createCell(""),
@@ -2667,6 +2690,30 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                           {dialog.type === 'confirm' ? 'Aceptar' : 'Entendido'}
                       </button>
                   </div>
+              </div>
+          </div>
+      )}
+
+      {/* Restriction Modal */}
+      {showRestrictionModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
+                  <div className="flex items-center gap-3 mb-4">
+                      <AlertTriangle className="text-yellow-500" size={24} />
+                      <h3 className="text-xl font-bold text-white">Acción no permitida</h3>
+                  </div>
+                  <p className="text-sm text-[#E8DCCF] mb-6">
+                      {isAdmin 
+                        ? "Acción Requerida: Debe consolidar el mes anterior para habilitar la visualización del mes actual."
+                        : "Datos en proceso de consolidación. Por favor, consulte en 24 horas."}
+                  </p>
+                  {isAdmin && (
+                      <div className="flex justify-end">
+                          <button onClick={() => { setShowRestrictionModal(false); setActiveSection('pagos'); }} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">
+                              Ir a Consolidar
+                          </button>
+                      </div>
+                  )}
               </div>
           </div>
       )}

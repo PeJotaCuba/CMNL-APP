@@ -147,6 +147,13 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     const [isProcessing, setIsProcessing] = useState(false);
     const globalUploadRef = useRef<HTMLInputElement>(null);
 
+    const canModify = useMemo(() => {
+        if (!currentUser) return false;
+        const isAdmin = ['Administrador', 'admin'].includes(currentUser.classification || currentUser.role);
+        const isCoordinator = ['Coordinador', 'coordinator'].includes(currentUser.classification || currentUser.role);
+        return isAdmin || isCoordinator;
+    }, [currentUser]);
+
     // Nuevos estados para ProgramDetail
     const [showBalance, setShowBalance] = useState(false);
     const [balanceStep, setBalanceStep] = useState<'config' | 'results'>('config');
@@ -254,21 +261,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
     const availablePrograms = useMemo(() => {
         if (!currentUser) return [];
-        // Assuming Admin, Director, Asesor can see all.
-        if (['Administrador', 'Director', 'Asesor', 'admin'].includes(currentUser.classification || currentUser.role)) {
-            return PROGRAMS;
-        }
-        
-        // For others, filter by name
-        const normalizedUserName = normalize(currentUser.name || "");
-        return PROGRAMS.filter(p => {
-            const scripts = getProgramScripts(p);
-            return scripts.some(s => {
-               if (!s.writer) return false;
-               const normalizedWriter = normalize(s.writer);
-               return normalizedWriter.includes(normalizedUserName) || normalizedUserName.includes(normalizedWriter);
-            });
-        });
+        return PROGRAMS;
     }, [currentUser]);
 
     const filteredPrograms = useMemo(() => {
@@ -1036,7 +1029,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                             <BarChart3 size={20} /> 
                             {(currentUser?.role !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Balance</span>}
                         </button>
-                        {(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') && (
+                        {canModify && (
                             <>
                                 <button onClick={() => { setScriptForm({}); setEditingScript(null); setShowNewScript(true); }} className="flex items-center justify-center p-3 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-colors shadow-lg" title="Nuevo">
                                     <Plus size={24} />
@@ -1096,7 +1089,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                         <p className="text-[#E8DCCF]"><span className="text-[#9E7649] font-medium uppercase tracking-wider text-[10px] block mb-0.5">Asesor</span>{s.advisor}</p>
                                     </div>
                                 </div>
-                                {(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') && (
+                                {canModify && (
                                     <div className="flex items-center gap-2 shrink-0">
                                         <button onClick={() => { setScriptForm({...s, themes: Array.isArray(s.themes) ? s.themes.join(', ') : (s.themes || '')} as any); setEditingScript(s); setShowNewScript(true); }} className="p-2.5 bg-[#1A100C] text-[#9E7649] hover:text-white rounded-xl border border-[#9E7649]/20 transition-colors" title="Editar">
                                             <Edit2 size={18} />
