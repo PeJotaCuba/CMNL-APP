@@ -124,16 +124,6 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     e.target.value = '';
   };
 
-  const downloadDatabase = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(team, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "equipocmnl.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  };
-
   const updateDatabase = async () => {
     setLoading(true);
     try {
@@ -192,16 +182,15 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       >
         <div className="flex gap-2">
           {isAdmin && (
-            <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer" title="Cargar TXT">
+            <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
               <Upload size={20} />
+              <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
               <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
             </label>
           )}
-          <button onClick={downloadDatabase} className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm" title="Descargar BD">
-            <Download size={20} />
-          </button>
-          <button onClick={updateDatabase} disabled={loading} className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50" title="Actualizar BD">
+          <button onClick={updateDatabase} disabled={loading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2" title="Actualizar BD">
             <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+            <span className="text-sm font-medium">Actualizar</span>
           </button>
         </div>
       </CMNLHeader>

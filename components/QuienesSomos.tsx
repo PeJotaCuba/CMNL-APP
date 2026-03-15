@@ -103,8 +103,9 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
         onMenuClick={onMenuClick}
         onBack={onBack}
       >
-        <button onClick={updateDatabase} disabled={loading} className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50" title="Actualizar Datos">
+        <button onClick={updateDatabase} disabled={loading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2" title="Actualizar Datos">
           <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+          <span className="text-sm font-medium">Actualizar</span>
         </button>
       </CMNLHeader>
 

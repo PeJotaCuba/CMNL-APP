@@ -20,13 +20,15 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
     setError('');
     
     // Find user by username OR mobile
-    const user = users.find(u => 
-        (u.username.toLowerCase() === identity.toLowerCase() || u.mobile === identity) && 
-        (u.password === password || (password.length === 4 && u.password.endsWith(password)))
-    );
+    const user = users.find(u => {
+      const matchIdentity = u.username.toLowerCase() === identity.toLowerCase() || (u.mobile && u.mobile === identity);
+      const matchPassword = u.password === password || (password.length === 4 && u.password && u.password.endsWith(password));
+      return matchIdentity && matchPassword;
+    });
 
     if (user) {
       localStorage.setItem('rcm_user_session', user.role);
+      localStorage.setItem('rcm_user_username', user.username);
       onLoginSuccess(user);
     } else {
       setError('Credenciales incorrectas');
