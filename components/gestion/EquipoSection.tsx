@@ -8,6 +8,7 @@ interface TeamMember {
   specialty: string;
   level: string;
   photoUrl?: string;
+  info?: string;
 }
 
 interface EquipoSectionProps {
@@ -21,6 +22,8 @@ const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-
 const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
 
   useEffect(() => {
@@ -60,18 +63,32 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
           // Combine specialties and levels if there are multiple
           const specialties = [];
           const levels = [];
+          const infoLines: string[] = [];
           
           for (let i = 1; i < lines.length; i += 2) {
-            if (lines[i]) specialties.push(lines[i]);
-            if (lines[i+1]) levels.push(lines[i+1]);
+            if (lines[i] && !lines[i].toLowerCase().includes('nivel') && lines[i].toLowerCase() !== 'habilitado' && lines[i].length > 50) {
+              // If it's a long text, it's probably info
+              infoLines.push(lines[i]);
+              if (lines[i+1]) infoLines.push(lines[i+1]);
+            } else {
+              if (lines[i]) specialties.push(lines[i]);
+              if (lines[i+1] && (lines[i+1].toLowerCase().includes('nivel') || lines[i+1].toLowerCase() === 'habilitado')) {
+                levels.push(lines[i+1]);
+              } else if (lines[i+1]) {
+                // Not a level, might be info or another specialty
+                infoLines.push(lines[i+1]);
+                i--; // Adjust step since we didn't consume a level
+              }
+            }
           }
           
           const specialty = specialties.join(' / ');
           const uniqueLevels = Array.from(new Set(levels));
           const level = uniqueLevels.length > 0 ? uniqueLevels.join(' / ') : '';
+          const info = infoLines.join('\n');
           const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
           
-          newMembers.push({ id, name, specialty, level });
+          newMembers.push({ id, name, specialty, level, info });
         }
       });
 
@@ -204,7 +221,20 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
             }
 
             return (
-              <div key={member.id} className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg relative group">
+              <div 
+                key={member.id} 
+                className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg relative group cursor-pointer hover:border-[#9E7649]/50 transition-colors"
+                onClick={() => setViewingMember(member)}
+              >
+                {isAdmin && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setEditingMember(member); }}
+                    className="absolute top-2 right-2 p-2 bg-black/40 hover:bg-[#9E7649] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-10"
+                    title="Editar Información"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                )}
                 <div className="relative w-24 h-24 rounded-full bg-[#1A100C] border-2 border-[#9E7649]/50 mb-4 overflow-hidden flex items-center justify-center">
                   {member.photoUrl ? (
                     <img src={member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
@@ -213,7 +243,10 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   )}
                   
                   {canEditPhoto && (
-                    <label className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <label 
+                      className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Camera size={24} className="text-white mb-1" />
                       <span className="text-[10px] text-white font-bold">Cambiar</span>
                       <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(member.id, e)} className="hidden" />
@@ -241,6 +274,107 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
           )}
         </div>
       </div>
+
+      {/* Viewing Modal */}
+      {viewingMember && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setViewingMember(null)} className="absolute top-4 right-4 text-[#E8DCCF]/50 hover:text-white">
+              ✕
+            </button>
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-32 h-32 rounded-full bg-[#2C1B15] border-2 border-[#9E7649] mb-4 overflow-hidden flex items-center justify-center">
+                {viewingMember.photoUrl ? (
+                  <img src={viewingMember.photoUrl} alt={viewingMember.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Users size={48} className="text-[#9E7649]/50" />
+                )}
+              </div>
+              <h2 className="text-2xl font-bold text-white text-center">{viewingMember.name}</h2>
+              <p className="text-[#9E7649] font-medium text-center mt-1">{viewingMember.specialty}</p>
+              {viewingMember.level && viewingMember.level !== 'No especificado' && (
+                <span className="text-xs bg-[#9E7649]/20 text-[#E8DCCF] px-3 py-1 rounded-full border border-[#9E7649]/30 mt-2">
+                  {Array.from(new Set(viewingMember.level.split(' / '))).join(' / ')}
+                </span>
+              )}
+            </div>
+            
+            <div className="bg-[#2C1B15] rounded-xl p-4 border border-[#9E7649]/20">
+              <h3 className="text-sm font-bold text-[#9E7649] mb-2 uppercase tracking-wider">Sobre {viewingMember.name.split(' ')[0]}</h3>
+              <p className="text-[#E8DCCF] text-sm leading-relaxed whitespace-pre-wrap">
+                {viewingMember.info || "No hay información adicional disponible."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editing Modal */}
+      {editingMember && isAdmin && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-white mb-4">Editar Miembro</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-[#9E7649] mb-1">Nombre</label>
+                <input 
+                  type="text" 
+                  value={editingMember.name}
+                  onChange={e => setEditingMember({...editingMember, name: e.target.value})}
+                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[#9E7649] mb-1">Especialidad</label>
+                <input 
+                  type="text" 
+                  value={editingMember.specialty}
+                  onChange={e => setEditingMember({...editingMember, specialty: e.target.value})}
+                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[#9E7649] mb-1">Nivel</label>
+                <input 
+                  type="text" 
+                  value={editingMember.level}
+                  onChange={e => setEditingMember({...editingMember, level: e.target.value})}
+                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[#9E7649] mb-1">Información Adicional</label>
+                <textarea 
+                  value={editingMember.info || ''}
+                  onChange={e => setEditingMember({...editingMember, info: e.target.value})}
+                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649] h-32 resize-none"
+                  placeholder="Añade información sobre este miembro..."
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button 
+                onClick={() => setEditingMember(null)}
+                className="flex-1 py-3 rounded-lg font-bold text-[#9E7649] bg-black/20 border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  const newTeam = team.map(m => m.id === editingMember.id ? editingMember : m);
+                  saveTeam(newTeam);
+                  setEditingMember(null);
+                }}
+                className="flex-1 py-3 rounded-lg font-bold text-white bg-[#9E7649] hover:bg-[#8B653D] transition-colors"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

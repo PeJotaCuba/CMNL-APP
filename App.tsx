@@ -11,6 +11,7 @@ import AgendaApp from './components/agenda/AgendaApp';
 import MusicaApp from './components/MusicaApp';
 import HistoryEvolutionView from './src/components/HistoryEvolutionView';
 import Sidebar from './components/Sidebar';
+import QuienesSomos from './components/QuienesSomos';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
@@ -432,7 +433,7 @@ const App: React.FC = () => {
       case AppView.SECTION_PROGRAMMING_PUBLIC:
         return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_ABOUT:
-        return <PlaceholderView title="Quiénes Somos" subtitle="Nuestro equipo y misión" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={aboutContent} />;
+        return <QuienesSomos onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_NEWS:
         return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />; 
       case AppView.SECTION_NEWS_DETAIL:
