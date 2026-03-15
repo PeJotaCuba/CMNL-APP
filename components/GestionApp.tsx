@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
 import { InterruptionModal } from './InterruptionModal';
+import EquipoSection from './gestion/EquipoSection';
 
 interface Props {
   onBack: () => void;
@@ -75,7 +76,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['pagos', 'catalogo', 'fichas', 'transmision'].includes(hash)) {
+      if (['pagos', 'catalogo', 'fichas', 'transmision', 'equipo', 'reportes'].includes(hash)) {
         setActiveSection(hash);
       } else {
         setActiveSection(null);
@@ -2637,6 +2638,11 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
               </div>
           </div>
       );
+  }
+
+  // Render Equipo Section
+  if (activeSection === 'equipo') {
+      return <EquipoSection currentUser={currentUser} onBack={() => setActiveSection(null)} onMenuClick={onMenuClick || (() => {})} />;
   }
 
   // Main Menu

@@ -31,13 +31,14 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
   const [originalUsername, setOriginalUsername] = useState('');
 
   const generateUniqueId = (name: string) => {
-      const cleanName = name ? name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 10) : 'USR';
+      const firstName = name ? name.split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase() : 'USR';
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let random = '';
-      for (let i = 0; i < 16; i++) {
-          random += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return `RCM-${cleanName}-${random}`;
+      const generateBlock = () => {
+          let block = '';
+          for (let i = 0; i < 4; i++) block += chars.charAt(Math.floor(Math.random() * chars.length));
+          return block;
+      };
+      return `${firstName}-${generateBlock()}-${generateBlock()}-${generateBlock()}`;
   };
 
   const downloadCreditStats = () => {

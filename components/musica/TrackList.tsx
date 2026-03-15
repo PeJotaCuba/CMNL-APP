@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Track } from './types';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import { saveAs } from 'file-saver';
 
 interface TrackListProps {
   tracks: Track[];
@@ -255,6 +257,71 @@ const TrackList: React.FC<TrackListProps> = ({
   const visibleItems = displayItems.slice(0, renderLimit);
   const currentFolderName = currentPath ? currentPath.split('/').pop() : activeRoot;
 
+  const handleGenerateReport = async () => {
+      const artistName = currentPath.split('/').pop() || 'Artista';
+      const targetPathNorm = normalizeStr(currentPath);
+      const relevantTracks = tracks.filter(t => t.path && normalizeStr(t.path).startsWith(targetPathNorm));
+
+      const children = [
+          new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 },
+              children: [
+                  new TextRun({
+                      text: artistName,
+                      bold: true,
+                      font: "Arial",
+                      size: 28, // 14pt
+                  })
+              ]
+          })
+      ];
+
+      relevantTracks.forEach(track => {
+          children.push(
+              new Paragraph({
+                  spacing: { after: 200 },
+                  children: [
+                      new TextRun({
+                          text: `Tema: ${track.metadata.title || 'Desconocido'}`,
+                          bold: true,
+                          font: "Arial",
+                          size: 24, // 12pt
+                      }),
+                      new TextRun({
+                          text: `Intérprete: ${track.metadata.performer || 'Desconocido'}`,
+                          font: "Arial",
+                          size: 24, // 12pt
+                          break: 1,
+                      }),
+                      new TextRun({
+                          text: `Autor: ${track.metadata.author || 'Desconocido'}`,
+                          font: "Arial",
+                          size: 24, // 12pt
+                          break: 1,
+                      }),
+                      new TextRun({
+                          text: `Ruta: ${track.path}`,
+                          font: "Arial",
+                          size: 24, // 12pt
+                          break: 1,
+                      }),
+                  ],
+              })
+          );
+      });
+
+      const doc = new Document({
+          sections: [{
+              properties: {},
+              children: children,
+          }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `Informe_${artistName}.docx`);
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#1A100C]">
       <div className="bg-[#2C1B15] shadow-sm border-b border-[#9E7649]/20 sticky top-0 z-10">
@@ -372,9 +439,16 @@ const TrackList: React.FC<TrackListProps> = ({
             )}
 
             {currentPath && !isSelectionView && !searchQuery.trim() && (
-                <button onClick={() => setCurrentPath(currentPath.includes('/') ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '')} className="self-start flex items-center gap-1 text-[10px] font-bold text-[#9E7649] uppercase hover:underline">
-                    <span className="material-symbols-outlined text-sm">arrow_back</span> Regresar
-                </button>
+                <div className="flex items-center justify-between w-full">
+                    <button onClick={() => setCurrentPath(currentPath.includes('/') ? currentPath.substring(0, currentPath.lastIndexOf('/')) : '')} className="self-start flex items-center gap-1 text-[10px] font-bold text-[#9E7649] uppercase hover:underline">
+                        <span className="material-symbols-outlined text-sm">arrow_back</span> Regresar
+                    </button>
+                    {currentPath.split('/').filter(Boolean).length === 3 && (
+                        <button onClick={handleGenerateReport} className="flex items-center gap-1 text-[10px] font-bold text-white bg-[#9E7649] hover:bg-[#8B653D] px-3 py-1.5 rounded-lg uppercase transition-colors shadow-sm">
+                            <span className="material-symbols-outlined text-sm">description</span> Generar Informe
+                        </button>
+                    )}
+                </div>
             )}
         </div>
       </div>

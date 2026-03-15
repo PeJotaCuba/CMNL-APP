@@ -121,10 +121,8 @@ const App: React.FC = () => {
     const handlePopState = (event: PopStateEvent) => {
       // If in AgendaApp, GestionApp, or GuionesApp and navigating internally (hash exists), ignore this event
       // to prevent App.tsx from unmounting the app
-      // Exception: allow back navigation if hash is #menu (root of sub-app)
       if ((currentView === AppView.APP_AGENDA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_GUIONES) && 
-          window.location.hash.length > 1 && 
-          window.location.hash !== '#menu') {
+          window.location.hash.length > 1) {
         return;
       }
 
@@ -145,7 +143,7 @@ const App: React.FC = () => {
   }, [history, currentView]);
 
   const handleNavigate = (view: AppView, data?: any) => {
-    window.history.pushState(null, '', '');
+    window.history.pushState(null, '', window.location.pathname);
     setHistory((prev) => [...prev, currentView]);
     setCurrentView(view);
     if (view === AppView.SECTION_NEWS_DETAIL && data) {
@@ -154,12 +152,20 @@ const App: React.FC = () => {
   };
 
   const handleBack = () => {
+    window.history.replaceState(null, '', window.location.pathname);
     if (history.length > 0) {
       const prevView = history[history.length - 1];
       setHistory((prev) => prev.slice(0, -1));
       setCurrentView(prevView);
     } else {
-      setCurrentView(AppView.LISTENER_HOME);
+      const sessionRole = localStorage.getItem('rcm_user_session');
+      if (sessionRole === 'admin') {
+        setCurrentView(AppView.ADMIN_DASHBOARD);
+      } else if (sessionRole === 'worker') {
+        setCurrentView(AppView.WORKER_HOME);
+      } else {
+        setCurrentView(AppView.LISTENER_HOME);
+      }
     }
   };
 

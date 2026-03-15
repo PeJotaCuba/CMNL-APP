@@ -103,7 +103,9 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
 
   // --- PRIORITY 2: Noticieros ---
   if (totalMinutes >= 720 && totalMinutes < 750) {
-    return { name: "Noticiero Provincial", time: "12:00 PM - 12:30 PM", image: getCategoryVector("Noticias", "Informativo") };
+    if (day !== 0) {
+      return { name: "Noticiero Provincial", time: "12:00 PM - 12:30 PM", image: getCategoryVector("Noticias", "Informativo") };
+    }
   }
 
   if (totalMinutes >= 780 && totalMinutes < 810) {
@@ -115,8 +117,13 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
     if (totalMinutes >= 420 && totalMinutes < 538) 
       return { name: "Buenos Días Bayamo", time: "7:00 AM - 8:58 AM", image: getCategoryVector("Variada", "Mañana") };
     
-    if (totalMinutes >= 540 && totalMinutes < 598) 
-      return { name: "La Cumbancha", time: "9:00 AM - 9:58 AM", image: getCategoryVector("Musica", "Cumbancha") };
+    if (day >= 1 && day <= 5) {
+      if (totalMinutes >= 540 && totalMinutes < 598) 
+        return { name: "La Cumbancha", time: "9:00 AM - 9:58 AM", image: getCategoryVector("Musica", "Cumbancha") };
+    } else if (day === 6) {
+      if (totalMinutes >= 540 && totalMinutes < 658) 
+        return { name: "La Cumbancha", time: "9:00 AM - 10:58 AM", image: getCategoryVector("Musica", "Cumbancha") };
+    }
 
     if (totalMinutes >= 660 && totalMinutes < 675)
        return { name: "RCM Noticias", time: "11:00 AM - 11:15 AM", image: getCategoryVector("Noticias", "Boletin") };
@@ -155,7 +162,7 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
         return { name: "Cómplices", time: "7:00 AM - 9:58 AM", image: getCategoryVector("Variada", "Complices") };
     }
 
-    if ((totalMinutes >= 600 && totalMinutes < 720) || (totalMinutes >= 750 && totalMinutes < 778))
+    if (totalMinutes >= 600 && totalMinutes < 778)
        return { name: "Estación 95.3", time: "10:00 AM - 12:58 PM", image: getCategoryVector("Variada", "Estacion") };
 
     if (totalMinutes >= 810 && totalMinutes < 898) 

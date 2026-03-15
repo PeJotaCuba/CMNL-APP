@@ -315,8 +315,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             const mergedMap = new Map<string, Script>();
             const generateKey = (s: Script) => {
                 if (useIdAsKey) return s.id;
-                const themes = Array.isArray(s.themes) ? s.themes : [];
-                return `${s.dateAdded}|${normalize(s.title)}|${normalize(s.writer || '')}|${normalize(themes.join(','))}`;
+                return `${s.dateAdded}|${normalize(s.genre)}`;
             };
 
             existing.forEach(s => mergedMap.set(generateKey(s), s));
@@ -1068,26 +1067,39 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start gap-4 mb-4">
                                         <div>
-                                            <span className="text-[#9E7649] font-bold text-[10px] uppercase tracking-wider block mb-1">Tema</span>
-                                            <h3 
-                                                className="text-lg font-bold text-white leading-tight group-hover:text-[#9E7649] transition-colors uppercase cursor-pointer"
-                                                onClick={() => {
-                                                    setSectionSearch(s.dateAdded);
-                                                    setShowProgramInside(true);
-                                                }}
-                                                title="Ver secciones por dentro"
-                                            >
-                                                {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
-                                            </h3>
+                                            {!['RCM NOTICIAS', 'ESTACIÓN 95.3'].includes(program.name) && (
+                                                <>
+                                                    <span className="text-[#9E7649] font-bold text-[10px] uppercase tracking-wider block mb-1">Tema</span>
+                                                    <h3 
+                                                        className="text-lg font-bold text-white leading-tight group-hover:text-[#9E7649] transition-colors uppercase cursor-pointer"
+                                                        onClick={() => {
+                                                            setSectionSearch(s.dateAdded);
+                                                            setShowProgramInside(true);
+                                                        }}
+                                                        title="Ver secciones por dentro"
+                                                    >
+                                                        {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
+                                                    </h3>
+                                                </>
+                                            )}
                                         </div>
-                                        <span className="text-xs text-[#E8DCCF]/60 bg-black/30 px-3 py-1.5 rounded-lg font-mono flex items-center gap-1.5 border border-white/5 text-center">
+                                        <span 
+                                            className="text-xs text-[#E8DCCF]/60 bg-black/30 px-3 py-1.5 rounded-lg font-mono flex items-center gap-1.5 border border-white/5 text-center cursor-pointer hover:text-[#9E7649]"
+                                            onClick={() => {
+                                                setSectionSearch(s.dateAdded);
+                                                setShowProgramInside(true);
+                                            }}
+                                            title="Ver secciones por dentro"
+                                        >
                                             <Calendar size={12} className="shrink-0" /> {s.dateAdded}
                                         </span>
                                     </div>
-                                    <div className="flex flex-wrap gap-8 text-sm bg-[#1A100C] p-3.5 rounded-xl border border-[#9E7649]/10">
-                                        <p className="text-[#E8DCCF]"><span className="text-[#9E7649] font-medium uppercase tracking-wider text-[10px] block mb-0.5">Escritor</span>{s.writer}</p>
-                                        <p className="text-[#E8DCCF]"><span className="text-[#9E7649] font-medium uppercase tracking-wider text-[10px] block mb-0.5">Asesor</span>{s.advisor}</p>
-                                    </div>
+                                    {program.name !== 'RCM NOTICIAS' && (
+                                        <div className="flex flex-wrap gap-8 text-sm bg-[#1A100C] p-3.5 rounded-xl border border-[#9E7649]/10">
+                                            <p className="text-[#E8DCCF]"><span className="text-[#9E7649] font-medium uppercase tracking-wider text-[10px] block mb-0.5">Escritor</span>{s.writer}</p>
+                                            <p className="text-[#E8DCCF]"><span className="text-[#9E7649] font-medium uppercase tracking-wider text-[10px] block mb-0.5">Asesor</span>{s.advisor}</p>
+                                        </div>
+                                    )}
                                 </div>
                                 {canModify && (
                                     <div className="flex items-center gap-2 shrink-0">
@@ -1316,9 +1328,11 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                                         <div className="flex-1">
                                                             <div className="flex justify-between items-start gap-4 mb-2">
                                                                 <div>
-                                                                    <h4 className="text-white font-bold text-base uppercase leading-tight">
-                                                                        {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
-                                                                    </h4>
+                                                                    {!['RCM NOTICIAS', 'ESTACIÓN 95.3'].includes(program.name) && (
+                                                                        <h4 className="text-white font-bold text-base uppercase leading-tight">
+                                                                            {Array.isArray(s.themes) && s.themes.length > 0 && s.themes[0] !== 'General' ? s.themes.join(', ') : s.title}
+                                                                        </h4>
+                                                                    )}
                                                                     <p className="text-[#E8DCCF]/60 text-xs mt-1 font-medium italic">
                                                                         {s.title}
                                                                     </p>
@@ -1327,16 +1341,18 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                                                     {formatSpanishDate(s.dateAdded)}
                                                                 </span>
                                                             </div>
-                                                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-medium">
-                                                                <span className="flex items-center gap-1.5 text-[#E8DCCF]/70">
-                                                                    <UserIcon size={14} className="text-[#9E7649]" />
-                                                                    <span className="text-[#E8DCCF]/40">Escritor:</span> {s.writer || 'No especificado'}
-                                                                </span>
-                                                                <span className="flex items-center gap-1.5 text-[#E8DCCF]/70">
-                                                                    <Shield size={14} className="text-[#9E7649]" />
-                                                                    <span className="text-[#E8DCCF]/40">Asesor:</span> {s.advisor || 'No especificado'}
-                                                                </span>
-                                                            </div>
+                                                            {program.name !== 'RCM NOTICIAS' && (
+                                                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-medium">
+                                                                    <span className="flex items-center gap-1.5 text-[#E8DCCF]/70">
+                                                                        <UserIcon size={14} className="text-[#9E7649]" />
+                                                                        <span className="text-[#E8DCCF]/40">Escritor:</span> {s.writer || 'No especificado'}
+                                                                    </span>
+                                                                    <span className="flex items-center gap-1.5 text-[#E8DCCF]/70">
+                                                                        <Shield size={14} className="text-[#9E7649]" />
+                                                                        <span className="text-[#E8DCCF]/40">Asesor:</span> {s.advisor || 'No especificado'}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}

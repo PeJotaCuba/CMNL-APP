@@ -40,6 +40,23 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [view, setView] = useState<ViewState>(ViewState.LIST);
   const [users, setUsers] = useState<User[]>([]);
   
+  const getUniqueId = (user: GlobalUser) => {
+      const storageKey = `rcm_unique_id_${user.username}`;
+      let id = localStorage.getItem(storageKey);
+      if (!id) {
+          const firstName = user.name ? user.name.split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase() : 'DIR';
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          const generateBlock = () => {
+              let block = '';
+              for (let i = 0; i < 4; i++) block += chars.charAt(Math.floor(Math.random() * chars.length));
+              return block;
+          };
+          id = `${firstName}-${generateBlock()}-${generateBlock()}-${generateBlock()}`;
+          localStorage.setItem(storageKey, id);
+      }
+      return id;
+  };
+
   // Map global user to music app user
   const currentUser: User | null = globalUser ? {
       username: globalUser.username,
@@ -47,7 +64,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       role: globalUser.role === 'admin' ? 'admin' : (globalUser.classification === 'Director' ? 'director' : 'user'),
       fullName: globalUser.name,
       phone: globalUser.mobile || '',
-      uniqueId: `RCM-${globalUser.username.toUpperCase()}-0000`
+      uniqueId: getUniqueId(globalUser)
   } : null;
 
   const authMode: AuthMode = currentUser ? currentUser.role : null;
