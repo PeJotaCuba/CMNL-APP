@@ -17,6 +17,7 @@ interface Props {
   setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   isSyncing: boolean;
   setIsSyncing: React.Dispatch<React.SetStateAction<boolean>>;
+  currentUser: User | null;
 }
 
 const UserManagement: React.FC<Props> = ({ 
@@ -24,7 +25,8 @@ const UserManagement: React.FC<Props> = ({
     historyContent, setHistoryContent, 
     aboutContent, setAboutContent,
     news, setNews,
-    isSyncing, setIsSyncing
+    isSyncing, setIsSyncing,
+    currentUser
 }) => {
   const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario', permissions: { canEditNews: false, canEditProgramming: false, canEditAbout: false, canEditCatalog: false, canEditFichas: false, canEditHours: false, canEditTeam: false } });
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -249,6 +251,15 @@ const UserManagement: React.FC<Props> = ({
     let consolidated = [];
     try { consolidated = JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]'); } catch (e) {}
 
+    let interruptions = [];
+    try { interruptions = JSON.parse(localStorage.getItem('rcm_interruptions') || '[]'); } catch (e) {}
+
+    let consolidatedMonths = [];
+    try { consolidatedMonths = JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]'); } catch (e) {}
+
+    let transmissionConfig = {};
+    try { transmissionConfig = JSON.parse(localStorage.getItem('rcm_transmission_config') || '{}'); } catch (e) {}
+
     // Recopilar datos de Agenda
     let agendaPrograms = [];
     try { agendaPrograms = JSON.parse(localStorage.getItem('rcm_programs') || '[]'); } catch (e) {}
@@ -277,6 +288,9 @@ const UserManagement: React.FC<Props> = ({
         catalogo,
         worklogs,
         consolidated,
+        interruptions,
+        consolidatedMonths,
+        transmissionConfig,
         paymentConfigs,
         scripts: scriptData,
         programSections,
@@ -319,7 +333,11 @@ const UserManagement: React.FC<Props> = ({
 
           // Restaurar Usuarios Principales
           if (json.users && Array.isArray(json.users)) {
-            setUsers(json.users);
+            setUsers(prev => {
+                const map = new Map(prev.map(u => [u.username, u]));
+                json.users.forEach(u => map.set(u.username, u));
+                return Array.from(map.values());
+            });
             restoredCount++;
           }
           
@@ -341,30 +359,91 @@ const UserManagement: React.FC<Props> = ({
                     ? getCategoryVector(n.category || 'Boletín', n.title) 
                     : n.image
             }));
-            setNews(processedNews);
+            setNews(prev => {
+                const map = new Map(prev.map(n => [n.id, n]));
+                processedNews.forEach(n => map.set(n.id, n));
+                return Array.from(map.values());
+            });
             restoredCount++;
           }
 
+          const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
+              if (!jsonData || !Array.isArray(jsonData)) return;
+              const localDataStr = localStorage.getItem(localKey);
+              const localData = localDataStr ? JSON.parse(localDataStr) : [];
+              if (!Array.isArray(localData)) {
+                  localStorage.setItem(localKey, JSON.stringify(jsonData));
+                  return;
+              }
+              const getId = (item: any) => typeof idKey === 'function' ? idKey(item) : String(item[idKey]);
+              const mergedMap = new Map();
+              localData.forEach(item => { if (item) mergedMap.set(getId(item), item); });
+              jsonData.forEach(item => { if (item) mergedMap.set(getId(item), item); });
+              localStorage.setItem(localKey, JSON.stringify(Array.from(mergedMap.values())));
+          };
+
+          const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>, idKey: string) => {
+              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+              const localDataStr = localStorage.getItem(localKey);
+              const localData = localDataStr ? JSON.parse(localDataStr) : {};
+              const mergedObj: Record<string, any[]> = { ...localData };
+              
+              Object.entries(jsonData).forEach(([dateKey, items]) => {
+                  if (!Array.isArray(items)) return;
+                  if (!mergedObj[dateKey]) {
+                      mergedObj[dateKey] = items;
+                  } else {
+                      const mergedMap = new Map();
+                      const getKey = (item: any) => typeof item === 'string' ? item : (item[idKey] || JSON.stringify(item));
+                      mergedObj[dateKey].forEach(item => { if (item) mergedMap.set(getKey(item), item); });
+                      items.forEach(item => { if (item) mergedMap.set(getKey(item), item); });
+                      mergedObj[dateKey] = Array.from(mergedMap.values());
+                  }
+              });
+              localStorage.setItem(localKey, JSON.stringify(mergedObj));
+          };
+
+          const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
+              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+              const localDataStr = localStorage.getItem(localKey);
+              const localData = localDataStr ? JSON.parse(localDataStr) : {};
+              localStorage.setItem(localKey, JSON.stringify({ ...localData, ...jsonData }));
+          };
+
           // Restaurar Gestión
           if (json.fichas) {
-              localStorage.setItem('rcm_data_fichas', JSON.stringify(json.fichas));
+              mergeData('rcm_data_fichas', json.fichas, 'id');
               restoredCount++;
           }
           if (json.catalogo) {
-              localStorage.setItem('rcm_data_catalogo', JSON.stringify(json.catalogo));
+              mergeData('rcm_data_catalogo', json.catalogo, 'name');
               restoredCount++;
           }
           if (json.worklogs) {
-              localStorage.setItem('rcm_data_worklogs', JSON.stringify(json.worklogs));
+              mergeData('rcm_data_worklogs', json.worklogs, 'id');
               restoredCount++;
           }
           if (json.consolidated) {
-              localStorage.setItem('rcm_data_consolidated', JSON.stringify(json.consolidated));
+              mergeData('rcm_data_consolidated', json.consolidated, 'id');
+              restoredCount++;
+          }
+          if (json.interruptions) {
+              mergeData('rcm_interruptions', json.interruptions, 'id');
+              restoredCount++;
+          }
+          if (json.consolidatedMonths) {
+              mergeData('rcm_consolidated_months', json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
+              restoredCount++;
+          }
+          if (json.transmissionConfig) {
+              localStorage.setItem('rcm_transmission_config', JSON.stringify(json.transmissionConfig));
               restoredCount++;
           }
           if (json.paymentConfigs) {
               Object.entries(json.paymentConfigs).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
+                  const localValStr = localStorage.getItem(key);
+                  const localVal = localValStr ? JSON.parse(localValStr) : {};
+                  localStorage.setItem(key, JSON.stringify({ ...localVal, ...(value as any) }));
               });
               restoredCount++;
           }
@@ -372,45 +451,46 @@ const UserManagement: React.FC<Props> = ({
           // Restaurar Guiones y Secciones
           if (json.scripts) {
               Object.entries(json.scripts).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
+                  mergeData(key, value as any[], 'id');
               });
               restoredCount++;
           }
           if (json.programSections) {
               Object.entries(json.programSections).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
+                  mergeData(key, value as any[], 'name');
               });
               restoredCount++;
           }
 
           // Restaurar Agenda
           if (json.agendaPrograms) {
-              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
+              mergeData('rcm_programs', json.agendaPrograms, 'id');
               restoredCount++;
           }
           if (json.agendaEfemerides) {
-              localStorage.setItem('rcm_efemerides', JSON.stringify(json.agendaEfemerides));
+              mergeRecordData('rcm_efemerides', json.agendaEfemerides, 'id');
               restoredCount++;
           }
           if (json.agendaConmemoraciones) {
-              localStorage.setItem('rcm_conmemoraciones', JSON.stringify(json.agendaConmemoraciones));
+              mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones, 'id');
               restoredCount++;
           }
           if (json.agendaDayThemes) {
-              localStorage.setItem('rcm_day_themes', JSON.stringify(json.agendaDayThemes));
+              mergeSimpleRecord('rcm_day_themes', json.agendaDayThemes);
               restoredCount++;
           }
           if (json.agendaUsers) {
-              localStorage.setItem('rcm_users', JSON.stringify(json.agendaUsers));
+              mergeData('rcm_users', json.agendaUsers, 'id');
               restoredCount++;
           }
           if (json.agendaPropaganda) {
-              localStorage.setItem('rcm_propaganda', JSON.stringify(json.agendaPropaganda));
+              mergeRecordData('rcm_propaganda', json.agendaPropaganda, 'id');
               restoredCount++;
           }
 
           if (restoredCount > 0) {
-            alert('¡Sincronización exitosa! Los datos se han actualizado desde el repositorio oficial. Por favor, recargue la página si es necesario para ver todos los cambios.');
+            alert('¡Sincronización exitosa! Los datos se han actualizado desde el repositorio oficial.');
+            window.location.reload();
           } else {
             alert('El archivo descargado no tiene el formato esperado.');
           }
@@ -442,19 +522,30 @@ const UserManagement: React.FC<Props> = ({
                 onClick={handleLoadFromGithub} 
                 disabled={isSyncing}
                 className="flex items-center gap-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] px-3 py-2 rounded-lg text-xs font-bold transition-colors border border-[#9E7649]/30 disabled:opacity-50" 
-                title="Cargar actualcmnl.json desde GitHub"
+                title="Actualizar datos desde GitHub"
             >
                 {isSyncing ? <RefreshCw size={16} className="animate-spin"/> : <DownloadCloud size={16} />}
-                <span className="hidden sm:inline">Sincronizar</span>
+                <span className="hidden sm:inline">Actualizar</span>
             </button>
-            <button 
-                onClick={handleDownloadCoorBackup} 
-                className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" 
-                title="Descargar coorbd.json"
-            >
-                <Download size={16} /> 
-                <span className="hidden sm:inline">Respaldar Coordinador</span>
-            </button>
+            {currentUser?.role === 'admin' ? (
+              <button 
+                  onClick={handleDownloadBackup} 
+                  className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" 
+                  title="Descargar actualcmnl.json"
+              >
+                  <Download size={16} /> 
+                  <span className="hidden sm:inline">Respaldar Sistema</span>
+              </button>
+            ) : currentUser?.classification === 'Coordinador' ? (
+              <button 
+                  onClick={handleDownloadCoorBackup} 
+                  className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-sm" 
+                  title="Descargar coorbd.json"
+              >
+                  <Download size={16} /> 
+                  <span className="hidden sm:inline">Respaldar Coordinador</span>
+              </button>
+            ) : null}
         </div>
       </CMNLHeader>
 
