@@ -87,7 +87,11 @@ const WorkerHome: React.FC<Props> = ({
         }
     }
 
-    let fichas = []; try { fichas = JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'); } catch (e) {}
+    let fichas = [];
+    const savedFichas = localStorage.getItem('rcm_data_fichas');
+    if (savedFichas) {
+        try { fichas = JSON.parse(savedFichas); } catch (e) {}
+    }
     let catalogo = []; try { catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'); } catch (e) {}
     let worklogs = []; try { worklogs = JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]'); } catch (e) {}
     let consolidated = []; try { consolidated = JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]'); } catch (e) {}
@@ -107,11 +111,11 @@ const WorkerHome: React.FC<Props> = ({
         scripts: scriptData, programSections, agendaPrograms, agendaEfemerides, agendaConmemoraciones, agendaDayThemes, agendaUsers, agendaPropaganda
     };
     
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'text/plain' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `actualcmnl.txt`;
+    a.download = `actualcmnl.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

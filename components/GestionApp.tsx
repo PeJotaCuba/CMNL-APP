@@ -99,7 +99,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   }, [activeSection]);
   const [fichas, setFichas] = useState<ProgramFicha[]>(() => {
       const saved = localStorage.getItem('rcm_data_fichas');
-      return saved ? JSON.parse(saved) : INITIAL_FICHAS;
+      if (saved) {
+          try {
+              return JSON.parse(saved);
+          } catch (e) {
+              console.error("Error parsing fichas from localStorage", e);
+          }
+      }
+      return INITIAL_FICHAS;
   });
   const [catalogo, setCatalogo] = useState<ProgramCatalog[]>(() => {
       const saved = localStorage.getItem('rcm_data_catalogo');
@@ -617,11 +624,11 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           catalogo,
       };
       const jsonString = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json' });
+      const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'gestioncmnl.json';
+      a.download = 'actualcmnl.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -639,6 +646,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       if (editForm && selectedFicha) {
           const updatedFichas = fichas.map(f => f.name === selectedFicha.name ? editForm : f);
           setFichas(updatedFichas);
+          localStorage.setItem('rcm_data_fichas', JSON.stringify(updatedFichas));
           setSelectedFicha(editForm);
           setIsEditing(false);
           setEditForm(null);

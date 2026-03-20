@@ -240,7 +240,10 @@ const UserManagement: React.FC<Props> = ({
 
     // Recopilar datos de Gestión (Fichas, Catálogo, Worklogs, Consolidados)
     let fichas = [];
-    try { fichas = JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'); } catch (e) {}
+    const savedFichas = localStorage.getItem('rcm_data_fichas');
+    if (savedFichas) {
+        try { fichas = JSON.parse(savedFichas); } catch (e) {}
+    }
 
     let catalogo = [];
     try { catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'); } catch (e) {}
@@ -303,9 +306,9 @@ const UserManagement: React.FC<Props> = ({
     };
     
     // Nombre fijo solicitado para coincidir con el repositorio
-    const filename = `actualcmnl.txt`;
+    const filename = `actualcmnl.json`;
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'text/plain' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -408,7 +411,7 @@ const UserManagement: React.FC<Props> = ({
 
           // Restaurar Gestión
           if (json.fichas) {
-              mergeData('rcm_data_fichas', json.fichas, 'id');
+              mergeData('rcm_data_fichas', json.fichas, 'name');
               restoredCount++;
           }
           if (json.catalogo) {
@@ -518,6 +521,25 @@ const UserManagement: React.FC<Props> = ({
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.username.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleDownloadCoorBackup = () => {
+    const data: Record<string, any> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+            try {
+                data[key] = JSON.parse(localStorage.getItem(key) || 'null');
+            } catch (e) {}
+        }
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'coorbd.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-[#1A100C] text-[#E8DCCF] font-display overflow-hidden">
@@ -890,24 +912,5 @@ const UserManagement: React.FC<Props> = ({
     </div>
   );
 };
-
-  const handleDownloadCoorBackup = () => {
-    const data: Record<string, any> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key) {
-            try {
-                data[key] = JSON.parse(localStorage.getItem(key) || 'null');
-            } catch (e) {}
-        }
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'coorbd.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
 export default UserManagement;

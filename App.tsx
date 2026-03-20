@@ -306,7 +306,7 @@ const App: React.FC = () => {
           };
 
           if (json.fichas) {
-              mergeData('rcm_data_fichas', json.fichas, 'id');
+              mergeData('rcm_data_fichas', json.fichas, 'name');
               changes++;
           }
           if (json.catalogo) {
