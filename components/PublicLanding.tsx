@@ -19,10 +19,13 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
     e.preventDefault();
     setError('');
     
+    const trimmedIdentity = identity.trim();
+    const trimmedPassword = password.trim();
+
     // Find user by username OR mobile
     const user = users.find(u => {
-      const matchIdentity = u.username.toLowerCase() === identity.toLowerCase() || (u.mobile && u.mobile === identity);
-      const matchPassword = u.password === password || (password.length === 4 && u.password && u.password.endsWith(password));
+      const matchIdentity = u.username.toLowerCase() === trimmedIdentity.toLowerCase() || (u.mobile && u.mobile.trim() === trimmedIdentity);
+      const matchPassword = u.password === trimmedPassword || (trimmedPassword.length === 4 && u.password && u.password.endsWith(trimmedPassword));
       return matchIdentity && matchPassword;
     });
 

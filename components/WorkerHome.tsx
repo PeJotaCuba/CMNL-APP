@@ -97,13 +97,19 @@ const WorkerHome: React.FC<Props> = ({
             </div>
           </div>
         </div>
-        
-        {isSyncing && (
+        <div className="flex items-center gap-3">
+          {isSyncing ? (
              <div className="flex items-center gap-2 text-[#CD853F] text-[10px] font-bold">
                  <RefreshCw size={12} className="animate-spin" />
                  <span>Sincronizando...</span>
              </div>
-        )}
+          ) : (
+             <button onClick={onSync} className="flex items-center gap-2 text-[#CD853F] hover:text-white text-[10px] font-bold transition-colors">
+                 <RefreshCw size={12} />
+                 <span>Sincronizar</span>
+             </button>
+          )}
+        </div>
       </header>
 
       {/* Main Content */}

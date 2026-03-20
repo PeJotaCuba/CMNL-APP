@@ -382,6 +382,21 @@ const App: React.FC = () => {
               changes++;
           }
 
+          // Fetch equipocmnl.json
+          try {
+              const equipoResponse = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
+              if (equipoResponse.ok) {
+                  const equipoData = await equipoResponse.json();
+                  if (Array.isArray(equipoData)) {
+                      localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
+                      localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
+                      changes++;
+                  }
+              }
+          } catch (equipoError) {
+              console.error("Error fetching equipo data during sync:", equipoError);
+          }
+
           alert('¡Sincronización completada! Los datos están actualizados.');
           window.location.reload();
       } catch (error) {

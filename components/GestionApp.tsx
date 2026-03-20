@@ -41,14 +41,10 @@ interface RoleConfig {
     id: string;
     role: string;
     level: string;
-    isHabitual: boolean;
-    habitualPrograms: string[];
-    habitualDays: number[]; // 0=Sun, 1=Mon, etc.
 }
 
 interface UserPaymentConfig {
     roles: RoleConfig[];
-    otherPayments?: number | string;
 }
 
 interface Interruption {
@@ -117,28 +113,80 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       const saved = localStorage.getItem('rcm_data_consolidated');
       return saved ? JSON.parse(saved) : [];
   });
-  const [userPaymentConfig, setUserPaymentConfig] = useState<UserPaymentConfig | null>(() => {
-      if (!currentUser) return null;
-      const saved = localStorage.getItem(`rcm_payment_config_${currentUser.username}`);
-      // Migrate old config if necessary
-      if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.role && !parsed.roles) {
-              return {
-                  roles: [{
-                      id: '1',
-                      role: parsed.role,
-                      level: parsed.level,
-                      isHabitual: false,
-                      habitualPrograms: [],
-                      habitualDays: []
-                  }]
-              };
-          }
-          return parsed;
-      }
-      return null;
+  const [teamData, setTeamData] = useState<any[]>(() => {
+      const saved = localStorage.getItem('rcm_equipo_cmnl');
+      return saved ? JSON.parse(saved) : [];
   });
+
+  useEffect(() => {
+      const fetchTeamData = async () => {
+          try {
+              const response = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
+              if (response.ok) {
+                  const data = await response.json();
+                  if (Array.isArray(data)) {
+                      setTeamData(data);
+                      localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(data));
+                  }
+              }
+          } catch (error) {
+              console.error("Error fetching team data:", error);
+          }
+      };
+
+      // Always fetch to ensure we have the latest data for payment calculations
+      fetchTeamData();
+  }, []);
+
+  const userPaymentConfig = React.useMemo<UserPaymentConfig | null>(() => {
+      if (!currentUser) return null;
+      
+      const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+      const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
+      
+      let member = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser.name));
+      
+      if (!member) {
+          // Fallback: try to match by at least 2 significant words (e.g. first name and last name)
+          const userWords = getWords(currentUser.name);
+          member = teamData.find(m => {
+              const memberWords = getWords(m.name);
+              const matchCount = userWords.filter(w => memberWords.includes(w)).length;
+              return matchCount >= 2;
+          });
+      }
+      
+      if (!member) return { roles: [] };
+
+      const specialties = member.specialty ? member.specialty.split(' / ') : [];
+      const levels = member.level ? member.level.split(' / ') : [];
+
+      const supportedRoles = ['Locutor', 'Realizador de sonido', 'Director', 'Asesor'];
+      
+      const roles: RoleConfig[] = [];
+      
+      specialties.forEach((spec: string, index: number) => {
+          const matchedRole = supportedRoles.find(r => spec.toLowerCase().includes(r.toLowerCase()));
+          if (matchedRole && roles.length < 3) {
+              let levelStr = levels[index] || levels[0] || 'I';
+              let level = 'I';
+              if (levelStr.toLowerCase().includes('primer')) level = 'I';
+              else if (levelStr.toLowerCase().includes('segundo')) level = 'II';
+              else if (levelStr.toLowerCase().includes('tercer')) level = 'III';
+              else if (levelStr.toLowerCase().includes('habilitado') || levelStr.toLowerCase().includes('no especificado')) level = 'SR';
+              
+              if (!roles.some(r => r.role === matchedRole)) {
+                  roles.push({
+                      id: Date.now().toString() + index,
+                      role: matchedRole,
+                      level: level
+                  });
+              }
+          }
+      });
+
+      return { roles };
+  }, [currentUser, teamData]);
 
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<ProgramCatalog | null>(null);
@@ -152,16 +200,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   const [showMonthlyPayments, setShowMonthlyPayments] = useState(false);
   
   // Payment Config State
-  const [configForm, setConfigForm] = useState<UserPaymentConfig>({ 
-      roles: [{ 
-          id: '1', 
-          role: 'Director', 
-          level: 'I', 
-          isHabitual: false, 
-          habitualPrograms: [], 
-          habitualDays: [] 
-      }] 
-  });
+
 
   // Transmission State
   const [transmissionConfig, setTransmissionConfig] = useState(getDayMinutesConfig());
@@ -232,18 +271,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       localStorage.setItem('rcm_data_consolidated', JSON.stringify(consolidatedPayments));
   }, [consolidatedPayments]);
 
-  useEffect(() => {
-      if (currentUser && userPaymentConfig) {
-          localStorage.setItem(`rcm_payment_config_${currentUser.username}`, JSON.stringify(userPaymentConfig));
-      }
-  }, [userPaymentConfig, currentUser]);
-
   const menuItems = [
     { id: 'transmision', icon: <Radio size={32} />, label: 'Transmisión', color: 'bg-red-900/40 text-red-400 border-red-500/30' },
     { id: 'equipo', icon: <Users size={32} />, label: 'Equipo', color: 'bg-purple-900/40 text-purple-400 border-purple-500/30' },
+    { id: 'pagos', icon: <CreditCard size={32} />, label: 'Pagos', color: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30' },
     { id: 'fichas', icon: <FileText size={32} />, label: 'Fichas', color: 'bg-emerald-900/40 text-emerald-400 border-emerald-500/30' },
     { id: 'catalogo', icon: <Library size={32} />, label: 'Catálogo', color: 'bg-amber-900/40 text-amber-400 border-amber-500/30' },
-    { id: 'pagos', icon: <CreditCard size={32} />, label: 'Pagos', color: 'bg-cyan-900/40 text-cyan-400 border-cyan-500/30' },
     { id: 'reportes', icon: <FileBarChart size={32} />, label: 'Reportes', color: 'bg-blue-900/40 text-blue-400 border-blue-500/30' },
   ];
 
@@ -694,59 +727,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           }
       });
 
-      // Add other payments to month total
-      if (userPaymentConfig.otherPayments) {
-          monthTotal += Number(userPaymentConfig.otherPayments) || 0;
-          // Also add to period total if the period covers the whole month? 
-          // For simplicity, let's assume 'otherPayments' is a monthly fixed amount that is added to the "Acumulado" view.
-          // Since "Acumulado" usually shows the current month's total, adding it here makes sense.
-          // However, periodTotal depends on specific dates. If the dates cover the full month, maybe we should add it.
-          // But usually periodTotal is for "Week" or "Day" views. 
-          // Let's only add it to monthTotal as requested ("Este se agrega al Acumulado inicial").
-      }
+
 
       return { periodTotal, monthTotal };
-  };
-
-  const autoCompleteHabitual = (role: RoleConfig, dates: string[]) => {
-      if (!currentUser) return;
-      const newLogs = [...workLogs];
-      let added = 0;
-
-      dates.forEach(date => {
-          // Adjust for local timezone to get correct day
-          const d = new Date(date + 'T12:00:00');
-          const day = d.getDay();
-          if (role.habitualDays.includes(day)) {
-              role.habitualPrograms.forEach(prog => {
-                  const exists = newLogs.some(l => 
-                      l.userId === currentUser.username && 
-                      l.role === role.role && 
-                      l.programName === prog && 
-                      l.date === date
-                  );
-                  if (!exists) {
-                      const amount = getProgramRate(prog, role.role, role.level);
-                      newLogs.push({
-                          id: Date.now().toString() + Math.random(),
-                          userId: currentUser.username,
-                          role: role.role,
-                          programName: prog,
-                          date: date,
-                          amount
-                      });
-                      added++;
-                  }
-              });
-          }
-      });
-
-      if (added > 0) {
-          setWorkLogs(newLogs);
-          alert(`Se han autocompletado ${added} registros habituales en este periodo.`);
-      } else {
-          alert('No hay nuevos registros habituales para añadir en este periodo.');
-      }
   };
 
   const calculateTax = (amount: number) => {
@@ -791,15 +774,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           .filter(l => l.userId === currentUser.username && l.date.startsWith(prevMonth) && userPaymentConfig.roles.some(r => r.role === l.role))
           .reduce((acc, log) => acc + log.amount, 0);
 
-      if (monthTotal === 0 && !userPaymentConfig.otherPayments) {
+      if (monthTotal === 0) {
           setDialog({ isOpen: true, title: 'Sin datos', message: `No hay pagos registrados para consolidar en el mes de ${prevMonth}.`, type: 'alert' });
           return;
       }
 
       // Add other payments
-      if (userPaymentConfig.otherPayments) {
-          monthTotal += Number(userPaymentConfig.otherPayments) || 0;
-      }
+
 
       const tax = calculateTax(monthTotal);
       const netAmount = monthTotal - tax;
@@ -843,64 +824,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
               setDialog({ isOpen: true, title: 'Éxito', message: `Registros del mes de ${currentMonth} eliminados.`, type: 'alert' });
           }
       });
-  };
-
-  const updateRole = (id: string, updates: Partial<RoleConfig>) => {
-      setConfigForm(prev => ({
-          ...prev,
-          roles: prev.roles.map(r => r.id === id ? { ...r, ...updates } : r)
-      }));
-  };
-
-  const addRole = () => {
-      setConfigForm(prev => ({
-          ...prev,
-          roles: [...prev.roles, {
-              id: Date.now().toString(),
-              role: 'Locutor',
-              level: 'I',
-              isHabitual: false,
-              habitualPrograms: [],
-              habitualDays: []
-          }]
-      }));
-  };
-
-  const removeRole = (id: string) => {
-      setConfigForm(prev => ({
-          ...prev,
-          roles: prev.roles.filter(r => r.id !== id)
-      }));
-  };
-
-  const toggleHabitualDay = (id: string, day: number) => {
-      setConfigForm(prev => ({
-          ...prev,
-          roles: prev.roles.map(r => {
-              if (r.id === id) {
-                  const days = r.habitualDays.includes(day) 
-                      ? r.habitualDays.filter(d => d !== day)
-                      : [...r.habitualDays, day];
-                  return { ...r, habitualDays: days };
-              }
-              return r;
-          })
-      }));
-  };
-
-  const toggleHabitualProgram = (id: string, program: string) => {
-      setConfigForm(prev => ({
-          ...prev,
-          roles: prev.roles.map(r => {
-              if (r.id === id) {
-                  const programs = r.habitualPrograms.includes(program)
-                      ? r.habitualPrograms.filter(p => p !== program)
-                      : [...r.habitualPrograms, program];
-                  return { ...r, habitualPrograms: programs };
-              }
-              return r;
-          })
-      }));
   };
 
   const handleBackNavigation = () => {
@@ -1643,138 +1566,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
       const dates = getDates();
       
-      if (!userPaymentConfig) {
-          return (
-              <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col p-6">
-                  <div className="max-w-2xl mx-auto w-full bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-8 shadow-2xl">
-                      <h2 className="text-2xl font-bold text-white mb-2">Configura tus pagos</h2>
-                      <p className="text-[#9E7649] text-sm mb-8">Define tus roles y niveles para calcular tus pagos acumulados.</p>
-                      
-                      <div className="space-y-6">
-                          {configForm.roles.map((role, idx) => (
-                              <div key={role.id} className="bg-black/20 p-6 rounded-xl border border-[#9E7649]/10 relative">
-                                  <button 
-                                      onClick={() => removeRole(role.id)}
-                                      className="absolute top-4 right-4 text-red-400 hover:text-red-300"
-                                  >
-                                      <Trash2 size={18} />
-                                  </button>
-                                  
-                                  <div className="grid grid-cols-2 gap-4 mb-4">
-                                      <div>
-                                          <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Cargo</label>
-                                          <select 
-                                              value={role.role}
-                                              onChange={(e) => updateRole(role.id, { role: e.target.value })}
-                                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
-                                          >
-                                              <option value="Director">Director</option>
-                                              <option value="Locutor">Locutor</option>
-                                              <option value="Escritor">Escritor</option>
-                                              <option value="Asesor">Asesor</option>
-                                              <option value="Realizador de Sonido">Realizador de Sonido</option>
-                                          </select>
-                                      </div>
-                                      <div>
-                                          <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Nivel</label>
-                                          <select 
-                                              value={role.level}
-                                              onChange={(e) => updateRole(role.id, { level: e.target.value })}
-                                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
-                                          >
-                                              <option value="I">Nivel I</option>
-                                              <option value="II">Nivel II</option>
-                                              <option value="III">Nivel III</option>
-                                          </select>
-                                      </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-3 mb-4">
-                                      <input 
-                                          type="checkbox" 
-                                          id={`habitual-${role.id}`}
-                                          checked={role.isHabitual}
-                                          onChange={(e) => updateRole(role.id, { isHabitual: e.target.checked })}
-                                          className="w-4 h-4 accent-[#9E7649]"
-                                      />
-                                      <label htmlFor={`habitual-${role.id}`} className="text-sm text-[#E8DCCF]">¿Es habitual en programas?</label>
-                                  </div>
-
-                                  {role.isHabitual && (
-                                      <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                                          <div>
-                                              <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Días Habituales</label>
-                                              <div className="flex gap-2">
-                                                  {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, i) => (
-                                                      <button
-                                                          key={i}
-                                                          onClick={() => toggleHabitualDay(role.id, i)}
-                                                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${role.habitualDays.includes(i) ? 'bg-[#9E7649] text-white' : 'bg-black/20 text-[#9E7649]/50'}`}
-                                                      >
-                                                          {day}
-                                                      </button>
-                                                  ))}
-                                              </div>
-                                          </div>
-                                          <div>
-                                              <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Programas Habituales</label>
-                                              <div className="flex flex-wrap gap-2">
-                                                  {programsList.map(prog => (
-                                                      <button
-                                                          key={prog}
-                                                          onClick={() => toggleHabitualProgram(role.id, prog)}
-                                                          className={`px-3 py-1 rounded-full text-[10px] transition-all ${role.habitualPrograms.includes(prog) ? 'bg-[#9E7649] text-white' : 'bg-black/20 text-[#9E7649]/50 border border-[#9E7649]/10'}`}
-                                                      >
-                                                          {prog}
-                                                      </button>
-                                                  ))}
-                                              </div>
-                                          </div>
-                                      </div>
-                                  )}
-                              </div>
-                          ))}
-                          
-                          <button 
-                              onClick={addRole}
-                              className="w-full py-4 border-2 border-dashed border-[#9E7649]/20 rounded-xl text-[#9E7649] hover:bg-[#9E7649]/5 transition-all flex items-center justify-center gap-2 font-bold"
-                          >
-                              <Plus size={20} /> Añadir otro cargo
-                          </button>
-
-                          <div className="bg-black/20 p-4 rounded-lg border border-[#9E7649]/20">
-                              <label className="text-xs text-[#9E7649] font-bold uppercase tracking-wider mb-2 block">Otros Pagos Mensuales ($)</label>
-                              <input 
-                                  type="number" 
-                                  value={configForm.otherPayments || ''}
-                                  onChange={(e) => setConfigForm(prev => ({ ...prev, otherPayments: e.target.value }))}
-                                  className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-3 text-sm focus:border-[#9E7649] outline-none text-[#E8DCCF]"
-                                  placeholder="0"
-                              />
-                              <p className="text-[10px] text-[#E8DCCF]/50 mt-1 italic">Este monto se suma al acumulado mensual antes de impuestos.</p>
-                          </div>
-                      </div>
-
-                      <div className="mt-10 flex gap-4">
-                          <button 
-                              onClick={() => {
-                                  setUserPaymentConfig(configForm);
-                              }}
-                              className="flex-1 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
-                          >
-                              <Check size={20} /> Guardar Configuración
-                          </button>
-                          <button 
-                              onClick={() => setActiveSection(null)}
-                              className="px-8 bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 font-bold rounded-xl transition-all"
-                          >
-                              Cancelar
-                          </button>
-                      </div>
-                  </div>
-              </div>
-          );
-      }
 
       const { periodTotal, monthTotal } = calculateTotalPayment(dates);
       const monthTax = calculateTax(monthTotal);
@@ -1815,14 +1606,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                           <CalendarCheck size={14} />
                           <span className="hidden lg:inline">Pagos</span>
                       </button>
-                      <button 
-                          onClick={() => setUserPaymentConfig(null)}
-                          className="flex items-center gap-1 text-xs px-2 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
-                          title="Configuración"
-                      >
-                          <Settings size={14} />
-                          <span className="hidden lg:inline">Config</span>
-                      </button>
                   </div>
               </CMNLHeader>
 
@@ -1851,7 +1634,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                               <div key={role.id}>
                                   <div className="text-[10px] sm:text-xs text-[#E8DCCF]">
                                       <span className="text-[#9E7649] font-bold">{role.role}:</span> {role.level}
-                                      {role.isHabitual && <span className="ml-2 text-[10px] bg-[#9E7649]/20 text-[#9E7649] px-1 rounded">Habitual</span>}
                                   </div>
                               </div>
                           ))}
@@ -1888,24 +1670,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                       </thead>
                                       <tbody>
                                           {workLogs
-                                              .filter(l => l.userId === currentUser?.username && userPaymentConfig.roles.some(r => r.role === l.role))
-                                              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                              .map(log => (
-                                              <tr key={log.id} className="border-b border-[#9E7649]/10 hover:bg-white/5">
-                                                  <td className="px-6 py-4 text-white">{log.date}</td>
-                                                  <td className="px-6 py-4 text-[#9E7649]">{log.role}</td>
-                                                  <td className="px-6 py-4 text-white">{log.programName}</td>
-                                                  <td className="px-6 py-4 text-right font-mono text-[#9E7649]">${log.amount.toFixed(2)}</td>
-                                                  <td className="px-6 py-4 text-center">
-                                                      <button 
-                                                          onClick={() => toggleWorkLog(log.programName, log.date, log.role)}
-                                                          className="text-red-400 hover:text-red-300 p-1"
-                                                      >
-                                                          <Trash2 size={16} />
-                                                      </button>
-                                                  </td>
-                                              </tr>
-                                          ))}
+                                                         .map(log => {
+                                                   const isRoleValid = userPaymentConfig.roles.some(r => r.role === log.role);
+                                                   return (
+                                                       <tr key={log.id} className={`border-b border-[#9E7649]/10 hover:bg-white/5 ${!isRoleValid ? 'opacity-50' : ''}`}>
+                                                           <td className="px-6 py-4 text-white">{log.date}</td>
+                                                           <td className="px-6 py-4 text-[#9E7649]">
+                                                               {log.role}
+                                                               {!isRoleValid && <span className="ml-2 text-[10px] text-red-400">(Cargo no válido)</span>}
+                                                           </td>
+                                                           <td className="px-6 py-4 text-white">{log.programName}</td>
+                                                           <td className="px-6 py-4 text-right font-mono text-[#9E7649]">${log.amount.toFixed(2)}</td>
+                                                           <td className="px-6 py-4 text-center">
+                                                               <button 
+                                                                   onClick={() => toggleWorkLog(log.programName, log.date, log.role)}
+                                                                   className="text-red-400 hover:text-red-300 p-1"
+                                                               >
+                                                                   <Trash2 size={16} />
+                                                               </button>
+                                                           </td>
+                                                       </tr>
+                                                   );
+                                               })
+                                          }
                                       </tbody>
                                   </table>
                               </div>
@@ -1969,16 +1756,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                       <div className="bg-[#3E1E16] px-6 py-3 border-b border-[#9E7649]/10 flex justify-between items-center">
                                           <div>
                                               <h3 className="text-white font-bold">{role.role}</h3>
-                                              <p className="text-[10px] text-[#9E7649]">{role.isHabitual ? 'Habitualidad Activa' : 'Selección Manual'}</p>
                                           </div>
-                                          {role.isHabitual && (
-                                              <button 
-                                                  onClick={() => autoCompleteHabitual(role, dates)}
-                                                  className="flex items-center gap-2 bg-[#9E7649]/20 text-[#9E7649] hover:bg-[#9E7649] hover:text-white px-3 py-1 rounded text-xs transition-colors border border-[#9E7649]/30"
-                                              >
-                                                  ✨ Autocompletar Habituales
-                                              </button>
-                                          )}
                                       </div>
                                       <div className="overflow-x-auto">
                                           <table className="w-full text-sm text-left">
