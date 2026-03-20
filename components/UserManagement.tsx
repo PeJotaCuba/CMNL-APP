@@ -303,9 +303,9 @@ const UserManagement: React.FC<Props> = ({
     };
     
     // Nombre fijo solicitado para coincidir con el repositorio
-    const filename = `actualcmnl.json`;
+    const filename = `actualcmnl.txt`;
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -359,11 +359,7 @@ const UserManagement: React.FC<Props> = ({
                     ? getCategoryVector(n.category || 'Boletín', n.title) 
                     : n.image
             }));
-            setNews(prev => {
-                const map = new Map(prev.map(n => [n.id, n]));
-                processedNews.forEach(n => map.set(n.id, n));
-                return Array.from(map.values());
-            });
+            setNews(processedNews);
             restoredCount++;
           }
 
@@ -464,7 +460,7 @@ const UserManagement: React.FC<Props> = ({
 
           // Restaurar Agenda
           if (json.agendaPrograms) {
-              mergeData('rcm_programs', json.agendaPrograms, 'id');
+              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
               restoredCount++;
           }
           if (json.agendaEfemerides) {

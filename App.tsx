@@ -258,11 +258,7 @@ const App: React.FC = () => {
                     ? getCategoryVector(n.category || 'Boletín', n.title) 
                     : n.image
             }));
-            setNews(prev => {
-                const map = new Map(prev.map(n => [n.id, n]));
-                processedNews.forEach(n => map.set(n.id, n));
-                return Array.from(map.values());
-            });
+            setNews(processedNews);
             changes++;
           }
           
@@ -358,7 +354,7 @@ const App: React.FC = () => {
               changes++;
           }
           if (json.agendaPrograms) {
-              mergeData('rcm_programs', json.agendaPrograms, 'id');
+              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
               changes++;
           }
           if (json.agendaEfemerides) {
