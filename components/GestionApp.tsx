@@ -120,6 +120,20 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`);
       return saved ? JSON.parse(saved) : [];
   });
+
+  useEffect(() => {
+      const savedWorkLogs = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_worklogs`);
+      setWorkLogs(savedWorkLogs ? JSON.parse(savedWorkLogs) : []);
+
+      const savedConsolidated = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`);
+      setConsolidatedPayments(savedConsolidated ? JSON.parse(savedConsolidated) : []);
+
+      const savedInterruptions = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`);
+      setInterruptions(savedInterruptions ? JSON.parse(savedInterruptions) : []);
+
+      const savedConsolidatedMonths = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`);
+      setConsolidatedMonths(savedConsolidatedMonths ? JSON.parse(savedConsolidatedMonths) : []);
+  }, [currentUser]);
   const [teamData, setTeamData] = useState<any[]>(() => {
       const saved = localStorage.getItem('rcm_equipo_cmnl');
       return saved ? JSON.parse(saved) : [];
