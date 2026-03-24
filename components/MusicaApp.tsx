@@ -36,10 +36,52 @@ interface MusicaAppProps {
   onMenuClick: () => void;
 }
 
+import BackupDialog from './musica/BackupDialog';
+// ...
 const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, onMenuClick }) => {
+  const [isDirty, setIsDirty] = useState(false);
+  const [showBackupDialog, setShowBackupDialog] = useState(false);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [view, setView] = useState<ViewState>(ViewState.LIST);
   const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if (isDirty) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  const handleBackup = async () => {
+    if (!currentUser) return;
+    const username = currentUser.username;
+    const selections = await loadSelectionsFromDB();
+    const savedSelections = await loadSavedSelectionsListFromDB();
+    const reports = await loadReportsFromDB();
+    const productions = await loadProductionsFromDB();
+
+    const data = {
+        username,
+        musica: { selections, savedSelections, reports, productions }
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${username}_backup.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setIsDirty(false);
+    setShowBackupDialog(false);
+  };
+
   
   const getUniqueId = (user: GlobalUser) => {
       const storageKey = `rcm_unique_id_${user.username}`;
@@ -678,6 +720,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             </div>
         )}
+
+        <BackupDialog isOpen={showBackupDialog} onClose={() => setShowBackupDialog(false)} onBackup={handleBackup} />
 
         <nav className="bg-[#2C1B15] border-t border-[#9E7649]/20 h-20 px-4 flex items-center justify-between pb-2 z-20 shrink-0">
             <NavButton icon="folder_open" label="Explorar" active={view === ViewState.LIST} onClick={() => navigateTo(ViewState.LIST)} />
