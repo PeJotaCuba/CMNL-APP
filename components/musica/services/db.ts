@@ -1,6 +1,9 @@
 import { Track, Report, Production } from '../types';
 
-const DB_NAME = 'RCM_Music_DB';
+const getDBName = () => {
+    const username = localStorage.getItem('rcm_user_username') || 'default';
+    return `RCM_Music_DB_${username}`;
+};
 const TRACKS_STORE = 'tracks';
 const REPORTS_STORE = 'reports';
 const PRODUCTIONS_STORE = 'productions';
@@ -14,7 +17,7 @@ const openDB = (): Promise<IDBDatabase> => {
             reject("IndexedDB no es soportado en este navegador.");
             return;
         }
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        const request = indexedDB.open(getDBName(), DB_VERSION);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
         request.onblocked = () => {
@@ -323,6 +326,38 @@ export const deleteProductionFromDB = async (id: string): Promise<void> => {
         store.delete(id);
         tx.oncomplete = () => resolve();
     });
+};
+
+export const clearReportsDB = async (): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(REPORTS_STORE, 'readwrite');
+            const store = tx.objectStore(REPORTS_STORE);
+            const request = store.clear();
+            
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    } catch (error) {
+        console.error("Error limpiando reportes:", error);
+    }
+};
+
+export const clearProductionsDB = async (): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
+            const store = tx.objectStore(PRODUCTIONS_STORE);
+            const request = store.clear();
+            
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    } catch (error) {
+        console.error("Error limpiando producciones:", error);
+    }
 };
 
 export const clearTracksDB = async (): Promise<void> => {

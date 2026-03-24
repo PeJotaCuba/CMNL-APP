@@ -3,6 +3,7 @@ import { AppView, NewsItem, User, ProgramItem } from '../types';
 import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight, RefreshCw, Menu, Play, Pause, Download, Upload } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
+import { loadSelectionsFromDB, loadSavedSelectionsListFromDB, loadReportsFromDB, loadProductionsFromDB, saveSelectionsToDB, saveSavedSelectionsListToDB, saveReportToDB, saveProductionToDB, clearReportsDB, clearProductionsDB } from './musica/services/db';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
@@ -69,53 +70,54 @@ const WorkerHome: React.FC<Props> = ({
     if(news.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
   };
 
-  const handleDownloadBackup = () => {
-    const scriptData: Record<string, any> = {};
-    const programSections: Record<string, any> = {};
-    const paymentConfigs: Record<string, any> = {};
+  const handleDownloadBackup = async () => {
+    if (!currentUser) return;
+    const username = currentUser.username;
 
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key) continue;
-
-        if (key.startsWith('guionbd_data_')) {
-            try { scriptData[key] = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
-        } else if (key.startsWith('program_sections_')) {
-            try { programSections[key] = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
-        } else if (key.startsWith('rcm_payment_config_')) {
-            try { paymentConfigs[key] = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+    // 1. Agenda: Intereses de usuario
+    let userInterests = null;
+    try {
+        const users = JSON.parse(localStorage.getItem('rcm_users') || '[]');
+        const userProfile = users.find((u: any) => u.username === username);
+        if (userProfile && userProfile.interests) {
+            userInterests = userProfile.interests;
         }
-    }
+    } catch (e) {}
 
-    let fichas = [];
-    const savedFichas = localStorage.getItem('rcm_data_fichas');
-    if (savedFichas) {
-        try { fichas = JSON.parse(savedFichas); } catch (e) {}
-    }
-    let catalogo = []; try { catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'); } catch (e) {}
-    let worklogs = []; try { worklogs = JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]'); } catch (e) {}
-    let consolidated = []; try { consolidated = JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]'); } catch (e) {}
-    let interruptions = []; try { interruptions = JSON.parse(localStorage.getItem('rcm_interruptions') || '[]'); } catch (e) {}
-    let consolidatedMonths = []; try { consolidatedMonths = JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]'); } catch (e) {}
-    let transmissionConfig = {}; try { transmissionConfig = JSON.parse(localStorage.getItem('rcm_transmission_config') || '{}'); } catch (e) {}
-    
-    let agendaPrograms = []; try { agendaPrograms = JSON.parse(localStorage.getItem('rcm_programs') || '[]'); } catch (e) {}
-    let agendaEfemerides = {}; try { agendaEfemerides = JSON.parse(localStorage.getItem('rcm_efemerides') || '{}'); } catch (e) {}
-    let agendaConmemoraciones = {}; try { agendaConmemoraciones = JSON.parse(localStorage.getItem('rcm_conmemoraciones') || '{}'); } catch (e) {}
-    let agendaDayThemes = {}; try { agendaDayThemes = JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'); } catch (e) {}
-    let agendaUsers = []; try { agendaUsers = JSON.parse(localStorage.getItem('rcm_users') || '[]'); } catch (e) {}
-    let agendaPropaganda = {}; try { agendaPropaganda = JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'); } catch (e) {}
+    // 2. Música: Selecciones y producciones
+    const selections = await loadSelectionsFromDB();
+    const savedSelections = await loadSavedSelectionsListFromDB();
+    const reports = await loadReportsFromDB();
+    const productions = await loadProductionsFromDB();
+
+    // 3. Gestión: Pagos
+    let worklogs = []; try { worklogs = JSON.parse(localStorage.getItem(`user_${username}_rcm_data_worklogs`) || '[]'); } catch (e) {}
+    let consolidated = []; try { consolidated = JSON.parse(localStorage.getItem(`user_${username}_rcm_data_consolidated`) || '[]'); } catch (e) {}
+    let consolidatedMonths = []; try { consolidatedMonths = JSON.parse(localStorage.getItem(`user_${username}_rcm_consolidated_months`) || '[]'); } catch (e) {}
 
     const data = {
-        fichas, catalogo, worklogs, consolidated, interruptions, consolidatedMonths, transmissionConfig, paymentConfigs,
-        scripts: scriptData, programSections, agendaPrograms, agendaEfemerides, agendaConmemoraciones, agendaDayThemes, agendaUsers, agendaPropaganda
+        username,
+        agenda: {
+            interests: userInterests
+        },
+        musica: {
+            selections,
+            savedSelections,
+            reports,
+            productions
+        },
+        gestion: {
+            worklogs,
+            consolidated,
+            consolidatedMonths
+        }
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `actualcmnl.json`;
+    a.download = `${username}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -124,59 +126,74 @@ const WorkerHome: React.FC<Props> = ({
 
   const handleLoadBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !currentUser) return;
 
-    if (!confirm('¿Estás seguro de sincronizar con este archivo? Esto sobrescribirá tu base de datos local.')) {
+    const expectedFileName = `${currentUser.username}.json`;
+    if (file.name !== expectedFileName) {
+        alert(`El archivo de respaldo debe llamarse exactamente "${expectedFileName}".`);
+        e.target.value = '';
+        return;
+    }
+
+    if (!confirm('¿Estás seguro de sincronizar con este archivo? Esto sobrescribirá tus datos locales.')) {
         e.target.value = '';
         return;
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
         try {
             const json = JSON.parse(event.target?.result as string);
             
             // Validación de estructura básica
-            if (!json || typeof json !== 'object' || (!Array.isArray(json.fichas) && !Array.isArray(json.agendaPrograms) && !Array.isArray(json.catalogo))) {
-                throw new Error("El archivo no tiene la estructura esperada de un respaldo válido.");
+            if (!json || typeof json !== 'object' || json.username !== currentUser.username) {
+                throw new Error("El archivo no pertenece a este usuario o no tiene la estructura esperada.");
             }
             
-            if (json.fichas) localStorage.setItem('rcm_data_fichas', JSON.stringify(json.fichas));
-            if (json.catalogo) localStorage.setItem('rcm_data_catalogo', JSON.stringify(json.catalogo));
-            if (json.worklogs) localStorage.setItem('rcm_data_worklogs', JSON.stringify(json.worklogs));
-            if (json.consolidated) localStorage.setItem('rcm_data_consolidated', JSON.stringify(json.consolidated));
-            if (json.interruptions) localStorage.setItem('rcm_interruptions', JSON.stringify(json.interruptions));
-            if (json.consolidatedMonths) localStorage.setItem('rcm_consolidated_months', JSON.stringify(json.consolidatedMonths));
-            if (json.transmissionConfig) localStorage.setItem('rcm_transmission_config', JSON.stringify(json.transmissionConfig));
-            
-            if (json.scripts) {
-                Object.keys(json.scripts).forEach(key => {
-                    localStorage.setItem(key, JSON.stringify(json.scripts[key]));
-                });
-            }
-            if (json.programSections) {
-                Object.keys(json.programSections).forEach(key => {
-                    localStorage.setItem(key, JSON.stringify(json.programSections[key]));
-                });
-            }
-            if (json.paymentConfigs) {
-                Object.keys(json.paymentConfigs).forEach(key => {
-                    localStorage.setItem(key, JSON.stringify(json.paymentConfigs[key]));
-                });
+            // 1. Agenda: Intereses de usuario
+            if (json.agenda && json.agenda.interests) {
+                try {
+                    const users = JSON.parse(localStorage.getItem('rcm_users') || '[]');
+                    const userIndex = users.findIndex((u: any) => u.username === currentUser.username);
+                    if (userIndex !== -1) {
+                        users[userIndex].interests = json.agenda.interests;
+                        localStorage.setItem('rcm_users', JSON.stringify(users));
+                    }
+                } catch (e) {
+                    console.error("Error updating agenda interests:", e);
+                }
             }
 
-            if (json.agendaPrograms) localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
-            if (json.agendaEfemerides) localStorage.setItem('rcm_efemerides', JSON.stringify(json.agendaEfemerides));
-            if (json.agendaConmemoraciones) localStorage.setItem('rcm_conmemoraciones', JSON.stringify(json.agendaConmemoraciones));
-            if (json.agendaDayThemes) localStorage.setItem('rcm_day_themes', JSON.stringify(json.agendaDayThemes));
-            if (json.agendaUsers) localStorage.setItem('rcm_users', JSON.stringify(json.agendaUsers));
-            if (json.agendaPropaganda) localStorage.setItem('rcm_propaganda', JSON.stringify(json.agendaPropaganda));
+            // 2. Música: Selecciones y producciones
+            if (json.musica) {
+                if (json.musica.selections) await saveSelectionsToDB(json.musica.selections);
+                if (json.musica.savedSelections) await saveSavedSelectionsListToDB(json.musica.savedSelections);
+                if (json.musica.reports) {
+                    await clearReportsDB();
+                    for (const report of json.musica.reports) {
+                        await saveReportToDB(report);
+                    }
+                }
+                if (json.musica.productions) {
+                    await clearProductionsDB();
+                    for (const prod of json.musica.productions) {
+                        await saveProductionToDB(prod);
+                    }
+                }
+            }
+
+            // 3. Gestión: Pagos
+            if (json.gestion) {
+                if (json.gestion.worklogs) localStorage.setItem(`user_${currentUser.username}_rcm_data_worklogs`, JSON.stringify(json.gestion.worklogs));
+                if (json.gestion.consolidated) localStorage.setItem(`user_${currentUser.username}_rcm_data_consolidated`, JSON.stringify(json.gestion.consolidated));
+                if (json.gestion.consolidatedMonths) localStorage.setItem(`user_${currentUser.username}_rcm_consolidated_months`, JSON.stringify(json.gestion.consolidatedMonths));
+            }
 
             alert('Sincronización completada con éxito. La aplicación se recargará.');
             window.location.reload();
         } catch (error) {
             console.error("Error parsing backup file:", error);
-            alert("Error al leer el archivo de respaldo. Asegúrate de que sea un archivo JSON válido.");
+            alert("Error al leer el archivo de respaldo. Asegúrate de que sea un archivo JSON válido y pertenezca a tu usuario.");
         }
     };
     reader.readAsText(file);
@@ -210,19 +227,6 @@ const WorkerHome: React.FC<Props> = ({
               <p className="text-[8px] text-[#CD853F] uppercase tracking-tighter mt-0.5">Gestión Interna</p>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {isSyncing ? (
-             <div className="flex items-center gap-2 text-[#CD853F] text-[10px] font-bold">
-                 <RefreshCw size={12} className="animate-spin" />
-                 <span>Sincronizando...</span>
-             </div>
-          ) : (
-             <button onClick={onSync} className="flex items-center gap-2 text-[#CD853F] hover:text-white text-[10px] font-bold transition-colors">
-                 <RefreshCw size={12} />
-                 <span>Sincronizar</span>
-             </button>
-          )}
         </div>
       </header>
 

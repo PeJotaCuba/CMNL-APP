@@ -14,8 +14,8 @@ import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, lo
 import { generateReportPDF } from './musica/services/pdfService';
 
 const USERS_KEY = 'rcm_users_db';
-const SELECTION_KEY = 'rcm_current_selection';
-const SAVED_SELECTIONS_KEY = 'rcm_saved_selections';
+const getSelectionKey = () => `user_${localStorage.getItem('rcm_user_username') || 'default'}_rcm_current_selection`;
+const getSavedSelectionsKey = () => `user_${localStorage.getItem('rcm_user_username') || 'default'}_rcm_saved_selections`;
 const CUSTOM_ROOTS_KEY = 'rcm_custom_roots';
 
 const USERS_DB_URL = 'https://raw.githubusercontent.com/PeJotaCuba/RCM-M-sica/refs/heads/main/musuarios.json';
@@ -141,7 +141,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 setSavedSelections(dbSavedSelections);
             } else {
                 // Fallback to localStorage if DB is empty (migration)
-                const savedSels = localStorage.getItem(SAVED_SELECTIONS_KEY);
+                const savedSels = localStorage.getItem(getSavedSelectionsKey());
                 if (savedSels) setSavedSelections(JSON.parse(savedSels));
             }
         } catch (e) { console.error("Error loading saved selections groups", e); }
@@ -164,8 +164,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
     }
   }, [savedSelections, isLoaded]);
 
-  useEffect(() => { if (authMode) localStorage.setItem(SELECTION_KEY, JSON.stringify(selectedTracksList)); }, [selectedTracksList, authMode]);
-  useEffect(() => { if (authMode) localStorage.setItem(SAVED_SELECTIONS_KEY, JSON.stringify(savedSelections)); }, [savedSelections, authMode]);
+  useEffect(() => { if (authMode) localStorage.setItem(getSelectionKey(), JSON.stringify(selectedTracksList)); }, [selectedTracksList, authMode]);
+  useEffect(() => { if (authMode) localStorage.setItem(getSavedSelectionsKey(), JSON.stringify(savedSelections)); }, [savedSelections, authMode]);
 
   const updateTracks = async (newTracksInput: Track[] | ((prev: Track[]) => Track[])) => {
       let finalTracks: Track[];
@@ -173,37 +173,6 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       setTracks(finalTracks);
       setIsSaving(true);
       try { await saveTracksToDB(finalTracks); } catch (e) { console.error("Error guardando DB:", e); } finally { setIsSaving(false); }
-  };
-
-  const handleSyncData = async () => {
-      setIsUpdating(true);
-      try {
-          const r = await fetch(USERS_DB_URL);
-          const data = await r.json();
-          let fetchedUsers: User[] = [];
-          let fetchedRoots: string[] = [];
-
-          if (Array.isArray(data)) {
-              fetchedUsers = data;
-          } else if (data.users || data.customRoots) {
-              fetchedUsers = data.users || [];
-              fetchedRoots = data.customRoots || [];
-          }
-
-          if (fetchedUsers.length > 0) {
-              setUsers(fetchedUsers);
-              localStorage.setItem(USERS_KEY, JSON.stringify(fetchedUsers));
-          }
-          if (fetchedRoots.length > 0) {
-              setCustomRoots(fetchedRoots);
-              localStorage.setItem(CUSTOM_ROOTS_KEY, JSON.stringify(fetchedRoots));
-          }
-          alert("Sincronización completada.");
-      } catch(e) {
-          alert("Error al sincronizar.");
-      } finally {
-          setIsUpdating(false);
-      }
   };
 
   const handleExportUsersDB = () => {
@@ -214,112 +183,6 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       const link = document.createElement('a');
       link.href = url; link.download = "musuarios.json";
       document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
-  };
-
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-      return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-      });
-  };
-
-  const base64ToBlob = async (base64: string): Promise<Blob> => {
-      const res = await fetch(base64);
-      return await res.blob();
-  };
-
-  const handleExportBackup = async () => {
-      if (!currentUser) return;
-      setIsUpdating(true);
-      try {
-          const dbTracks = await loadTracksFromDB();
-          const dbReports = await loadReportsFromDB();
-          const dbProductions = await loadProductionsFromDB();
-          
-          const reportsForExport = await Promise.all(dbReports.map(async r => {
-              const base64 = r.pdfBlob ? await blobToBase64(r.pdfBlob) : null;
-              const { pdfBlob, ...rest } = r;
-              return { ...rest, pdfBlobBase64: base64 };
-          }));
-
-          const backup = {
-              tracks: dbTracks,
-              reports: reportsForExport,
-              productions: dbProductions,
-              savedSelections: savedSelections,
-              currentSelection: selectedTracksList,
-              timestamp: new Date().toISOString(),
-              user: currentUser.username
-          };
-
-          const dateStr = new Date().toISOString().split('T')[0];
-          const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `RCM_Backup_${currentUser.username}_${dateStr}.json`;
-          a.click();
-          URL.revokeObjectURL(url);
-      } catch (e) {
-          console.error("Error exporting backup:", e);
-          alert("Error al exportar la copia de seguridad.");
-      } finally {
-          setIsUpdating(false);
-      }
-  };
-
-  const handleImportBackup = (file: File) => {
-      if (!file) return;
-      setIsUpdating(true);
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-          try {
-              const backup = JSON.parse(e.target?.result as string);
-              
-              if (backup.tracks && Array.isArray(backup.tracks)) {
-                  await saveTracksToDB(backup.tracks);
-                  setTracks(backup.tracks);
-              }
-              
-              if (backup.reports && Array.isArray(backup.reports)) {
-                  for (const r of backup.reports) {
-                      if (r.pdfBlobBase64) {
-                          r.pdfBlob = await base64ToBlob(r.pdfBlobBase64);
-                          delete r.pdfBlobBase64;
-                      } else {
-                          r.pdfBlob = new Blob();
-                      }
-                      await saveReportToDB(r);
-                  }
-              }
-              
-              if (backup.productions && Array.isArray(backup.productions)) {
-                  for (const p of backup.productions) {
-                      await saveProductionToDB(p);
-                  }
-              }
-              
-              if (backup.savedSelections) {
-                  setSavedSelections(backup.savedSelections);
-                  localStorage.setItem(SAVED_SELECTIONS_KEY, JSON.stringify(backup.savedSelections));
-              }
-              
-              if (backup.currentSelection) {
-                  setSelectedTracksList(backup.currentSelection);
-                  localStorage.setItem(SELECTION_KEY, JSON.stringify(backup.currentSelection));
-              }
-              
-              alert("Copia de seguridad restaurada con éxito.");
-          } catch (err) {
-              console.error("Error importing backup:", err);
-              alert("Error al restaurar la copia de seguridad. El archivo puede estar corrupto.");
-          } finally {
-              setIsUpdating(false);
-          }
-      };
-      reader.readAsText(file);
   };
 
   const handleSyncRoot = async (rootName: string) => {
@@ -407,7 +270,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           // Clear selection after update
           setSelectedTracksList([]);
           setCurrentSelectionId(null);
-          localStorage.removeItem(SELECTION_KEY);
+          localStorage.removeItem(getSelectionKey());
           
           alert("Selección actualizada correctamente.");
           return;
@@ -445,7 +308,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           // Clear selection after save
           setSelectedTracksList([]);
           setCurrentSelectionId(null);
-          localStorage.removeItem(SELECTION_KEY);
+          localStorage.removeItem(getSelectionKey());
           
           alert("Selección guardada correctamente.");
       }
@@ -460,7 +323,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const confirmClearSelection = () => {
       setSelectedTracksList([]);
       setCurrentSelectionId(null);
-      localStorage.removeItem(SELECTION_KEY);
+      localStorage.removeItem(getSelectionKey());
       setShowClearConfirm(false);
   };
 
@@ -564,19 +427,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         sectionTitle="Música CMNL"
         onMenuClick={onMenuClick}
         onBack={navigateBack}
-      >
-        {(authMode === 'admin' || authMode === 'director') && (
-            <div className="flex gap-4 items-center">
-                <button onClick={handleExportBackup} className="text-[#9E7649] hover:text-white transition-colors flex items-center justify-center" title="Exportar Copia de Seguridad">
-                    <span className="material-symbols-outlined text-2xl">cloud_download</span>
-                </button>
-                <label className="text-[#9E7649] hover:text-white transition-colors cursor-pointer flex items-center justify-center" title="Restaurar Copia de Seguridad">
-                    <span className="material-symbols-outlined text-2xl">cloud_upload</span>
-                    <input type="file" accept=".json" onChange={(e) => { if (e.target.files && e.target.files[0]) handleImportBackup(e.target.files[0]); e.target.value = ''; }} className="hidden" />
-                </label>
-            </div>
-        )}
-      </CMNLHeader>
+      />
       
       <div className="flex-1 overflow-hidden relative flex flex-col">
             {view === ViewState.LIST && (
@@ -712,7 +563,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             )}
 
-            {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} onExportBackup={handleExportBackup} onImportBackup={handleImportBackup} />}
+            {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
             {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} />}
             {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}

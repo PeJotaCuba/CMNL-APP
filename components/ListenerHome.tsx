@@ -121,12 +121,6 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                     <span className="text-sm font-medium">Actualizar</span>
                 </button>
             )}
-            
-            <div className="mt-6 pt-6 border-t border-white/5">
-                <p className="font-bold text-[#C69C6D] uppercase tracking-widest text-[10px] mb-1">Radio Ciudad Monumento</p>
-                <p className="text-[10px] text-stone-500">Voz de la segunda villa cubana</p>
-                <p className="text-[10px] text-stone-500 opacity-50 mt-1">CMNL App 2026</p>
-            </div>
          </div>
       </aside>
 

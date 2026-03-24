@@ -114,5 +114,6 @@ export const PROGRAMS_LIST = [
   "Coloreando Melodías",
   "Alba y crisol",
   "Estación 95.3",
-  "Palco de Domingo"
+  "Palco de Domingo",
+  "La Cumbancha"
 ];

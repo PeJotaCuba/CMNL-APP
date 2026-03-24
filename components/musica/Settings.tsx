@@ -11,11 +11,9 @@ interface SettingsProps {
   onExportUsers: () => void;
   onImportUsers: (users: User[]) => void;
   currentUser?: User | null;
-  onExportBackup: () => void;
-  onImportBackup: (file: File) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUser, onDeleteUser, onExportUsers, onImportUsers, currentUser, onExportBackup, onImportBackup }) => {
+const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUser, onDeleteUser, onExportUsers, onImportUsers, currentUser }) => {
   const [formData, setFormData] = useState({
       username: '',
       fullName: '',

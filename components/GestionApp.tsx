@@ -113,11 +113,11 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       return saved ? JSON.parse(saved) : [];
   });
   const [workLogs, setWorkLogs] = useState<WorkLog[]>(() => {
-      const saved = localStorage.getItem('rcm_data_worklogs');
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_worklogs`);
       return saved ? JSON.parse(saved) : [];
   });
   const [consolidatedPayments, setConsolidatedPayments] = useState<ConsolidatedPayment[]>(() => {
-      const saved = localStorage.getItem('rcm_data_consolidated');
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`);
       return saved ? JSON.parse(saved) : [];
   });
   const [teamData, setTeamData] = useState<any[]>(() => {
@@ -212,11 +212,11 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   // Transmission State
   const [transmissionConfig, setTransmissionConfig] = useState(getDayMinutesConfig());
   const [interruptions, setInterruptions] = useState<Interruption[]>(() => {
-      const saved = localStorage.getItem('rcm_interruptions');
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`);
       return saved ? JSON.parse(saved) : [];
   });
   const [consolidatedMonths, setConsolidatedMonths] = useState<ConsolidatedMonth[]>(() => {
-      const saved = localStorage.getItem('rcm_consolidated_months');
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`);
       return saved ? JSON.parse(saved) : [];
   });
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
@@ -238,12 +238,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('rcm_interruptions', JSON.stringify(interruptions));
-  }, [interruptions]);
+    localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`, JSON.stringify(interruptions));
+  }, [interruptions, currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('rcm_consolidated_months', JSON.stringify(consolidatedMonths));
-  }, [consolidatedMonths]);
+    localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`, JSON.stringify(consolidatedMonths));
+  }, [consolidatedMonths, currentUser]);
 
   useEffect(() => {
     const today = new Date();
@@ -271,12 +271,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   }, [catalogo]);
 
   useEffect(() => {
-      localStorage.setItem('rcm_data_worklogs', JSON.stringify(workLogs));
-  }, [workLogs]);
+      localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_data_worklogs`, JSON.stringify(workLogs));
+  }, [workLogs, currentUser]);
 
   useEffect(() => {
-      localStorage.setItem('rcm_data_consolidated', JSON.stringify(consolidatedPayments));
-  }, [consolidatedPayments]);
+      localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`, JSON.stringify(consolidatedPayments));
+  }, [consolidatedPayments, currentUser]);
 
   const menuItems = [
     { id: 'transmision', icon: <Radio size={32} />, label: 'Transmisión', color: 'bg-red-900/40 text-red-400 border-red-500/30' },

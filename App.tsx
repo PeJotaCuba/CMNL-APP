@@ -563,51 +563,66 @@ const App: React.FC = () => {
         )}
 
         {showPlayer && (
-           <div className={`fixed ${(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) ? 'bottom-16 md:bottom-0 md:left-64' : 'bottom-0 left-0'} right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 px-4 py-3 pb-safe-bottom transition-all duration-300`}>
-           <div className="max-w-md mx-auto flex items-center gap-3">
-               {/* Refresh Button replacing previous Image */}
-               <button 
-                  onClick={handleRefreshLive}
-                  className="w-10 h-10 rounded-lg bg-white/5 border border-[#9E7649]/20 flex items-center justify-center shrink-0 text-[#9E7649] hover:bg-[#9E7649]/10 active:scale-95 transition-all"
-                  title="Actualizar transmisión"
-               >
-                   <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
-               </button>
+           <>
+             <div className={`fixed ${(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) ? 'bottom-16 md:bottom-0 md:left-0' : 'bottom-0 left-0'} right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 transition-all duration-300 flex`}>
+                 
+                 {/* Left Info Box (Only on Desktop Listener Home) */}
+                 {(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) && (
+                    <div className="hidden md:flex flex-col justify-center w-64 bg-[#2C1B15] border-r border-white/5 px-6 shrink-0 py-3">
+                        <p className="font-bold text-[#C69C6D] uppercase tracking-widest text-[10px] mb-1">Radio Ciudad Monumento</p>
+                        <p className="text-[10px] text-stone-500">Voz de la segunda villa cubana</p>
+                        <p className="text-[10px] text-stone-500 opacity-50 mt-1">CMNL App 2026</p>
+                    </div>
+                 )}
 
-               <div className="flex-1 min-w-0">
-                  <p className="text-[#F5EFE6] text-sm font-bold truncate">{currentProgram.name}</p>
-                  <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                      <p className="text-[#9E7649] text-[10px] truncate">95.3 FM • Señal en vivo</p>
-                  </div>
-               </div>
-               <div className="flex items-center gap-3">
-                  <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipBack size={20} fill="currentColor" className="opacity-50" /></button>
-                  <button 
-                    onClick={togglePlay}
-                    className="w-10 h-10 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 transition-all border border-white/10"
-                  >
-                     {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
-                  </button>
-                  <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipForward size={20} fill="currentColor" className="opacity-50" /></button>
-               </div>
-           </div>
-           <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#6B442A] overflow-hidden">
-              {isPlaying && (
-                  <div className="absolute top-0 bottom-0 bg-[#9E7649] animate-progress-indeterminate"></div>
-              )}
-           </div>
-           <style>{`
-              @keyframes progress-indeterminate {
-                  0% { left: -30%; width: 30%; }
-                  50% { left: 40%; width: 40%; }
-                  100% { left: 100%; width: 30%; }
-              }
-              .animate-progress-indeterminate {
-                  animation: progress-indeterminate 2s infinite linear;
-              }
-           `}</style>
-        </div>
+                 {/* Live Player Content */}
+                 <div className="flex-1 px-4 py-3 pb-safe-bottom relative">
+                     <div className="max-w-md mx-auto flex items-center gap-3">
+                         {/* Refresh Button replacing previous Image */}
+                         <button 
+                            onClick={handleRefreshLive}
+                            className="w-10 h-10 rounded-lg bg-white/5 border border-[#9E7649]/20 flex items-center justify-center shrink-0 text-[#9E7649] hover:bg-[#9E7649]/10 active:scale-95 transition-all"
+                            title="Actualizar transmisión"
+                         >
+                             <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+                         </button>
+
+                         <div className="flex-1 min-w-0">
+                            <p className="text-[#F5EFE6] text-sm font-bold truncate">{currentProgram.name}</p>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                                <p className="text-[#9E7649] text-[10px] truncate">95.3 FM • Señal en vivo</p>
+                            </div>
+                         </div>
+                         <div className="flex items-center gap-3">
+                            <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipBack size={20} fill="currentColor" className="opacity-50" /></button>
+                            <button 
+                              onClick={togglePlay}
+                              className="w-10 h-10 rounded-full bg-[#9E7649] text-[#3E1E16] flex items-center justify-center shadow-lg hover:scale-105 transition-all border border-white/10"
+                            >
+                               {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
+                            </button>
+                            <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipForward size={20} fill="currentColor" className="opacity-50" /></button>
+                         </div>
+                     </div>
+                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#6B442A] overflow-hidden">
+                        {isPlaying && (
+                            <div className="absolute top-0 bottom-0 bg-[#9E7649] animate-progress-indeterminate"></div>
+                        )}
+                     </div>
+                 </div>
+             </div>
+             <style>{`
+                @keyframes progress-indeterminate {
+                    0% { left: -30%; width: 30%; }
+                    50% { left: 40%; width: 40%; }
+                    100% { left: 100%; width: 30%; }
+                }
+                .animate-progress-indeterminate {
+                    animation: progress-indeterminate 2s infinite linear;
+                }
+             `}</style>
+           </>
         )}
       </div>
   );
