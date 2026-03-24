@@ -36,7 +36,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
       const headerColor = newsColors[colorIndex];
 
       return (
-        <div className="flex flex-col h-full w-full bg-[#1A100C] text-[#E8DCCF]">
+        <div className="flex flex-col h-full w-full bg-[#2C1B15] text-[#E8DCCF]">
              <div className={`relative h-56 flex flex-col justify-end ${headerColor}`}>
                  <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-[#1A100C] opacity-80"></div>
                  <button onClick={onBack} className="absolute top-4 left-4 p-2 bg-black/40 text-white rounded-full backdrop-blur-md z-10 border border-white/10 hover:bg-white/20 transition-all">

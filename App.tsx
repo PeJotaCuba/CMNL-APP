@@ -527,7 +527,7 @@ const App: React.FC = () => {
   };
 
   return (
-      <div className="w-full min-h-screen bg-[#1A100C] dark:bg-[#F5F5F0] font-display">
+      <div className="w-full min-h-screen bg-[#2C1B15] font-display">
         <audio 
           ref={audioRef} 
           src="https://icecast.teveo.cu/KR43FF7C" 
@@ -563,7 +563,7 @@ const App: React.FC = () => {
         )}
 
         {showPlayer && (
-           <div className="fixed bottom-0 left-0 right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 px-4 py-3 pb-safe-bottom">
+           <div className={`fixed ${(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) ? 'bottom-16 md:bottom-0 md:left-64' : 'bottom-0 left-0'} right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 px-4 py-3 pb-safe-bottom transition-all duration-300`}>
            <div className="max-w-md mx-auto flex items-center gap-3">
                {/* Refresh Button replacing previous Image */}
                <button 

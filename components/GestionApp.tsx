@@ -1279,7 +1279,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       }
 
       return (
-          <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col relative">
+          <div className="min-h-screen bg-[#2C1B15] text-[#E8DCCF] font-display flex flex-col relative">
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                   sectionTitle="Transmisión"
@@ -1653,7 +1653,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                           <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden p-4">
                               <div className="flex justify-between items-center mb-4">
                                   <h3 className="text-white font-bold">Historial Acumulado (Mes Actual)</h3>
-                                  <div className="flex gap-2">
+                                  <div className="flex flex-wrap gap-2">
                                       <button onClick={consolidateMonth} className="flex items-center gap-2 bg-[#9E7649] text-white px-3 py-1 rounded text-sm hover:bg-[#8B653D]">
                                           <Save size={16} /> Consolidar Mes
                                       </button>
@@ -2322,7 +2322,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                       <div key={idx} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-colors">
                                           {isEditing && editForm ? (
                                               <div className="space-y-2">
-                                                  <div className="flex gap-2">
+                                                  <div className="flex flex-wrap gap-2">
                                                       <input 
                                                           type="text" 
                                                           value={sec.name} 

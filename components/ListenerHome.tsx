@@ -50,12 +50,12 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
   };
 
   return (
-    <div className="relative flex min-h-screen h-full w-full flex-col md:flex-row bg-[#1E1815] font-display text-stone-100 overflow-y-auto no-scrollbar">
+    <div className="relative flex min-h-screen h-full w-full flex-col md:flex-row bg-[#2C1B15] font-display text-stone-100 overflow-y-auto no-scrollbar">
       {/* Header Pattern Background */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none fixed"></div>
 
       {/* Mobile Sticky Header */}
-      <header className="md:hidden sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#1E1815]/90 backdrop-blur-md border-b border-white/5">
+      <header className="md:hidden sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#2C1B15]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <button 
               onClick={onMenuClick}
@@ -69,17 +69,25 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
             </div>
             <div>
               <h1 className="text-sm font-serif font-bold text-[#C69C6D] leading-none tracking-wide">CMNL App</h1>
-              <p className="text-[8px] text-stone-500 uppercase tracking-tighter mt-0.5">Voz de la segunda villa</p>
+              <p className="text-[8px] text-stone-500 uppercase tracking-tighter mt-0.5">Voz de la segunda villa cubana</p>
             </div>
           </div>
         </div>
         
-        {isSyncing && (
-             <div className="flex items-center gap-2 text-[#C69C6D] text-[10px] font-bold">
-                 <RefreshCw size={12} className="animate-spin" />
-                 <span>Sincronizando...</span>
-             </div>
-        )}
+        <div className="flex items-center gap-3">
+          {isSyncing && (
+               <div className="flex items-center gap-2 text-[#C69C6D] text-[10px] font-bold mr-2">
+                   <RefreshCw size={12} className="animate-spin" />
+               </div>
+          )}
+          <button 
+            onClick={() => onNavigate(AppView.LANDING)}
+            className="text-[#C69C6D] hover:text-white transition-colors p-1"
+            title="Iniciar Sesión"
+          >
+            <LogIn size={20} />
+          </button>
+        </div>
       </header>
 
       {/* Desktop Left Sidebar */}
@@ -95,6 +103,10 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
          </div>
 
          <div className="flex flex-col gap-2 flex-1">
+             <button onClick={() => onNavigate(AppView.LANDING)} className="flex items-center gap-3 bg-[#9E7649] text-white p-3 rounded-xl transition-all w-full text-left shadow-lg hover:bg-[#8B653D] hover:scale-[1.02] mb-4">
+                 <LogIn size={18} />
+                 <span className="font-bold text-sm">Iniciar Sesión</span>
+             </button>
              <SidebarLink icon={<Home size={18} />} label="Inicio" onClick={() => onNavigate(AppView.LISTENER_HOME)} />
              <SidebarLink icon={<ScrollText size={18} />} label="Historia" onClick={() => onNavigate(AppView.SECTION_HISTORY)} />
              <SidebarLink icon={<Users size={18} />} label="Quiénes Somos" onClick={() => onNavigate(AppView.SECTION_ABOUT)} />
@@ -109,10 +121,12 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                     <span className="text-sm font-medium">Actualizar</span>
                 </button>
             )}
-            <button onClick={() => onNavigate(AppView.LANDING)} className="flex items-center gap-3 text-stone-400 hover:text-[#CD853F] transition-colors w-full p-2 rounded-lg hover:bg-white/5">
-                <LogIn size={18} />
-                <span className="text-sm font-medium">Iniciar Sesión</span>
-            </button>
+            
+            <div className="mt-6 pt-6 border-t border-white/5">
+                <p className="font-bold text-[#C69C6D] uppercase tracking-widest text-[10px] mb-1">Radio Ciudad Monumento</p>
+                <p className="text-[10px] text-stone-500">Voz de la segunda villa cubana</p>
+                <p className="text-[10px] text-stone-500 opacity-50 mt-1">CMNL App 2026</p>
+            </div>
          </div>
       </aside>
 
@@ -175,16 +189,10 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
         </div>
 
         {/* Footer Info */}
-        <div className="mt-8 pb-4 border-t border-white/5 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-stone-500 text-xs">
-            <div className="text-center md:text-left">
-                <p className="font-bold text-[#C69C6D] uppercase tracking-widest mb-1">Radio Ciudad Monumento</p>
-                <p>La voz de la segunda villa cubana</p>
-            </div>
-            <div className="flex gap-4">
-                <a href="#" className="hover:text-white transition-colors">Política de Privacidad</a>
-                <a href="#" className="hover:text-white transition-colors">Términos de Uso</a>
-            </div>
-            <p className="opacity-50">© 2024 CMNL App</p>
+        <div className="mt-8 pb-4 border-t border-white/5 pt-6 flex flex-col items-center justify-center gap-2 text-stone-500 text-xs md:hidden">
+            <p className="font-bold text-[#C69C6D] uppercase tracking-widest">Radio Ciudad Monumento</p>
+            <p>Voz de la segunda villa cubana</p>
+            <p className="opacity-50 mt-1">CMNL App 2026</p>
         </div>
 
       </main>
@@ -230,7 +238,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
       `}</style>
 
       {/* Bottom Nav (Mobile Only) */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-[#1E1815]/95 backdrop-blur-xl border-t border-white/5 pb-safe pt-2 px-6 z-50">
+      <nav className="md:hidden fixed bottom-0 w-full bg-[#2C1B15]/95 backdrop-blur-xl border-t border-white/5 pb-safe pt-2 px-6 z-50">
         <div className="flex justify-around items-center h-16">
           <button onClick={() => onNavigate(AppView.LISTENER_HOME)} className="flex flex-col items-center gap-1.5 text-[#C69C6D]">
             <Home size={22} strokeWidth={2.5} />
