@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Track, Production, PROGRAMS_LIST } from './types';
+import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import * as XLSX from 'xlsx';
 import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB } from './services/db';
@@ -25,7 +25,7 @@ type TabType = 'intro' | 'stock' | 'archive';
 const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [activeTab, setActiveTab] = useState<TabType>('intro');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [program, setProgram] = useState(PROGRAMS_LIST[0]);
+  const [program, setProgram] = useState(DEFAULT_PROGRAMS_LIST[0]);
   
   const [currentTrack, setCurrentTrack] = useState<TempTrack>({
       id: '',
@@ -208,7 +208,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       }
 
       setDate(lastParsedDate);
-      if (PROGRAMS_LIST.includes(lastParsedProgram)) {
+      if (DEFAULT_PROGRAMS_LIST.includes(lastParsedProgram)) {
           setProgram(lastParsedProgram);
       }
       
@@ -375,7 +375,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                 onChange={e => setProgram(e.target.value)} 
                                 className="w-full p-2 border border-[#9E7649]/30 rounded-lg bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]"
                             >
-                                {PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                                {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
                     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CMNLHeader from './CMNLHeader';
 import { User as GlobalUser } from '../types';
-import { Track, ViewState, AuthMode, User, PROGRAMS_LIST, Report, ExportItem, SavedSelection } from './musica/types';
+import { Track, ViewState, AuthMode, User, DEFAULT_PROGRAMS_LIST, Report, ExportItem, SavedSelection } from './musica/types';
 import { parseTxtDatabase, GENRES_LIST, COUNTRIES_LIST } from './musica/constants';
 import TrackList from './musica/TrackList';
 import TrackDetail from './musica/TrackDetail';
@@ -14,6 +14,7 @@ import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, lo
 import { generateReportPDF } from './musica/services/pdfService';
 
 const USERS_KEY = 'rcm_users_db';
+const PROGRAMS_KEY = 'rcm_programs_list';
 const getSelectionKey = () => `user_${localStorage.getItem('rcm_user_username') || 'default'}_rcm_current_selection`;
 const getSavedSelectionsKey = () => `user_${localStorage.getItem('rcm_user_username') || 'default'}_rcm_saved_selections`;
 const CUSTOM_ROOTS_KEY = 'rcm_custom_roots';
@@ -78,12 +79,17 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const [customRoots, setCustomRoots] = useState<string[]>([]);
   
+  const [programs, setPrograms] = useState<string[]>(() => {
+      const saved = localStorage.getItem(PROGRAMS_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_PROGRAMS_LIST;
+  });
+
   const [showWishlist, setShowWishlist] = useState(false);
   const [wishlistText, setWishlistText] = useState('');
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportItems, setExportItems] = useState<ExportItem[]>([]);
-  const [programName, setProgramName] = useState(PROGRAMS_LIST[0]);
+  const [programName, setProgramName] = useState(programs[0] || '');
   const [editingReportId, setEditingReportId] = useState<string | null>(null); 
 
   const [isUpdating, setIsUpdating] = useState(false);
@@ -605,7 +611,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                     <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 shrink-0">
                         <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
                         <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
-                            {PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                            {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                     </div>
 

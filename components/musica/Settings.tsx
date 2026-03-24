@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { Track, User } from './types';
+import React, { useState, useEffect } from 'react';
+import { Track, User, DEFAULT_PROGRAMS_LIST } from './types';
 import * as XLSX from 'xlsx';
+
+const PROGRAMS_KEY = 'rcm_programs_list';
 
 interface SettingsProps {
   tracks: Track[];
@@ -14,6 +16,36 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUser, onDeleteUser, onExportUsers, onImportUsers, currentUser }) => {
+  const [programs, setPrograms] = useState<string[]>(() => {
+      const saved = localStorage.getItem(PROGRAMS_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_PROGRAMS_LIST;
+  });
+  const [newProgram, setNewProgram] = useState('');
+
+  useEffect(() => {
+      localStorage.setItem(PROGRAMS_KEY, JSON.stringify(programs));
+  }, [programs]);
+
+  const addProgram = () => {
+      if (newProgram && !programs.includes(newProgram)) {
+          setPrograms([...programs, newProgram]);
+          setNewProgram('');
+      }
+  };
+
+  const removeProgram = (program: string) => {
+      setPrograms(programs.filter(p => p !== program));
+  };
+
+  const moveProgram = (index: number, direction: 'up' | 'down') => {
+      const newPrograms = [...programs];
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex >= 0 && targetIndex < newPrograms.length) {
+          [newPrograms[index], newPrograms[targetIndex]] = [newPrograms[targetIndex], newPrograms[index]];
+          setPrograms(newPrograms);
+      }
+  };
+
   const [formData, setFormData] = useState({
       username: '',
       fullName: '',
@@ -294,6 +326,29 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
                 </div>
             </div>
         )}
+
+        <div className="mt-8 p-6 bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20">
+            <h3 className="font-bold text-white mb-4">Gestión de Programas</h3>
+            <div className="flex gap-2 mb-4">
+                <input 
+                    className="flex-1 p-2.5 rounded-lg border border-[#9E7649]/30 bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]" 
+                    value={newProgram} 
+                    onChange={e => setNewProgram(e.target.value)} 
+                    placeholder="Nombre del nuevo programa"
+                />
+                <button onClick={addProgram} className="px-4 py-2 bg-[#9E7649] text-white rounded-lg font-bold text-sm hover:bg-[#8B653D]">Agregar</button>
+            </div>
+            <div className="space-y-2">
+                {programs.map((program, index) => (
+                    <div key={program} className="flex items-center gap-2 p-2 bg-[#1A100C] rounded-lg border border-[#9E7649]/20">
+                        <span className="flex-1 text-sm text-white">{program}</span>
+                        <button onClick={() => moveProgram(index, 'up')} className="p-1 text-[#E8DCCF]/60 hover:text-white"><span className="material-symbols-outlined text-sm">arrow_upward</span></button>
+                        <button onClick={() => moveProgram(index, 'down')} className="p-1 text-[#E8DCCF]/60 hover:text-white"><span className="material-symbols-outlined text-sm">arrow_downward</span></button>
+                        <button onClick={() => removeProgram(program)} className="p-1 text-red-500 hover:text-red-400"><span className="material-symbols-outlined text-sm">delete</span></button>
+                    </div>
+                ))}
+            </div>
+        </div>
     </div>
   );
 };
