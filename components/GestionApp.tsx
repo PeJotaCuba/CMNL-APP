@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings, AlertTriangle, RefreshCw } from 'lucide-react';
 import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
 import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
@@ -16,6 +16,7 @@ interface Props {
   onBack: () => void;
   onMenuClick?: () => void;
   currentUser: User | null;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
 interface WorkLog {
@@ -65,8 +66,74 @@ interface ConsolidatedMonth {
     dateConsolidated: string;
 }
 
-const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
+const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const isInitialMount = React.useRef(true);
+
+  const [fichas, setFichas] = useState<ProgramFicha[]>(() => {
+      const saved = localStorage.getItem('rcm_data_fichas');
+      if (saved) {
+          try {
+              return JSON.parse(saved);
+          } catch (e) {
+              console.error("Error parsing fichas from localStorage", e);
+          }
+      }
+      return INITIAL_FICHAS;
+  });
+  const [catalogo, setCatalogo] = useState<ProgramCatalog[]>(() => {
+      const saved = localStorage.getItem('rcm_data_catalogo');
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>(() => {
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_worklogs`);
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [consolidatedPayments, setConsolidatedPayments] = useState<ConsolidatedPayment[]>(() => {
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`);
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [interruptions, setInterruptions] = useState<Interruption[]>(() => {
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`);
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [consolidatedMonths, setConsolidatedMonths] = useState<ConsolidatedMonth[]>(() => {
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`);
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [teamData, setTeamData] = useState<any[]>(() => {
+      const saved = localStorage.getItem('rcm_equipo_cmnl');
+      return saved ? JSON.parse(saved) : [];
+  });
+
+  const [habitualMode, setHabitualMode] = useState<boolean>(() => {
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_habitual_mode`);
+      return saved === 'true';
+  });
+  const [habitualExclusions, setHabitualExclusions] = useState<any[]>(() => {
+      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_habitual_exclusions`);
+      return saved ? JSON.parse(saved) : [];
+  });
+  const [showMonthClosingModal, setShowMonthClosingModal] = useState(false);
+  const [pendingConsolidationMonth, setPendingConsolidationMonth] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Month closing check
+    const today = new Date();
+    if (today.getDate() === 1 && habitualMode && currentUser?.role !== 'admin' && currentUser?.role !== 'coordinator') {
+        const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const prevMonth = formatDateToISO(prevMonthDate).slice(0, 7);
+        
+        // Check if there are logs or habitual data for the previous month that hasn't been consolidated
+        const hasData = workLogs.some(l => l.userId === currentUser.username && l.date.startsWith(prevMonth));
+        const alreadyConsolidated = consolidatedPayments.some(c => c.userId === currentUser.username && c.month === prevMonth);
+        
+        if (hasData && !alreadyConsolidated) {
+            setPendingConsolidationMonth(prevMonth);
+            setShowMonthClosingModal(true);
+        }
+    }
+  }, [habitualMode, currentUser, workLogs, consolidatedPayments]);
 
   // Hash Navigation Logic
   useEffect(() => {
@@ -97,50 +164,66 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
         window.location.hash = targetHash;
     }
   }, [activeSection]);
-  const [fichas, setFichas] = useState<ProgramFicha[]>(() => {
-      const saved = localStorage.getItem('rcm_data_fichas');
-      if (saved) {
-          try {
-              return JSON.parse(saved);
-          } catch (e) {
-              console.error("Error parsing fichas from localStorage", e);
-          }
-      }
-      return INITIAL_FICHAS;
-  });
-  const [catalogo, setCatalogo] = useState<ProgramCatalog[]>(() => {
-      const saved = localStorage.getItem('rcm_data_catalogo');
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [workLogs, setWorkLogs] = useState<WorkLog[]>(() => {
-      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_worklogs`);
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [consolidatedPayments, setConsolidatedPayments] = useState<ConsolidatedPayment[]>(() => {
-      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`);
-      return saved ? JSON.parse(saved) : [];
-  });
 
   useEffect(() => {
-      const savedWorkLogs = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_worklogs`);
-      setWorkLogs(savedWorkLogs ? JSON.parse(savedWorkLogs) : []);
+      if (currentUser) {
+          const username = currentUser.username;
+          const savedWorkLogs = localStorage.getItem(`user_${username}_rcm_data_worklogs`);
+          setWorkLogs(savedWorkLogs ? JSON.parse(savedWorkLogs) : []);
 
-      const savedConsolidated = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_data_consolidated`);
-      setConsolidatedPayments(savedConsolidated ? JSON.parse(savedConsolidated) : []);
+          const savedConsolidated = localStorage.getItem(`user_${username}_rcm_data_consolidated`);
+          setConsolidatedPayments(savedConsolidated ? JSON.parse(savedConsolidated) : []);
 
-      const savedInterruptions = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`);
-      setInterruptions(savedInterruptions ? JSON.parse(savedInterruptions) : []);
+          const savedInterruptions = localStorage.getItem(`user_${username}_rcm_interruptions`);
+          setInterruptions(savedInterruptions ? JSON.parse(savedInterruptions) : []);
 
-      const savedConsolidatedMonths = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`);
-      setConsolidatedMonths(savedConsolidatedMonths ? JSON.parse(savedConsolidatedMonths) : []);
+          const savedConsolidatedMonths = localStorage.getItem(`user_${username}_rcm_consolidated_months`);
+          setConsolidatedMonths(savedConsolidatedMonths ? JSON.parse(savedConsolidatedMonths) : []);
+
+          const savedHabitualMode = localStorage.getItem(`user_${username}_habitual_mode`);
+          setHabitualMode(savedHabitualMode === 'true');
+
+          const savedHabitualExclusions = localStorage.getItem(`user_${username}_habitual_exclusions`);
+          setHabitualExclusions(savedHabitualExclusions ? JSON.parse(savedHabitualExclusions) : []);
+      }
   }, [currentUser]);
-  const [teamData, setTeamData] = useState<any[]>(() => {
-      const saved = localStorage.getItem('rcm_equipo_cmnl');
-      return saved ? JSON.parse(saved) : [];
-  });
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+        isInitialMount.current = false;
+        return;
+    }
+    onDirtyChange(true);
+  }, [workLogs, consolidatedPayments, interruptions, consolidatedMonths, fichas, catalogo, habitualMode, habitualExclusions, onDirtyChange]);
+
+  useEffect(() => {
+      if (currentUser) {
+          const username = currentUser.username;
+          localStorage.setItem(`user_${username}_rcm_data_worklogs`, JSON.stringify(workLogs));
+          localStorage.setItem(`user_${username}_rcm_data_consolidated`, JSON.stringify(consolidatedPayments));
+          localStorage.setItem(`user_${username}_rcm_interruptions`, JSON.stringify(interruptions));
+          localStorage.setItem(`user_${username}_rcm_consolidated_months`, JSON.stringify(consolidatedMonths));
+          localStorage.setItem(`user_${username}_habitual_mode`, String(habitualMode));
+          localStorage.setItem(`user_${username}_habitual_exclusions`, JSON.stringify(habitualExclusions));
+      }
+      localStorage.setItem('rcm_data_fichas', JSON.stringify(fichas));
+      localStorage.setItem('rcm_data_catalogo', JSON.stringify(catalogo));
+  }, [workLogs, consolidatedPayments, interruptions, consolidatedMonths, fichas, catalogo, habitualMode, habitualExclusions, currentUser]);
 
   useEffect(() => {
       const fetchTeamData = async () => {
+          // Only fetch if we don't have local data or if it's explicitly requested
+          const saved = localStorage.getItem('rcm_equipo_cmnl');
+          if (saved) {
+              try {
+                  const parsed = JSON.parse(saved);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                      setTeamData(parsed);
+                      return; // Don't fetch if we have data
+                  }
+              } catch (e) {}
+          }
+
           try {
               const response = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
               if (response.ok) {
@@ -155,7 +238,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           }
       };
 
-      // Always fetch to ensure we have the latest data for payment calculations
       fetchTeamData();
   }, []);
 
@@ -215,7 +297,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   const [editForm, setEditForm] = useState<ProgramFicha | null>(null);
 
   // Work Log State
-  const [workLogDate, setWorkLogDate] = useState(new Date().toISOString().split('T')[0]);
+  const [workLogDate, setWorkLogDate] = useState(() => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  });
+
+  const parseLocalDate = (dateStr: string) => {
+      if (!dateStr) return new Date();
+      // Handle YYYY-MM-DD format
+      if (dateStr.length === 10 && dateStr.includes('-')) {
+          return new Date(dateStr + 'T12:00:00');
+      }
+      return new Date(dateStr);
+  };
+
+  const formatDateToISO = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
   const [workLogView, setWorkLogView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [showAccumulated, setShowAccumulated] = useState(false);
   const [showMonthlyPayments, setShowMonthlyPayments] = useState(false);
@@ -225,14 +329,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
   // Transmission State
   const [transmissionConfig, setTransmissionConfig] = useState(getDayMinutesConfig());
-  const [interruptions, setInterruptions] = useState<Interruption[]>(() => {
-      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`);
-      return saved ? JSON.parse(saved) : [];
-  });
-  const [consolidatedMonths, setConsolidatedMonths] = useState<ConsolidatedMonth[]>(() => {
-      const saved = localStorage.getItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`);
-      return saved ? JSON.parse(saved) : [];
-  });
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [showPrematureAlert, setShowPrematureAlert] = useState(false);
@@ -312,7 +408,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   };
 
   const isProgramOnDay = (program: ProgramFicha, dateStr: string) => {
-      const date = new Date(dateStr);
+      // Use T12:00:00 to avoid timezone issues with YYYY-MM-DD
+      const date = new Date(dateStr + 'T12:00:00');
       const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
       const freq = program.frequency.toLowerCase();
       
@@ -395,7 +492,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       const userLogs = workLogs.filter(l => 
           l.userId === currentUser.username && 
           userPaymentConfig.roles.some(r => r.role === l.role)
-      ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      ).sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
 
       let totalAmount = 0;
 
@@ -419,7 +516,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           startY: 40,
       });
 
-      doc.save(`reporte_pagos_${currentUser.username}_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`reporte_pagos_${currentUser.username}_${formatDateToISO(new Date())}.pdf`);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'fichas' | 'catalogo') => {
@@ -705,6 +802,35 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       const roleConfig = userPaymentConfig.roles.find(r => r.role === role);
       if (!roleConfig) return;
 
+      const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+      const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
+      
+      let userTeamInfo = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser.name));
+      
+      if (!userTeamInfo) {
+          const userWords = getWords(currentUser.name);
+          userTeamInfo = teamData.find(m => {
+              const memberWords = getWords(m.name);
+              const matchCount = userWords.filter(w => memberWords.includes(w)).length;
+              return matchCount >= 2;
+          });
+      }
+
+      const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+      const roleNorm = normalize(role);
+      
+      const habitualProgramsByRole = userTeamInfo?.habitualProgramsByRole || {};
+      const legacyHabitualPrograms = userTeamInfo?.habitualPrograms || [];
+      
+      const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === roleNorm || roleNorm.includes(normalize(k)) || normalize(k).includes(roleNorm));
+      
+      let isHabitual = false;
+      if (roleKey) {
+          isHabitual = habitualProgramsByRole[roleKey].includes(programName);
+      } else {
+          isHabitual = legacyHabitualPrograms.includes(programName);
+      }
+
       const existingIndex = workLogs.findIndex(l => 
           l.userId === userId && 
           l.role === role && 
@@ -717,6 +843,19 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           newLogs.splice(existingIndex, 1);
           setWorkLogs(newLogs);
       } else {
+          if (habitualMode && isHabitual) {
+              const exclusionIndex = habitualExclusions.findIndex(ex => ex.date === date && ex.programName === programName && ex.role === role);
+              if (exclusionIndex >= 0) {
+                  const newExclusions = [...habitualExclusions];
+                  newExclusions.splice(exclusionIndex, 1);
+                  setHabitualExclusions(newExclusions);
+                  return;
+              } else {
+                  setHabitualExclusions([...habitualExclusions, { date, programName, role }]);
+                  return;
+              }
+          }
+
           const amount = getProgramRate(programName, role, roleConfig.level);
           setWorkLogs([...workLogs, {
               id: Date.now().toString() + Math.random(),
@@ -730,13 +869,21 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
   };
 
   const calculateTotalPayment = (dates: string[]) => {
-      if (!userPaymentConfig || !currentUser) return { periodTotal: 0, monthTotal: 0 };
+      if (!userPaymentConfig || !currentUser) return { periodTotal: 0, monthTotal: 0, calculatedUntil: 0 };
       
       const userId = currentUser.username;
-      const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
+      const today = new Date();
+      const currentMonth = formatDateToISO(today).slice(0, 7); // YYYY-MM
+      const currentDay = today.getDate();
 
       let periodTotal = 0;
       let monthTotal = 0;
+
+      const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+      const userRoleNorms = userPaymentConfig.roles.map(r => ({ ...r, norm: normalize(r.role) }));
+
+      // Track which habitual programs are already in workLogs to avoid double counting
+      const logsSet = new Set(workLogs.filter(l => l.userId === userId).map(l => `${l.date}|${l.programName}|${l.role}`));
 
       workLogs.forEach(log => {
           if (log.userId === userId && userPaymentConfig.roles.some(r => r.role === log.role)) {
@@ -749,9 +896,84 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           }
       });
 
+      if (habitualMode) {
+          const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+          const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
+          
+          let userTeamInfo = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser.name));
+          
+          if (!userTeamInfo) {
+              const userWords = getWords(currentUser.name);
+              userTeamInfo = teamData.find(m => {
+                  const memberWords = getWords(m.name);
+                  const matchCount = userWords.filter(w => memberWords.includes(w)).length;
+                  return matchCount >= 2;
+              });
+          }
 
+          const habitualProgramsByRole = userTeamInfo?.habitualProgramsByRole || {};
+          const legacyHabitualPrograms = userTeamInfo?.habitualPrograms || [];
 
-      return { periodTotal, monthTotal };
+          if (Object.keys(habitualProgramsByRole).length > 0 || legacyHabitualPrograms.length > 0) {
+              const year = today.getFullYear();
+              const month = today.getMonth();
+              
+              // Period for Habitualidad: Day 1 to [Current Day - 1]
+              const monthDates = [];
+              for (let i = 1; i < currentDay; i++) {
+                  const d = new Date(year, month, i, 12, 0, 0);
+                  monthDates.push(formatDateToISO(d));
+              }
+
+              userRoleNorms.forEach(role => {
+                  const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === role.norm || role.norm.includes(normalize(k)) || normalize(k).includes(role.norm));
+                  
+                  let rolePrograms = [];
+                  if (roleKey) {
+                      rolePrograms = habitualProgramsByRole[roleKey] || [];
+                  } else if (legacyHabitualPrograms.length > 0) {
+                      rolePrograms = legacyHabitualPrograms || [];
+                  }
+
+                  if (rolePrograms.length === 0) return;
+
+                  rolePrograms.forEach(progName => {
+                      const progItem = catalogo.find(p => normalize(p.name) === normalize(progName));
+                      if (!progItem) return;
+
+                      const hasRole = progItem.roles.some(r => {
+                          const catalogRoleNorm = normalize(r.role);
+                          return catalogRoleNorm === role.norm || 
+                                 catalogRoleNorm.includes(role.norm) || 
+                                 role.norm.includes(catalogRoleNorm) ||
+                                 (role.norm === 'realizador de sonido' && catalogRoleNorm === 'realizador');
+                      });
+
+                      if (!hasRole) return;
+
+                      const ficha = fichas.find(f => normalize(f.name) === normalize(progName));
+                      const amount = getProgramRate(progName, role.role, role.level);
+                      
+                      monthDates.forEach(date => {
+                          const isAired = ficha ? isProgramOnDay(ficha, date) : true;
+                          if (isAired) {
+                              const key = `${date}|${progName}|${role.role}`;
+                              const isExcluded = habitualExclusions.some(ex => ex.date === date && ex.programName === progName && ex.role === role.role);
+                              
+                              if (!logsSet.has(key) && !isExcluded) {
+                                  if (dates.includes(date)) {
+                                      periodTotal += amount;
+                                  }
+                                  monthTotal += amount;
+                              }
+                          }
+                      });
+                  });
+              });
+          }
+      }
+
+      return { periodTotal, monthTotal, calculatedUntil: currentDay - 1 };
   };
 
   const calculateTax = (amount: number) => {
@@ -777,7 +999,148 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       return tax5Percent + scaleTax;
   };
 
-  const consolidateMonth = () => {
+  const handleSaveHabitualSelection = () => {
+      if (!currentUser || !userPaymentConfig) return;
+      
+      const { monthTotal } = calculateTotalPayment([]);
+      const tax = calculateTax(monthTotal);
+      const netAmount = monthTotal - tax;
+      const currentMonth = formatDateToISO(new Date()).slice(0, 7);
+
+      setDialog({
+          isOpen: true,
+          title: 'Confirmar Guardado',
+          message: `¿Desea guardar la selección habitual actual?\n\nAcumulado Bruto: $${monthTotal.toFixed(2)}\nImpuestos: $${tax.toFixed(2)}\nNeto a Pagar: $${netAmount.toFixed(2)}\n\nEsto consolidará los datos y reiniciará el ciclo de cálculo.`,
+          type: 'confirm',
+          onConfirm: () => {
+              const newConsolidation: ConsolidatedPayment = {
+                  id: Date.now().toString(),
+                  userId: currentUser.username,
+                  month: currentMonth,
+                  amount: netAmount,
+                  grossAmount: monthTotal,
+                  taxAmount: tax,
+                  dateConsolidated: new Date().toISOString()
+              };
+              setConsolidatedPayments([...consolidatedPayments, newConsolidation]);
+              // Clear exclusions and logs for this month
+              setHabitualExclusions([]);
+              const newLogs = workLogs.filter(l => !(l.userId === currentUser.username && l.date.startsWith(currentMonth)));
+              setWorkLogs(newLogs);
+              setDialog({ isOpen: true, title: 'Éxito', message: 'Selección guardada y consolidada exitosamente.', type: 'alert' });
+          }
+      });
+  };
+
+  const handleExportPaymentsDOCX = async () => {
+      if (!currentUser || !userPaymentConfig) return;
+      
+      const { monthTotal } = calculateTotalPayment([]);
+      const tax = calculateTax(monthTotal);
+      const netAmount = monthTotal - tax;
+      const currentMonth = formatDateToISO(new Date()).slice(0, 7);
+
+      const doc = new Document({
+          sections: [{
+              properties: {},
+              children: [
+                  new Paragraph({
+                      children: [
+                          new TextRun({
+                              text: "REPORTE DE PAGOS - CMNL",
+                              bold: true,
+                              size: 32,
+                          }),
+                      ],
+                      alignment: AlignmentType.CENTER,
+                  }),
+                  new Paragraph({ text: "" }),
+                  new Paragraph({
+                      children: [
+                          new TextRun({ text: `Usuario: `, bold: true }),
+                          new TextRun({ text: currentUser.name }),
+                      ],
+                  }),
+                  new Paragraph({
+                      children: [
+                          new TextRun({ text: `Mes: `, bold: true }),
+                          new TextRun({ text: currentMonth }),
+                      ],
+                  }),
+                  new Paragraph({
+                      children: [
+                          new TextRun({ text: `Fecha de Generación: `, bold: true }),
+                          new TextRun({ text: new Date().toLocaleDateString() }),
+                      ],
+                  }),
+                  new Paragraph({ text: "" }),
+                  new Paragraph({
+                      children: [
+                          new TextRun({ text: "RESUMEN FINANCIERO", bold: true, size: 24 }),
+                      ],
+                  }),
+                  new Paragraph({ text: "" }),
+                  new Table({
+                      width: { size: 100, type: WidthType.PERCENTAGE },
+                      rows: [
+                          new TableRow({
+                              children: [
+                                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Concepto", bold: true })] })] }),
+                                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Monto", bold: true })] })] }),
+                              ],
+                          }),
+                          new TableRow({
+                              children: [
+                                  new TableCell({ children: [new Paragraph("Acumulado Bruto")] }),
+                                  new TableCell({ children: [new Paragraph(`$${monthTotal.toFixed(2)}`)] }),
+                              ],
+                          }),
+                          new TableRow({
+                              children: [
+                                  new TableCell({ children: [new Paragraph("Impuestos (Deducciones)")] }),
+                                  new TableCell({ children: [new Paragraph(`-$${tax.toFixed(2)}`)] }),
+                              ],
+                          }),
+                          new TableRow({
+                              children: [
+                                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Total a Pagar (Neto)", bold: true })] })] }),
+                                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `$${netAmount.toFixed(2)}`, bold: true })] })] }),
+                              ],
+                          }),
+                      ],
+                  }),
+                  new Paragraph({ text: "" }),
+                  new Paragraph({
+                      children: [
+                          new TextRun({ text: "Roles y Especialidades:", bold: true }),
+                      ],
+                  }),
+                  ...userPaymentConfig.roles.map(role => new Paragraph({
+                      children: [
+                          new TextRun({ text: `• ${role.role}: `, bold: true }),
+                          new TextRun({ text: role.level }),
+                      ],
+                  })),
+                  new Paragraph({ text: "" }),
+                  new Paragraph({
+                      children: [
+                          new TextRun({
+                              text: "Este documento es un comprobante de cálculo generado por el sistema CMNL.",
+                              italics: true,
+                              size: 16,
+                          }),
+                      ],
+                      alignment: AlignmentType.CENTER,
+                  }),
+              ],
+          }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `Reporte_Pagos_${currentUser.username}_${currentMonth}.docx`);
+  };
+
+  const consolidateMonth = async () => {
       if (!currentUser || !userPaymentConfig) return;
       
       // Calculate the previous month relative to today
@@ -833,7 +1196,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
   const clearMonth = () => {
       if (!currentUser) return;
-      const currentMonth = new Date(workLogDate).toISOString().slice(0, 7); // YYYY-MM
+      const currentMonth = formatDateToISO(parseLocalDate(workLogDate)).slice(0, 7); // YYYY-MM
       
       setDialog({
           isOpen: true,
@@ -1558,7 +1921,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
           });
       }
       
-      const currentDate = new Date(workLogDate);
+      const currentDate = parseLocalDate(workLogDate);
       
       const getDates = () => {
           if (workLogView === 'daily') return [workLogDate];
@@ -1589,17 +1952,17 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
       const dates = getDates();
       
 
-      const { periodTotal, monthTotal } = calculateTotalPayment(dates);
+      const { periodTotal, monthTotal, calculatedUntil } = calculateTotalPayment(dates);
       const monthTax = calculateTax(monthTotal);
       const monthNet = monthTotal - monthTax;
 
       const formatDateRange = (dates: string[]) => {
           if (dates.length === 0) return '';
           if (dates.length === 1) {
-              return new Date(dates[0]).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+              return parseLocalDate(dates[0]).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
           }
-          const start = new Date(dates[0]);
-          const end = new Date(dates[dates.length - 1]);
+          const start = parseLocalDate(dates[0]);
+          const end = parseLocalDate(dates[dates.length - 1]);
           return `${start.getDate()} ${start.toLocaleDateString('es-ES', { month: 'short' })} - ${end.getDate()} ${end.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}`;
       };
 
@@ -1628,8 +1991,63 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                           <CalendarCheck size={14} />
                           <span className="hidden lg:inline">Pagos</span>
                       </button>
+                      <button 
+                          onClick={() => setHabitualMode(!habitualMode)}
+                          className={`flex items-center gap-1 text-xs px-2 py-2 rounded-lg font-bold transition-all ${habitualMode ? 'bg-green-600 text-white shadow-lg' : 'bg-black/20 text-green-600 border border-green-600/30 hover:bg-green-600/10'}`}
+                          title="Habitualidad Automática"
+                      >
+                          <RefreshCw size={14} className={habitualMode ? "text-white" : ""} />
+                          <span className="hidden lg:inline">Habitualidad</span>
+                      </button>
                   </div>
               </CMNLHeader>
+
+              {/* Month Closing Modal */}
+              {showMonthClosingModal && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                      <div className="bg-[#2C1B15] border border-[#9E7649]/40 p-8 rounded-2xl max-w-md w-full shadow-2xl text-center">
+                          <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/30">
+                              <CalendarCheck size={40} className="text-red-500" />
+                          </div>
+                          <h2 className="text-2xl font-bold text-white mb-4">Cierre de Mes Requerido</h2>
+                          <p className="text-[#E8DCCF]/70 mb-8">
+                              Se ha detectado que el mes de <span className="text-white font-bold">{pendingConsolidationMonth}</span> aún tiene cálculos pendientes de Habitualidad. 
+                              Es obligatorio resolver este periodo antes de continuar con el mes actual.
+                          </p>
+                          <div className="flex flex-col gap-3">
+                              <button 
+                                  onClick={() => {
+                                      // Trigger consolidation for the pending month
+                                      // We need to temporarily set workLogDate to that month to calculate correctly
+                                      const originalDate = workLogDate;
+                                      setWorkLogDate(`${pendingConsolidationMonth}-01`);
+                                      setTimeout(() => {
+                                          handleSaveHabitualSelection();
+                                          setShowMonthClosingModal(false);
+                                          setWorkLogDate(originalDate);
+                                      }, 100);
+                                  }}
+                                  className="w-full bg-green-600 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                              >
+                                  <Save size={18} /> Guardar y Consolidar {pendingConsolidationMonth}
+                              </button>
+                              <button 
+                                  onClick={() => {
+                                      if (window.confirm(`¿Está seguro de que desea desechar los cálculos de ${pendingConsolidationMonth}? Esta acción no se puede deshacer.`)) {
+                                          const newLogs = workLogs.filter(l => !(l.userId === currentUser?.username && l.date.startsWith(pendingConsolidationMonth!)));
+                                          setWorkLogs(newLogs);
+                                          setShowMonthClosingModal(false);
+                                      }
+                                  }}
+                                  className="w-full bg-red-900/40 text-red-200 font-bold py-3 rounded-xl hover:bg-red-900/60 transition-colors"
+                              >
+                                  Desechar Cálculo
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
 
               <div className="p-4 sm:p-6 max-w-6xl mx-auto w-full">
                   {/* Summary Card */}
@@ -1651,7 +2069,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                               <p className="text-[10px] text-[#E8DCCF]/50 mt-1">Pago definitivo</p>
                           </div>
                       </div>
-                      <div className="grid grid-cols-1 gap-2 w-full lg:w-auto lg:text-right border-t lg:border-t-0 border-[#9E7649]/10 pt-4 lg:pt-0">
+                      <div className="flex flex-col gap-2 w-full lg:w-auto lg:text-right border-t lg:border-t-0 border-[#9E7649]/10 pt-4 lg:pt-0">
+                          {habitualMode && (
+                              <div className="mb-2">
+                                  <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Habitualidad Activa</p>
+                                  <p className="text-[10px] text-[#E8DCCF]/60 italic">Calculado hasta el día {calculatedUntil}</p>
+                              </div>
+                          )}
                           {userPaymentConfig.roles.map(role => (
                               <div key={role.id}>
                                   <div className="text-[10px] sm:text-xs text-[#E8DCCF]">
@@ -1668,8 +2092,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                               <div className="flex justify-between items-center mb-4">
                                   <h3 className="text-white font-bold">Historial Acumulado (Mes Actual)</h3>
                                   <div className="flex flex-wrap gap-2">
+                                      {habitualMode && (
+                                          <button onClick={handleSaveHabitualSelection} className="flex items-center gap-2 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                                              <Save size={16} /> Guardar Selección
+                                          </button>
+                                      )}
                                       <button onClick={consolidateMonth} className="flex items-center gap-2 bg-[#9E7649] text-white px-3 py-1 rounded text-sm hover:bg-[#8B653D]">
                                           <Save size={16} /> Consolidar Mes
+                                      </button>
+                                      <button onClick={handleExportPaymentsDOCX} className="flex items-center gap-2 bg-black/20 text-[#9E7649] border border-[#9E7649]/30 px-3 py-1 rounded text-sm hover:bg-[#9E7649]/10">
+                                          <FileDown size={16} /> Exportar .docx
                                       </button>
                                       <button onClick={generatePDF} className="flex items-center gap-2 bg-black/20 text-[#9E7649] border border-[#9E7649]/30 px-3 py-1 rounded text-sm hover:bg-[#9E7649]/10">
                                           <FileDown size={16} /> Descargar PDF
@@ -1755,24 +2187,41 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
                               <div className="flex items-center gap-2 ml-auto">
                                   <button onClick={() => {
-                                      const d = new Date(workLogDate);
+                                      const d = parseLocalDate(workLogDate);
                                       d.setDate(d.getDate() - (workLogView === 'weekly' ? 7 : 1));
-                                      setWorkLogDate(d.toISOString().split('T')[0]);
+                                      setWorkLogDate(formatDateToISO(d));
                                   }} className="p-2 hover:bg-white/10 rounded-full"><ChevronLeft size={20}/></button>
                                   
                                   <span className="font-mono font-bold text-white">
-                                      {workLogView === 'daily' ? new Date(workLogDate).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : `Semana: ${formatDateRange(dates)}`}
+                                      {workLogView === 'daily' ? parseLocalDate(workLogDate).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : `Semana: ${formatDateRange(dates)}`}
                                   </span>
 
                                   <button onClick={() => {
-                                      const d = new Date(workLogDate);
+                                      const d = parseLocalDate(workLogDate);
                                       d.setDate(d.getDate() + (workLogView === 'weekly' ? 7 : 1));
-                                      setWorkLogDate(d.toISOString().split('T')[0]);
+                                      setWorkLogDate(formatDateToISO(d));
                                   }} className="p-2 hover:bg-white/10 rounded-full"><ChevronRight size={20}/></button>
                               </div>
                           </div>
 
                           {userPaymentConfig.roles.map(role => {
+                              const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+                              const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
+                              
+                              let userTeamInfo = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser?.name || ''));
+                              
+                              if (!userTeamInfo && currentUser?.name) {
+                                  const userWords = getWords(currentUser.name);
+                                  userTeamInfo = teamData.find(m => {
+                                      const memberWords = getWords(m.name);
+                                      const matchCount = userWords.filter(w => memberWords.includes(w)).length;
+                                      return matchCount >= 2;
+                                  });
+                              }
+
+                              const habitualProgramsByRole = userTeamInfo?.habitualProgramsByRole || {};
+                              const legacyHabitualPrograms = userTeamInfo?.habitualPrograms || [];
+
                               return (
                                   <div key={role.id} className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
                                       <div className="bg-[#3E1E16] px-6 py-3 border-b border-[#9E7649]/10 flex justify-between items-center">
@@ -1787,7 +2236,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                                       <th className="px-6 py-3">Programa</th>
                                                       {dates.map(date => (
                                                           <th key={date} className="px-6 py-3 text-center">
-                                                              {workLogView === 'daily' ? 'Selección' : new Date(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
+                                                              {workLogView === 'daily' ? 'Selección' : parseLocalDate(date).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
                                                           </th>
                                                       ))}
                                                   </tr>
@@ -1805,12 +2254,24 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
                                                           <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
                                                               <td className="px-6 py-4 font-medium text-white">{prog}</td>
                                                               {dates.map(date => {
+                                                                   const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+                                                                   const roleNorm = normalize(role.role);
+                                                                   const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === roleNorm || roleNorm.includes(normalize(k)) || normalize(k).includes(roleNorm));
+                                                                   
+                                                                   let isHabitual = false;
+                                                                   if (roleKey) {
+                                                                       isHabitual = (habitualProgramsByRole[roleKey] || []).includes(prog);
+                                                                   } else {
+                                                                       isHabitual = (legacyHabitualPrograms || []).includes(prog);
+                                                                   }
+                                                                  const isExcluded = habitualExclusions.some(ex => ex.date === date && ex.programName === prog && ex.role === role.role);
+
                                                                   const isWorked = workLogs.some(l => 
                                                                       l.userId === currentUser?.username && 
                                                                       l.role === role.role && 
                                                                       l.programName === prog && 
                                                                       l.date === date
-                                                                  );
+                                                                  ) || (habitualMode && isHabitual && !isExcluded);
                                                                   
                                                                   const ficha = fichas.find(f => f.name === prog);
                                                                   const canWork = ficha ? isProgramOnDay(ficha, date) : true;
@@ -2442,7 +2903,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
 
   // Render Equipo Section
   if (activeSection === 'equipo') {
-      return <EquipoSection currentUser={currentUser} onBack={() => setActiveSection(null)} onMenuClick={onMenuClick || (() => {})} />;
+      return (
+          <EquipoSection 
+              currentUser={currentUser} 
+              onBack={() => setActiveSection(null)} 
+              onMenuClick={onMenuClick || (() => {})} 
+              catalogo={catalogo}
+              onDirtyChange={onDirtyChange}
+              onTeamUpdate={(newTeam) => setTeamData(newTeam)}
+          />
+      );
   }
 
   // Main Menu

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import * as XLSX from 'xlsx';
-import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB } from './services/db';
+import { saveAs } from 'file-saver';
+import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB, bulkUpdateProductions } from './services/db';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType } from "docx";
 
 interface ProductionsProps {
@@ -284,12 +285,127 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
     });
 
     const blob = await Packer.toBlob(doc);
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Produccion_${program}_${date}.docx`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    saveAs(blob, `Produccion_${program}_${date}.docx`);
+  };
+
+  const handleMoveToArchive = async () => {
+      if (stockMensual.length === 0) return alert("No hay producciones en el stock mensual para archivar.");
+      if (!window.confirm("¿Estás seguro de que deseas mover todas las producciones del mes al archivo?")) return;
+
+      const updatedProductions = stockMensual.map(p => ({ ...p, archived: true }));
+      try {
+          await bulkUpdateProductions(updatedProductions);
+          await fetchProductions();
+          alert("Todas las producciones del mes han sido movidas al archivo.");
+      } catch (error) {
+          alert("Error al archivar producciones.");
+      }
+  };
+
+  const handleGenerateDetailedStatsDOCX = async () => {
+    if (stockMensual.length === 0) return alert("No hay producciones en el mes actual para generar estadísticas.");
+
+    const allTracks = stockMensual.flatMap(p => p.tracks);
+    
+    // Stats calculations
+    const cubanWorks = allTracks.filter(t => t.authorCountry.toLowerCase() === 'cuba' || t.performerCountry.toLowerCase() === 'cuba').length;
+    const foreignWorks = allTracks.length - cubanWorks;
+
+    const authors = allTracks.map(t => ({ name: t.author, country: t.authorCountry }));
+    const performers = allTracks.map(t => ({ name: t.performer, country: t.performerCountry }));
+    
+    const uniqueAuthors = Array.from(new Set(authors.map(a => a.name)));
+    const uniquePerformers = Array.from(new Set(performers.map(p => p.name)));
+
+    const cubanAuthors = uniqueAuthors.filter(name => authors.find(a => a.name === name)?.country.toLowerCase() === 'cuba').length;
+    const foreignAuthors = uniqueAuthors.length - cubanAuthors;
+
+    const cubanPerformers = uniquePerformers.filter(name => performers.find(p => p.name === name)?.country.toLowerCase() === 'cuba').length;
+    const foreignPerformers = uniquePerformers.length - cubanPerformers;
+
+    // Geographic breakdown for foreigners
+    const regions: Record<string, string[]> = {
+        'América Latina': ['mexico', 'colombia', 'argentina', 'venezuela', 'puerto rico', 'republica dominicana', 'panama', 'chile', 'peru', 'ecuador', 'bolivia', 'uruguay', 'paraguay', 'costa rica', 'guatemala', 'honduras', 'el salvador', 'nicaragua'],
+        'Norteamérica': ['estados unidos', 'usa', 'canada'],
+        'Europa': ['españa', 'espana', 'francia', 'italia', 'reino unido', 'alemania', 'portugal', 'holanda', 'belgica', 'suiza', 'austria', 'suecia', 'noruega', 'dinamarca'],
+        'Asia': ['china', 'japon', 'corea', 'india']
+    };
+
+    const getRegion = (country: string) => {
+        const c = country.toLowerCase();
+        for (const [region, countries] of Object.entries(regions)) {
+            if (countries.includes(c)) return region;
+        }
+        return 'Otros';
+    };
+
+    const foreignTalentRegions: Record<string, number> = { 'América Latina': 0, 'Norteamérica': 0, 'Europa': 0, 'Asia': 0, 'Otros': 0 };
+    [...authors, ...performers].forEach(t => {
+        if (t.country && t.country.toLowerCase() !== 'cuba') {
+            const region = getRegion(t.country);
+            foreignTalentRegions[region]++;
+        }
+    });
+
+    // Rankings
+    const getTop5 = (items: string[]) => {
+        const counts: Record<string, number> = {};
+        items.forEach(i => { if(i) counts[i] = (counts[i] || 0) + 1; });
+        return Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+    };
+
+    const topSongs = getTop5(allTracks.map(t => t.title));
+    const topAuthors = getTop5(allTracks.map(t => t.author));
+    const topPerformers = getTop5(allTracks.map(t => t.performer));
+    const topGenres = getTop5(allTracks.map(t => t.genre));
+
+    const doc = new Document({
+        sections: [{
+            properties: {},
+            children: [
+                new Paragraph({ text: "ESTADÍSTICAS DE DIFUSIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: `Mes: ${currentMonthStr}`, alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: "" }),
+
+                new Paragraph({ text: "1. Resumen de Obras", heading: "Heading2" }),
+                new Paragraph({ text: `Total de obras difundidas: ${allTracks.length}` }),
+                new Paragraph({ text: `Obras de autores/intérpretes cubanos: ${cubanWorks}` }),
+                new Paragraph({ text: `Obras de autores/intérpretes extranjeros: ${foreignWorks}` }),
+                new Paragraph({ text: "" }),
+
+                new Paragraph({ text: "2. Registro de Talento", heading: "Heading2" }),
+                new Paragraph({ text: `Autores Cubanos: ${cubanAuthors}` }),
+                new Paragraph({ text: `Autores Extranjeros: ${foreignAuthors}` }),
+                new Paragraph({ text: `Intérpretes Cubanos: ${cubanPerformers}` }),
+                new Paragraph({ text: `Intérpretes Extranjeros: ${foreignPerformers}` }),
+                new Paragraph({ text: "" }),
+
+                new Paragraph({ text: "3. Desglose Geográfico (Extranjeros)", heading: "Heading2" }),
+                ...Object.entries(foreignTalentRegions).map(([region, count]) => 
+                    new Paragraph({ text: `${region}: ${count}` })
+                ),
+                new Paragraph({ text: "" }),
+
+                new Paragraph({ text: "4. Rankings (Top 5)", heading: "Heading2" }),
+                new Paragraph({ text: "Canciones más difundidas:", style: "Strong" }),
+                ...topSongs.map(([name, count]) => new Paragraph({ text: `• ${name} (${count})` })),
+                new Paragraph({ text: "" }),
+                new Paragraph({ text: "Autores más registrados:", style: "Strong" }),
+                ...topAuthors.map(([name, count]) => new Paragraph({ text: `• ${name} (${count})` })),
+                new Paragraph({ text: "" }),
+                new Paragraph({ text: "Intérpretes más registrados:", style: "Strong" }),
+                ...topPerformers.map(([name, count]) => new Paragraph({ text: `• ${name} (${count})` })),
+                new Paragraph({ text: "" }),
+                new Paragraph({ text: "Géneros más difundidos:", style: "Strong" }),
+                ...topGenres.map(([name, count]) => new Paragraph({ text: `• ${name} (${count})` })),
+            ],
+        }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `Estadisticas_Musica_${currentMonthStr}.docx`);
   };
 
   const currentDate = new Date();
@@ -309,12 +425,12 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const stockMensual = dbProductions.filter(p => {
       const { year, month } = getYearMonth(p.date);
-      return year === currentYear && month === currentMonth;
+      return year === currentYear && month === currentMonth && !p.archived;
   });
   
   const archivo = dbProductions.filter(p => {
       const { year, month } = getYearMonth(p.date);
-      return !(year === currentYear && month === currentMonth);
+      return !(year === currentYear && month === currentMonth) || p.archived;
   });
 
   // Agrupar archivo por mes (usando el formato normalizado YYYY-MM)
@@ -472,22 +588,41 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                      <button onClick={handleSaveProduction} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-green-700 flex items-center justify-center gap-2">
                         <span className="material-symbols-outlined">save</span> Guardar Producción (DB)
                      </button>
-
-                     <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[#9E7649]/20">
-                        <button onClick={handleExportHistoryCSV} className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-3 rounded-xl hover:bg-[#3E1E16] flex items-center justify-center gap-2 text-xs">
-                            <span className="material-symbols-outlined text-green-500">table_view</span> Exportar Histórico CSV
-                        </button>
-                        <button onClick={handleGenerateDOCX} className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-3 rounded-xl hover:bg-[#3E1E16] flex items-center justify-center gap-2 text-xs">
-                            <span className="material-symbols-outlined text-blue-400">description</span> Informe DOCX (Sesión)
-                        </button>
-                     </div>
                 </div>
             </>
         )}
 
         {activeTab === 'stock' && (
             <div className="space-y-4">
-                <h3 className="font-bold text-white mb-4 border-b border-[#9E7649]/20 pb-2">Producciones del Mes ({currentMonthStr})</h3>
+                <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
+                    <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr})</h3>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleGenerateDOCX} 
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe DOCX (Sesión)
+                        </button>
+                        <button 
+                            onClick={handleExportHistoryCSV} 
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-green-500 text-sm">table_view</span> Exportar CSV
+                        </button>
+                        <button 
+                            onClick={handleGenerateDetailedStatsDOCX} 
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-blue-400 text-sm">analytics</span> Estadísticas .docx
+                        </button>
+                        <button 
+                            onClick={handleMoveToArchive} 
+                            className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
+                        </button>
+                    </div>
+                </div>
                 {stockMensual.length === 0 ? (
                     <div className="p-8 border-2 border-dashed border-[#9E7649]/20 rounded-2xl text-center text-[#E8DCCF]/40 text-xs">
                         No hay producciones guardadas en este mes.

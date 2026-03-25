@@ -41,6 +41,7 @@ export interface Production {
     id: string;
     date: string;
     program: string;
+    archived?: boolean;
     tracks: {
         title: string;
         author: string;

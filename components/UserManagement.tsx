@@ -217,6 +217,9 @@ const UserManagement: React.FC<Props> = ({
     
     // Recopilar configuraciones de pago
     const paymentConfigs: Record<string, any> = {};
+    
+    // Recopilar datos específicos de usuarios (worklogs, consolidaciones, etc.)
+    const userData: Record<string, any> = {};
 
     // Iterar sobre todo el localStorage para capturar claves dinámicas
     for (let i = 0; i < localStorage.length; i++) {
@@ -234,6 +237,10 @@ const UserManagement: React.FC<Props> = ({
         } else if (key.startsWith('rcm_payment_config_')) {
             try {
                 paymentConfigs[key] = JSON.parse(localStorage.getItem(key) || '{}');
+            } catch (e) {}
+        } else if (key.startsWith('user_')) {
+            try {
+                userData[key] = JSON.parse(localStorage.getItem(key) || 'null');
             } catch (e) {}
         }
     }
@@ -282,6 +289,9 @@ const UserManagement: React.FC<Props> = ({
     let agendaPropaganda = {};
     try { agendaPropaganda = JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'); } catch (e) {}
 
+    let equipo = [];
+    try { equipo = JSON.parse(localStorage.getItem('rcm_equipo_cmnl') || '[]'); } catch (e) {}
+
     const data = {
         users, // Usuarios del sistema principal
         historyContent,
@@ -297,16 +307,18 @@ const UserManagement: React.FC<Props> = ({
         paymentConfigs,
         scripts: scriptData,
         programSections,
+        userData, // Incluir todos los datos de usuarios
         agendaPrograms,
         agendaEfemerides,
         agendaConmemoraciones,
         agendaDayThemes,
         agendaUsers, // Usuarios de la agenda (perfiles extendidos)
-        agendaPropaganda
+        agendaPropaganda,
+        equipo // Incluir datos del equipo (habitualPrograms, etc.)
     };
     
-    // Nombre fijo solicitado para coincidir con el repositorio
-    const filename = `actualcmnl.json`;
+    // Nombre dinámico con el usuario
+    const filename = `${currentUser?.username || 'admin'}_actualcmnl.json`;
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -487,19 +499,25 @@ const UserManagement: React.FC<Props> = ({
               restoredCount++;
           }
 
-          // Fetch equipocmnl.json
-          try {
-              const equipoResponse = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
-              if (equipoResponse.ok) {
-                  const equipoData = await equipoResponse.json();
-                  if (Array.isArray(equipoData)) {
-                      localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
-                      localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
-                      restoredCount++;
+          // Restaurar Equipo (desde el JSON de respaldo si existe)
+          if (json.equipo && Array.isArray(json.equipo)) {
+              localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(json.equipo));
+              restoredCount++;
+          } else {
+              // Si no está en el JSON, intentar descargar de GitHub
+              try {
+                  const equipoResponse = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
+                  if (equipoResponse.ok) {
+                      const equipoData = await equipoResponse.json();
+                      if (Array.isArray(equipoData)) {
+                          localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
+                          localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
+                          restoredCount++;
+                      }
                   }
+              } catch (equipoError) {
+                  console.error("Error fetching equipo data during sync:", equipoError);
               }
-          } catch (equipoError) {
-              console.error("Error fetching equipo data during sync:", equipoError);
           }
 
           if (restoredCount > 0) {
@@ -532,11 +550,12 @@ const UserManagement: React.FC<Props> = ({
             } catch (e) {}
         }
     }
+    const filename = `${currentUser?.username || 'coordinador'}_coorbd.json`;
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'coorbd.json';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };

@@ -303,6 +303,22 @@ export const saveProductionToDB = async (production: Production): Promise<void> 
     }
 };
 
+export const bulkUpdateProductions = async (productions: Production[]): Promise<void> => {
+    try {
+        const db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
+            const store = tx.objectStore(PRODUCTIONS_STORE);
+            productions.forEach(p => store.put(p));
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    } catch (error) {
+        console.error("Error en actualización masiva de producciones:", error);
+        throw error;
+    }
+};
+
 export const loadProductionsFromDB = async (): Promise<Production[]> => {
     try {
         const db = await openDB();

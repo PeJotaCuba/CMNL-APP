@@ -34,55 +34,23 @@ interface MusicaAppProps {
   currentUser: GlobalUser | null;
   onBack: () => void;
   onMenuClick: () => void;
+  onDirtyChange: (dirty: boolean) => void;
 }
 
-import BackupDialog from './musica/BackupDialog';
+
 // ...
-const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, onMenuClick }) => {
-  const [isDirty, setIsDirty] = useState(false);
-  const [showBackupDialog, setShowBackupDialog] = useState(false);
+const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, onMenuClick, onDirtyChange }) => {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [view, setView] = useState<ViewState>(ViewState.LIST);
   const [users, setUsers] = useState<User[]>([]);
 
+  const [isLoaded, setIsLoaded] = useState(false);
+  const isInitialMount = React.useRef(true);
+
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-        if (isDirty) {
-            e.preventDefault();
-            e.returnValue = '';
-        }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
+      isInitialMount.current = false;
+  }, []);
 
-  const handleBackup = async () => {
-    if (!currentUser) return;
-    const username = currentUser.username;
-    const selections = await loadSelectionsFromDB();
-    const savedSelections = await loadSavedSelectionsListFromDB();
-    const reports = await loadReportsFromDB();
-    const productions = await loadProductionsFromDB();
-
-    const data = {
-        username,
-        musica: { selections, savedSelections, reports, productions }
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${username}_backup.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setIsDirty(false);
-    setShowBackupDialog(false);
-  };
-
-  
   const getUniqueId = (user: GlobalUser) => {
       const storageKey = `rcm_unique_id_${user.username}`;
       let id = localStorage.getItem(storageKey);
@@ -126,6 +94,12 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       return saved ? JSON.parse(saved) : DEFAULT_PROGRAMS_LIST;
   });
 
+  useEffect(() => {
+      if (!isInitialMount.current) {
+          onDirtyChange(true);
+      }
+  }, [tracks, selectedTracksList, savedSelections, customRoots, programs, onDirtyChange]);
+
   const [showWishlist, setShowWishlist] = useState(false);
   const [wishlistText, setWishlistText] = useState('');
 
@@ -156,8 +130,6 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           onBack();
       }
   };
-
-  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const initApp = async () => {
@@ -289,7 +261,10 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   };
 
   const handleSelectTrack = (track: Track) => { setSelectedTrack(track); };
-  const handleToggleSelection = (track: Track) => { setSelectedTracksList(prev => prev.find(t => t.id === track.id) ? prev.filter(t => t.id !== track.id) : [...prev, track]); };
+  const handleToggleSelection = (track: Track) => { 
+      onDirtyChange(true);
+      setSelectedTracksList(prev => prev.find(t => t.id === track.id) ? prev.filter(t => t.id !== track.id) : [...prev, track]); 
+  };
 
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -461,6 +436,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   };
 
   const handleSaveEdit = (updatedTrack: Track) => {
+      onDirtyChange(true);
       updateTracks(prev => prev.map(t => t.id === updatedTrack.id ? updatedTrack : t));
       if (view === ViewState.SELECTION) setSelectedTracksList(prev => prev.map(t => t.id === updatedTrack.id ? updatedTrack : t));
       setSelectedTrack(null);
@@ -720,8 +696,6 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             </div>
         )}
-
-        <BackupDialog isOpen={showBackupDialog} onClose={() => setShowBackupDialog(false)} onBackup={handleBackup} />
 
         <nav className="bg-[#2C1B15] border-t border-[#9E7649]/20 h-20 px-4 flex items-center justify-between pb-2 z-20 shrink-0">
             <NavButton icon="folder_open" label="Explorar" active={view === ViewState.LIST} onClick={() => navigateTo(ViewState.LIST)} />

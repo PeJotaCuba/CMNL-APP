@@ -9,17 +9,22 @@ interface TeamMember {
   level: string;
   photoUrl?: string;
   info?: string;
+  habitualPrograms?: string[];
+  habitualProgramsByRole?: Record<string, string[]>;
 }
 
 interface EquipoSectionProps {
   currentUser: any;
   onBack: () => void;
   onMenuClick: () => void;
+  catalogo: any[];
+  onDirtyChange: (dirty: boolean) => void;
+  onTeamUpdate?: (newTeam: TeamMember[]) => void;
 }
 
 const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
 
-const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick }) => {
+const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
@@ -43,6 +48,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
   const saveTeam = (newTeam: TeamMember[]) => {
     setTeam(newTeam);
     localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(newTeam));
+    onDirtyChange(true);
+    if (onTeamUpdate) onTeamUpdate(newTeam);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,8 +138,23 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       if (!response.ok) throw new Error("Error al descargar la base de datos");
       const data = await response.json();
       if (Array.isArray(data)) {
-        saveTeam(data);
-        alert("Base de datos actualizada correctamente.");
+        // Merge with existing to preserve local edits (photos, habitual programs)
+        const currentTeam = [...team];
+        const updatedTeam = data.map(newMember => {
+          const existing = currentTeam.find(m => m.id === newMember.id || (m.name && newMember.name && m.name.toLowerCase() === newMember.name.toLowerCase()));
+          if (existing) {
+            return {
+              ...newMember,
+              photoUrl: existing.photoUrl || newMember.photoUrl,
+              habitualPrograms: existing.habitualPrograms || newMember.habitualPrograms,
+              info: existing.info || newMember.info
+            };
+          }
+          return newMember;
+        });
+
+        saveTeam(updatedTeam);
+        alert("Base de datos actualizada correctamente (se han preservado las ediciones locales).");
       } else {
         alert("El formato del archivo descargado no es válido.");
       }
@@ -300,11 +322,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
       {/* Editing Modal */}
       {editingMember && isAdmin && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setEditingMember(null)}>
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setEditingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative my-auto" onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-white mb-4">Editar Miembro</h2>
             
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               <div>
                 <label className="block text-sm text-[#9E7649] mb-1">Nombre</label>
                 <input 
@@ -337,9 +359,55 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                 <textarea 
                   value={editingMember.info || ''}
                   onChange={e => setEditingMember({...editingMember, info: e.target.value})}
-                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649] h-32 resize-none"
+                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649] h-24 resize-none"
                   placeholder="Añade información sobre este miembro..."
                 />
+              </div>
+              <div>
+                <label className="block text-sm text-[#9E7649] mb-1 font-bold uppercase tracking-wider">Programas Habituales por Especialidad</label>
+                <div className="space-y-4">
+                  {editingMember.specialty.split(' / ').map(role => {
+                    const roleName = role.trim();
+                    const roleHabitual = editingMember.habitualProgramsByRole?.[roleName] || [];
+                    
+                    return (
+                      <div key={roleName} className="bg-black/20 border border-[#9E7649]/20 rounded-xl p-3">
+                        <h4 className="text-xs font-bold text-[#9E7649] mb-2 uppercase">{roleName}</h4>
+                        <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                          {catalogo.length > 0 ? (
+                            catalogo.map(prog => (
+                              <label key={prog.name} className="flex items-center gap-2 p-1.5 hover:bg-[#9E7649]/10 rounded cursor-pointer transition-colors">
+                                <input 
+                                  type="checkbox" 
+                                  checked={roleHabitual.includes(prog.name)}
+                                  onChange={e => {
+                                    const currentByRole = editingMember.habitualProgramsByRole || {};
+                                    const currentRoleProgs = currentByRole[roleName] || [];
+                                    const updatedRoleProgs = e.target.checked 
+                                      ? [...currentRoleProgs, prog.name]
+                                      : currentRoleProgs.filter(p => p !== prog.name);
+                                    
+                                    setEditingMember({
+                                      ...editingMember, 
+                                      habitualProgramsByRole: {
+                                        ...currentByRole,
+                                        [roleName]: updatedRoleProgs
+                                      }
+                                    });
+                                  }}
+                                  className="accent-[#9E7649] w-4 h-4"
+                                />
+                                <span className="text-sm text-white/90">{prog.name}</span>
+                              </label>
+                            ))
+                          ) : (
+                            <p className="text-[10px] text-[#E8DCCF]/40 p-2 italic">No hay programas en el catálogo</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

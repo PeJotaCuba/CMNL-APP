@@ -14,11 +14,35 @@ import Sidebar from './components/Sidebar';
 import QuienesSomos from './components/QuienesSomos';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
+import BackupDialog from './components/BackupDialog';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
   const [history, setHistory] = useState<AppView[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
+  const [showBackupDialog, setShowBackupDialog] = useState(false);
+  const pendingNavigation = useRef<() => void | null>(null);
+
+  const checkDirty = (callback: () => void) => {
+      if (isDirty) {
+          pendingNavigation.current = callback;
+          setShowBackupDialog(true);
+      } else {
+          callback();
+      }
+  };
+
+  const handleBackup = () => {
+      // This needs to be implemented based on the specific app's backup logic.
+      // For now, just close the dialog and reset dirty state.
+      setIsDirty(false);
+      setShowBackupDialog(false);
+      if (pendingNavigation.current) {
+          pendingNavigation.current();
+          pendingNavigation.current = null;
+      }
+  };
   
   // Global Data State - Initialized from LocalStorage or JSON via utils
   const [users, setUsers] = useState<User[]>(() => {
@@ -144,30 +168,34 @@ const App: React.FC = () => {
   }, [history, currentView]);
 
   const handleNavigate = (view: AppView, data?: any) => {
-    window.history.pushState(null, '', window.location.pathname);
-    setHistory((prev) => [...prev, currentView]);
-    setCurrentView(view);
-    if (view === AppView.SECTION_NEWS_DETAIL && data) {
-      setSelectedNews(data);
-    }
+    checkDirty(() => {
+        window.history.pushState(null, '', window.location.pathname);
+        setHistory((prev) => [...prev, currentView]);
+        setCurrentView(view);
+        if (view === AppView.SECTION_NEWS_DETAIL && data) {
+          setSelectedNews(data);
+        }
+    });
   };
 
   const handleBack = () => {
-    window.history.replaceState(null, '', window.location.pathname);
-    if (history.length > 0) {
-      const prevView = history[history.length - 1];
-      setHistory((prev) => prev.slice(0, -1));
-      setCurrentView(prevView);
-    } else {
-      const sessionRole = localStorage.getItem('rcm_user_session');
-      if (sessionRole === 'admin') {
-        setCurrentView(AppView.ADMIN_DASHBOARD);
-      } else if (sessionRole === 'worker') {
-        setCurrentView(AppView.WORKER_HOME);
-      } else {
-        setCurrentView(AppView.LISTENER_HOME);
-      }
-    }
+    checkDirty(() => {
+        window.history.replaceState(null, '', window.location.pathname);
+        if (history.length > 0) {
+          const prevView = history[history.length - 1];
+          setHistory((prev) => prev.slice(0, -1));
+          setCurrentView(prevView);
+        } else {
+          const sessionRole = localStorage.getItem('rcm_user_session');
+          if (sessionRole === 'admin') {
+            setCurrentView(AppView.ADMIN_DASHBOARD);
+          } else if (sessionRole === 'worker') {
+            setCurrentView(AppView.WORKER_HOME);
+          } else {
+            setCurrentView(AppView.LISTENER_HOME);
+          }
+        }
+    });
   };
 
   const handleLogout = () => {
@@ -497,11 +525,11 @@ const App: React.FC = () => {
       case AppView.APP_AGENDA:
         return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_MUSICA:
-        return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
+        return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_PROGRAMACION:
-        return <GestionApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
+        return <GestionApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
 
       // Public Sections
       case AppView.SECTION_HISTORY:
@@ -561,6 +589,8 @@ const App: React.FC = () => {
             <p className="mt-2 text-[#9E7649] text-xs">Por favor, espere un momento</p>
           </div>
         )}
+
+        <BackupDialog isOpen={showBackupDialog} onClose={() => setShowBackupDialog(false)} onBackup={handleBackup} />
 
         {showPlayer && (
            <>
