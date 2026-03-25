@@ -490,35 +490,20 @@ const UserManagement: React.FC<Props> = ({
               restoredCount++;
           }
           if (json.programsList && Array.isArray(json.programsList)) {
-              if (!localStorage.getItem('rcm_programs_list')) {
-                  localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
-              }
+              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
               restoredCount++;
           }
           if (json.customRoots && Array.isArray(json.customRoots)) {
-              if (!localStorage.getItem('rcm_custom_roots')) {
-                  localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
-              }
+              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
               restoredCount++;
           }
           if (json.userData) {
               Object.entries(json.userData).forEach(([key, value]) => {
-                  // Preservar si ya existe localmente
-                  if (!localStorage.getItem(key)) {
-                      localStorage.setItem(key, JSON.stringify(value));
-                  }
+                  localStorage.setItem(key, JSON.stringify(value));
               });
               restoredCount++;
           }
-          if (json.paymentConfigs) {
-              Object.entries(json.paymentConfigs).forEach(([key, value]) => {
-                  // Preservar si ya existe localmente
-                  if (!localStorage.getItem(key)) {
-                      localStorage.setItem(key, JSON.stringify(value));
-                  }
-              });
-              restoredCount++;
-          }
+          // End of sync logic
 
           // Restaurar Equipo (desde el JSON de respaldo si existe)
           if (json.equipo && Array.isArray(json.equipo)) {

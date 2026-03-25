@@ -378,10 +378,7 @@ const App: React.FC = () => {
           }
           if (json.paymentConfigs) {
               Object.entries(json.paymentConfigs).forEach(([key, value]) => {
-                  // Preservar si ya existe localmente
-                  if (!localStorage.getItem(key)) {
-                      localStorage.setItem(key, JSON.stringify(value));
-                  }
+                  localStorage.setItem(key, JSON.stringify(value));
               });
               changes++;
           }
@@ -422,23 +419,16 @@ const App: React.FC = () => {
               changes++;
           }
           if (json.programsList && Array.isArray(json.programsList)) {
-              if (!localStorage.getItem('rcm_programs_list')) {
-                  localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
-              }
+              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
               changes++;
           }
           if (json.customRoots && Array.isArray(json.customRoots)) {
-              if (!localStorage.getItem('rcm_custom_roots')) {
-                  localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
-              }
+              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
               changes++;
           }
           if (json.userData) {
               Object.entries(json.userData).forEach(([key, value]) => {
-                  // Preservar si ya existe localmente
-                  if (!localStorage.getItem(key)) {
-                      localStorage.setItem(key, JSON.stringify(value));
-                  }
+                  localStorage.setItem(key, JSON.stringify(value));
               });
               changes++;
           }
