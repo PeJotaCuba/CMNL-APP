@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Program, UserProfile, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData } from './types.ts';
 import { INITIAL_USERS, INITIAL_PROGRAMS, INITIAL_EFEMERIDES, INITIAL_CONMEMORACIONES, INITIAL_DAY_THEMES, INITIAL_PROPAGANDA } from './database.ts';
@@ -15,6 +15,7 @@ interface Props {
   onBack: () => void;
   onMenuClick?: () => void;
   currentUser: any; // From main app
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 const InnerAgendaApp: React.FC<{
@@ -101,7 +102,7 @@ const InnerAgendaApp: React.FC<{
   );
 };
 
-const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
+const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange }) => {
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('rcm_users');
@@ -225,6 +226,18 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser }) => {
     localStorage.setItem('rcm_day_themes', JSON.stringify(dayThemes));
     localStorage.setItem('rcm_propaganda', JSON.stringify(propaganda));
     localStorage.setItem('rcm_users', JSON.stringify(users));
+    
+    // Check if any data is different from initial to avoid marking dirty on first load
+    // Actually, a simpler way is to just call it if any of these change after mount
+  }, [programs, efemerides, conmemoraciones, dayThemes, propaganda, users]);
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (onDirtyChange) onDirtyChange(true);
   }, [programs, efemerides, conmemoraciones, dayThemes, propaganda, users]);
 
   const handleLogout = () => {

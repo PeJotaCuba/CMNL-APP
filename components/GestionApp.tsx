@@ -803,41 +803,60 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       }
   };
 
+  const getHabitualStatus = (programName: string, role: string, dateStr: string) => {
+    if (!currentUser || !habitualMode) return { isHabitual: false, isAutoMarked: false, isExcluded: false };
+
+    const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+    const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
+    const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
+    
+    let userTeamInfo = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser.name));
+    if (!userTeamInfo) {
+      const userWords = getWords(currentUser.name);
+      userTeamInfo = teamData.find(m => {
+        const memberWords = getWords(m.name);
+        const matchCount = userWords.filter(w => memberWords.includes(w)).length;
+        return matchCount >= 2;
+      });
+    }
+
+    const habitualProgramsByRole = userTeamInfo?.habitualProgramsByRole || {};
+    const legacyHabitualPrograms = userTeamInfo?.habitualPrograms || [];
+    const roleNorm = normalize(role);
+    const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === roleNorm || roleNorm.includes(normalize(k)) || normalize(k).includes(roleNorm));
+    
+    let isHabitual = false;
+    if (roleKey) {
+      isHabitual = (habitualProgramsByRole[roleKey] || []).includes(programName);
+    } else {
+      isHabitual = (legacyHabitualPrograms || []).includes(programName);
+    }
+
+    if (!isHabitual) return { isHabitual: false, isAutoMarked: false, isExcluded: false };
+
+    const isExcluded = habitualExclusions.some(ex => ex.date === dateStr && ex.programName === programName && ex.role === role);
+    
+    // Auto-marking logic: Day 1 to Day-1 of current month
+    const today = new Date();
+    const currentMonth = formatDateToISO(today).slice(0, 7);
+    const currentDay = today.getDate();
+    
+    const isCurrentMonth = dateStr.startsWith(currentMonth);
+    const dayOfDate = parseInt(dateStr.split('-')[2]);
+    
+    const isAutoMarked = isCurrentMonth && dayOfDate < currentDay && !isExcluded;
+
+    return { isHabitual, isAutoMarked, isExcluded };
+  };
+
   const toggleWorkLog = (programName: string, date: string, role: string) => {
-      if (!currentUser || !userPaymentConfig) return;
-      const userId = currentUser.username;
-      
-      const roleConfig = userPaymentConfig.roles.find(r => r.role === role);
-      if (!roleConfig) return;
+    if (!currentUser || !userPaymentConfig) return;
+    const userId = currentUser.username;
+    
+    const roleConfig = userPaymentConfig.roles.find(r => r.role === role);
+    if (!roleConfig) return;
 
-      const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-      const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
-      
-      let userTeamInfo = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser.name));
-      
-      if (!userTeamInfo) {
-          const userWords = getWords(currentUser.name);
-          userTeamInfo = teamData.find(m => {
-              const memberWords = getWords(m.name);
-              const matchCount = userWords.filter(w => memberWords.includes(w)).length;
-              return matchCount >= 2;
-          });
-      }
-
-      const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-      const roleNorm = normalize(role);
-      
-      const habitualProgramsByRole = userTeamInfo?.habitualProgramsByRole || {};
-      const legacyHabitualPrograms = userTeamInfo?.habitualPrograms || [];
-      
-      const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === roleNorm || roleNorm.includes(normalize(k)) || normalize(k).includes(roleNorm));
-      
-      let isHabitual = false;
-      if (roleKey) {
-          isHabitual = habitualProgramsByRole[roleKey].includes(programName);
-      } else {
-          isHabitual = legacyHabitualPrograms.includes(programName);
-      }
+    const { isHabitual } = getHabitualStatus(programName, role, date);
 
       const existingIndex = workLogs.findIndex(l => 
           l.userId === userId && 
@@ -851,18 +870,26 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           newLogs.splice(existingIndex, 1);
           setWorkLogs(newLogs);
       } else {
-          if (habitualMode && isHabitual) {
-              const exclusionIndex = habitualExclusions.findIndex(ex => ex.date === date && ex.programName === programName && ex.role === role);
-              if (exclusionIndex >= 0) {
-                  const newExclusions = [...habitualExclusions];
-                  newExclusions.splice(exclusionIndex, 1);
-                  setHabitualExclusions(newExclusions);
-                  return;
-              } else {
-                  setHabitualExclusions([...habitualExclusions, { date, programName, role }]);
-                  return;
-              }
+      if (habitualMode && isHabitual) {
+        const today = new Date();
+        const currentMonth = formatDateToISO(today).slice(0, 7);
+        const currentDay = today.getDate();
+        const dayOfDate = parseInt(date.split('-')[2]);
+
+        // Only use exclusions for the auto-marked range
+        if (date.startsWith(currentMonth) && dayOfDate < currentDay) {
+          const exclusionIndex = habitualExclusions.findIndex(ex => ex.date === date && ex.programName === programName && ex.role === role);
+          if (exclusionIndex >= 0) {
+            const newExclusions = [...habitualExclusions];
+            newExclusions.splice(exclusionIndex, 1);
+            setHabitualExclusions(newExclusions);
+            return;
+          } else {
+            setHabitualExclusions([...habitualExclusions, { date, programName, role }]);
+            return;
           }
+        }
+      }
 
           const amount = getProgramRate(programName, role, roleConfig.level);
           setWorkLogs([...workLogs, {
@@ -877,111 +904,64 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   };
 
   const calculateTotalPayment = (dates: string[]) => {
-      if (!userPaymentConfig || !currentUser) return { periodTotal: 0, monthTotal: 0, calculatedUntil: 0 };
-      
-      const userId = currentUser.username;
-      const today = new Date();
-      const currentMonth = formatDateToISO(today).slice(0, 7); // YYYY-MM
-      const currentDay = today.getDate();
+    if (!userPaymentConfig || !currentUser) return { periodTotal: 0, monthTotal: 0, calculatedUntil: 0 };
+    
+    const userId = currentUser.username;
+    const today = new Date();
+    const currentMonth = formatDateToISO(today).slice(0, 7);
+    const currentDay = today.getDate();
 
-      let periodTotal = 0;
-      let monthTotal = 0;
+    let periodTotal = 0;
+    let monthTotal = 0;
 
-      const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-      const userRoleNorms = userPaymentConfig.roles.map(r => ({ ...r, norm: normalize(r.role) }));
-
-      // Track which habitual programs are already in workLogs to avoid double counting
-      const logsSet = new Set(workLogs.filter(l => l.userId === userId).map(l => `${l.date}|${l.programName}|${l.role}`));
-
-      workLogs.forEach(log => {
-          if (log.userId === userId && userPaymentConfig.roles.some(r => r.role === log.role)) {
-              if (dates.includes(log.date)) {
-                  periodTotal += log.amount;
-              }
-              if (log.date.startsWith(currentMonth)) {
-                  monthTotal += log.amount;
-              }
-          }
-      });
-
-      if (habitualMode) {
-          const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
-          const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
-          
-          let userTeamInfo = teamData.find(m => normalizeName(m.name) === normalizeName(currentUser.name));
-          
-          if (!userTeamInfo) {
-              const userWords = getWords(currentUser.name);
-              userTeamInfo = teamData.find(m => {
-                  const memberWords = getWords(m.name);
-                  const matchCount = userWords.filter(w => memberWords.includes(w)).length;
-                  return matchCount >= 2;
-              });
-          }
-
-          const habitualProgramsByRole = userTeamInfo?.habitualProgramsByRole || {};
-          const legacyHabitualPrograms = userTeamInfo?.habitualPrograms || [];
-
-          if (Object.keys(habitualProgramsByRole).length > 0 || legacyHabitualPrograms.length > 0) {
-              const year = today.getFullYear();
-              const month = today.getMonth();
-              
-              // Period for Habitualidad: Day 1 to [Current Day - 1]
-              const monthDates = [];
-              for (let i = 1; i < currentDay; i++) {
-                  const d = new Date(year, month, i, 12, 0, 0);
-                  monthDates.push(formatDateToISO(d));
-              }
-
-              userRoleNorms.forEach(role => {
-                  const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === role.norm || role.norm.includes(normalize(k)) || normalize(k).includes(role.norm));
-                  
-                  let rolePrograms = [];
-                  if (roleKey) {
-                      rolePrograms = habitualProgramsByRole[roleKey] || [];
-                  } else if (legacyHabitualPrograms.length > 0) {
-                      rolePrograms = legacyHabitualPrograms || [];
-                  }
-
-                  if (rolePrograms.length === 0) return;
-
-                  rolePrograms.forEach(progName => {
-                      const progItem = catalogo.find(p => normalize(p.name) === normalize(progName));
-                      if (!progItem) return;
-
-                      const hasRole = progItem.roles.some(r => {
-                          const catalogRoleNorm = normalize(r.role);
-                          return catalogRoleNorm === role.norm || 
-                                 catalogRoleNorm.includes(role.norm) || 
-                                 role.norm.includes(catalogRoleNorm) ||
-                                 (role.norm === 'realizador de sonido' && catalogRoleNorm === 'realizador');
-                      });
-
-                      if (!hasRole) return;
-
-                      const ficha = fichas.find(f => normalize(f.name) === normalize(progName));
-                      const amount = getProgramRate(progName, role.role, role.level);
-                      
-                      monthDates.forEach(date => {
-                          const isAired = ficha ? isProgramOnDay(ficha, date) : false;
-                          if (isAired) {
-                              const key = `${date}|${progName}|${role.role}`;
-                              const isExcluded = habitualExclusions.some(ex => ex.date === date && ex.programName === progName && ex.role === role.role);
-                              
-                              if (!logsSet.has(key) && !isExcluded) {
-                                  if (dates.includes(date)) {
-                                      periodTotal += amount;
-                                  }
-                                  monthTotal += amount;
-                              }
-                          }
-                      });
-                  });
-              });
-          }
+    // 1. Calculate from manual workLogs
+    workLogs.forEach(log => {
+      if (log.userId === userId && userPaymentConfig.roles.some(r => r.role === log.role)) {
+        if (dates.includes(log.date)) {
+          periodTotal += log.amount;
+        }
+        if (log.date.startsWith(currentMonth)) {
+          monthTotal += log.amount;
+        }
       }
+    });
 
-      return { periodTotal, monthTotal, calculatedUntil: currentDay - 1 };
+    // 2. Calculate from Habitualidad
+    if (habitualMode) {
+      const logsSet = new Set(workLogs.filter(l => l.userId === userId).map(l => `${l.date}|${l.programName}|${l.role}`));
+      
+      // We need to check all programs in catalog for each user role
+      userPaymentConfig.roles.forEach(role => {
+        catalogo.forEach(prog => {
+          const { isHabitual } = getHabitualStatus(prog.name, role.role, ""); // Check if habitual for this role
+          if (!isHabitual) return;
+
+          const ficha = fichas.find(f => f.name === prog.name);
+          if (!ficha) return;
+
+          const amount = getProgramRate(prog.name, role.role, role.level);
+
+          // Check dates from Day 1 to Day-1 of current month
+          for (let i = 1; i < currentDay; i++) {
+            const d = new Date(today.getFullYear(), today.getMonth(), i, 12, 0, 0);
+            const dateStr = formatDateToISO(d);
+            
+            if (isProgramOnDay(ficha, dateStr)) {
+              const { isAutoMarked } = getHabitualStatus(prog.name, role.role, dateStr);
+              
+              if (isAutoMarked && !logsSet.has(`${dateStr}|${prog.name}|${role.role}`)) {
+                if (dates.includes(dateStr)) {
+                  periodTotal += amount;
+                }
+                monthTotal += amount;
+              }
+            }
+          }
+        });
+      });
+    }
+
+    return { periodTotal, monthTotal, calculatedUntil: currentDay - 1 };
   };
 
   const calculateTax = (amount: number) => {
@@ -2263,25 +2243,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                           <tr key={prog} className="border-b border-[#9E7649]/10 hover:bg-white/5">
                                                               <td className="px-6 py-4 font-medium text-white">{prog}</td>
                                                               {dates.map(date => {
-                                                                   const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-                                                                   const roleNorm = normalize(role.role);
-                                                                   const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === roleNorm || roleNorm.includes(normalize(k)) || normalize(k).includes(roleNorm));
-                                                                   
-                                                                   let isHabitual = false;
-                                                                   if (roleKey) {
-                                                                       isHabitual = (habitualProgramsByRole[roleKey] || []).includes(prog);
-                                                                   } else {
-                                                                       isHabitual = (legacyHabitualPrograms || []).includes(prog);
-                                                                   }
-                                                                  const isExcluded = habitualExclusions.some(ex => ex.date === date && ex.programName === prog && ex.role === role.role);
+                                                                  const { isHabitual, isAutoMarked, isExcluded } = getHabitualStatus(prog, role.role, date);
 
                                                                   const isWorked = workLogs.some(l => 
                                                                       l.userId === currentUser?.username && 
                                                                       l.role === role.role && 
                                                                       l.programName === prog && 
                                                                       l.date === date
-                                                                  ) || (habitualMode && isHabitual && !isExcluded);
+                                                                  ) || isAutoMarked;
                                                                   
+                                                                  const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
                                                                   const ficha = fichas.find(f => normalize(f.name) === normalize(prog));
                                                                   const canWork = (ficha ? isProgramOnDay(ficha, date) : false) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
 
@@ -2290,7 +2261,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                                           {canWork ? (
                                                                               <button 
                                                                                   onClick={() => toggleWorkLog(prog, date, role.role)}
-                                                                                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
+                                                                                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${isWorked ? 'bg-[#9E7649] text-white shadow-lg scale-110' : isHabitual && !isExcluded ? 'bg-[#9E7649]/40 text-white/50 hover:bg-[#9E7649]/60' : 'bg-black/20 text-[#9E7649]/30 hover:bg-[#9E7649]/20'}`}
                                                                               >
                                                                                   <Check size={16} className={isWorked ? 'opacity-100' : 'opacity-0'} />
                                                                               </button>

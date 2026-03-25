@@ -108,6 +108,7 @@ interface GuionesAppProps {
     currentUser: User | null;
     onBack: () => void;
     onMenuClick?: () => void;
+    onDirtyChange?: (isDirty: boolean) => void;
 }
 
 const parseRawEntry = (raw: string): Script | null => {
@@ -140,7 +141,7 @@ const parseRawEntry = (raw: string): Script | null => {
   };
 };
 
-const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClick }) => {
+const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClick, onDirtyChange }) => {
     const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showStats, setShowStats] = useState(false);
@@ -285,6 +286,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
     const distributeScripts = (newScripts: Script[], useIdAsKey = false) => {
         const groupedByProgram: Record<string, Script[]> = {};
+        if (onDirtyChange) onDirtyChange(true);
 
         newScripts.forEach(script => {
             const scriptProgNorm = normalize(script.genre);
@@ -411,6 +413,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     const handleDeleteScript = (id: string) => {
         if (!selectedProgram) return;
         if (window.confirm('¿Eliminar este guion?')) {
+            if (onDirtyChange) onDirtyChange(true);
             const program = PROGRAMS.find(p => p.name === selectedProgram);
             if (program) {
                 const scripts = getProgramScripts(program);
@@ -426,6 +429,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     const handleSaveScript = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedProgram) return;
+        if (onDirtyChange) onDirtyChange(true);
         const program = PROGRAMS.find(p => p.name === selectedProgram);
         if (!program) return;
 
@@ -455,6 +459,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     const handlePulirSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedProgram || !pulirSearch) return;
+        if (onDirtyChange) onDirtyChange(true);
         const program = PROGRAMS.find(p => p.name === selectedProgram);
         if (!program) return;
 

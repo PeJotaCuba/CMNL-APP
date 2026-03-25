@@ -18,6 +18,7 @@ interface Props {
   isSyncing: boolean;
   setIsSyncing: React.Dispatch<React.SetStateAction<boolean>>;
   currentUser: User | null;
+  onDirtyChange?: (isDirty: boolean) => void;
 }
 
 const UserManagement: React.FC<Props> = ({ 
@@ -26,7 +27,8 @@ const UserManagement: React.FC<Props> = ({
     aboutContent, setAboutContent,
     news, setNews,
     isSyncing, setIsSyncing,
-    currentUser
+    currentUser,
+    onDirtyChange
 }) => {
   const [newUser, setNewUser] = useState<User>({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario', permissions: { canEditNews: false, canEditProgramming: false, canEditAbout: false, canEditCatalog: false, canEditFichas: false, canEditHours: false, canEditTeam: false } });
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -70,6 +72,7 @@ const UserManagement: React.FC<Props> = ({
             alert('El nombre de usuario ya existe');
             return;
          }
+         if (onDirtyChange) onDirtyChange(true);
          setUsers([...users, newUser]);
          setNewUser({ name: '', username: '', mobile: '', password: '', role: 'worker', classification: 'Usuario' });
     }
@@ -78,6 +81,7 @@ const UserManagement: React.FC<Props> = ({
   const saveEditedUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser && editingUser.username && editingUser.password) {
+         if (onDirtyChange) onDirtyChange(true);
          setUsers(prev => prev.map(u => u.username === editingUser.username ? editingUser : u));
          setEditingUser(null);
     }
@@ -89,6 +93,7 @@ const UserManagement: React.FC<Props> = ({
 
   const removeUser = (username: string) => {
     if(confirm('¿Eliminar usuario?')) {
+        if (onDirtyChange) onDirtyChange(true);
         setUsers(users.filter(u => u.username !== username));
     }
   };
@@ -96,6 +101,7 @@ const UserManagement: React.FC<Props> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'users' | 'history' | 'about' | 'news') => {
     const file = e.target.files?.[0];
     if (file) {
+      if (onDirtyChange) onDirtyChange(true);
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;

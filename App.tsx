@@ -15,6 +15,7 @@ import QuienesSomos from './components/QuienesSomos';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
+import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -22,35 +23,84 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<AppView[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [showBackupDialog, setShowBackupDialog] = useState(false);
-  const pendingNavigation = useRef<() => void | null>(null);
+  const [isLogoutTrigger, setIsLogoutTrigger] = useState(false);
+  const pendingNavigation = useRef<(() => void) | null>(null);
 
-  const checkDirty = (callback: () => void) => {
-      if (isDirty) {
+  const checkDirty = (callback: () => void, isLogout = false) => {
+      // Check if user should see the backup prompt
+      const isExcluded = currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador' || currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
+      const isActiveRole = ['Director', 'Asesor', 'Realizador de sonido', 'Locutor'].includes(currentUser?.classification || '');
+
+      if (isDirty && !isExcluded && isActiveRole) {
           pendingNavigation.current = callback;
+          setIsLogoutTrigger(isLogout);
           setShowBackupDialog(true);
       } else {
           callback();
       }
   };
 
-  const handleBackup = () => {
-      if (currentUser && currentUser.role !== 'admin' && currentUser.role !== 'coordinator') {
-          const backupData: any = {
-              username: currentUser.username,
+  const handleBackup = async () => {
+      if (currentUser) {
+          // Collect all data
+          const username = currentUser.username;
+          
+          // 1. Payments Data (LocalStorage)
+          const paymentsData = {
+              worklogs: JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]').filter((l: any) => l.userId === username),
+              consolidated: JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]').filter((l: any) => l.userId === username),
+              interruptions: JSON.parse(localStorage.getItem('rcm_interruptions') || '[]').filter((l: any) => l.userId === username),
+              consolidatedMonths: JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]').filter((l: any) => l.userId === username),
+              habitualExclusions: JSON.parse(localStorage.getItem('rcm_habitual_exclusions') || '[]').filter((l: any) => l.username === username),
+          };
+
+          // 2. Music Data (IndexedDB + LocalStorage)
+          const [reports, productions, selections, savedSelectionsList] = await Promise.all([
+              loadReportsFromDB(username),
+              loadProductionsFromDB(), // These might need filtering by user if they have a field
+              loadSelectionsFromDB(),
+              loadSavedSelectionsListFromDB()
+          ]);
+
+          const musicData = {
+              currentSelection: JSON.parse(localStorage.getItem(`user_${username}_rcm_current_selection`) || '[]'),
+              savedSelections: JSON.parse(localStorage.getItem(`user_${username}_rcm_saved_selections`) || '[]'),
+              reports: reports,
+              productions: productions.filter((p: any) => p.createdBy === username || !p.createdBy),
+              selections: selections,
+              savedSelectionsList: savedSelectionsList
+          };
+
+          // 3. Guiones Data (LocalStorage)
+          const guionesData: Record<string, any> = {};
+          for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('guionbd_data_')) {
+                  guionesData[key] = JSON.parse(localStorage.getItem(key) || '[]');
+              }
+          }
+
+          // 4. Agenda Data (LocalStorage)
+          const agendaData = {
+              programs: JSON.parse(localStorage.getItem('rcm_programs') || '[]'),
+              efemerides: JSON.parse(localStorage.getItem('rcm_efemerides') || '{}'),
+              conmemoraciones: JSON.parse(localStorage.getItem('rcm_conmemoraciones') || '{}'),
+              dayThemes: JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'),
+              propaganda: JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'),
+              users: JSON.parse(localStorage.getItem('rcm_users') || '[]'),
+          };
+
+          const backupData = {
+              username: username,
+              name: currentUser.name,
+              classification: currentUser.classification,
               timestamp: new Date().toISOString(),
-              gestion: {
-                  worklogs: JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]').filter((l: any) => l.userId === currentUser.username),
-                  consolidated: JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]').filter((l: any) => l.userId === currentUser.username),
-                  interruptions: JSON.parse(localStorage.getItem('rcm_interruptions') || '[]').filter((l: any) => l.userId === currentUser.username),
-                  consolidatedMonths: JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]').filter((l: any) => l.userId === currentUser.username),
-              },
-              musica: {
-                  currentSelection: JSON.parse(localStorage.getItem(`user_${currentUser.username}_rcm_current_selection`) || '[]'),
-                  savedSelections: JSON.parse(localStorage.getItem(`user_${currentUser.username}_rcm_saved_selections`) || '[]'),
-              },
-              agenda: {
-                  // Agenda data seems to be shared, let's include relevant parts if possible
-                  // For now, let's keep it simple as requested
+              version: "1.0",
+              data: {
+                  payments: paymentsData,
+                  music: musicData,
+                  guiones: guionesData,
+                  agenda: agendaData
               }
           };
 
@@ -59,11 +109,14 @@ const App: React.FC = () => {
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `Respaldo_${currentUser.username}_${new Date().toISOString().split('T')[0]}.json`;
+          link.download = `Respaldo_${username}_${new Date().toISOString().split('T')[0]}.json`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
+
+          // Update last backup timestamp
+          localStorage.setItem(`last_backup_${username}`, new Date().getTime().toString());
       }
 
       setIsDirty(false);
@@ -107,6 +160,25 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+
+  // 24-Hour Backup Reminder Effect
+  useEffect(() => {
+    if (currentUser) {
+      const isExcluded = currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador' || currentUser.role === 'admin' || currentUser.role === 'coordinator';
+      const isActiveRole = ['Director', 'Asesor', 'Realizador de sonido', 'Locutor'].includes(currentUser.classification || '');
+      
+      if (!isExcluded && isActiveRole) {
+        const lastBackup = localStorage.getItem(`last_backup_${currentUser.username}`);
+        const now = new Date().getTime();
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+
+        if (!lastBackup || (now - parseInt(lastBackup)) > twentyFourHours) {
+          // If 24h passed, mark as dirty to trigger prompt on next navigation or logout
+          setIsDirty(true);
+        }
+      }
+    }
+  }, [currentUser]);
 
   // Persistence Effects
   useEffect(() => { localStorage.setItem('rcm_data_users', JSON.stringify(users)); }, [users]);
@@ -203,20 +275,22 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // 1. Clear session
-    localStorage.removeItem('rcm_user_session');
-    localStorage.removeItem('rcm_user_username');
-    setCurrentUser(null);
-    
-    // 2. Stop Player
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    setIsPlaying(false);
+    checkDirty(() => {
+        // 1. Clear session
+        localStorage.removeItem('rcm_user_session');
+        localStorage.removeItem('rcm_user_username');
+        setCurrentUser(null);
+        
+        // 2. Stop Player
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsPlaying(false);
 
-    // 3. Redirect
-    setHistory([]);
-    setCurrentView(AppView.LISTENER_HOME);
+        // 3. Redirect
+        setHistory([]);
+        setCurrentView(AppView.LANDING); // Redirect to login
+    }, true);
   };
 
   const togglePlay = () => {
@@ -474,16 +548,17 @@ const App: React.FC = () => {
             isSyncing={isSyncing}
             setIsSyncing={setIsSyncing}
             currentUser={currentUser}
+            onDirtyChange={setIsDirty}
           />
         );
       
       // CMNL Apps
       case AppView.APP_AGENDA:
-        return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
+        return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_MUSICA:
         return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_GUIONES:
-        return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
+        return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_PROGRAMACION:
         return <GestionApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
 
@@ -546,7 +621,18 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <BackupDialog isOpen={showBackupDialog} onClose={() => setShowBackupDialog(false)} onBackup={handleBackup} />
+        <BackupDialog 
+          isOpen={showBackupDialog} 
+          onClose={() => {
+              setShowBackupDialog(false);
+              if (pendingNavigation.current) {
+                  pendingNavigation.current();
+                  pendingNavigation.current = null;
+              }
+          }}
+          onBackup={handleBackup}
+          isLogoutTrigger={isLogoutTrigger}
+        />
 
         {showPlayer && (
            <>
