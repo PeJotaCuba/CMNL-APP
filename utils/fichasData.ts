@@ -132,7 +132,7 @@ export const INITIAL_FICHAS: ProgramFicha[] = [
     name: "Parada Joven",
     schedule: "12:30 PM - 12:58 PM",
     duration: "28 min",
-    frequency: "Lunes a Sábado",
+    frequency: "Lunes a Viernes",
     func: "Orientación",
     music_cuban: "85 %",
     music_foreign: "15 %",
@@ -248,7 +248,7 @@ export const INITIAL_FICHAS: ProgramFicha[] = [
     sections: []
   },
   {
-    name: "Estación 95-3",
+    name: "Estación 95.3",
     schedule: "10:00 AM - 12:58 PM",
     duration: "178 min",
     frequency: "Domingo",

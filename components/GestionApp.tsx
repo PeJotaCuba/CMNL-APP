@@ -411,21 +411,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       // Use T12:00:00 to avoid timezone issues with YYYY-MM-DD
       const date = new Date(dateStr + 'T12:00:00');
       const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
-      const freq = program.frequency.toLowerCase();
+      const freq = program.frequency.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       
       // Normalize frequency string
-      if (freq.includes('diario') || freq.includes('lunes a domingo')) return true;
-      if (freq.includes('lunes a sábado') && day !== 0) return true;
-      if (freq.includes('lunes a viernes') && day >= 1 && day <= 5) return true;
+      if (freq.includes('diario') || freq.includes('lunes a domingo') || freq.includes('lunes-domingo') || freq.includes('lunes - domingo')) return true;
+      if ((freq.includes('lunes a sabado') || freq.includes('lunes-sabado') || freq.includes('lunes - sabado')) && day !== 0) return true;
+      if ((freq.includes('lunes a viernes') || freq.includes('lunes-viernes') || freq.includes('lunes - viernes')) && day >= 1 && day <= 5) return true;
+      if ((freq.includes('lunes a jueves') || freq.includes('lunes-jueves') || freq.includes('lunes - jueves')) && day >= 1 && day <= 4) return true;
+      if ((freq.includes('lunes a miercoles') || freq.includes('lunes-miercoles') || freq.includes('lunes - miercoles')) && day >= 1 && day <= 3) return true;
+      if ((freq.includes('martes a viernes') || freq.includes('martes-viernes') || freq.includes('martes - viernes')) && day >= 2 && day <= 5) return true;
+      if ((freq.includes('martes a jueves') || freq.includes('martes-jueves') || freq.includes('martes - jueves')) && day >= 2 && day <= 4) return true;
+      if ((freq.includes('miercoles a viernes') || freq.includes('miercoles-viernes') || freq.includes('miercoles - viernes')) && day >= 3 && day <= 5) return true;
+      if ((freq.includes('jueves a domingo') || freq.includes('jueves-domingo') || freq.includes('jueves - domingo')) && (day >= 4 || day === 0)) return true;
+      if ((freq.includes('viernes a domingo') || freq.includes('viernes-domingo') || freq.includes('viernes - domingo')) && (day >= 5 || day === 0)) return true;
+      if ((freq.includes('fines de semana') || freq.includes('fin de semana')) && (day === 0 || day === 6)) return true;
       
       const daysMap: { [key: number]: string[] } = {
           0: ['domingo', 'dominical'],
           1: ['lunes'],
           2: ['martes'],
-          3: ['miércoles', 'miercoles'],
+          3: ['miercoles'],
           4: ['jueves'],
           5: ['viernes'],
-          6: ['sábado', 'sabado', 'sabatina']
+          6: ['sabado', 'sabatina']
       };
 
       return daysMap[day].some(d => freq.includes(d));
@@ -955,7 +963,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       const amount = getProgramRate(progName, role.role, role.level);
                       
                       monthDates.forEach(date => {
-                          const isAired = ficha ? isProgramOnDay(ficha, date) : true;
+                          const isAired = ficha ? isProgramOnDay(ficha, date) : false;
                           if (isAired) {
                               const key = `${date}|${progName}|${role.role}`;
                               const isExcluded = habitualExclusions.some(ex => ex.date === date && ex.programName === progName && ex.role === role.role);
@@ -2244,8 +2252,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                               <tbody>
                                                   {programsList.map(prog => {
                                                       const isAired = dates.some(date => {
-                                                          const ficha = fichas.find(f => f.name === prog);
-                                                          return ficha ? isProgramOnDay(ficha, date) : true;
+                                                          const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+                                                          const ficha = fichas.find(f => normalize(f.name) === normalize(prog));
+                                                          return (ficha ? isProgramOnDay(ficha, date) : false) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
                                                       });
 
                                                       if (!isAired) return null;
@@ -2273,8 +2282,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                                       l.date === date
                                                                   ) || (habitualMode && isHabitual && !isExcluded);
                                                                   
-                                                                  const ficha = fichas.find(f => f.name === prog);
-                                                                  const canWork = ficha ? isProgramOnDay(ficha, date) : true;
+                                                                  const ficha = fichas.find(f => normalize(f.name) === normalize(prog));
+                                                                  const canWork = (ficha ? isProgramOnDay(ficha, date) : false) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
 
                                                                   return (
                                                                       <td key={date} className="px-6 py-4 text-center">
