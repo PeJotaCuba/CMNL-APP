@@ -284,7 +284,7 @@ const App: React.FC = () => {
       if(!confirmSync) return;
 
       setIsSyncing(true);
-      const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json';
+      const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
       try {
           const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
@@ -294,11 +294,7 @@ const App: React.FC = () => {
           let changes = 0;
 
           if (json.users && Array.isArray(json.users)) {
-            setUsers(prev => {
-                const map = new Map(prev.map(u => [u.username, u]));
-                json.users.forEach(u => map.set(u.username, u));
-                return Array.from(map.values());
-            });
+            setUsers(json.users);
             changes++;
           }
           if (typeof json.historyContent === 'string') {
@@ -322,45 +318,17 @@ const App: React.FC = () => {
           
           const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
               if (!jsonData || !Array.isArray(jsonData)) return;
-              const localDataStr = localStorage.getItem(localKey);
-              const localData = localDataStr ? JSON.parse(localDataStr) : [];
-              if (!Array.isArray(localData)) {
-                  localStorage.setItem(localKey, JSON.stringify(jsonData));
-                  return;
-              }
-              const getId = (item: any) => typeof idKey === 'function' ? idKey(item) : String(item[idKey]);
-              const mergedMap = new Map();
-              localData.forEach(item => { if (item) mergedMap.set(getId(item), item); });
-              jsonData.forEach(item => { if (item) mergedMap.set(getId(item), item); });
-              localStorage.setItem(localKey, JSON.stringify(Array.from(mergedMap.values())));
+              localStorage.setItem(localKey, JSON.stringify(jsonData));
           };
 
           const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>, idKey: string) => {
               if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              const localDataStr = localStorage.getItem(localKey);
-              const localData = localDataStr ? JSON.parse(localDataStr) : {};
-              const mergedObj: Record<string, any[]> = { ...localData };
-              
-              Object.entries(jsonData).forEach(([dateKey, items]) => {
-                  if (!Array.isArray(items)) return;
-                  if (!mergedObj[dateKey]) {
-                      mergedObj[dateKey] = items;
-                  } else {
-                      const mergedMap = new Map();
-                      const getKey = (item: any) => typeof item === 'string' ? item : (item[idKey] || JSON.stringify(item));
-                      mergedObj[dateKey].forEach(item => { if (item) mergedMap.set(getKey(item), item); });
-                      items.forEach(item => { if (item) mergedMap.set(getKey(item), item); });
-                      mergedObj[dateKey] = Array.from(mergedMap.values());
-                  }
-              });
-              localStorage.setItem(localKey, JSON.stringify(mergedObj));
+              localStorage.setItem(localKey, JSON.stringify(jsonData));
           };
 
           const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
               if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              const localDataStr = localStorage.getItem(localKey);
-              const localData = localDataStr ? JSON.parse(localDataStr) : {};
-              localStorage.setItem(localKey, JSON.stringify({ ...localData, ...jsonData }));
+              localStorage.setItem(localKey, JSON.stringify(jsonData));
           };
 
           if (json.fichas) {
@@ -393,9 +361,7 @@ const App: React.FC = () => {
           }
           if (json.paymentConfigs) {
               Object.entries(json.paymentConfigs).forEach(([key, value]) => {
-                  const localValStr = localStorage.getItem(key);
-                  const localVal = localValStr ? JSON.parse(localValStr) : {};
-                  localStorage.setItem(key, JSON.stringify({ ...localVal, ...(value as any) }));
+                  localStorage.setItem(key, JSON.stringify(value));
               });
               changes++;
           }
@@ -456,7 +422,7 @@ const App: React.FC = () => {
           } else {
               // Fetch equipocmnl.json
               try {
-                  const equipoResponse = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
+                  const equipoResponse = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
                   if (equipoResponse.ok) {
                       const equipoData = await equipoResponse.json();
                       if (Array.isArray(equipoData)) {

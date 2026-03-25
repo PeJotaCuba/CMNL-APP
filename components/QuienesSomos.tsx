@@ -50,7 +50,7 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
   const updateDatabase = async () => {
     setLoading(true);
     try {
-      const response = await fetch(EQUIPO_URL);
+      const response = await fetch(`${EQUIPO_URL}?t=${new Date().getTime()}`);
       if (!response.ok) throw new Error("Error al descargar la base de datos");
       const data = await response.json();
       if (Array.isArray(data)) {
