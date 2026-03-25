@@ -435,20 +435,39 @@ const App: React.FC = () => {
               mergeRecordData('rcm_propaganda', json.agendaPropaganda, 'id');
               changes++;
           }
+          if (json.programsList && Array.isArray(json.programsList)) {
+              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
+              changes++;
+          }
+          if (json.customRoots && Array.isArray(json.customRoots)) {
+              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
+              changes++;
+          }
+          if (json.userData) {
+              Object.entries(json.userData).forEach(([key, value]) => {
+                  localStorage.setItem(key, JSON.stringify(value));
+              });
+              changes++;
+          }
 
-          // Fetch equipocmnl.json
-          try {
-              const equipoResponse = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
-              if (equipoResponse.ok) {
-                  const equipoData = await equipoResponse.json();
-                  if (Array.isArray(equipoData)) {
-                      localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
-                      localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
-                      changes++;
+          if (json.equipo && Array.isArray(json.equipo)) {
+              localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(json.equipo));
+              changes++;
+          } else {
+              // Fetch equipocmnl.json
+              try {
+                  const equipoResponse = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json', { cache: "no-store" });
+                  if (equipoResponse.ok) {
+                      const equipoData = await equipoResponse.json();
+                      if (Array.isArray(equipoData)) {
+                          localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
+                          localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
+                          changes++;
+                      }
                   }
+              } catch (equipoError) {
+                  console.error("Error fetching equipo data during sync:", equipoError);
               }
-          } catch (equipoError) {
-              console.error("Error fetching equipo data during sync:", equipoError);
           }
 
           alert('¡Sincronización completada! Los datos están actualizados.');
@@ -459,20 +478,6 @@ const App: React.FC = () => {
       } finally {
           setIsSyncing(false);
       }
-  };
-
-  const handleUpdateFromCoor = async () => {
-    try {
-        const response = await fetch('https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/coorbd.json');
-        const data = await response.json();
-        Object.entries(data).forEach(([key, value]) => {
-            localStorage.setItem(key, JSON.stringify(value));
-        });
-        alert('Actualización completada');
-    } catch (error) {
-        console.error(error);
-        alert('Error al actualizar');
-    }
   };
 
   // Determine if Player should be visible
@@ -529,7 +534,6 @@ const App: React.FC = () => {
             onRefreshLive={handleRefreshLive}
             currentProgram={currentProgram}
             onMenuClick={() => setIsSidebarOpen(true)}
-            onUpdateFromCoor={handleUpdateFromCoor}
           />
         );
       case AppView.APP_USER_MANAGEMENT:

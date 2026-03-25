@@ -292,6 +292,12 @@ const UserManagement: React.FC<Props> = ({
     let equipo = [];
     try { equipo = JSON.parse(localStorage.getItem('rcm_equipo_cmnl') || '[]'); } catch (e) {}
 
+    let programsList = [];
+    try { programsList = JSON.parse(localStorage.getItem('rcm_programs_list') || '[]'); } catch (e) {}
+
+    let customRoots = [];
+    try { customRoots = JSON.parse(localStorage.getItem('rcm_custom_roots') || '[]'); } catch (e) {}
+
     const data = {
         users, // Usuarios del sistema principal
         historyContent,
@@ -314,11 +320,13 @@ const UserManagement: React.FC<Props> = ({
         agendaDayThemes,
         agendaUsers, // Usuarios de la agenda (perfiles extendidos)
         agendaPropaganda,
-        equipo // Incluir datos del equipo (habitualPrograms, etc.)
+        equipo, // Incluir datos del equipo (habitualPrograms, etc.)
+        programsList,
+        customRoots
     };
     
-    // Nombre dinámico con el usuario
-    const filename = `${currentUser?.username || 'admin'}_actualcmnl.json`;
+    // Nombre del archivo
+    const filename = 'actualcmnl.json';
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -496,6 +504,20 @@ const UserManagement: React.FC<Props> = ({
           }
           if (json.agendaPropaganda) {
               mergeRecordData('rcm_propaganda', json.agendaPropaganda, 'id');
+              restoredCount++;
+          }
+          if (json.programsList && Array.isArray(json.programsList)) {
+              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
+              restoredCount++;
+          }
+          if (json.customRoots && Array.isArray(json.customRoots)) {
+              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
+              restoredCount++;
+          }
+          if (json.userData) {
+              Object.entries(json.userData).forEach(([key, value]) => {
+                  localStorage.setItem(key, JSON.stringify(value));
+              });
               restoredCount++;
           }
 

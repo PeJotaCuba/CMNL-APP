@@ -18,7 +18,6 @@ interface Props {
   onRefreshLive: () => void;
   currentProgram: ProgramItem;
   onMenuClick?: () => void;
-  onUpdateFromCoor: () => void;
 }
 
 const newsColors = [
@@ -43,8 +42,7 @@ const AdminDashboard: React.FC<Props> = ({
     isRefreshing,
     onRefreshLive,
     currentProgram,
-    onMenuClick,
-    onUpdateFromCoor
+    onMenuClick
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
@@ -114,10 +112,10 @@ const AdminDashboard: React.FC<Props> = ({
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
             {currentUser?.classification === 'Administrador' && (
               <button 
-               onClick={onUpdateFromCoor}
+               onClick={onSync}
                className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
               >
-                Actualizar Coordinador
+                Actualizar Sistema
               </button>
             )}
          </div>
