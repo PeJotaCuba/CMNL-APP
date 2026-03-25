@@ -114,32 +114,6 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('rcm_data_history', historyContent); }, [historyContent]);
   useEffect(() => { localStorage.setItem('rcm_data_about', aboutContent); }, [aboutContent]);
 
-  // Force update users from INITIAL_USERS to ensure code changes (like new passwords/roles) are applied
-  useEffect(() => {
-      setUsers(prevUsers => {
-          const updatedUsers = [...prevUsers];
-          let hasChanges = false;
-
-          INITIAL_USERS.forEach(initUser => {
-              const index = updatedUsers.findIndex(u => u.username === initUser.username);
-              if (index !== -1) {
-                  // Check if critical fields changed
-                  if (updatedUsers[index].password !== initUser.password || 
-                      updatedUsers[index].role !== initUser.role ||
-                      updatedUsers[index].classification !== initUser.classification) {
-                      updatedUsers[index] = { ...updatedUsers[index], ...initUser };
-                      hasChanges = true;
-                  }
-              } else {
-                  updatedUsers.push(initUser);
-                  hasChanges = true;
-              }
-          });
-
-          return hasChanges ? updatedUsers : prevUsers;
-      });
-  }, []);
-
   useEffect(() => {
     // Check for persistent session
     const sessionRole = localStorage.getItem('rcm_user_session');
@@ -291,19 +265,70 @@ const App: React.FC = () => {
           if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
           
           const json = await response.json();
-          let changes = 0;
+          const pendingUpdates: Record<string, string> = {};
+          
+          const setLocal = (key: string, value: any) => {
+              pendingUpdates[key] = JSON.stringify(value);
+          };
 
+          // Helper to merge data while protecting user-generated content
+          const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
+              if (!jsonData || !Array.isArray(jsonData)) return;
+              
+              const saved = localStorage.getItem(localKey);
+              const localData = saved ? JSON.parse(saved) : [];
+
+              // Protected Keys: NO BORRAR, MODIFICAR O RESETEAR
+              const protectedKeys = ['rcm_data_worklogs', 'rcm_data_consolidated', 'rcm_interruptions', 'rcm_consolidated_months', 'rcm_users'];
+              
+              if (protectedKeys.includes(localKey)) {
+                  if (localKey === 'rcm_users') {
+                      // Preserve interests for agenda users
+                      const merged = jsonData.map(newUser => {
+                          const localItem = localData.find((u: any) => u.id === newUser.id);
+                          return localItem && localItem.interests ? { ...newUser, interests: localItem.interests } : newUser;
+                      });
+                      setLocal(localKey, merged);
+                  } else {
+                      // For other protected data (worklogs, reports), keep local and add new ones from JSON if they don't exist
+                      const getId = (item: any) => (typeof idKey === 'function' ? idKey(item) : item[idKey]);
+                      const merged = [...localData];
+                      jsonData.forEach(newItem => {
+                          if (!merged.some(oldItem => getId(oldItem) === getId(newItem))) {
+                              merged.push(newItem);
+                          }
+                      });
+                      setLocal(localKey, merged);
+                  }
+                  return;
+              }
+
+              // Administrative data: Overwrite local with remote
+              setLocal(localKey, jsonData);
+          };
+
+          const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>) => {
+              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+              setLocal(localKey, jsonData);
+          };
+
+          const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
+              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+              setLocal(localKey, jsonData);
+          };
+
+          // Apply updates to state (will be persisted via useEffects, but we also setLocal for consistency)
           if (json.users && Array.isArray(json.users)) {
             setUsers(json.users);
-            changes++;
+            setLocal('rcm_data_users', json.users);
           }
           if (typeof json.historyContent === 'string') {
             setHistoryContent(json.historyContent);
-            changes++;
+            setLocal('rcm_data_history', json.historyContent);
           }
           if (typeof json.aboutContent === 'string') {
             setAboutContent(json.aboutContent);
-            changes++;
+            setLocal('rcm_data_about', json.aboutContent);
           }
           if (json.news && Array.isArray(json.news)) {
             const processedNews = json.news.map((n: NewsItem) => ({
@@ -313,145 +338,59 @@ const App: React.FC = () => {
                     : n.image
             }));
             setNews(processedNews);
-            changes++;
+            setLocal('rcm_data_news', processedNews);
           }
           
-          const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
-              if (!jsonData || !Array.isArray(jsonData)) return;
-              
-              if (localKey === 'rcm_users') {
-                  const saved = localStorage.getItem('rcm_users');
-                  const localUsers = saved ? JSON.parse(saved) : [];
-                  
-                  const mergedUsers = jsonData.map(newUser => {
-                      const localUser = localUsers.find((u: any) => u.id === newUser.id);
-                      if (localUser && localUser.interests) {
-                          return { ...newUser, interests: localUser.interests };
-                      }
-                      return newUser;
-                  });
-                  
-                  localStorage.setItem(localKey, JSON.stringify(mergedUsers));
-                  return;
-              }
-
-              localStorage.setItem(localKey, JSON.stringify(jsonData));
-          };
-
-          const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>, idKey: string) => {
-              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              localStorage.setItem(localKey, JSON.stringify(jsonData));
-          };
-
-          const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
-              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              localStorage.setItem(localKey, JSON.stringify(jsonData));
-          };
-
-          if (json.fichas) {
-              mergeData('rcm_data_fichas', json.fichas, 'name');
-              changes++;
-          }
-          if (json.catalogo) {
-              mergeData('rcm_data_catalogo', json.catalogo, 'name');
-              changes++;
-          }
-          if (json.worklogs) {
-              mergeData('rcm_data_worklogs', json.worklogs, 'id');
-              changes++;
-          }
-          if (json.consolidated) {
-              mergeData('rcm_data_consolidated', json.consolidated, 'id');
-              changes++;
-          }
-          if (json.interruptions) {
-              mergeData('rcm_interruptions', json.interruptions, 'id');
-              changes++;
-          }
-          if (json.consolidatedMonths) {
-              mergeData('rcm_consolidated_months', json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
-              changes++;
-          }
-          if (json.transmissionConfig) {
-              localStorage.setItem('rcm_transmission_config', JSON.stringify(json.transmissionConfig));
-              changes++;
-          }
+          if (json.fichas) mergeData('rcm_data_fichas', json.fichas, 'name');
+          if (json.catalogo) mergeData('rcm_data_catalogo', json.catalogo, 'name');
+          if (json.worklogs) mergeData('rcm_data_worklogs', json.worklogs, 'id');
+          if (json.consolidated) mergeData('rcm_data_consolidated', json.consolidated, 'id');
+          if (json.interruptions) mergeData('rcm_interruptions', json.interruptions, 'id');
+          if (json.consolidatedMonths) mergeData('rcm_consolidated_months', json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
+          
+          if (json.transmissionConfig) setLocal('rcm_transmission_config', json.transmissionConfig);
           if (json.paymentConfigs) {
-              Object.entries(json.paymentConfigs).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
-              });
-              changes++;
+              Object.entries(json.paymentConfigs).forEach(([key, value]) => setLocal(key, value));
           }
           if (json.scripts) {
-              Object.entries(json.scripts).forEach(([key, value]) => {
-                  mergeData(key, value as any[], 'id');
-              });
-              changes++;
+              Object.entries(json.scripts).forEach(([key, value]) => mergeData(key, value as any[], 'id'));
           }
           if (json.programSections) {
-              Object.entries(json.programSections).forEach(([key, value]) => {
-                  mergeData(key, value as any[], 'name');
-              });
-              changes++;
+              Object.entries(json.programSections).forEach(([key, value]) => mergeData(key, value as any[], 'name'));
           }
-          if (json.agendaPrograms) {
-              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
-              changes++;
-          }
-          if (json.agendaEfemerides) {
-              mergeRecordData('rcm_efemerides', json.agendaEfemerides, 'id');
-              changes++;
-          }
-          if (json.agendaConmemoraciones) {
-              mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones, 'id');
-              changes++;
-          }
-          if (json.agendaDayThemes) {
-              mergeSimpleRecord('rcm_day_themes', json.agendaDayThemes);
-              changes++;
-          }
-          if (json.agendaUsers) {
-              mergeData('rcm_users', json.agendaUsers, 'id');
-              changes++;
-          }
-          if (json.agendaPropaganda) {
-              mergeRecordData('rcm_propaganda', json.agendaPropaganda, 'id');
-              changes++;
-          }
-          if (json.programsList && Array.isArray(json.programsList)) {
-              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
-              changes++;
-          }
-          if (json.customRoots && Array.isArray(json.customRoots)) {
-              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
-              changes++;
-          }
+          if (json.agendaPrograms) setLocal('rcm_programs', json.agendaPrograms);
+          if (json.agendaEfemerides) mergeRecordData('rcm_efemerides', json.agendaEfemerides);
+          if (json.agendaConmemoraciones) mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones);
+          if (json.agendaDayThemes) mergeSimpleRecord('rcm_day_themes', json.agendaDayThemes);
+          if (json.agendaUsers) mergeData('rcm_users', json.agendaUsers, 'id');
+          if (json.agendaPropaganda) mergeRecordData('rcm_propaganda', json.agendaPropaganda);
+          if (json.programsList && Array.isArray(json.programsList)) setLocal('rcm_programs_list', json.programsList);
+          if (json.customRoots && Array.isArray(json.customRoots)) setLocal('rcm_custom_roots', json.customRoots);
           if (json.userData) {
-              Object.entries(json.userData).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
-              });
-              changes++;
+              Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
           }
 
           if (json.equipo && Array.isArray(json.equipo)) {
-              localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(json.equipo));
-              changes++;
+              setLocal('rcm_equipo_cmnl', json.equipo);
           } else {
-              // Fetch equipocmnl.json
               try {
                   const equipoResponse = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
                   if (equipoResponse.ok) {
                       const equipoData = await equipoResponse.json();
                       if (Array.isArray(equipoData)) {
-                          localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
-                          localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
-                          changes++;
+                          setLocal('rcm_equipo_cmnl', equipoData);
+                          setLocal('rcm_equipo_last_update', Date.now().toString());
                       }
                   }
               } catch (equipoError) {
                   console.error("Error fetching equipo data during sync:", equipoError);
               }
           }
+
+          // Atomic application of all updates
+          Object.entries(pendingUpdates).forEach(([key, value]) => {
+              localStorage.setItem(key, value);
+          });
 
           alert('¡Sincronización completada! Los datos están actualizados.');
           window.location.reload();

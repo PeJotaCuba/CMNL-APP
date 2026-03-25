@@ -354,19 +354,28 @@ const UserManagement: React.FC<Props> = ({
           const json = await response.json();
           let restoredCount = 0;
 
+          const pendingUpdates: Record<string, string> = {};
+          
+          const setLocal = (key: string, value: any) => {
+              pendingUpdates[key] = JSON.stringify(value);
+          };
+
           // Restaurar Usuarios Principales
           if (json.users && Array.isArray(json.users)) {
             setUsers(json.users);
+            setLocal('rcm_data_users', json.users);
             restoredCount++;
           }
           
           // Restaurar Contenido Estático
           if (typeof json.historyContent === 'string') {
             setHistoryContent(json.historyContent);
+            setLocal('rcm_data_history', json.historyContent);
             restoredCount++;
           }
           if (typeof json.aboutContent === 'string') {
             setAboutContent(json.aboutContent);
+            setLocal('rcm_data_about', json.aboutContent);
             restoredCount++;
           }
           
@@ -379,39 +388,53 @@ const UserManagement: React.FC<Props> = ({
                     : n.image
             }));
             setNews(processedNews);
+            setLocal('rcm_data_news', processedNews);
             restoredCount++;
           }
 
           const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
               if (!jsonData || !Array.isArray(jsonData)) return;
               
-              if (localKey === 'rcm_users') {
-                  const saved = localStorage.getItem('rcm_users');
-                  const localUsers = saved ? JSON.parse(saved) : [];
-                  
-                  const mergedUsers = jsonData.map(newUser => {
-                      const localUser = localUsers.find((u: any) => u.id === newUser.id);
-                      if (localUser && localUser.interests) {
-                          return { ...newUser, interests: localUser.interests };
-                      }
-                      return newUser;
-                  });
-                  
-                  localStorage.setItem(localKey, JSON.stringify(mergedUsers));
+              const saved = localStorage.getItem(localKey);
+              const localData = saved ? JSON.parse(saved) : [];
+
+              // Protected Keys: NO BORRAR, MODIFICAR O RESETEAR
+              const protectedKeys = ['rcm_data_worklogs', 'rcm_data_consolidated', 'rcm_interruptions', 'rcm_consolidated_months', 'rcm_users'];
+              
+              if (protectedKeys.includes(localKey)) {
+                  if (localKey === 'rcm_users') {
+                      // Preserve interests for agenda users
+                      const merged = jsonData.map(newUser => {
+                          const localItem = localData.find((u: any) => u.id === newUser.id);
+                          return localItem && localItem.interests ? { ...newUser, interests: localItem.interests } : newUser;
+                      });
+                      setLocal(localKey, merged);
+                  } else {
+                      // For other protected data (worklogs, reports), keep local and add new ones from JSON if they don't exist
+                      const getId = (item: any) => (typeof idKey === 'function' ? idKey(item) : item[idKey]);
+                      const merged = [...localData];
+                      jsonData.forEach(newItem => {
+                          if (!merged.some(oldItem => getId(oldItem) === getId(newItem))) {
+                              merged.push(newItem);
+                          }
+                      });
+                      setLocal(localKey, merged);
+                  }
                   return;
               }
 
-              localStorage.setItem(localKey, JSON.stringify(jsonData));
+              // Administrative data: Overwrite local with remote
+              setLocal(localKey, jsonData);
           };
 
-          const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>, idKey: string) => {
+          const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>) => {
               if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              localStorage.setItem(localKey, JSON.stringify(jsonData));
+              setLocal(localKey, jsonData);
           };
 
           const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
               if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              localStorage.setItem(localKey, JSON.stringify(jsonData));
+              setLocal(localKey, jsonData);
           };
 
           // Restaurar Gestión
@@ -440,12 +463,12 @@ const UserManagement: React.FC<Props> = ({
               restoredCount++;
           }
           if (json.transmissionConfig) {
-              localStorage.setItem('rcm_transmission_config', JSON.stringify(json.transmissionConfig));
+              setLocal('rcm_transmission_config', json.transmissionConfig);
               restoredCount++;
           }
           if (json.paymentConfigs) {
               Object.entries(json.paymentConfigs).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
+                  setLocal(key, value);
               });
               restoredCount++;
           }
@@ -466,15 +489,15 @@ const UserManagement: React.FC<Props> = ({
 
           // Restaurar Agenda
           if (json.agendaPrograms) {
-              localStorage.setItem('rcm_programs', JSON.stringify(json.agendaPrograms));
+              setLocal('rcm_programs', json.agendaPrograms);
               restoredCount++;
           }
           if (json.agendaEfemerides) {
-              mergeRecordData('rcm_efemerides', json.agendaEfemerides, 'id');
+              mergeRecordData('rcm_efemerides', json.agendaEfemerides);
               restoredCount++;
           }
           if (json.agendaConmemoraciones) {
-              mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones, 'id');
+              mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones);
               restoredCount++;
           }
           if (json.agendaDayThemes) {
@@ -486,20 +509,20 @@ const UserManagement: React.FC<Props> = ({
               restoredCount++;
           }
           if (json.agendaPropaganda) {
-              mergeRecordData('rcm_propaganda', json.agendaPropaganda, 'id');
+              mergeRecordData('rcm_propaganda', json.agendaPropaganda);
               restoredCount++;
           }
           if (json.programsList && Array.isArray(json.programsList)) {
-              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
+              setLocal('rcm_programs_list', json.programsList);
               restoredCount++;
           }
           if (json.customRoots && Array.isArray(json.customRoots)) {
-              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
+              setLocal('rcm_custom_roots', json.customRoots);
               restoredCount++;
           }
           if (json.userData) {
               Object.entries(json.userData).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
+                  setLocal(key, value);
               });
               restoredCount++;
           }
@@ -507,7 +530,7 @@ const UserManagement: React.FC<Props> = ({
 
           // Restaurar Equipo (desde el JSON de respaldo si existe)
           if (json.equipo && Array.isArray(json.equipo)) {
-              localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(json.equipo));
+              setLocal('rcm_equipo_cmnl', json.equipo);
               restoredCount++;
           } else {
               // Si no está en el JSON, intentar descargar de GitHub
@@ -516,8 +539,8 @@ const UserManagement: React.FC<Props> = ({
                   if (equipoResponse.ok) {
                       const equipoData = await equipoResponse.json();
                       if (Array.isArray(equipoData)) {
-                          localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(equipoData));
-                          localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
+                          setLocal('rcm_equipo_cmnl', equipoData);
+                          setLocal('rcm_equipo_last_update', Date.now().toString());
                           restoredCount++;
                       }
                   }
@@ -525,6 +548,11 @@ const UserManagement: React.FC<Props> = ({
                   console.error("Error fetching equipo data during sync:", equipoError);
               }
           }
+
+          // Atomic application of all updates
+          Object.entries(pendingUpdates).forEach(([key, value]) => {
+              localStorage.setItem(key, value);
+          });
 
           if (restoredCount > 0) {
             alert('¡Sincronización exitosa! Los datos se han actualizado desde el repositorio oficial.');
