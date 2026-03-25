@@ -131,41 +131,6 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     e.target.value = '';
   };
 
-  const updateDatabase = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(EQUIPO_URL);
-      if (!response.ok) throw new Error("Error al descargar la base de datos");
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        // Merge with existing to preserve local edits (photos, habitual programs)
-        const currentTeam = [...team];
-        const updatedTeam = data.map(newMember => {
-          const existing = currentTeam.find(m => m.id === newMember.id || (m.name && newMember.name && m.name.toLowerCase() === newMember.name.toLowerCase()));
-          if (existing) {
-            return {
-              ...newMember,
-              photoUrl: existing.photoUrl || newMember.photoUrl,
-              habitualPrograms: existing.habitualPrograms || newMember.habitualPrograms,
-              info: existing.info || newMember.info
-            };
-          }
-          return newMember;
-        });
-
-        saveTeam(updatedTeam);
-        alert("Base de datos actualizada correctamente (se han preservado las ediciones locales).");
-      } else {
-        alert("El formato del archivo descargado no es válido.");
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Hubo un error al actualizar la base de datos.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const getPriority = (specialtyStr: string) => {
     const roles = specialtyStr.split(' / ').map(s => s.trim().toLowerCase());
     let minPriority = 99;
@@ -183,17 +148,6 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       else if (role.includes('especialista')) minPriority = Math.min(minPriority, 10);
     }
     return minPriority;
-  };
-
-  const handleDownloadEquipo = () => {
-    const dataStr = JSON.stringify(team, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'equipo.json';
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const sortedTeam = [...team].sort((a, b) => {
@@ -215,22 +169,12 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       >
         <div className="flex gap-2">
           {isAdmin && (
-            <>
-              <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
-                <Upload size={20} />
-                <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
-                <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-              </label>
-              <button onClick={handleDownloadEquipo} className="p-2 bg-[#2C1B15] hover:bg-[#3E1E16] text-[#9E7649] border border-[#9E7649]/30 rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Descargar equipo.json">
-                <Download size={20} />
-                <span className="hidden sm:inline text-sm font-medium">Descargar JSON</span>
-              </button>
-            </>
+            <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
+              <Upload size={20} />
+              <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
+              <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+            </label>
           )}
-          <button onClick={updateDatabase} disabled={loading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2" title="Actualizar BD">
-            <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
-            <span className="text-sm font-medium">Actualizar</span>
-          </button>
         </div>
       </CMNLHeader>
 
