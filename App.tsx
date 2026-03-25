@@ -34,8 +34,38 @@ const App: React.FC = () => {
   };
 
   const handleBackup = () => {
-      // This needs to be implemented based on the specific app's backup logic.
-      // For now, just close the dialog and reset dirty state.
+      if (currentUser && currentUser.role !== 'admin' && currentUser.role !== 'coordinator') {
+          const backupData: any = {
+              username: currentUser.username,
+              timestamp: new Date().toISOString(),
+              gestion: {
+                  worklogs: JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]').filter((l: any) => l.userId === currentUser.username),
+                  consolidated: JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]').filter((l: any) => l.userId === currentUser.username),
+                  interruptions: JSON.parse(localStorage.getItem('rcm_interruptions') || '[]').filter((l: any) => l.userId === currentUser.username),
+                  consolidatedMonths: JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]').filter((l: any) => l.userId === currentUser.username),
+              },
+              musica: {
+                  currentSelection: JSON.parse(localStorage.getItem(`user_${currentUser.username}_rcm_current_selection`) || '[]'),
+                  savedSelections: JSON.parse(localStorage.getItem(`user_${currentUser.username}_rcm_saved_selections`) || '[]'),
+              },
+              agenda: {
+                  // Agenda data seems to be shared, let's include relevant parts if possible
+                  // For now, let's keep it simple as requested
+              }
+          };
+
+          const dataStr = JSON.stringify(backupData, null, 2);
+          const blob = new Blob([dataStr], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Respaldo_${currentUser.username}_${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+      }
+
       setIsDirty(false);
       setShowBackupDialog(false);
       if (pendingNavigation.current) {
@@ -594,7 +624,7 @@ const App: React.FC = () => {
 
         {showPlayer && (
            <>
-             <div className={`fixed ${(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) ? 'bottom-16 md:bottom-0 md:left-0' : 'bottom-0 left-0'} right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 transition-all duration-300 flex`}>
+             <div className={`fixed bottom-0 left-0 right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 transition-all duration-300 flex`}>
                  
                  {/* Left Info Box (Only on Desktop Listener Home) */}
                  {(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) && (

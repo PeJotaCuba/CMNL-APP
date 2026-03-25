@@ -80,13 +80,6 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                    <RefreshCw size={12} className="animate-spin" />
                </div>
           )}
-          <button 
-            onClick={() => onNavigate(AppView.LANDING)}
-            className="text-[#C69C6D] hover:text-white transition-colors p-1"
-            title="Iniciar Sesión"
-          >
-            <LogIn size={20} />
-          </button>
         </div>
       </header>
 
@@ -192,7 +185,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
       </main>
       
       {/* Floating WhatsApp Menu for Listeners */}
-      <div className="fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
+      <div className="fixed bottom-28 right-5 z-40 flex flex-col items-end gap-3">
          {showFabMenu && (
              <div className="flex flex-col gap-3 animate-fade-in-up">
                  <a 
@@ -231,23 +224,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
         }
       `}</style>
 
-      {/* Bottom Nav (Mobile Only) */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-[#2C1B15]/95 backdrop-blur-xl border-t border-white/5 pb-safe pt-2 px-6 z-50">
-        <div className="flex justify-around items-center h-16">
-          <button onClick={() => onNavigate(AppView.LISTENER_HOME)} className="flex flex-col items-center gap-1.5 text-[#C69C6D]">
-            <Home size={22} strokeWidth={2.5} />
-            <span className="text-[9px] font-bold uppercase tracking-wide">Inicio</span>
-          </button>
-          <button onClick={() => onNavigate(AppView.SECTION_PODCAST)} className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
-            <Podcast size={22} />
-            <span className="text-[9px] font-medium uppercase tracking-wide">Podcast</span>
-          </button>
-          <button onClick={() => onNavigate(AppView.SECTION_PROFILE)} className="flex flex-col items-center gap-1.5 text-stone-500 hover:text-[#C69C6D] transition-colors">
-            <UserIcon size={22} />
-            <span className="text-[9px] font-medium uppercase tracking-wide">Perfil</span>
-          </button>
-        </div>
-      </nav>
+      {/* Bottom Nav (Mobile Only) - REMOVED */}
     </div>
   );
 };
