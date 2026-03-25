@@ -384,6 +384,23 @@ const UserManagement: React.FC<Props> = ({
 
           const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
               if (!jsonData || !Array.isArray(jsonData)) return;
+              
+              if (localKey === 'rcm_users') {
+                  const saved = localStorage.getItem('rcm_users');
+                  const localUsers = saved ? JSON.parse(saved) : [];
+                  
+                  const mergedUsers = jsonData.map(newUser => {
+                      const localUser = localUsers.find((u: any) => u.id === newUser.id);
+                      if (localUser && localUser.interests) {
+                          return { ...newUser, interests: localUser.interests };
+                      }
+                      return newUser;
+                  });
+                  
+                  localStorage.setItem(localKey, JSON.stringify(mergedUsers));
+                  return;
+              }
+
               localStorage.setItem(localKey, JSON.stringify(jsonData));
           };
 
@@ -473,16 +490,32 @@ const UserManagement: React.FC<Props> = ({
               restoredCount++;
           }
           if (json.programsList && Array.isArray(json.programsList)) {
-              localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
+              if (!localStorage.getItem('rcm_programs_list')) {
+                  localStorage.setItem('rcm_programs_list', JSON.stringify(json.programsList));
+              }
               restoredCount++;
           }
           if (json.customRoots && Array.isArray(json.customRoots)) {
-              localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
+              if (!localStorage.getItem('rcm_custom_roots')) {
+                  localStorage.setItem('rcm_custom_roots', JSON.stringify(json.customRoots));
+              }
               restoredCount++;
           }
           if (json.userData) {
               Object.entries(json.userData).forEach(([key, value]) => {
-                  localStorage.setItem(key, JSON.stringify(value));
+                  // Preservar si ya existe localmente
+                  if (!localStorage.getItem(key)) {
+                      localStorage.setItem(key, JSON.stringify(value));
+                  }
+              });
+              restoredCount++;
+          }
+          if (json.paymentConfigs) {
+              Object.entries(json.paymentConfigs).forEach(([key, value]) => {
+                  // Preservar si ya existe localmente
+                  if (!localStorage.getItem(key)) {
+                      localStorage.setItem(key, JSON.stringify(value));
+                  }
               });
               restoredCount++;
           }
