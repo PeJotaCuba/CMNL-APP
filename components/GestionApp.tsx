@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Radio, FileBarChart, Library, FileText, Users, CreditCard, Upload, Save, X, Edit2, Check, CalendarCheck, ChevronLeft, ChevronRight, Trash2, FileDown, Plus, Settings, AlertTriangle, RefreshCw } from 'lucide-react';
-import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo } from '../types';
+import { ProgramFicha, ProgramSection, User, ProgramCatalog, RolePaymentInfo, NewsItem } from '../types';
 import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
@@ -17,6 +17,15 @@ interface Props {
   onMenuClick?: () => void;
   currentUser: User | null;
   onDirtyChange: (dirty: boolean) => void;
+  users: User[];
+  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  historyContent: string;
+  setHistoryContent: React.Dispatch<React.SetStateAction<string>>;
+  aboutContent: string;
+  setAboutContent: React.Dispatch<React.SetStateAction<string>>;
+  news: NewsItem[];
+  setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
+  setImpersonatedUser: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
 interface WorkLog {
@@ -66,7 +75,7 @@ interface ConsolidatedMonth {
     dateConsolidated: string;
 }
 
-const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange }) => {
+const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const isInitialMount = React.useRef(true);
 
@@ -805,6 +814,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
   const getHabitualStatus = (programName: string, role: string, dateStr: string) => {
     if (!currentUser || !habitualMode) return { isHabitual: false, isAutoMarked: false, isExcluded: false };
+
+    // Palco de Domingo logic: Only habitual on Sundays
+    if (programName === "Palco de Domingo") {
+      const date = new Date(dateStr);
+      if (date.getDay() !== 0) return { isHabitual: false, isAutoMarked: false, isExcluded: false };
+    }
 
     const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
     const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
@@ -2891,6 +2906,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               catalogo={catalogo}
               onDirtyChange={onDirtyChange}
               onTeamUpdate={(newTeam) => setTeamData(newTeam)}
+              users={users}
+              setUsers={setUsers}
+              historyContent={historyContent}
+              setHistoryContent={setHistoryContent}
+              aboutContent={aboutContent}
+              setAboutContent={setAboutContent}
+              news={news}
+              setNews={setNews}
+              setImpersonatedUser={setImpersonatedUser}
           />
       );
   }

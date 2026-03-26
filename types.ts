@@ -3,7 +3,7 @@ export enum AppView {
   LISTENER_HOME = 'LISTENER_HOME',
   WORKER_HOME = 'WORKER_HOME',
   ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
-  APP_USER_MANAGEMENT = 'APP_USER_MANAGEMENT',
+  APP_EQUIPO = 'APP_EQUIPO',
   
   // CMNL Apps
   APP_AGENDA = 'APP_AGENDA',
@@ -30,7 +30,7 @@ export interface HistoricalMonthData {
   consolidated: boolean;
 }
 
-export type UserClassification = 'Director' | 'Asesor' | 'Realizador de sonido' | 'Locutor' | 'Administrador' | 'Coordinador' | 'Usuario';
+export type UserClassification = 'director' | 'asesor' | 'realizador' | 'locutor' | 'guionista' | 'periodista' | 'coordinador' | 'director de emisora' | 'jefe de programación' | 'especialista' | 'auxiliar general' | 'asistente de dirección' | 'recepcionista' | 'Administrador' | 'Trabajador';
 
 export interface NewsItem {
   id: string;
@@ -63,6 +63,7 @@ export interface UserPermissions {
 }
 
 export interface User {
+  id: string;
   username: string;
   role: 'admin' | 'worker' | 'listener' | 'coordinator';
   name: string;

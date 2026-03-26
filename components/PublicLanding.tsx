@@ -10,9 +10,9 @@ interface Props {
 }
 
 const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) => {
+  const [identity, setIdentity] = useState('');
+  const [credential, setCredential] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [identity, setIdentity] = useState(''); // Can be username or mobile
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleLogin = (e: React.FormEvent) => {
@@ -20,13 +20,27 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
     setError('');
     
     const trimmedIdentity = identity.trim();
-    const trimmedPassword = password.trim();
+    const trimmedCredential = credential.trim();
 
-    // Find user by username OR mobile
+    if (!trimmedIdentity || !trimmedCredential) {
+      setError('Ambos campos son obligatorios');
+      return;
+    }
+
+    // Find user by matching identity (username or mobile) and credential (password or PIN)
     const user = users.find(u => {
-      const matchIdentity = u.username.toLowerCase() === trimmedIdentity.toLowerCase() || (u.mobile && u.mobile.trim() === trimmedIdentity);
-      const matchPassword = u.password === trimmedPassword || (trimmedPassword.length === 4 && u.password && u.password.endsWith(trimmedPassword));
-      return matchIdentity && matchPassword;
+      const matchIdentity = 
+        u.username.toLowerCase() === trimmedIdentity.toLowerCase() || 
+        (u.mobile && u.mobile.trim() === trimmedIdentity);
+      
+      const matchPassword = u.password === trimmedCredential;
+      
+      // PIN Extraction: last 4 digits of password
+      const digitsAtEnd = u.password ? (u.password.match(/\d+$/)?.[0] || "") : "";
+      const expectedPin = digitsAtEnd.slice(-4);
+      const matchPin = trimmedCredential === expectedPin;
+
+      return matchIdentity && (matchPassword || matchPin);
     });
 
     if (user) {
@@ -52,7 +66,7 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
         Volver a la Radio
       </button>
 
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6">
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 py-12">
         {/* Logo Section */}
         <div className="w-24 h-24 mb-6 rounded-2xl bg-white flex items-center justify-center shadow-lg p-0 overflow-hidden ring-4 ring-[#F5F0EB]">
              <img src={LOGO_URL} alt="Radio Ciudad" className="w-full h-full object-cover" />
@@ -62,50 +76,50 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
           Acceso Personal
         </h2>
         <p className="text-xs text-[#8C7B70] mb-8 text-center max-w-xs">
-            Ingresa con tu usuario o número de móvil corporativo.
+            Ingresa tus credenciales para acceder al sistema.
         </p>
 
         {/* Login Form */}
         <div className="w-full max-w-sm">
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <form onSubmit={handleLogin} className="flex flex-col gap-3">
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8C7B70]">
-                <UserIcon size={20} />
+                <UserIcon size={18} />
               </div>
               <input 
                 type="text" 
                 value={identity}
                 onChange={(e) => setIdentity(e.target.value)}
                 placeholder="Usuario o Móvil" 
-                className="w-full pl-12 pr-4 py-3.5 rounded-lg border border-[#E8DCCF] bg-white text-[#4A3B32] focus:ring-2 focus:ring-[#8B5E3C] focus:border-transparent outline-none transition-all placeholder:text-[#8C7B70]/70"
+                className="w-full pl-11 pr-4 py-3 rounded-lg border border-[#E8DCCF] bg-white text-[#4A3B32] focus:ring-2 focus:ring-[#8B5E3C] focus:border-transparent outline-none transition-all placeholder:text-[#8C7B70]/70 text-sm"
               />
             </div>
 
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8C7B70]">
-                <Lock size={20} />
+                <Lock size={18} />
               </div>
               <input 
                 type={showPassword ? "text" : "password"} 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Contraseña" 
-                className="w-full pl-12 pr-12 py-3.5 rounded-lg border border-[#E8DCCF] bg-white text-[#4A3B32] focus:ring-2 focus:ring-[#8B5E3C] focus:border-transparent outline-none transition-all placeholder:text-[#8C7B70]/70"
+                value={credential}
+                onChange={(e) => setCredential(e.target.value)}
+                placeholder="Contraseña o PIN" 
+                className="w-full pl-11 pr-11 py-3 rounded-lg border border-[#E8DCCF] bg-white text-[#4A3B32] focus:ring-2 focus:ring-[#8B5E3C] focus:border-transparent outline-none transition-all placeholder:text-[#8C7B70]/70 text-sm"
               />
               <button 
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8C7B70] hover:text-[#5D3A24]"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
 
-            {error && <p className="text-red-500 text-xs font-medium text-center">{error}</p>}
+            {error && <p className="text-red-500 text-[10px] font-bold text-center mt-1 uppercase tracking-wider">{error}</p>}
 
             <button 
               type="submit"
-              className="mt-4 w-full bg-[#5D3A24] text-white font-bold py-3.5 rounded-lg hover:bg-[#4A2E1C] hover:scale-[1.02] shadow-lg transition-all duration-300"
+              className="mt-4 w-full bg-[#5D3A24] text-white font-bold py-3.5 rounded-lg hover:bg-[#4A2E1C] hover:scale-[1.02] shadow-lg transition-all duration-300 uppercase tracking-widest text-xs"
             >
               Iniciar Sesión
             </button>

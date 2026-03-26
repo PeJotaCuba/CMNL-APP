@@ -4,7 +4,7 @@ import PublicLanding from './components/PublicLanding';
 import ListenerHome from './components/ListenerHome';
 import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
-import UserManagement from './components/UserManagement';
+import EquipoSection from './components/gestion/EquipoSection';
 import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
@@ -29,7 +29,7 @@ const App: React.FC = () => {
   const checkDirty = (callback: () => void, isLogout = false) => {
       // Check if user should see the backup prompt
       const isExcluded = currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador' || currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
-      const isActiveRole = ['Director', 'Asesor', 'Realizador de sonido', 'Locutor'].includes(currentUser?.classification || '');
+      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser?.classification || '');
 
       if (isDirty && !isExcluded && isActiveRole) {
           pendingNavigation.current = callback;
@@ -158,6 +158,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [impersonatedUser, setImpersonatedUser] = useState<any | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
 
@@ -165,7 +166,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       const isExcluded = currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador' || currentUser.role === 'admin' || currentUser.role === 'coordinator';
-      const isActiveRole = ['Director', 'Asesor', 'Realizador de sonido', 'Locutor'].includes(currentUser.classification || '');
+      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser.classification || '');
       
       if (!isExcluded && isActiveRole) {
         const lastBackup = localStorage.getItem(`last_backup_${currentUser.username}`);
@@ -477,7 +478,7 @@ const App: React.FC = () => {
   };
 
   // Determine if Player should be visible
-  const isAppView = currentView.startsWith('APP_') && currentView !== AppView.APP_USER_MANAGEMENT;
+  const isAppView = currentView.startsWith('APP_');
   const isLoginScreen = currentView === AppView.LANDING; 
   // Hide player on WorkerHome and AdminDashboard as it's integrated there
   const isIntegratedPlayerView = currentView === AppView.WORKER_HOME || currentView === AppView.ADMIN_DASHBOARD;
@@ -532,23 +533,23 @@ const App: React.FC = () => {
             onMenuClick={() => setIsSidebarOpen(true)}
           />
         );
-      case AppView.APP_USER_MANAGEMENT:
+      case AppView.APP_EQUIPO:
         return (
-          <UserManagement 
+          <EquipoSection 
             onBack={handleBack} 
             onMenuClick={() => setIsSidebarOpen(true)}
-            users={users} 
-            setUsers={setUsers} 
+            currentUser={currentUser}
+            catalogo={JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]')}
+            onDirtyChange={setIsDirty}
+            users={users}
+            setUsers={setUsers}
             historyContent={historyContent}
             setHistoryContent={setHistoryContent}
             aboutContent={aboutContent}
             setAboutContent={setAboutContent}
             news={news}
             setNews={setNews}
-            isSyncing={isSyncing}
-            setIsSyncing={setIsSyncing}
-            currentUser={currentUser}
-            onDirtyChange={setIsDirty}
+            setImpersonatedUser={setImpersonatedUser}
           />
         );
       
@@ -560,7 +561,23 @@ const App: React.FC = () => {
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_PROGRAMACION:
-        return <GestionApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
+        return (
+          <GestionApp 
+            onBack={handleBack} 
+            onMenuClick={() => setIsSidebarOpen(true)} 
+            currentUser={currentUser} 
+            onDirtyChange={setIsDirty}
+            users={users}
+            setUsers={setUsers}
+            historyContent={historyContent}
+            setHistoryContent={setHistoryContent}
+            aboutContent={aboutContent}
+            setAboutContent={setAboutContent}
+            news={news}
+            setNews={setNews}
+            setImpersonatedUser={setImpersonatedUser}
+          />
+        );
 
       // Public Sections
       case AppView.SECTION_HISTORY:
@@ -595,11 +612,20 @@ const App: React.FC = () => {
           onPause={() => setIsPlaying(false)}
         ></audio>
 
+        {impersonatedUser && (
+          <button 
+              onClick={() => setImpersonatedUser(null)}
+              className="fixed bottom-24 right-5 z-50 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg text-sm border-2 border-white/10 hover:bg-red-700 transition-colors"
+          >
+              Regresar a Admin
+          </button>
+        )}
+
         <Sidebar 
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)} 
           onNavigate={handleNavigate}
-          currentUser={currentUser}
+          currentUser={impersonatedUser || currentUser}
           onSync={handleCloudSync}
           isSyncing={isSyncing}
           onLogout={handleLogout}

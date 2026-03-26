@@ -170,13 +170,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               />
             )}
             
-            {currentUser?.role === 'admin' && (
-              <SidebarItem 
-                icon={<Settings size={20} />} 
-                label="Configuración" 
-                onClick={() => handleNavigation(AppView.APP_USER_MANAGEMENT)} 
-              />
-            )}
+            {/* Removed Configuración and Equipo direct access as per requirements */}
 
             {currentUser ? (
               <SidebarItem 

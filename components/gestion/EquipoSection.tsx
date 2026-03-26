@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Upload, Download, RefreshCw, Edit2, Camera } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
+import ContentManagementSection from './ContentManagementSection';
+import { User } from '../../types';
 
 interface TeamMember {
   id: string;
@@ -20,16 +22,31 @@ interface EquipoSectionProps {
   catalogo: any[];
   onDirtyChange: (dirty: boolean) => void;
   onTeamUpdate?: (newTeam: TeamMember[]) => void;
+  users: User[];
+  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  historyContent: string;
+  setHistoryContent: React.Dispatch<React.SetStateAction<string>>;
+  aboutContent: string;
+  setAboutContent: React.Dispatch<React.SetStateAction<string>>;
+  news: any[];
+  setNews: React.Dispatch<React.SetStateAction<any[]>>;
+  setImpersonatedUser: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
 const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
 
-const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate }) => {
+const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
+
+  const ROLES = [
+    'director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 
+    'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 
+    'auxiliar general', 'asistente de dirección', 'recepcionista'
+  ];
 
   useEffect(() => {
     const saved = localStorage.getItem('rcm_equipo_cmnl');
@@ -59,59 +76,150 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      const blocks = text.split(/[-_]{10,}/); // Split by 10 or more underscores or hyphens
-      const newMembers: TeamMember[] = [];
+      
+      const currentTeam = [...team];
+      const updatedUsers = [...users];
+      let processedCount = 0;
 
-      blocks.forEach(block => {
-        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-        if (lines.length >= 2) {
-          const name = lines[0];
-          
-          // Combine specialties and levels if there are multiple
-          const specialties = [];
-          const levels = [];
-          const infoLines: string[] = [];
-          
-          for (let i = 1; i < lines.length; i += 2) {
-            if (lines[i] && !lines[i].toLowerCase().includes('nivel') && lines[i].toLowerCase() !== 'habilitado' && lines[i].length > 50) {
-              // If it's a long text, it's probably info
-              infoLines.push(lines[i]);
-              if (lines[i+1]) infoLines.push(lines[i+1]);
+      // Detect format: If it contains "Nombre completo:", it's the credentials format
+      if (text.toLowerCase().includes('nombre completo:')) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        const userBlocks: string[] = [];
+        let currentBlock = "";
+        
+        lines.forEach(line => {
+          if (line.toLowerCase().includes('nombre completo:')) {
+            if (currentBlock) userBlocks.push(currentBlock);
+            currentBlock = line;
+          } else {
+            currentBlock += " " + line;
+          }
+        });
+        if (currentBlock) userBlocks.push(currentBlock);
+
+        userBlocks.forEach(block => {
+          const labels = ['Nombre completo', 'Nombre de usuario', 'Número de móvil', 'Contraseña'];
+          const getValue = (label: string) => {
+            const otherLabels = labels.filter(l => l !== label).join('|');
+            const regex = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\s*(?:${otherLabels}):|$)`, 'i');
+            const match = block.match(regex);
+            return match ? match[1].trim().replace(/,$/, '').trim() : '';
+          };
+
+          const namePart = getValue('Nombre completo');
+          const userPart = getValue('Nombre de usuario');
+          const mobilePart = getValue('Número de móvil');
+          const passPart = getValue('Contraseña');
+
+          if (namePart && userPart) {
+            const id = userPart.toLowerCase().replace(/[^a-z0-9]/g, '');
+            
+            // Update User
+            const userIdx = updatedUsers.findIndex(u => u.username.toLowerCase() === userPart.toLowerCase() || u.id === id);
+            const newUser: User = {
+              id,
+              username: userPart,
+              name: namePart,
+              mobile: mobilePart || (userIdx >= 0 ? updatedUsers[userIdx].mobile : ''),
+              password: passPart || (userIdx >= 0 ? updatedUsers[userIdx].password : '1234'),
+              role: userIdx >= 0 ? updatedUsers[userIdx].role : 'worker',
+              classification: userIdx >= 0 ? updatedUsers[userIdx].classification : 'especialista'
+            };
+
+            if (userIdx >= 0) {
+              updatedUsers[userIdx] = newUser;
             } else {
-              if (lines[i]) specialties.push(lines[i]);
-              if (lines[i+1] && (lines[i+1].toLowerCase().includes('nivel') || lines[i+1].toLowerCase() === 'habilitado')) {
-                levels.push(lines[i+1]);
-              } else if (lines[i+1]) {
-                // Not a level, might be info or another specialty
-                infoLines.push(lines[i+1]);
-                i--; // Adjust step since we didn't consume a level
+              updatedUsers.push(newUser);
+            }
+
+            // Update Team Member if exists or create basic one
+            const teamIdx = currentTeam.findIndex(m => m.id === id || m.name.toLowerCase() === namePart.toLowerCase());
+            if (teamIdx >= 0) {
+              currentTeam[teamIdx] = { ...currentTeam[teamIdx], name: namePart, id };
+            } else {
+              currentTeam.push({
+                id,
+                name: namePart,
+                specialty: 'Especialista',
+                level: '',
+                info: '',
+                photoUrl: `https://picsum.photos/seed/${id}/400/400`
+              });
+            }
+            processedCount++;
+          }
+        });
+      } else {
+        // Original Team Info format (separated by underscores/hyphens)
+        const blocks = text.split(/[-_]{10,}/);
+        blocks.forEach(block => {
+          const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+          if (lines.length >= 2) {
+            const name = lines[0];
+            
+            // Combine specialties and levels if there are multiple
+            const specialties = [];
+            const levels = [];
+            const infoLines: string[] = [];
+            
+            for (let i = 1; i < lines.length; i += 2) {
+              if (lines[i] && !lines[i].toLowerCase().includes('nivel') && lines[i].toLowerCase() !== 'habilitado' && lines[i].length > 50) {
+                // If it's a long text, it's probably info
+                infoLines.push(lines[i]);
+                if (lines[i+1]) infoLines.push(lines[i+1]);
+              } else {
+                if (lines[i]) specialties.push(lines[i]);
+                if (lines[i+1] && (lines[i+1].toLowerCase().includes('nivel') || lines[i+1].toLowerCase() === 'habilitado')) {
+                  levels.push(lines[i+1]);
+                } else if (lines[i+1]) {
+                  // Not a level, might be info or another specialty
+                  infoLines.push(lines[i+1]);
+                  i--; // Adjust step since we didn't consume a level
+                }
               }
             }
-          }
-          
-          const specialty = specialties.join(' / ');
-          const uniqueLevels = Array.from(new Set(levels));
-          const level = uniqueLevels.length > 0 ? uniqueLevels.join(' / ') : '';
-          const info = infoLines.join('\n');
-          const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-          
-          newMembers.push({ id, name, specialty, level, info });
-        }
-      });
+            
+            const specialty = specialties.join(' / ');
+            const uniqueLevels = Array.from(new Set(levels));
+            const level = uniqueLevels.length > 0 ? uniqueLevels.join(' / ') : '';
+            const info = infoLines.join('\n');
+            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            
+            const newMember = { id, name, specialty, level, info };
+            
+            const existingIndex = currentTeam.findIndex(m => m.id === id || (m.name && name && m.name.toLowerCase() === name.toLowerCase()));
+            if (existingIndex >= 0) {
+              currentTeam[existingIndex] = { ...currentTeam[existingIndex], ...newMember, photoUrl: currentTeam[existingIndex].photoUrl };
+            } else {
+              currentTeam.push(newMember);
+            }
 
-      // Merge with existing
-      const currentTeam = [...team];
-      newMembers.forEach(newMember => {
-        const existingIndex = currentTeam.findIndex(m => m.id === newMember.id || (m.name && newMember.name && m.name.toLowerCase() === newMember.name.toLowerCase()));
-        if (existingIndex >= 0) {
-          currentTeam[existingIndex] = { ...currentTeam[existingIndex], ...newMember, photoUrl: currentTeam[existingIndex].photoUrl };
-        } else {
-          currentTeam.push(newMember);
-        }
-      });
+            // Also update/create user
+            const existingUserIndex = updatedUsers.findIndex(u => u.id === id);
+            const specialtyLower = specialty.toLowerCase();
+            const newUser: User = {
+              id,
+              username: id,
+              name: name,
+              password: existingUserIndex >= 0 ? updatedUsers[existingUserIndex].password : '1234',
+              role: (specialtyLower.includes('director') || specialtyLower.includes('coordinador')) ? 'admin' : 'worker',
+              classification: specialty.split('/')[0].trim().toLowerCase() as any || 'especialista'
+            };
+
+            if (existingUserIndex >= 0) {
+              updatedUsers[existingUserIndex] = { ...updatedUsers[existingUserIndex], ...newUser };
+            } else {
+              updatedUsers.push(newUser);
+            }
+            processedCount++;
+          }
+        });
+      }
 
       saveTeam(currentTeam);
-      alert(`Se procesaron ${newMembers.length} registros.`);
+      setUsers(updatedUsers);
+      localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+      alert(`Se procesaron ${processedCount} registros de equipo y usuarios.`);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -178,73 +286,121 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
         </div>
       </CMNLHeader>
 
+      {/* Removed Tabs as per requirements */}
+
       <div className="p-6 overflow-y-auto pb-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {sortedTeam.map(member => {
-            const isSelf = currentUser?.name && member.name && currentUser.name.toLowerCase() === member.name.toLowerCase();
-            const canEditPhoto = isAdmin || isSelf;
+              const isSelf = currentUser?.name && member.name && currentUser.name.toLowerCase() === member.name.toLowerCase();
+              const canEditPhoto = isAdmin || isSelf;
 
-            let displayLevel = member.level;
-            if (displayLevel === 'No especificado') {
-              displayLevel = '';
-            } else if (displayLevel) {
-              const parts = displayLevel.split(' / ');
-              displayLevel = Array.from(new Set(parts)).join(' / ');
-            }
+              let displayLevel = member.level;
+              if (displayLevel === 'No especificado') {
+                displayLevel = '';
+              } else if (displayLevel) {
+                const parts = displayLevel.split(' / ');
+                displayLevel = Array.from(new Set(parts)).join(' / ');
+              }
 
-            return (
-              <div 
-                key={member.id} 
-                className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg relative group cursor-pointer hover:border-[#9E7649]/50 transition-colors"
-                onClick={() => setViewingMember(member)}
-              >
-                {isAdmin && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setEditingMember(member); }}
-                    className="absolute top-2 right-2 p-2 bg-black/40 hover:bg-[#9E7649] text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all z-10"
-                    title="Editar Información"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                )}
-                <div className="relative w-24 h-24 rounded-full bg-[#1A100C] border-2 border-[#9E7649]/50 mb-4 overflow-hidden flex items-center justify-center">
-                  {member.photoUrl ? (
-                    <img src={member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Users size={40} className="text-[#9E7649]/50" />
+              return (
+                <div 
+                  key={member.id} 
+                  className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg relative group cursor-pointer hover:border-[#9E7649]/50 transition-colors"
+                  onClick={() => setViewingMember(member)}
+                >
+                  {isAdmin && (
+                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          // Find corresponding user
+                          const user = users.find(u => u.id === member.id);
+                          setEditingMember({
+                            ...member,
+                            username: user?.username || '',
+                            mobile: user?.mobile || '',
+                            password: user?.password || '',
+                            role: user?.role || ''
+                          }); 
+                        }}
+                        className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
+                        title="Editar Información"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          const user = users.find(u => u.id === member.id);
+                          setImpersonatedUser(user || {
+                            id: member.id,
+                            username: member.id,
+                            name: member.name,
+                            role: 'worker',
+                            classification: 'Trabajador'
+                          }); 
+                        }}
+                        className="p-1.5 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
+                        title="Entrar como usuario"
+                      >
+                        <Users size={14} />
+                      </button>
+                    </div>
                   )}
+                  <div className="relative w-24 h-24 rounded-full bg-[#1A100C] border-2 border-[#9E7649]/50 mb-4 overflow-hidden flex items-center justify-center">
+                    {member.photoUrl ? (
+                      <img src={member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Users size={40} className="text-[#9E7649]/50" />
+                    )}
+                    
+                    {canEditPhoto && (
+                      <label 
+                        className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Camera size={24} className="text-white mb-1" />
+                        <span className="text-[10px] text-white font-bold">Cambiar</span>
+                        <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(member.id, e)} className="hidden" />
+                      </label>
+                    )}
+                  </div>
                   
-                  {canEditPhoto && (
-                    <label 
-                      className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Camera size={24} className="text-white mb-1" />
-                      <span className="text-[10px] text-white font-bold">Cambiar</span>
-                      <input type="file" accept="image/*" onChange={(e) => handlePhotoUpload(member.id, e)} className="hidden" />
-                    </label>
+                  <h3 className="text-lg font-bold text-white text-center leading-tight mb-1">{member.name}</h3>
+                  <p className="text-sm text-[#9E7649] text-center font-medium mb-1">{member.specialty}</p>
+                  {displayLevel && (
+                    <span className="text-xs bg-[#9E7649]/20 text-[#E8DCCF] px-3 py-1 rounded-full border border-[#9E7649]/30">
+                      {displayLevel}
+                    </span>
                   )}
                 </div>
-                
-                <h3 className="text-lg font-bold text-white text-center leading-tight mb-1">{member.name}</h3>
-                <p className="text-sm text-[#9E7649] text-center font-medium mb-1">{member.specialty}</p>
-                {displayLevel && (
-                  <span className="text-xs bg-[#9E7649]/20 text-[#E8DCCF] px-3 py-1 rounded-full border border-[#9E7649]/30">
-                    {displayLevel}
-                  </span>
-                )}
+              );
+            })}
+            
+            {team.length === 0 && (
+              <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-50">
+                <Users size={64} className="mb-4 text-[#9E7649]" />
+                <p className="text-lg">No hay miembros en el equipo</p>
+                {isAdmin && <p className="text-sm mt-2">Carga un archivo TXT para comenzar</p>}
               </div>
-            );
-          })}
-          
-          {team.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-50">
-              <Users size={64} className="mb-4 text-[#9E7649]" />
-              <p className="text-lg">No hay miembros en el equipo</p>
-              {isAdmin && <p className="text-sm mt-2">Carga un archivo TXT para comenzar</p>}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        
+        {/* Content Management integrated below team list for admins */}
+        {isAdmin && (
+          <div className="mt-12 pt-12 border-t border-[#9E7649]/20">
+            <h2 className="text-xl font-bold text-white mb-6 uppercase tracking-widest">Gestión de Contenido</h2>
+            <ContentManagementSection 
+                historyContent={historyContent}
+                setHistoryContent={setHistoryContent}
+                aboutContent={aboutContent}
+                setAboutContent={setAboutContent}
+                news={news}
+                setNews={setNews}
+                onDirtyChange={onDirtyChange}
+            />
+          </div>
+        )}
       </div>
 
       {/* Viewing Modal */}
@@ -281,59 +437,113 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
         </div>
       )}
 
-      {/* Editing Modal */}
+      {/* Editing Modal - Unified Team & User */}
       {editingMember && isAdmin && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setEditingMember(null)}>
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative my-auto" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-bold text-white mb-4">Editar Miembro</h2>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-lg w-full relative my-auto" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-white mb-4">Gestión de Personal: {editingMember.name}</h2>
             
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-              <div>
-                <label className="block text-sm text-[#9E7649] mb-1">Nombre</label>
-                <input 
-                  type="text" 
-                  value={editingMember.name}
-                  onChange={e => setEditingMember({...editingMember, name: e.target.value})}
-                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
-                />
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+              {/* Section: Basic Info */}
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Información de Producción</h3>
+                <div>
+                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Nombre Completo</label>
+                  <input 
+                    type="text" 
+                    value={editingMember.name}
+                    onChange={e => setEditingMember({...editingMember, name: e.target.value})}
+                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Especialidades (Separar con /)</label>
+                  <input 
+                    type="text" 
+                    value={editingMember.specialty}
+                    onChange={e => setEditingMember({...editingMember, specialty: e.target.value})}
+                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                    placeholder="Ej: locutor / realizador"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Niveles</label>
+                  <input 
+                    type="text" 
+                    value={editingMember.level}
+                    onChange={e => setEditingMember({...editingMember, level: e.target.value})}
+                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Biografía / Información</label>
+                  <textarea 
+                    value={editingMember.info || ''}
+                    onChange={e => setEditingMember({...editingMember, info: e.target.value})}
+                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649] h-24 resize-none"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm text-[#9E7649] mb-1">Especialidad</label>
-                <input 
-                  type="text" 
-                  value={editingMember.specialty}
-                  onChange={e => setEditingMember({...editingMember, specialty: e.target.value})}
-                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
-                />
+
+              {/* Section: User Access */}
+              <div className="space-y-4 pt-4">
+                <h3 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Acceso de Usuario</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Usuario</label>
+                    <input 
+                      type="text" 
+                      value={editingMember.username || ''}
+                      onChange={e => setEditingMember({...editingMember, username: e.target.value})}
+                      className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Móvil</label>
+                    <input 
+                      type="text" 
+                      value={editingMember.mobile || ''}
+                      onChange={e => setEditingMember({...editingMember, mobile: e.target.value})}
+                      className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Contraseña</label>
+                  <input 
+                    type="text" 
+                    value={editingMember.password || ''}
+                    onChange={e => setEditingMember({...editingMember, password: e.target.value})}
+                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Rol Principal (Calificador)</label>
+                  <select 
+                    value={editingMember.role || ''}
+                    onChange={e => setEditingMember({...editingMember, role: e.target.value})}
+                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
+                  >
+                    <option value="">Seleccionar Rol</option>
+                    {ROLES.map(role => (
+                      <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
+              {/* Section: Programs */}
               <div>
-                <label className="block text-sm text-[#9E7649] mb-1">Nivel</label>
-                <input 
-                  type="text" 
-                  value={editingMember.level}
-                  onChange={e => setEditingMember({...editingMember, level: e.target.value})}
-                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-[#9E7649] mb-1">Información Adicional</label>
-                <textarea 
-                  value={editingMember.info || ''}
-                  onChange={e => setEditingMember({...editingMember, info: e.target.value})}
-                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649] h-24 resize-none"
-                  placeholder="Añade información sobre este miembro..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-[#9E7649] mb-1 font-bold uppercase tracking-wider">Programas Habituales por Especialidad</label>
+                <label className="block text-xs text-[#9E7649] mb-1 font-bold uppercase tracking-wider">Programas Habituales</label>
                 <div className="space-y-4">
                   {editingMember.specialty.split(' / ').map(role => {
                     const roleName = role.trim();
+                    if (!roleName) return null;
                     const roleHabitual = editingMember.habitualProgramsByRole?.[roleName] || [];
                     
                     return (
                       <div key={roleName} className="bg-black/20 border border-[#9E7649]/20 rounded-xl p-3">
-                        <h4 className="text-xs font-bold text-[#9E7649] mb-2 uppercase">{roleName}</h4>
+                        <h4 className="text-[10px] font-bold text-[#9E7649] mb-2 uppercase">{roleName}</h4>
                         <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                           {catalogo.length > 0 ? (
                             catalogo.map(prog => (
@@ -358,7 +568,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                   }}
                                   className="accent-[#9E7649] w-4 h-4"
                                 />
-                                <span className="text-sm text-white/90">{prog.name}</span>
+                                <span className="text-xs text-white/90">{prog.name}</span>
                               </label>
                             ))
                           ) : (
@@ -381,13 +591,50 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
               <button 
                 onClick={() => {
-                  const newTeam = team.map(m => m.id === editingMember.id ? editingMember : m);
-                  saveTeam(newTeam);
+                  // 1. Update Team Member
+                  const updatedTeam = team.map(m => m.id === editingMember.id ? {
+                    id: editingMember.id,
+                    name: editingMember.name,
+                    specialty: editingMember.specialty,
+                    level: editingMember.level,
+                    info: editingMember.info,
+                    photoUrl: editingMember.photoUrl,
+                    habitualProgramsByRole: editingMember.habitualProgramsByRole
+                  } : m);
+                  saveTeam(updatedTeam);
+
+                  // 2. Update User
+                  let updatedUsers = users.map(u => u.id === editingMember.id ? {
+                    ...u,
+                    name: editingMember.name,
+                    username: editingMember.username,
+                    mobile: editingMember.mobile,
+                    password: editingMember.password,
+                    classification: editingMember.role || u.classification || 'Trabajador',
+                    role: (editingMember.role === 'director' || editingMember.role === 'coordinador' || u.role === 'admin') ? 'admin' : 'worker'
+                  } : u);
+                  
+                  // If user doesn't exist, create it
+                  if (!users.find(u => u.id === editingMember.id)) {
+                    updatedUsers.push({
+                      id: editingMember.id,
+                      name: editingMember.name,
+                      username: editingMember.username || editingMember.id,
+                      mobile: editingMember.mobile || '',
+                      password: editingMember.password || '1234',
+                      classification: editingMember.role || 'especialista',
+                      role: (editingMember.role === 'director' || editingMember.role === 'coordinador') ? 'admin' : 'worker'
+                    });
+                  }
+                  
+                  setUsers(updatedUsers);
+                  localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                  
                   setEditingMember(null);
                 }}
                 className="flex-1 py-3 rounded-lg font-bold text-white bg-[#9E7649] hover:bg-[#8B653D] transition-colors"
               >
-                Guardar
+                Guardar Cambios
               </button>
             </div>
           </div>

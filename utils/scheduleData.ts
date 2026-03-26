@@ -66,6 +66,7 @@ export const getCategoryVector = (category: string, title: string): string => {
 // Users from JSON
 export const INITIAL_USERS: User[] = (appData.users || []).map(u => ({
   ...u,
+  id: u.id || u.username,
   role: u.role as 'admin' | 'worker' | 'listener', // Ensure type safety
   classification: u.classification as any
 }));
