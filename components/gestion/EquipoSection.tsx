@@ -84,7 +84,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       
       blocks.forEach(block => {
           const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-          if (lines.length < 5) return; // Need at least name, specialty, mobile, user, pass
+          if (lines.length < 4) return; // Need at least name, specialty, mobile, user, pass
           
           let name = lines[0];
           let specialtyRaw = '';
@@ -92,32 +92,17 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
           let mobile = '';
           let username = '';
           let password = '';
-          let role = 'user'; // Default
+          let role = 'worker'; 
+          let classification: any = 'Trabajador';
           
-          const ALLOWED_SPECIALTIES = [
-              'Locutor',
-              'Director',
-              'Asesor',
-              'Guionista',
-              'Realizador de sonido',
-              'Especialista',
-              'Coordinador de Programas',
-              'Asistente de dirección',
-              'Director de emisora',
-              'Jefe de Programación',
-              'Periodista',
-              'Auxiliar General',
-              'Recepcionista'
-          ];
-
           // Second line is Specialties (separated by /)
-          if (lines[1] && !lines[1].toLowerCase().startsWith('móvil:')) {
+          if (lines[1] && !lines[1].toLowerCase().includes('móvil:') && !lines[1].toLowerCase().includes('usuario:')) {
               specialtyRaw = lines[1];
           }
           
           // Third line might be Category/Level
           let lineIndex = 2;
-          if (lines[lineIndex] && !lines[lineIndex].toLowerCase().startsWith('móvil:')) {
+          if (lines[lineIndex] && !lines[lineIndex].toLowerCase().includes('móvil:') && !lines[lineIndex].toLowerCase().includes('usuario:')) {
               level = lines[lineIndex];
               lineIndex++;
           }
@@ -126,25 +111,62 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               const l = lines[i];
               const lower = l.toLowerCase();
               if (lower.startsWith('móvil:') || lower.startsWith('movil:')) {
-                  mobile = l.substring(6).trim();
+                  mobile = l.split(':')[1]?.trim() || '';
               } else if (lower.startsWith('usuario:')) {
-                  username = l.substring(8).trim();
+                  username = l.split(':')[1]?.trim() || '';
               } else if (lower.startsWith('contraseña:') || lower.startsWith('contrasena:')) {
-                  password = l.substring(11).trim();
+                  password = l.split(':')[1]?.trim() || '';
               } else if (lower.startsWith('rol:')) {
-                  const roleStr = l.substring(4).trim().toLowerCase();
-                  if (roleStr === 'admin' || roleStr === 'administrador') role = 'admin';
-                  else if (roleStr === 'director') role = 'director';
-                  else if (roleStr === 'coordinador') role = 'coordinador';
-                  else if (roleStr === 'usuario') role = 'user';
-                  else role = 'user';
+                  const roleStr = l.split(':')[1]?.trim().toLowerCase() || '';
+                  
+                  const classificationMap: Record<string, string> = {
+                    'director': 'director',
+                    'directora': 'director',
+                    'asesor': 'asesor',
+                    'asesora': 'asesor',
+                    'realizador': 'realizador',
+                    'realizadora': 'realizador',
+                    'locutor': 'locutor',
+                    'locutora': 'locutor',
+                    'guionista': 'guionista',
+                    'periodista': 'periodista',
+                    'coordinador': 'coordinador',
+                    'coordinadora': 'coordinador',
+                    'director de emisora': 'director de emisora',
+                    'directora de emisora': 'director de emisora',
+                    'jefe de programación': 'jefe de programación',
+                    'jefa de programación': 'jefe de programación',
+                    'especialista': 'especialista',
+                    'auxiliar general': 'auxiliar general',
+                    'asistente de dirección': 'asistente de dirección',
+                    'recepcionista': 'recepcionista'
+                  };
+
+                  if (roleStr === 'admin' || roleStr === 'administrador') {
+                      role = 'admin';
+                      classification = 'Administrador';
+                  } else if (roleStr === 'director') {
+                      role = 'admin';
+                      classification = 'director';
+                  } else if (roleStr === 'coordinador') {
+                      role = 'coordinator';
+                      classification = 'coordinador';
+                  } else if (roleStr === 'usuario') {
+                      role = 'worker';
+                      const firstSpec = specialtyRaw.split('/')[0].trim().toLowerCase();
+                      if (classificationMap[firstSpec]) {
+                          classification = classificationMap[firstSpec];
+                      } else if (specialtyRaw.toLowerCase().includes('realizador de sonido')) {
+                          classification = 'realizador';
+                      } else {
+                          classification = 'Trabajador';
+                      }
+                  } else {
+                      role = 'worker';
+                      classification = 'Trabajador';
+                  }
               }
           }
-          
-          const parsedSpecialties = specialtyRaw.split('/').map(s => s.trim());
-          const validSpecialties = parsedSpecialties.filter(s => 
-              ALLOWED_SPECIALTIES.some(allowed => allowed.toLowerCase() === s.toLowerCase())
-          ).slice(0, 3);
           
           if (username && password && name) {
               const id = username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -154,13 +176,12 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               const newUser: User = {
                   id,
                   username,
-                  fullName: name,
-                  phone: mobile,
+                  name: name,
+                  mobile: mobile,
                   password,
                   role: role as any,
-                  specialties: validSpecialties,
-                  category: level
-              } as any; 
+                  classification: classification
+              }; 
 
               if (userIdx >= 0) {
                   updatedUsers[userIdx] = { ...updatedUsers[userIdx], ...newUser };
@@ -171,12 +192,18 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               // Update Team Member
               const teamIdx = currentTeam.findIndex(m => m.id === id || m.name.toLowerCase() === name.toLowerCase());
               if (teamIdx >= 0) {
-                  currentTeam[teamIdx] = { ...currentTeam[teamIdx], name, specialty: validSpecialties.join(' / '), level, id };
+                  currentTeam[teamIdx] = { 
+                    ...currentTeam[teamIdx], 
+                    name, 
+                    specialty: specialtyRaw, 
+                    level, 
+                    id 
+                  };
               } else {
                   currentTeam.push({
                       id,
                       name,
-                      specialty: validSpecialties.join(' / '),
+                      specialty: specialtyRaw,
                       level,
                       info: '',
                       photoUrl: `https://picsum.photos/seed/${id}/400/400`
