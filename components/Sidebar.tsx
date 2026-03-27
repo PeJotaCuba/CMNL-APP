@@ -14,7 +14,8 @@ import {
   FileText, 
   Podcast, 
   Newspaper,
-  Home
+  Home,
+  BookOpen
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -145,6 +146,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             {currentUser ? (
               // Worker/Admin Apps
               <>
+                {(currentUser.classification === 'Usuario' || 
+                  currentUser.classification === 'Coordinador' || 
+                  currentUser.classification === 'Director') && (
+                  <SidebarItem 
+                    icon={<BookOpen size={20} />} 
+                    label="Guía" 
+                    onClick={() => handleNavigation(AppView.APP_GUIA)} 
+                    className="text-[#C69C6D] border border-[#C69C6D]/20 bg-[#C69C6D]/5 mb-2"
+                  />
+                )}
                 <SidebarItem 
                   icon={<CalendarDays size={20} />} 
                   label="Agenda" 
