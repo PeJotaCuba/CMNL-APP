@@ -115,6 +115,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [showBulkSuccessModal, setShowBulkSuccessModal] = useState(false);
+  const [bulkCount, setBulkCount] = useState(0);
+
   const navigateTo = (newView: ViewState) => {
       setNavStack(prev => [...prev, newView]);
       setView(newView);
@@ -282,69 +285,177 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const handleSaveSelectionClick = () => {
       if (selectedTracksList.length === 0) return alert("Selección vacía.");
       
+      const items: ExportItem[] = selectedTracksList.map(t => ({ 
+          id: t.id, 
+          title: t.metadata.title, 
+          author: t.metadata.author, 
+          authorCountry: t.metadata.authorCountry || '', 
+          performer: t.metadata.performer, 
+          performerCountry: t.metadata.performerCountry || '', 
+          genre: t.metadata.genre || '', 
+          source: 'db', 
+          path: t.path 
+      }));
+      setExportItems(items);
+
       // UPDATE EXISTING SELECTION
       if (currentSelectionId) {
-          setSavedSelections(prev => {
-              const updated = prev.map(s => 
-                  s.id === currentSelectionId 
-                      ? { ...s, tracks: [...selectedTracksList], date: new Date().toISOString() }
-                      : s
-              );
-              saveSavedSelectionsListToDB(updated);
-              return updated;
-          });
-          
-          // Clear selection after update
-          setSelectedTracksList([]);
-          setCurrentSelectionId(null);
-          localStorage.removeItem(getSelectionKey());
-          
-          alert("Selección actualizada correctamente.");
-          return;
+          const currentSel = savedSelections.find(s => s.id === currentSelectionId);
+          if (currentSel) {
+              setSaveName(currentSel.name);
+              setProgramName(currentSel.program || programs[0]);
+              setReportDate(currentSel.date.split('T')[0]);
+          }
+      } else {
+          setSaveName('');
+          setProgramName(programs[0]);
+          setReportDate(new Date().toISOString().split('T')[0]);
       }
 
-      // SAVE NEW SELECTION
-      if (savedSelections.length >= 5) return alert("Límite de 5 selecciones.");
       setPendingSelectionToLoad(null);
-      setSaveName('');
       setShowSaveModal(true);
   };
 
   const confirmSaveSelection = () => {
       if (!saveName.trim()) return;
       
-      const newSelection: SavedSelection = { 
-          id: `sel-${Date.now()}`, 
-          name: saveName.trim(), 
-          date: new Date().toISOString(), 
-          tracks: [...selectedTracksList] 
-      };
-      
-      setSavedSelections(prev => {
-          const updated = [newSelection, ...prev];
-          saveSavedSelectionsListToDB(updated);
-          return updated;
+      const updatedTracks = selectedTracksList.map((t, idx) => {
+          const item = exportItems[idx];
+          if (!item) return t;
+          return {
+              ...t,
+              metadata: {
+                  ...t.metadata,
+                  title: item.title,
+                  author: item.author,
+                  authorCountry: item.authorCountry,
+                  performer: item.performer,
+                  performerCountry: item.performerCountry,
+                  genre: item.genre
+              }
+          };
       });
-      
-      if (pendingSelectionToLoad) {
-          setSelectedTracksList(pendingSelectionToLoad.tracks);
-          setCurrentSelectionId(pendingSelectionToLoad.id);
-          setPendingSelectionToLoad(null);
-          alert("Selección actual guardada y nueva selección cargada.");
-      } else {
-          // Clear selection after save
+
+      if (currentSelectionId) {
+          setSavedSelections(prev => {
+              const updated = prev.map(s => 
+                  s.id === currentSelectionId 
+                      ? { ...s, name: saveName.trim(), tracks: updatedTracks, date: new Date(reportDate).toISOString(), program: programName }
+                      : s
+              );
+              saveSavedSelectionsListToDB(updated);
+              return updated;
+          });
+          
           setSelectedTracksList([]);
           setCurrentSelectionId(null);
           localStorage.removeItem(getSelectionKey());
+          alert("Selección actualizada correctamente.");
+      } else {
+          if (savedSelections.length >= 5) return alert("Límite de 5 selecciones.");
+
+          const newSelection: SavedSelection = { 
+              id: `sel-${Date.now()}`, 
+              name: saveName.trim(), 
+              date: new Date(reportDate).toISOString(), 
+              tracks: updatedTracks,
+              program: programName
+          };
           
-          alert("Selección guardada correctamente.");
+          setSavedSelections(prev => {
+              const updated = [newSelection, ...prev];
+              saveSavedSelectionsListToDB(updated);
+              return updated;
+          });
+          
+          if (pendingSelectionToLoad) {
+              setSelectedTracksList(pendingSelectionToLoad.tracks);
+              setCurrentSelectionId(pendingSelectionToLoad.id);
+              setPendingSelectionToLoad(null);
+              alert("Selección actual guardada y nueva selección cargada.");
+          } else {
+              setSelectedTracksList([]);
+              setCurrentSelectionId(null);
+              localStorage.removeItem(getSelectionKey());
+              alert("Selección guardada correctamente.");
+          }
       }
       
       setShowSaveModal(false);
   };
 
+  const handleBulkExport = async () => {
+      if (savedSelections.length === 0) return alert("No hay selecciones guardadas.");
+
+      setIsUpdating(true);
+      try {
+          const existingReports = await loadReportsFromDB();
+          let count = 0;
+
+          for (const sel of savedSelections) {
+              const selDate = sel.date.split('T')[0];
+              const selProgram = sel.program || 'Sin Especificar';
+
+              // Check for duplicates
+              const duplicate = existingReports.find(r => r.program === selProgram && r.date.split('T')[0] === selDate);
+              if (duplicate) {
+                  await deleteReportFromDB(duplicate.id);
+              }
+
+              const exportItems: ExportItem[] = sel.tracks.map(t => ({
+                  id: t.id,
+                  title: t.metadata.title,
+                  author: t.metadata.author,
+                  authorCountry: t.metadata.authorCountry || '',
+                  performer: t.metadata.performer,
+                  performerCountry: t.metadata.performerCountry || '',
+                  genre: t.metadata.genre || '',
+                  source: 'db',
+                  path: t.path
+              }));
+              
+              const pdfBlob = generateReportPDF({
+                  userFullName: currentUser?.fullName || 'N/A',
+                  userUniqueId: currentUser?.uniqueId || 'N/A',
+                  program: selProgram,
+                  date: sel.date,
+                  items: exportItems
+              });
+              
+              const fileName = `PM-${selProgram}-${selDate}.pdf`;
+              
+              await saveReportToDB({
+                  id: `rep-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  date: sel.date,
+                  program: selProgram,
+                  generatedBy: currentUser?.username || 'N/A',
+                  fileName,
+                  pdfBlob,
+                  items: exportItems,
+                  status: { downloaded: false, sent: false }
+              });
+              count++;
+          }
+          setRefreshReportsTrigger(prev => prev + 1);
+          setBulkCount(count);
+          setShowBulkSuccessModal(true);
+          
+          // Cleanup saved selections after bulk export
+          setSavedSelections([]);
+          saveSavedSelectionsListToDB([]);
+          localStorage.removeItem(getSavedSelectionsKey());
+      } catch (e) {
+          console.error(e);
+          alert("Error al generar reportes en lote.");
+      } finally {
+          setIsUpdating(false);
+      }
+  };
+
   const handleClearSelectionClick = () => {
-      setShowClearConfirm(true);
+      if (window.confirm("¿Desea limpiar la selección actual?")) {
+          confirmClearSelection();
+      }
   };
 
   const confirmClearSelection = () => {
@@ -415,9 +526,15 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   };
 
   const handleOpenExportModal = () => {
-      setEditingReportId(null);
-      const items: ExportItem[] = selectedTracksList.map(t => ({ id: t.id, title: t.metadata.title, author: t.metadata.author, authorCountry: t.metadata.authorCountry || '', performer: t.metadata.performer, performerCountry: t.metadata.performerCountry || '', genre: t.metadata.genre || '', source: 'db', path: t.path }));
-      setExportItems(items); setShowExportModal(true);
+      if (selectedTracksList.length > 0) {
+          setEditingReportId(null);
+          const items: ExportItem[] = selectedTracksList.map(t => ({ id: t.id, title: t.metadata.title, author: t.metadata.author, authorCountry: t.metadata.authorCountry || '', performer: t.metadata.performer, performerCountry: t.metadata.performerCountry || '', genre: t.metadata.genre || '', source: 'db', path: t.path }));
+          setExportItems(items); setShowExportModal(true);
+      } else if (savedSelections.length > 0) {
+          handleBulkExport();
+      } else {
+          alert("No hay pistas seleccionadas ni selecciones guardadas.");
+      }
   };
 
   const handleUpdateExportItem = (index: number, field: keyof ExportItem, value: string) => {
@@ -426,12 +543,25 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleShareWhatsApp = () => {
       let message = `*CRÉDITOS RCM*\n*Programa:* ${programName}\n\n`;
-      exportItems.forEach(item => { message += `🎵 *${item.title}* - ${item.performer}\n📂 _${item.path || 'Manual'}_\n\n`; });
+      exportItems.forEach(item => { 
+          message += `🎵 *Título:* ${item.title}\n`;
+          message += `👤 *Autor:* ${item.author}\n`;
+          message += `🎤 *Intérprete:* ${item.performer}\n`;
+          message += `📂 *Ruta:* ${item.path || 'Manual'}\n\n`; 
+      });
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const handleDownloadReport = async () => {
       if (!currentUser) return;
+
+      // Check for duplicates
+      const existingReports = await loadReportsFromDB();
+      const duplicate = existingReports.find(r => r.program === programName && r.date.split('T')[0] === reportDate);
+      if (duplicate && duplicate.id !== editingReportId) {
+          await deleteReportFromDB(duplicate.id);
+      }
+
       const pdfBlob = generateReportPDF({ userFullName: currentUser.fullName, userUniqueId: currentUser.uniqueId || 'N/A', program: programName, date: reportDate, items: exportItems });
       const fileName = `PM-${programName}-${reportDate}.pdf`;
       
@@ -441,7 +571,13 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       
       await saveReportToDB({ id: `rep-${Date.now()}`, date: new Date(reportDate).toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: exportItems, status: { downloaded: false, sent: false } });
       setRefreshReportsTrigger(prev => prev + 1);
-      alert("Reporte guardado."); setShowExportModal(false);
+      alert("Reporte guardado."); 
+      setShowExportModal(false);
+
+      // Cleanup workspace after individual PDF export
+      setSelectedTracksList([]);
+      setCurrentSelectionId(null);
+      localStorage.removeItem(getSelectionKey());
   };
 
   const handleSaveEdit = (updatedTrack: Track) => {
@@ -518,15 +654,15 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                             onToggleSelection={handleToggleSelection} selectedTrackIds={new Set(selectedTracksList.map(t => t.id))}
                         />
                      </div>
-                     <div className="p-4 bg-[#2C1B15] border-t border-[#9E7649]/20 flex flex-col gap-2">
+                      <div className="p-4 bg-[#2C1B15] border-t border-[#9E7649]/20 flex flex-col gap-2">
                           <button onClick={handleSaveSelectionClick} className={`w-full text-white py-3 rounded-xl font-bold text-xs shadow-md flex items-center justify-center gap-2 ${currentSelectionId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
                               <span className="material-symbols-outlined text-sm">{currentSelectionId ? 'sync' : 'save'}</span> 
                               {currentSelectionId ? 'Actualizar Selección' : 'Guardar Selección'}
                           </button>
                           <button onClick={handleOpenExportModal} className="w-full bg-[#9E7649] text-white py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#8B653D]">
-                             <span className="material-symbols-outlined">ios_share</span> Exportar / Compartir ({selectedTracksList.length})
+                              <span className="material-symbols-outlined">ios_share</span> Exportar / Compartir {selectedTracksList.length > 0 ? `(${selectedTracksList.length})` : '(Masivo)'}
                           </button>
-                     </div>
+                      </div>
                 </div>
             )}
 
@@ -545,20 +681,91 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             )}
             {showSaveModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowSaveModal(false)}>
-                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
-                        <h3 className="font-bold text-lg mb-4 text-white">Guardar Selección</h3>
-                        <input 
-                            autoFocus
-                            className="w-full p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-sm outline-none focus:border-[#9E7649] mb-4" 
-                            placeholder="Nombre de la selección..." 
-                            value={saveName} 
-                            onChange={e => setSaveName(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && confirmSaveSelection()}
-                        />
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowSaveModal(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cancelar</button>
-                            <button onClick={confirmSaveSelection} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700">Guardar</button>
+                    <div className="w-full max-w-lg bg-[#2C1B15] rounded-2xl shadow-2xl flex flex-col h-[85vh] border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        
+                        <div className="flex justify-between items-center p-4 border-b border-[#9E7649]/20 shrink-0 bg-[#1A100C] rounded-t-2xl">
+                            <h3 className="font-bold text-white">Guardar Selección</h3>
+                            <button onClick={() => setShowSaveModal(false)}><span className="material-symbols-outlined text-[#E8DCCF]/40 hover:text-white">close</span></button>
                         </div>
+
+                        <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 shrink-0 space-y-4">
+                            <input 
+                                autoFocus
+                                className="w-full p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-sm outline-none focus:border-[#9E7649]" 
+                                placeholder="Nombre de la selección..." 
+                                value={saveName} 
+                                onChange={e => setSaveName(e.target.value)}
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
+                                    <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
+                                        {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Fecha</label>
+                                    <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            <p className="text-xs font-bold text-[#9E7649] uppercase tracking-widest">Editar Créditos</p>
+                            {exportItems.map((item, idx) => (
+                                <div key={item.id} className="p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
+                                    <div className="mb-2">
+                                        <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Título</label>
+                                        <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-sm font-bold outline-none focus:border-[#9E7649]" value={item.title} onChange={e => handleUpdateExportItem(idx, 'title', e.target.value)} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Autor</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" value={item.author} onChange={e => handleUpdateExportItem(idx, 'author', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">País Autor</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" list="country-options" value={item.authorCountry} onChange={e => handleUpdateExportItem(idx, 'authorCountry', e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Intérprete</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" value={item.performer} onChange={e => handleUpdateExportItem(idx, 'performer', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">País Intérprete</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" list="country-options" value={item.performerCountry} onChange={e => handleUpdateExportItem(idx, 'performerCountry', e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Género</label>
+                                        <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" list="genre-options" value={item.genre} onChange={e => handleUpdateExportItem(idx, 'genre', e.target.value)} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 bg-[#1A100C] border-t border-[#9E7649]/20 rounded-b-2xl shrink-0">
+                            <button onClick={confirmSaveSelection} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700">
+                                {currentSelectionId ? 'Actualizar Selección' : 'Guardar Selección'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showBulkSuccessModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowBulkSuccessModal(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center" onClick={e => e.stopPropagation()}>
+                        <div className="size-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span className="material-symbols-outlined text-blue-400 text-3xl">check_circle</span>
+                        </div>
+                        <h3 className="font-bold text-lg mb-2 text-white">Exportación Exitosa</h3>
+                        <p className="text-sm text-[#E8DCCF]/60 mb-6">Se han generado correctamente <strong>{bulkCount}</strong> reportes PDF y se han movido a la sección de Reportes.</p>
+                        <button onClick={() => setShowBulkSuccessModal(false)} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700">
+                            Entendido
+                        </button>
                     </div>
                 </div>
             )}
