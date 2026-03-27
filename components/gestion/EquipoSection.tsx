@@ -36,15 +36,11 @@ const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-
 const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
 
-  const ROLES = [
-    'director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 
-    'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 
-    'auxiliar general', 'asistente de dirección', 'recepcionista'
-  ];
+  const ROLES = ['Usuario', 'Director', 'Coordinador'];
 
   useEffect(() => {
     const saved = localStorage.getItem('rcm_equipo_cmnl');
@@ -119,51 +115,21 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               } else if (lower.startsWith('rol:')) {
                   const roleStr = l.split(':')[1]?.trim().toLowerCase() || '';
                   
-                  const classificationMap: Record<string, string> = {
-                    'director': 'director',
-                    'directora': 'director',
-                    'asesor': 'asesor',
-                    'asesora': 'asesor',
-                    'realizador': 'realizador',
-                    'realizadora': 'realizador',
-                    'locutor': 'locutor',
-                    'locutora': 'locutor',
-                    'guionista': 'guionista',
-                    'periodista': 'periodista',
-                    'coordinador': 'coordinador',
-                    'coordinadora': 'coordinador',
-                    'director de emisora': 'director de emisora',
-                    'directora de emisora': 'director de emisora',
-                    'jefe de programación': 'jefe de programación',
-                    'jefa de programación': 'jefe de programación',
-                    'especialista': 'especialista',
-                    'auxiliar general': 'auxiliar general',
-                    'asistente de dirección': 'asistente de dirección',
-                    'recepcionista': 'recepcionista'
-                  };
-
                   if (roleStr === 'admin' || roleStr === 'administrador') {
                       role = 'admin';
                       classification = 'Administrador';
                   } else if (roleStr === 'director') {
-                      role = 'admin';
-                      classification = 'director';
+                      role = 'worker';
+                      classification = 'Director';
                   } else if (roleStr === 'coordinador') {
-                      role = 'coordinator';
-                      classification = 'coordinador';
+                      role = 'worker';
+                      classification = 'Coordinador';
                   } else if (roleStr === 'usuario') {
                       role = 'worker';
-                      const firstSpec = specialtyRaw.split('/')[0].trim().toLowerCase();
-                      if (classificationMap[firstSpec]) {
-                          classification = classificationMap[firstSpec];
-                      } else if (specialtyRaw.toLowerCase().includes('realizador de sonido')) {
-                          classification = 'realizador';
-                      } else {
-                          classification = 'Trabajador';
-                      }
+                      classification = 'Usuario';
                   } else {
                       role = 'worker';
-                      classification = 'Trabajador';
+                      classification = 'Usuario';
                   }
               }
           }
@@ -327,8 +293,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   onClick={() => setViewingMember(member)}
                 >
                   {isAdmin && (
-                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {currentUser?.role === 'admin' && (
+                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      {isAdmin && (
                         (() => {
                           const user = users.find(u => u.id === member.id || u.username.toLowerCase() === member.id.toLowerCase());
                           if (user && user.mobile) {
@@ -337,7 +303,13 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
                                   const pin = user.password ? user.password.slice(-4) : '0000';
-                                  const message = `Hola, tu usuario es ${user.username} y tu contraseña es ${user.password}. Puedes entrar con el PIN: ${pin}.`;
+                                  const message = `Hola, acceda a https://cmnl-app.vercel.app/ con los siguientes datos,
+Usuario: ${user.username}
+Móvil: ${user.mobile}
+Contraseña: ${user.password}
+Pin: ${pin}
+
+Recuerde Actualizar antes de autenticarse.`;
                                   const url = `https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
                                   window.open(url, '_blank');
                                 }}
@@ -558,7 +530,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   >
                     <option value="">Seleccionar Rol</option>
                     {ROLES.map(role => (
-                      <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
+                      <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
                 </div>
@@ -642,8 +614,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     username: editingMember.username,
                     mobile: editingMember.mobile,
                     password: editingMember.password,
-                    classification: editingMember.role || u.classification || 'Trabajador',
-                    role: (editingMember.role === 'director' || editingMember.role === 'coordinador' || u.role === 'admin') ? 'admin' : 'worker'
+                    classification: editingMember.role || u.classification || 'Usuario',
+                    role: (editingMember.username === 'admin' || editingMember.classification === 'Administrador') ? 'admin' : 'worker'
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -654,8 +626,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       username: editingMember.username || editingMember.id,
                       mobile: editingMember.mobile || '',
                       password: editingMember.password || '1234',
-                      classification: editingMember.role || 'especialista',
-                      role: (editingMember.role === 'director' || editingMember.role === 'coordinador') ? 'admin' : 'worker'
+                      classification: editingMember.role || 'Usuario',
+                      role: (editingMember.username === 'admin' || editingMember.classification === 'Administrador') ? 'admin' : 'worker'
                     });
                   }
                   

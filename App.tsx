@@ -31,8 +31,8 @@ const App: React.FC = () => {
 
   const checkDirty = (callback: () => void, isLogout = false) => {
       // Check if user should see the backup prompt
-      const isExcluded = currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador' || currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
-      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser?.classification || '');
+      const isExcluded = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
+      const isActiveRole = ['Usuario'].includes(currentUser?.classification || '');
 
       if (isDirty && !isExcluded && isActiveRole) {
           pendingNavigation.current = callback;
@@ -168,7 +168,7 @@ const App: React.FC = () => {
   // 24-Hour Backup Reminder Effect
   useEffect(() => {
     if (currentUser) {
-      const isExcluded = currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador' || currentUser.role === 'admin' || currentUser.role === 'coordinator';
+      const isExcluded = currentUser.username === 'admin' || currentUser.classification === 'Administrador';
       const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser.classification || '');
       
       if (!isExcluded && isActiveRole) {
@@ -350,6 +350,10 @@ const App: React.FC = () => {
           agendaDayThemes: JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'),
           agendaUsers: JSON.parse(localStorage.getItem('rcm_users') || '[]'),
           agendaPropaganda: JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'),
+          programming: JSON.parse(localStorage.getItem('rcm_programming') || '[]'),
+          history: localStorage.getItem('rcm_data_history') || '',
+          about: localStorage.getItem('rcm_data_about') || '',
+          news_data: JSON.parse(localStorage.getItem('rcm_data_news') || '[]'),
       };
 
       // Collect all relevant keys from localStorage
@@ -359,7 +363,8 @@ const App: React.FC = () => {
           'rcm_programs_list', 
           'rcm_custom_roots',
           'rcm_current_selection',
-          'rcm_saved_selections'
+          'rcm_saved_selections',
+          'rcm_data_tracks'
       ];
 
       for (let i = 0; i < localStorage.length; i++) {
@@ -597,7 +602,7 @@ const App: React.FC = () => {
         return <PublicLanding onNavigate={setCurrentView} users={users} onLoginSuccess={(user) => {
             setCurrentUser(user);
             localStorage.setItem('rcm_user_username', user.username);
-            if(user.role === 'admin') {
+            if(user.username === 'admin' || user.classification === 'Administrador') {
                 handleNavigate(AppView.ADMIN_DASHBOARD);
             } else {
                 handleNavigate(AppView.WORKER_HOME);

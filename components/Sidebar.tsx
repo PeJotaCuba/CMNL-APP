@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleInicio = () => {
     if (currentUser) {
-      if (currentUser.role === 'admin') {
+      if (currentUser.username === 'admin' || currentUser.classification === 'Administrador') {
         handleNavigation(AppView.ADMIN_DASHBOARD);
       } else {
         handleNavigation(AppView.WORKER_HOME);
@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <SidebarItem 
               icon={<ScrollText size={20} />} 
               label="Historia" 
-              onClick={() => handleNavigation(currentUser?.role === 'admin' ? AppView.ADMIN_SECTION_HISTORY : AppView.SECTION_HISTORY)} 
+              onClick={() => handleNavigation((currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') ? AppView.ADMIN_SECTION_HISTORY : AppView.SECTION_HISTORY)} 
             />
             <SidebarItem 
               icon={<Users size={20} />} 
@@ -110,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <SidebarItem 
               icon={<Mic size={20} />} 
               label="Programación" 
-              onClick={() => handleNavigation(currentUser?.role === 'admin' ? AppView.ADMIN_SECTION_PROGRAMMING : AppView.SECTION_PROGRAMMING_PUBLIC)} 
+              onClick={() => handleNavigation((currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') ? AppView.ADMIN_SECTION_PROGRAMMING : AppView.SECTION_PROGRAMMING_PUBLIC)} 
             />
             {!currentUser && onSync && (
               <div className="flex flex-col items-center pt-2 pb-4">
@@ -134,7 +134,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Section 2: Apps */}
           <div className="px-4 flex flex-col gap-2">
-            {currentUser?.role === 'admin' && (
+            {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') && (
               <SidebarItem 
                 icon={<Newspaper size={20} />} 
                 label="Gestión de Noticias" 

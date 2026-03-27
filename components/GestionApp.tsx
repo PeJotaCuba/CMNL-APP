@@ -406,7 +406,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
     { id: 'reportes', icon: <FileBarChart size={32} />, label: 'Reportes', color: 'bg-blue-900/40 text-blue-400 border-blue-500/30' },
   ];
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
 
   const formatPercentage = (value: string) => {
       if (!value) return '';

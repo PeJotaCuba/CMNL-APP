@@ -150,8 +150,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
     const canModify = useMemo(() => {
         if (!currentUser) return false;
-        const isAdmin = ['Administrador', 'admin'].includes(currentUser.classification || currentUser.role);
-        const isCoordinator = ['Coordinador', 'coordinator'].includes(currentUser.classification || currentUser.role);
+        const isAdmin = currentUser.username === 'admin' || currentUser.classification === 'Administrador';
+        const isCoordinator = currentUser.classification === 'Coordinador';
         return isAdmin || isCoordinator;
     }, [currentUser]);
 
@@ -213,7 +213,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
     useEffect(() => {
         const handleSelection = () => {
-            if (!selectedProgram || showPulir || showNewScript || !currentUser || !['Administrador', 'admin'].includes(currentUser.classification || currentUser.role)) {
+            if (!selectedProgram || showPulir || showNewScript || !currentUser || !(currentUser.username === 'admin' || currentUser.classification === 'Administrador')) {
                 setFloatingPulir(prev => prev.visible ? { ...prev, visible: false } : prev);
                 return;
             }
@@ -1019,19 +1019,19 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                     <div className="flex flex-wrap items-center gap-3 sm:gap-4 justify-center sm:justify-start">
                         <button 
                             onClick={() => setShowProgramInside(true)} 
-                            className={`flex items-center gap-2 ${(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') ? 'justify-center p-3' : 'px-3 py-2.5'} bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold`} 
+                            className={`flex items-center gap-2 ${(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') ? 'justify-center p-3' : 'px-3 py-2.5'} bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold`} 
                             title="Por dentro"
                         >
                             <BookOpen size={20} /> 
-                            {(currentUser?.role !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Por dentro</span>}
+                            {(currentUser?.username !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Por dentro</span>}
                         </button>
                         <button 
                             onClick={() => setShowBalance(true)} 
-                            className={`flex items-center gap-2 ${(currentUser?.role === 'admin' || currentUser?.classification === 'Administrador') ? 'justify-center p-3' : 'px-3 py-2.5'} bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold`} 
+                            className={`flex items-center gap-2 ${(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') ? 'justify-center p-3' : 'px-3 py-2.5'} bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors text-sm font-bold`} 
                             title="Balance"
                         >
                             <BarChart3 size={20} /> 
-                            {(currentUser?.role !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Balance</span>}
+                            {(currentUser?.username !== 'admin' && currentUser?.classification !== 'Administrador') && <span>Balance</span>}
                         </button>
                         {canModify && (
                             <>
@@ -1273,7 +1273,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                         <span className="text-sm font-bold">Informes</span>
                                     </button>
 
-                                    {(currentUser.role === 'admin' || currentUser.classification === 'Administrador') && (
+                                    {(currentUser.username === 'admin' || currentUser.classification === 'Administrador') && (
                                         <>
                                             <label className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold cursor-pointer transition-all shadow-lg">
                                                 <Upload size={18} />

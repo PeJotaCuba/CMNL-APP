@@ -9,7 +9,7 @@ interface Props {
 }
 
 const HistoryEvolutionView: React.FC<Props> = ({ currentUser, onBack }) => {
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
   const [historyData, setHistoryData] = useState<HistoricalMonthData[]>([]); // Mock inicial
   const [newMonth, setNewMonth] = useState({ month: 0, year: 2026, interruptions: 0 });
 

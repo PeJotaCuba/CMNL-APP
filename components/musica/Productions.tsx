@@ -799,7 +799,7 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                         >
                             <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
                         </button>
-                        {(currentUser?.role === 'admin' || currentUser?.role === 'coordinador') && (
+                        {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.role === 'coordinador') && (
                             <button 
                                 onClick={() => { if(confirm('¿Estás seguro de limpiar toda la lista de producciones?')) onUpdateTracks([]); }} 
                                 className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"

@@ -112,7 +112,7 @@ const AdminDashboard: React.FC<Props> = ({
          {/* Welcome (Simplified) */}
          <div className="flex justify-between items-center">
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
-            {currentUser?.classification === 'Administrador' && (
+            {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') && (
               <div className="flex gap-2">
                 <button 
                  onClick={onSystemBackup}

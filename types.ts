@@ -33,7 +33,7 @@ export interface HistoricalMonthData {
   consolidated: boolean;
 }
 
-export type UserClassification = 'director' | 'asesor' | 'realizador' | 'locutor' | 'guionista' | 'periodista' | 'coordinador' | 'director de emisora' | 'jefe de programación' | 'especialista' | 'auxiliar general' | 'asistente de dirección' | 'recepcionista' | 'Administrador' | 'Trabajador';
+export type UserClassification = 'Usuario' | 'Director' | 'Coordinador' | 'Administrador' | 'Trabajador';
 
 export interface NewsItem {
   id: string;

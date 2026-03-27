@@ -232,6 +232,8 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
       return 'Usuario';
   };
 
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
+
   const canDelete = (u: User) => {
       if (u.username === 'admin') return false;
       if (currentUser && u.username === currentUser.username) return false;
@@ -291,7 +293,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
             </button>
         </div>
 
-        {currentUser?.role === 'admin' && (
+        {isAdmin && (
         <div className="mb-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -349,7 +351,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
                                     <span className="material-symbols-outlined text-sm">chat</span>
                                 </button>
                             )}
-                            {canDelete(user) || currentUser?.role === 'admin' ? (
+                            {canDelete(user) || isAdmin ? (
                                 <button onClick={() => handleDeleteConfirm(user.username)} className="size-7 flex items-center justify-center rounded bg-red-900/20 text-red-500 hover:bg-red-900/40 border border-red-500/20" title="Eliminar">
                                     <span className="material-symbols-outlined text-sm">delete</span>
                                 </button>
