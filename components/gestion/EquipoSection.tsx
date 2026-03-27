@@ -40,7 +40,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
 
-  const ROLES = ['Usuario', 'Director', 'Coordinador'];
+  const ROLES = ['Usuario', 'Director', 'Coordinador', 'Administrador'];
 
   useEffect(() => {
     const saved = localStorage.getItem('rcm_equipo_cmnl');
@@ -333,7 +333,7 @@ Recuerde Actualizar antes de autenticarse.`;
                             username: user?.username || '',
                             mobile: user?.mobile || '',
                             password: user?.password || '',
-                            role: user?.role || ''
+                            role: user?.classification || 'Usuario'
                           }); 
                         }}
                         className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
@@ -608,14 +608,16 @@ Recuerde Actualizar antes de autenticarse.`;
                   saveTeam(updatedTeam);
 
                   // 2. Update User
+                  const newClassification = editingMember.role || 'Usuario';
                   let updatedUsers = users.map(u => u.id === editingMember.id ? {
                     ...u,
                     name: editingMember.name,
                     username: editingMember.username,
                     mobile: editingMember.mobile,
                     password: editingMember.password,
-                    classification: editingMember.role || u.classification || 'Usuario',
-                    role: (editingMember.username === 'admin' || editingMember.classification === 'Administrador') ? 'admin' : 'worker'
+                    classification: newClassification,
+                    role: (editingMember.username === 'admin' || newClassification === 'Administrador') ? 'admin' : 
+                          (newClassification === 'Coordinador' ? 'coordinator' : 'worker')
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -626,8 +628,9 @@ Recuerde Actualizar antes de autenticarse.`;
                       username: editingMember.username || editingMember.id,
                       mobile: editingMember.mobile || '',
                       password: editingMember.password || '1234',
-                      classification: editingMember.role || 'Usuario',
-                      role: (editingMember.username === 'admin' || editingMember.classification === 'Administrador') ? 'admin' : 'worker'
+                      classification: newClassification,
+                      role: (editingMember.username === 'admin' || newClassification === 'Administrador') ? 'admin' : 
+                            (newClassification === 'Coordinador' ? 'coordinator' : 'worker')
                     });
                   }
                   
