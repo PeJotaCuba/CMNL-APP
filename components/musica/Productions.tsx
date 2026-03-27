@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
+import { Track, Production, DEFAULT_PROGRAMS_LIST, User } from './types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -9,6 +9,7 @@ import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, Ali
 interface ProductionsProps {
   onUpdateTracks: (updateFunc: (prev: Track[]) => Track[]) => void;
   allTracks?: Track[];
+  currentUser: User | null;
 }
 
 interface TempTrack {
@@ -23,10 +24,11 @@ interface TempTrack {
 
 type TabType = 'intro' | 'stock' | 'archive';
 
-const Productions: React.FC<ProductionsProps> = ({ }) => {
+const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, currentUser }) => {
   const [activeTab, setActiveTab] = useState<TabType>('intro');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [program, setProgram] = useState(DEFAULT_PROGRAMS_LIST[0]);
+  const [director, setDirector] = useState('');
   
   const [currentTrack, setCurrentTrack] = useState<TempTrack>({
       id: '',
@@ -42,6 +44,9 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [editingTrackIndex, setEditingTrackIndex] = useState<number | null>(null);
   
   const [dbProductions, setDbProductions] = useState<Production[]>([]);
+  
+  const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void}>({isOpen: false, message: '', onConfirm: () => {}});
+  const [alertDialog, setAlertDialog] = useState<{isOpen: boolean, message: string}>({isOpen: false, message: ''});
 
   const fetchProductions = async () => {
       const prods = await loadProductionsFromDB();
@@ -95,12 +100,35 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
           id: `prod-${Date.now()}`,
           date,
           program,
+          director,
           tracks: sessionTracks
       };
 
       try {
           await saveProductionToDB(newProduction);
-          alert("Producción guardada correctamente en la base de datos.");
+          
+          // Sincronización de Datos: Add tracks to the main music section
+          onUpdateTracks(prev => {
+              const newTracks: Track[] = sessionTracks.map(t => ({
+                  id: `prod-track-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                  filename: `${t.title} - ${t.performer}.mp3`,
+                  path: `Producciones/${program}/${date}`,
+                  isVerified: true,
+                  metadata: {
+                      title: t.title,
+                      author: t.author,
+                      authorCountry: t.authorCountry,
+                      performer: t.performer,
+                      performerCountry: t.performerCountry,
+                      genre: t.genre,
+                      album: program,
+                      year: date.split('-')[0]
+                  }
+              }));
+              return [...prev, ...newTracks];
+          });
+
+          alert("Producción guardada correctamente y sincronizada con la sección de música.");
           setSessionTracks([]); 
           fetchProductions();
       } catch (e) {
@@ -110,8 +138,13 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const handleDeleteProduction = async (id: string) => {
       if (window.confirm("¿Estás seguro de que deseas eliminar esta producción?")) {
-          await deleteProductionFromDB(id);
-          fetchProductions();
+          try {
+              await deleteProductionFromDB(id);
+              fetchProductions();
+          } catch (e) {
+              console.error("Error deleting production:", e);
+              alert("Error al eliminar la producción.");
+          }
       }
   };
 
@@ -119,9 +152,140 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       if (!e.target.files || e.target.files.length === 0) return;
       const files = Array.from(e.target.files) as File[];
       
+      if (files.length > 1) {
+          let importedCount = 0;
+          let allNewTracks: Track[] = [];
+          
+          for (const file of files) {
+              const text = await file.text();
+              const lines = text.split('\n');
+              
+              let fileTracks: TempTrack[] = [];
+              let fileDate = date;
+              let fileProgram = program;
+              let fileDirector = '';
+              let current: Partial<TempTrack> = {};
+
+              const saveCurrent = () => {
+                  if (current.title && (current.author || current.performer)) {
+                       fileTracks.push({
+                           id: `imp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                           title: current.title,
+                           author: current.author || '',
+                           authorCountry: current.authorCountry || '',
+                           performer: current.performer || '',
+                           performerCountry: current.performerCountry || '',
+                           genre: current.genre || ''
+                       } as TempTrack);
+                  }
+                  current = {};
+              };
+
+              lines.forEach(line => {
+                  const l = line.trim();
+                  if (!l) return;
+                  const lower = l.toLowerCase();
+
+                  if (lower.startsWith('fecha:')) {
+                      let d = l.substring(6).trim();
+                      if (d.includes('/')) {
+                          const parts = d.split('/');
+                          if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                      }
+                      fileDate = d;
+                  } else if (lower.startsWith('programa:')) {
+                      fileProgram = l.substring(9).trim();
+                  } else if (lower.startsWith('director:')) {
+                      fileDirector = l.substring(9).trim();
+                  } else if (/^\[\d+\]\s+/.test(l) || /\d+\.\s*titulo:/.test(lower) || lower.startsWith('titulo:')) {
+                      saveCurrent();
+                      let val = l;
+                      if (/^\[\d+\]\s+/.test(l)) {
+                          val = l.replace(/^\[\d+\]\s+/, '').trim();
+                      } else {
+                          val = l.replace(/^\d+\.\s*/, '').replace(/^titulo:\s*/i, '').trim();
+                      }
+                      current.title = val;
+                  } else if (lower.startsWith('autor:')) {
+                      const val = l.substring(6).trim();
+                      const match = val.match(/^(.*?)\s*\((.*?)\)$/);
+                      if (match) {
+                          current.author = match[1].trim();
+                          current.authorCountry = match[2].trim() !== '-' ? match[2].trim() : '';
+                      } else {
+                          current.author = val;
+                      }
+                      if (current.author === '[No encontrado]') current.author = '';
+                  } else if (lower.startsWith('intérprete:') || lower.startsWith('interprete:')) {
+                       const val = l.substring(l.indexOf(':') + 1).trim();
+                       const match = val.match(/^(.*?)\s*\((.*?)\)$/);
+                       if (match) {
+                           current.performer = match[1].trim();
+                           current.performerCountry = match[2].trim() !== '-' ? match[2].trim() : '';
+                       } else {
+                           current.performer = val;
+                       }
+                       if (current.performer === '[No encontrado]') current.performer = '';
+                  } else if (lower.startsWith('país:') || lower.startsWith('pais:')) {
+                       const val = l.substring(5).trim();
+                       if (current.performer && !current.performerCountry) {
+                           current.performerCountry = val !== '-' ? val : '';
+                       } else if (current.author && !current.authorCountry) {
+                           current.authorCountry = val !== '-' ? val : '';
+                       }
+                  } else if (lower.startsWith('género:') || lower.startsWith('genero:')) {
+                       const val = l.substring(l.indexOf(':') + 1).trim();
+                       current.genre = val !== '---' ? val : '';
+                  }
+              });
+              saveCurrent();
+
+              if (fileTracks.length > 0) {
+                  const newProduction: Production = {
+                      id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                      date: fileDate,
+                      program: fileProgram,
+                      director: fileDirector,
+                      tracks: fileTracks
+                  };
+                  await saveProductionToDB(newProduction);
+                  importedCount++;
+
+                  const newTracks: Track[] = fileTracks.map(t => ({
+                      id: `prod-track-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                      filename: `${t.title} - ${t.performer}.mp3`,
+                      path: `Producciones/${fileProgram}/${fileDate}`,
+                      isVerified: true,
+                      metadata: {
+                          title: t.title,
+                          author: t.author,
+                          authorCountry: t.authorCountry,
+                          performer: t.performer,
+                          performerCountry: t.performerCountry,
+                          genre: t.genre,
+                          album: fileProgram,
+                          year: fileDate.split('-')[0]
+                      }
+                  }));
+                  allNewTracks = [...allNewTracks, ...newTracks];
+              }
+          }
+          
+          if (allNewTracks.length > 0) {
+              onUpdateTracks(prev => [...prev, ...allNewTracks]);
+          }
+          
+          alert(`Se han importado ${importedCount} producciones correctamente.`);
+          fetchProductions();
+          e.target.value = '';
+          return;
+      }
+
+      // Single file logic
       let allParsedTracks: TempTrack[] = [];
       let lastParsedDate = date;
       let lastParsedProgram = program;
+      let lastParsedDirector = director;
 
       for (const file of files) {
           const text = await file.text();
@@ -158,6 +322,8 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                   lastParsedDate = d;
               } else if (lower.startsWith('programa:')) {
                   lastParsedProgram = l.substring(9).trim();
+              } else if (lower.startsWith('director:')) {
+                  lastParsedDirector = l.substring(9).trim();
               } else if (/^\[\d+\]\s+/.test(l) || /\d+\.\s*titulo:/.test(lower) || lower.startsWith('titulo:')) {
                   saveCurrent();
                   let val = l;
@@ -209,6 +375,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       }
 
       setDate(lastParsedDate);
+      setDirector(lastParsedDirector);
       if (DEFAULT_PROGRAMS_LIST.includes(lastParsedProgram)) {
           setProgram(lastParsedProgram);
       }
@@ -229,6 +396,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
               rows.push({
                   Fecha: prod.date,
                   Programa: prod.program,
+                  Director: prod.director || '',
                   Título: t.title,
                   Autor: t.author,
                   "País Autor": t.authorCountry,
@@ -494,6 +662,16 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                 {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-xs font-bold text-[#E8DCCF]/60 mb-1">Director</label>
+                            <input 
+                                type="text" 
+                                value={director} 
+                                onChange={e => setDirector(e.target.value)} 
+                                className="w-full p-2 border border-[#9E7649]/30 rounded-lg bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]"
+                                placeholder="Nombre del director"
+                            />
+                        </div>
                     </div>
 
                     <h3 className="font-bold text-white mb-4 border-b border-[#9E7649]/20 pb-2">
@@ -621,6 +799,14 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                         >
                             <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
                         </button>
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'coordinador') && (
+                            <button 
+                                onClick={() => { if(confirm('¿Estás seguro de limpiar toda la lista de producciones?')) onUpdateTracks([]); }} 
+                                className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
+                            >
+                                <span className="material-symbols-outlined text-sm">delete_sweep</span> Limpiar lista
+                            </button>
+                        )}
                     </div>
                 </div>
                 {stockMensual.length === 0 ? (
@@ -633,7 +819,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <h4 className="font-bold text-white text-sm">{prod.program}</h4>
-                                    <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas</p>
+                                    <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas {prod.director ? `• Dir: ${prod.director}` : ''}</p>
                                 </div>
                                 <button onClick={() => handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
                                     <span className="material-symbols-outlined text-sm">delete</span>
@@ -669,7 +855,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <h4 className="font-bold text-white text-sm">{prod.program}</h4>
-                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas</p>
+                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas {prod.director ? `• Dir: ${prod.director}` : ''}</p>
                                         </div>
                                         <button onClick={() => handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
                                             <span className="material-symbols-outlined text-sm">delete</span>
@@ -689,6 +875,42 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
         <datalist id="country-options">
             {COUNTRIES_LIST.map(c => <option key={c} value={c} />)}
         </datalist>
+
+        {/* Custom Alert Dialog */}
+        {alertDialog.isOpen && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+                    <h3 className="text-white font-bold mb-4">Aviso</h3>
+                    <p className="text-[#E8DCCF]/80 text-sm mb-6 whitespace-pre-wrap">{alertDialog.message}</p>
+                    <div className="flex justify-end">
+                        <button onClick={() => setAlertDialog({isOpen: false, message: ''})} className="bg-[#9E7649] hover:bg-[#8B653D] text-white px-6 py-2 rounded-xl font-bold transition-colors">
+                            Aceptar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Custom Confirm Dialog */}
+        {confirmDialog.isOpen && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+                    <h3 className="text-white font-bold mb-4">Confirmar Acción</h3>
+                    <p className="text-[#E8DCCF]/80 text-sm mb-6 whitespace-pre-wrap">{confirmDialog.message}</p>
+                    <div className="flex justify-end gap-3">
+                        <button onClick={() => setConfirmDialog({isOpen: false, message: '', onConfirm: () => {}})} className="bg-transparent border border-[#9E7649]/30 text-white px-4 py-2 rounded-xl hover:bg-[#3E1E16] transition-colors">
+                            Cancelar
+                        </button>
+                        <button onClick={() => {
+                            confirmDialog.onConfirm();
+                            setConfirmDialog({isOpen: false, message: '', onConfirm: () => {}});
+                        }} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl font-bold transition-colors">
+                            Confirmar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

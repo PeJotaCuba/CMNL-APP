@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X } from 'lucide-react';
+import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X, Upload } from 'lucide-react';
 import { NewsItem } from '../types';
 import CMNLHeader from './CMNLHeader';
 
@@ -12,6 +12,8 @@ interface ViewProps {
   customContent?: string;
   newsItem?: NewsItem | null;
   user?: { name: string; role: string; photo?: string } | null;
+  onUpload?: (file: File) => void;
+  isAdmin?: boolean;
 }
 
 const newsColors = [
@@ -23,11 +25,17 @@ const newsColors = [
   'bg-[#263238]',
 ];
 
-export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
+export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem, onUpload, isAdmin }) => {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const isProgramming = title.includes('Programación');
   // Logic to show FAB on specific public views (History, About, Programming)
   const showListenerFab = title.includes('Historia') || title.includes('Quiénes Somos') || title.includes('Programación');
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && onUpload) {
+      onUpload(e.target.files[0]);
+    }
+  };
 
   // Specific Layout for News Detail
   if (newsItem) {
@@ -76,6 +84,15 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
       <div className="flex-1 overflow-y-auto p-4 pb-24"> {/* Added pb-24 for player clearance */}
         {isProgramming ? (
           <div className="max-w-2xl mx-auto">
+             {isAdmin && (
+               <div className="mb-4">
+                 <label className="flex items-center justify-center gap-2 bg-[#5D3A24] text-white py-2 px-4 rounded-lg cursor-pointer hover:bg-[#4A2E1C] transition-colors">
+                   <Upload size={16} />
+                   Cargar Parrilla (TXT)
+                   <input type="file" accept=".txt" onChange={handleFileChange} className="hidden" />
+                 </label>
+               </div>
+             )}
              <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-[#5D3A24]/10">
                <div className="p-4 bg-[#F5F0EB] border-b border-[#5D3A24]/10">
                   <h3 className="font-bold text-[#5D3A24] uppercase tracking-wide text-sm">Parrilla Oficial</h3>
@@ -114,8 +131,19 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
              </div>
           </div>
         ) : customContent ? (
-            <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-[#5D3A24]/10 whitespace-pre-wrap">
-                {customContent}
+            <div className="max-w-2xl mx-auto">
+                {isAdmin && (
+                    <div className="mb-4">
+                        <label className="flex items-center justify-center gap-2 bg-[#5D3A24] text-white py-2 px-4 rounded-lg cursor-pointer hover:bg-[#4A2E1C] transition-colors">
+                            <Upload size={16} />
+                            Cargar Contenido (TXT)
+                            <input type="file" accept=".txt" onChange={handleFileChange} className="hidden" />
+                        </label>
+                    </div>
+                )}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-[#5D3A24]/10 whitespace-pre-wrap">
+                    {customContent}
+                </div>
             </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full opacity-50">

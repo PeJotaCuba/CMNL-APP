@@ -4,6 +4,7 @@ import PublicLanding from './components/PublicLanding';
 import ListenerHome from './components/ListenerHome';
 import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
+import ContentManagementSection from './components/gestion/ContentManagementSection';
 import EquipoSection from './components/gestion/EquipoSection';
 import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
@@ -12,6 +13,7 @@ import MusicaApp from './components/MusicaApp';
 import HistoryEvolutionView from './src/components/HistoryEvolutionView';
 import Sidebar from './components/Sidebar';
 import QuienesSomos from './components/QuienesSomos';
+import NewsUploadModal from './components/NewsUploadModal';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
@@ -20,6 +22,7 @@ import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
+  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
   const [history, setHistory] = useState<AppView[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -245,6 +248,9 @@ const App: React.FC = () => {
   }, [history, currentView]);
 
   const handleNavigate = (view: AppView, data?: any) => {
+    if (view === AppView.ADMIN_SECTION_NEWS) {
+      setIsNewsModalOpen(true);
+    }
     checkDirty(() => {
         window.history.pushState(null, '', window.location.pathname);
         setHistory((prev) => [...prev, currentView]);
@@ -484,6 +490,31 @@ const App: React.FC = () => {
   const isIntegratedPlayerView = currentView === AppView.WORKER_HOME || currentView === AppView.ADMIN_DASHBOARD;
   const showPlayer = !isAppView && !isLoginScreen && !isIntegratedPlayerView;
 
+  const handleNewsUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const blocks = text.split(/---/).filter(b => b.trim());
+        const newNews: NewsItem[] = blocks.map((block, index) => {
+          const lines = block.trim().split('\n').filter(l => l.trim());
+          const title = lines[0] || 'Sin Título';
+          const content = lines.slice(1).join('\n') || '';
+          return {
+            id: `news-${Date.now()}-${index}`,
+            title,
+            content,
+            category: 'General',
+            date: new Date().toLocaleDateString(),
+            excerpt: content.slice(0, 100) + '...'
+          };
+        });
+        setNews(newNews);
+        localStorage.setItem('rcm_data_news', JSON.stringify(newNews));
+        alert(`${newNews.length} noticias cargadas y actualizadas correctamente.`);
+    };
+    reader.readAsText(file);
+  };
+
   const renderView = () => {
     switch (currentView) {
       case AppView.LANDING: // Acts as LOGIN view now
@@ -582,16 +613,43 @@ const App: React.FC = () => {
       // Public Sections
       case AppView.SECTION_HISTORY:
         return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} />;
+      case AppView.ADMIN_SECTION_HISTORY:
+        return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} isAdmin={true} onUpload={(file) => {
+            const reader = new FileReader();
+            reader.onload = (e) => setHistoryContent(e.target?.result as string);
+            reader.readAsText(file);
+        }} />;
       case AppView.SECTION_HISTORY_EVOLUTION:
         return <HistoryEvolutionView currentUser={currentUser} onBack={handleBack} />;
       case AppView.SECTION_PROGRAMMING_PUBLIC:
         return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
+      case AppView.ADMIN_SECTION_PROGRAMMING:
+        return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} isAdmin={true} onUpload={(file) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target?.result as string;
+                const lines = text.split('\n').filter(l => l.trim());
+                const newPrograms = lines.map((line, index) => {
+                  const [time, name, description] = line.split('|').map(s => s.trim());
+                  return {
+                    id: `prog-${Date.now()}-${index}`,
+                    time: time || '00:00',
+                    name: name || 'Programa sin nombre',
+                    description: description || '',
+                    days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+                  };
+                });
+                localStorage.setItem('rcm_programming', JSON.stringify(newPrograms));
+                alert(`${newPrograms.length} programas cargados correctamente.`);
+            };
+            reader.readAsText(file);
+        }} />;
       case AppView.SECTION_ABOUT:
         return <QuienesSomos onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_NEWS:
         return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />; 
-      case AppView.SECTION_NEWS_DETAIL:
-        return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} newsItem={selectedNews} />;
+      case AppView.ADMIN_SECTION_NEWS:
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_PODCAST:
         return <PlaceholderView title="Podcasts" subtitle="Escucha a tu ritmo" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_PROFILE:
@@ -660,12 +718,18 @@ const App: React.FC = () => {
           isLogoutTrigger={isLogoutTrigger}
         />
 
+        <NewsUploadModal 
+          isOpen={isNewsModalOpen} 
+          onClose={() => setIsNewsModalOpen(false)} 
+          onUpload={handleNewsUpload} 
+        />
+
         {showPlayer && (
            <>
              <div className={`fixed bottom-0 left-0 right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 transition-all duration-300 flex`}>
                  
                  {/* Left Info Box (Only on Desktop Listener Home) */}
-                 {(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) && (
+                 {(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS || currentView === AppView.ADMIN_SECTION_NEWS) && (
                     <div className="hidden md:flex flex-col justify-center w-64 bg-[#2C1B15] border-r border-white/5 px-6 shrink-0 py-3">
                         <p className="font-bold text-[#C69C6D] uppercase tracking-widest text-[10px] mb-1">Radio Ciudad Monumento</p>
                         <p className="text-[10px] text-stone-500">Voz de la segunda villa cubana</p>

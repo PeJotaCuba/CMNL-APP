@@ -104,16 +104,25 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
              <SidebarLink icon={<ScrollText size={18} />} label="Historia" onClick={() => onNavigate(AppView.SECTION_HISTORY)} />
              <SidebarLink icon={<Users size={18} />} label="Quiénes Somos" onClick={() => onNavigate(AppView.SECTION_ABOUT)} />
              <SidebarLink icon={<Mic size={18} />} label="Programación" onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} />
-             <SidebarLink icon={<Newspaper size={18} />} label="Noticias" onClick={() => onNavigate(AppView.SECTION_NEWS)} />
+             
+             {onSync && (
+                <div className="mt-8 flex flex-col items-center">
+                  <button 
+                    onClick={onSync} 
+                    disabled={isSyncing} 
+                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${
+                      isSyncing ? 'bg-stone-700 cursor-not-allowed' : 'bg-[#C69C6D] hover:bg-[#B58B5C] active:scale-95 ring-4 ring-[#C69C6D]/10'
+                    } text-white mb-2`}
+                  >
+                      <RefreshCw size={24} className={isSyncing ? 'animate-spin' : ''} />
+                  </button>
+                  <span className="text-[10px] font-bold text-[#C69C6D] uppercase tracking-widest">Actualizar</span>
+                </div>
+             )}
          </div>
 
-         <div className="mt-auto pt-6 border-t border-white/5">
-            {onSync && (
-                <button onClick={onSync} disabled={isSyncing} className="flex items-center gap-3 text-stone-400 hover:text-[#CD853F] transition-colors w-full p-2 rounded-lg hover:bg-white/5 mb-2">
-                    <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-                    <span className="text-sm font-medium">Actualizar</span>
-                </button>
-            )}
+         <div className="mt-4 pt-4 border-t border-white/5">
+            {/* Divider only */}
          </div>
       </aside>
 

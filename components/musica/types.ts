@@ -41,6 +41,7 @@ export interface Production {
     id: string;
     date: string;
     program: string;
+    director?: string;
     archived?: boolean;
     tracks: {
         title: string;
@@ -55,10 +56,12 @@ export interface Production {
 export interface User {
   username: string;
   password?: string;
-  role: 'admin' | 'director' | 'user'; 
+  role: 'admin' | 'director' | 'coordinador' | 'user'; 
   fullName: string;
   phone?: string;
   uniqueId?: string;
+  specialties?: string[];
+  category?: string;
 }
 
 export interface ReportStatus {
@@ -101,7 +104,7 @@ export interface SearchFilters {
   type: FilterType;
 }
 
-export type AuthMode = 'user' | 'director' | 'admin' | null;
+export type AuthMode = 'user' | 'director' | 'admin' | 'coordinador' | null;
 
 export const DEFAULT_PROGRAMS_LIST = [
   "Buenos Días, Bayamo",

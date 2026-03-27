@@ -86,8 +86,13 @@ const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onS
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={onClose}>
-        <div className="bg-[#2C1B15] w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-[#9E7649]/30" onClick={(e) => e.stopPropagation()}>
+    <div 
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" 
+        onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onClose();
+        }}
+    >
+        <div className="bg-[#2C1B15] w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh] border border-[#9E7649]/30">
             
             <div className="flex justify-between items-center p-5 border-b border-[#9E7649]/20 shrink-0 bg-[#1A100C] rounded-t-2xl">
                 <div className="flex items-center gap-3 overflow-hidden">

@@ -9,7 +9,7 @@ const REPORTS_STORE = 'reports';
 const PRODUCTIONS_STORE = 'productions';
 const SELECTIONS_STORE = 'selections';
 const SAVED_SELECTIONS_STORE = 'saved_selections_groups';
-const DB_VERSION = 5; // Incremented version
+const DB_VERSION = 6; // Incremented version
 
 const openDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
@@ -280,8 +280,9 @@ export const deleteReportFromDB = async (id: string): Promise<void> => {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(REPORTS_STORE, 'readwrite');
         const store = tx.objectStore(REPORTS_STORE);
-        store.delete(id);
-        tx.oncomplete = () => resolve();
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
     });
 };
 
@@ -336,11 +337,12 @@ export const loadProductionsFromDB = async (): Promise<Production[]> => {
 
 export const deleteProductionFromDB = async (id: string): Promise<void> => {
     const db = await openDB();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
         const store = tx.objectStore(PRODUCTIONS_STORE);
-        store.delete(id);
-        tx.oncomplete = () => resolve();
+        const request = store.delete(id);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
     });
 };
 
