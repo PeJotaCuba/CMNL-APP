@@ -108,6 +108,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportItems, setExportItems] = useState<ExportItem[]>([]);
   const [programName, setProgramName] = useState(programs[0] || '');
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null); 
   const [refreshReportsTrigger, setRefreshReportsTrigger] = useState(0);
 
@@ -431,15 +432,14 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleDownloadReport = async () => {
       if (!currentUser) return;
-      const pdfBlob = generateReportPDF({ userFullName: currentUser.fullName, userUniqueId: currentUser.uniqueId || 'N/A', program: programName, items: exportItems });
-      const dateStr = new Date().toISOString().split('T')[0];
-      const fileName = `PM-${programName}-${dateStr}.pdf`;
+      const pdfBlob = generateReportPDF({ userFullName: currentUser.fullName, userUniqueId: currentUser.uniqueId || 'N/A', program: programName, date: reportDate, items: exportItems });
+      const fileName = `PM-${programName}-${reportDate}.pdf`;
       
       if (editingReportId) {
           await deleteReportFromDB(editingReportId);
       }
       
-      await saveReportToDB({ id: `rep-${Date.now()}`, date: new Date().toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: exportItems, status: { downloaded: false, sent: false } });
+      await saveReportToDB({ id: `rep-${Date.now()}`, date: new Date(reportDate).toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: exportItems, status: { downloaded: false, sent: false } });
       setRefreshReportsTrigger(prev => prev + 1);
       alert("Reporte guardado."); setShowExportModal(false);
   };
@@ -451,7 +451,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       setSelectedTrack(null);
   };
 
-  const handleEditReport = (report: Report) => { if (report.items) { setExportItems(report.items); setProgramName(report.program); setEditingReportId(report.id); setShowExportModal(true); } };
+  const handleEditReport = (report: Report) => { if (report.items) { setExportItems(report.items); setProgramName(report.program); setReportDate(report.date.split('T')[0]); setEditingReportId(report.id); setShowExportModal(true); } };
 
   return (
     <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
@@ -635,11 +635,17 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                         <button onClick={() => setShowExportModal(false)}><span className="material-symbols-outlined text-[#E8DCCF]/40 hover:text-white">close</span></button>
                     </div>
 
-                    <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 shrink-0">
-                        <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
-                        <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
-                            {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
+                    <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 shrink-0 grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
+                            <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
+                                {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Fecha</label>
+                            <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]" />
+                        </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">

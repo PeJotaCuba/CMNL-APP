@@ -13,6 +13,7 @@ interface ReportData {
     userFullName: string;
     userUniqueId: string;
     program: string;
+    date: string;
     items: {
         title: string;
         author: string;
@@ -26,7 +27,7 @@ interface ReportData {
 export const generateReportPDF = (data: ReportData): Blob => {
     const JsPDFCtor = (jsPDF as any).default || jsPDF;
     const doc = new JsPDFCtor();
-    const today = new Date().toLocaleDateString('es-ES');
+    const dateToDisplay = new Date(data.date).toLocaleDateString('es-ES', { timeZone: 'UTC' });
 
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
@@ -37,7 +38,7 @@ export const generateReportPDF = (data: ReportData): Blob => {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`Director(a): ${data.userFullName}`, 20, 45);
-    doc.text(`Fecha: ${today}`, 20, 50);
+    doc.text(`Fecha: ${dateToDisplay}`, 20, 50);
     doc.text(`Programa: ${data.program || 'Sin Especificar'}`, 20, 55);
 
     doc.setLineWidth(0.5);

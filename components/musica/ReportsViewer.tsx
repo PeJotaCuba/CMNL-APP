@@ -129,7 +129,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 <div className="min-w-0 flex-1">
                                     <h4 className="font-bold text-white truncate text-sm">{report.fileName}</h4>
                                     <div className="flex flex-wrap text-xs text-[#E8DCCF]/60 gap-x-3 gap-y-1 mt-1">
-                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">calendar_today</span> {new Date(report.date).toLocaleDateString()}</span>
+                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">calendar_today</span> {new Date(report.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}</span>
                                         <span className="flex items-center gap-1 truncate"><span className="material-symbols-outlined text-[10px]">radio</span> {report.program}</span>
                                     </div>
                                     <p className="text-[10px] text-[#E8DCCF]/40 mt-1 truncate">Generado por: {report.generatedBy}</p>
