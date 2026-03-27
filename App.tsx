@@ -32,7 +32,7 @@ const App: React.FC = () => {
   const checkDirty = (callback: () => void, isLogout = false) => {
       // Check if user should see the backup prompt
       const isExcluded = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
-      const isActiveRole = ['Usuario'].includes(currentUser?.classification || '');
+      const isActiveRole = ['Director', 'Coordinador', 'Trabajador', 'Usuario'].includes(currentUser?.classification || '');
 
       if (isDirty && !isExcluded && isActiveRole) {
           pendingNavigation.current = callback;

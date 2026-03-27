@@ -293,7 +293,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   onClick={() => setViewingMember(member)}
                 >
                   {isAdmin && (
-                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-100 transition-opacity">
                       {isAdmin && (
                         (() => {
                           const user = users.find(u => u.id === member.id || u.username.toLowerCase() === member.id.toLowerCase());
@@ -327,7 +327,7 @@ Recuerde Actualizar antes de autenticarse.`;
                         onClick={(e) => { 
                           e.stopPropagation(); 
                           // Find corresponding user
-                          const user = users.find(u => u.id === member.id);
+                          const user = users.find(u => u.id === member.id || u.username.toLowerCase() === member.id.toLowerCase());
                           setEditingMember({
                             ...member,
                             username: user?.username || '',

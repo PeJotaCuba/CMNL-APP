@@ -10,7 +10,7 @@ import Settings from './musica/Settings';
 import Productions from './musica/Productions';
 import ReportsViewer from './musica/ReportsViewer';
 import Guide from './musica/Guide';
-import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB, saveSavedSelectionsListToDB, loadSavedSelectionsListFromDB } from './musica/services/db'; 
+import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB, saveSavedSelectionsListToDB, loadSavedSelectionsListFromDB, deleteReportFromDB } from './musica/services/db'; 
 import { generateReportPDF } from './musica/services/pdfService';
 
 const USERS_KEY = 'rcm_users_db';
@@ -109,6 +109,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [exportItems, setExportItems] = useState<ExportItem[]>([]);
   const [programName, setProgramName] = useState(programs[0] || '');
   const [editingReportId, setEditingReportId] = useState<string | null>(null); 
+  const [refreshReportsTrigger, setRefreshReportsTrigger] = useState(0);
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -433,7 +434,13 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       const pdfBlob = generateReportPDF({ userFullName: currentUser.fullName, userUniqueId: currentUser.uniqueId || 'N/A', program: programName, items: exportItems });
       const dateStr = new Date().toISOString().split('T')[0];
       const fileName = `PM-${programName}-${dateStr}.pdf`;
-      await saveReportToDB({ id: editingReportId || `rep-${Date.now()}`, date: new Date().toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: exportItems, status: { downloaded: false, sent: false } });
+      
+      if (editingReportId) {
+          await deleteReportFromDB(editingReportId);
+      }
+      
+      await saveReportToDB({ id: `rep-${Date.now()}`, date: new Date().toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: exportItems, status: { downloaded: false, sent: false } });
+      setRefreshReportsTrigger(prev => prev + 1);
       alert("Reporte guardado."); setShowExportModal(false);
   };
 
@@ -591,7 +598,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
             {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
             {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} currentUser={currentUser} />}
-            {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} />}
+            {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} refreshTrigger={refreshReportsTrigger} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
         </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, RefreshCw } from 'lucide-react';
+import { Users, X } from 'lucide-react';
 import CMNLHeader from './CMNLHeader';
 
 interface TeamMember {
@@ -16,12 +16,9 @@ interface QuienesSomosProps {
   onMenuClick: () => void;
 }
 
-const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
-
 const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
   useEffect(() => {
     // Load existing data
@@ -36,36 +33,7 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
         console.error("Error parsing team data", e);
       }
     }
-
-    // Check if we need to prompt for update (every 24 hours)
-    const lastUpdate = localStorage.getItem('rcm_equipo_last_update');
-    const now = Date.now();
-    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-
-    if (!lastUpdate || now - parseInt(lastUpdate) > TWENTY_FOUR_HOURS) {
-      setShowUpdatePrompt(true);
-    }
   }, []);
-
-  const updateDatabase = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${EQUIPO_URL}?t=${new Date().getTime()}`);
-      if (!response.ok) throw new Error("Error al descargar la base de datos");
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setTeam(data);
-        localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(data));
-        localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
-        setShowUpdatePrompt(false);
-      }
-    } catch (error) {
-      console.error(error);
-      alert("Hubo un error al actualizar la base de datos.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getPriority = (specialtyStr: string) => {
     const roles = specialtyStr.split(' / ').map(s => s.trim().toLowerCase());
@@ -102,17 +70,16 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
         sectionTitle="Quiénes Somos"
         onMenuClick={onMenuClick}
         onBack={onBack}
-      >
-        <button onClick={updateDatabase} disabled={loading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2" title="Actualizar Datos">
-          <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
-          <span className="text-sm font-medium">Actualizar</span>
-        </button>
-      </CMNLHeader>
+      />
 
       <div className="p-6 overflow-y-auto pb-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
           {sortedTeam.map(member => (
-            <div key={member.id} className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg">
+            <div 
+              key={member.id} 
+              className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg cursor-pointer hover:border-[#9E7649]/50 transition-colors"
+              onClick={() => setSelectedMember(member)}
+            >
               <div className="relative w-24 h-24 rounded-full bg-[#1A100C] border-2 border-[#9E7649]/50 mb-4 overflow-hidden flex items-center justify-center">
                 {member.photoUrl ? (
                   <img src={member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
@@ -135,31 +102,34 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
         </div>
       </div>
 
-      {/* Update Prompt Modal */}
-      {showUpdatePrompt && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full relative text-center">
-            <h2 className="text-xl font-bold text-white mb-2">Actualizar Equipo</h2>
-            <p className="text-[#E8DCCF] mb-6 text-sm">
-              Es recomendable actualizar la información del equipo para ver los últimos cambios.
-            </p>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => {
-                  setShowUpdatePrompt(false);
-                  localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
-                }}
-                className="flex-1 py-2 rounded-lg font-bold text-[#9E7649] bg-black/20 border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-colors"
-              >
-                Más tarde
-              </button>
-              <button 
-                onClick={updateDatabase}
-                disabled={loading}
-                className="flex-1 py-2 rounded-lg font-bold text-white bg-[#9E7649] hover:bg-[#8B653D] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? <RefreshCw size={16} className="animate-spin" /> : 'Actualizar'}
-              </button>
+      {/* Member Info Modal */}
+      {selectedMember && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => setSelectedMember(null)}
+              className="absolute top-4 right-4 text-[#E8DCCF]/50 hover:text-white transition-colors"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-32 h-32 rounded-full border-4 border-[#9E7649]/30 overflow-hidden mb-4 bg-black/50 flex items-center justify-center">
+                {selectedMember.photoUrl ? (
+                  <img src={selectedMember.photoUrl} alt={selectedMember.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Users size={48} className="text-[#9E7649]/50" />
+                )}
+              </div>
+              <h2 className="text-2xl font-bold text-white text-center leading-tight mb-1">{selectedMember.name}</h2>
+              <p className="text-[#9E7649] font-medium text-center">{selectedMember.specialty}</p>
+            </div>
+            
+            <div className="bg-black/30 rounded-xl p-4 border border-white/5 max-h-60 overflow-y-auto">
+              <h3 className="text-sm font-bold text-white/70 uppercase tracking-wider mb-2">Biografía</h3>
+              <p className="text-sm text-[#E8DCCF]/90 whitespace-pre-wrap leading-relaxed">
+                {selectedMember.info || 'No hay información biográfica disponible para este miembro.'}
+              </p>
             </div>
           </div>
         </div>

@@ -6,9 +6,10 @@ interface ReportsViewerProps {
     users?: User[]; 
     onEdit: (report: Report) => void;
     currentUser?: User | null;
+    refreshTrigger?: number;
 }
 
-const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, currentUser }) => {
+const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, currentUser, refreshTrigger = 0 }) => {
     const [reports, setReports] = useState<Report[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
@@ -20,7 +21,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             setShowTutorial(true);
         }
         loadData();
-    }, []);
+    }, [refreshTrigger, currentUser]);
 
     const closeTutorial = () => {
         localStorage.setItem('rcm_tut_reports', 'true');

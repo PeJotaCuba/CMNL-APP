@@ -117,7 +117,8 @@ const WorkerHome: React.FC<Props> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${username}.json`;
+    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `${username}_${dateStr}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -128,9 +129,8 @@ const WorkerHome: React.FC<Props> = ({
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
 
-    const expectedFileName = `${currentUser.username}.json`;
-    if (file.name !== expectedFileName) {
-        alert(`El archivo de respaldo debe llamarse exactamente "${expectedFileName}".`);
+    if (!file.name.startsWith(currentUser.username) || !file.name.endsWith('.json')) {
+        alert(`El archivo de respaldo debe comenzar con "${currentUser.username}" y ser un archivo .json.`);
         e.target.value = '';
         return;
     }
@@ -365,7 +365,7 @@ const WorkerHome: React.FC<Props> = ({
                  <div>
                     <p className="text-[10px] text-stone-400 uppercase tracking-wide">Usuario conectado</p>
                     <p className="text-sm text-[#FFF8DC] font-medium">{currentUser?.name}</p>
-                    <p className="text-xs text-[#CD853F]">{currentUser?.classification || 'Trabajador'}</p>
+                    <p className="text-xs text-[#CD853F]">{currentUser?.classification || 'Usuario'}</p>
                  </div>
               </div>
               <div className="flex gap-2">

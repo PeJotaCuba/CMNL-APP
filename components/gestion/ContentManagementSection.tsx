@@ -87,23 +87,6 @@ const ContentManagementSection: React.FC<Props> = ({ historyContent, setHistoryC
             </label>
         </div>
 
-        {/* Quiénes Somos Section */}
-        <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-lg">
-            <div className="flex items-center gap-4 mb-4 border-b border-[#9E7649]/10 pb-4">
-                <div className="p-3 bg-[#9E7649]/20 rounded-xl text-[#9E7649]">
-                    <Info size={24} />
-                </div>
-                <div>
-                    <h3 className="text-lg font-bold text-white">Quiénes Somos</h3>
-                    <p className="text-xs text-[#E8DCCF]/60">Visible en la sección pública "Quiénes Somos"</p>
-                </div>
-            </div>
-            <label className="flex items-center gap-2 bg-[#1A100C] hover:bg-[#2C1B15] text-[#E8DCCF] px-4 py-2 rounded-lg text-sm font-bold transition-colors border border-[#9E7649]/30 cursor-pointer">
-                <Upload size={16} />
-                <span>Cargar Quiénes Somos (.txt)</span>
-                <input type="file" accept=".txt" onChange={(e) => handleFileUpload(e, 'about')} className="hidden" />
-            </label>
-        </div>
         {/* Noticias Section */}
         <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-lg">
             <div className="flex items-center gap-4 mb-4 border-b border-[#9E7649]/10 pb-4">
