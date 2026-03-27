@@ -386,92 +386,60 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
       e.target.value = ''; 
   };
 
-  const handleExportHistoryCSV = async () => {
+  const handleExportDB = async () => {
       const history = await loadProductionsFromDB();
-      if (history.length === 0) return alert("No hay historial de producciones.");
+      if (history.length === 0) return alert("No hay producciones para exportar.");
 
-      const rows: any[] = [];
-      history.forEach(prod => {
-          prod.tracks.forEach(t => {
-              rows.push({
-                  Fecha: prod.date,
-                  Programa: prod.program,
-                  Director: prod.director || '',
-                  Título: t.title,
-                  Autor: t.author,
-                  "País Autor": t.authorCountry,
-                  Intérprete: t.performer,
-                  "País Intérprete": t.performerCountry,
-                  Género: t.genre
-              });
-          });
-      });
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Historial_Producciones");
-      XLSX.writeFile(wb, `RCM_Historial_Producciones_${date}.csv`);
+      const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
+      saveAs(blob, `RCM_Producciones_BD.json`);
   };
 
-  const handleGenerateDOCX = async () => {
-    if (sessionTracks.length === 0) return alert("Agregue temas para generar el informe DOCX.");
+  const handleImportDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-    const tableRows = [
-        new TableRow({
-            children: [
-                new TableCell({ children: [new Paragraph({ text: "Título", style: "Strong" })] }),
-                new TableCell({ children: [new Paragraph({ text: "Aut/Int", style: "Strong" })] }),
-                new TableCell({ children: [new Paragraph({ text: "Países", style: "Strong" })] }),
-                new TableCell({ children: [new Paragraph({ text: "Género", style: "Strong" })] }),
-            ],
-        }),
-        ...sessionTracks.map(t => new TableRow({
-            children: [
-                new TableCell({ children: [new Paragraph(t.title)] }),
-                new TableCell({ children: [new Paragraph(`${t.author} / ${t.performer}`)] }),
-                new TableCell({ children: [new Paragraph(`${t.authorCountry} / ${t.performerCountry}`)] }),
-                new TableCell({ children: [new Paragraph(t.genre)] }),
-            ],
-        }))
-    ];
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+          try {
+              const content = evt.target?.result as string;
+              const importedProductions = JSON.parse(content);
 
-    const doc = new Document({
-        sections: [{
-            properties: {},
-            children: [
-                new Paragraph({ text: "REPORTE DE PRODUCCIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
-                new Paragraph({ text: "" }),
-                new Paragraph({ text: `Fecha: ${date}` }),
-                new Paragraph({ text: `Programa: ${program}` }),
-                new Paragraph({ text: "" }),
-                new Table({
-                    width: { size: 100, type: WidthType.PERCENTAGE },
-                    rows: tableRows,
-                }),
-            ],
-        }],
-    });
+              if (!Array.isArray(importedProductions)) return alert("El archivo no tiene un formato válido.");
 
-    const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Produccion_${program}_${date}.docx`);
+              const currentProductions = await loadProductionsFromDB();
+              
+              for (const importedProd of importedProductions) {
+                  // Find if exists
+                  const existingIndex = currentProductions.findIndex(p => p.date === importedProd.date && p.program === importedProd.program);
+                  if (existingIndex !== -1) {
+                      // Update: keep the existing ID
+                      importedProd.id = currentProductions[existingIndex].id;
+                      await saveProductionToDB(importedProd);
+                  } else {
+                      // Add: generate a new ID
+                      importedProd.id = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+                      await saveProductionToDB(importedProd);
+                  }
+              }
+
+              await fetchProductions();
+              alert("Base de datos cargada correctamente.");
+          } catch (error) {
+              console.error("Error importing DB:", error);
+              alert("Error al importar el archivo JSON.");
+          }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
   };
 
-  const handleMoveToArchive = async () => {
-      if (stockMensual.length === 0) return alert("No hay producciones en el stock mensual para archivar.");
-      if (!window.confirm("¿Estás seguro de que deseas mover todas las producciones del mes al archivo?")) return;
+  const handleGenerateMonthlyReportDOCX = async () => {
+    if (stockMensual.length === 0) return alert("No hay producciones en el mes actual para generar el informe.");
 
-      const updatedProductions = stockMensual.map(p => ({ ...p, archived: true }));
-      try {
-          await bulkUpdateProductions(updatedProductions);
-          await fetchProductions();
-          alert("Todas las producciones del mes han sido movidas al archivo.");
-      } catch (error) {
-          alert("Error al archivar producciones.");
-      }
-  };
-
-  const handleGenerateDetailedStatsDOCX = async () => {
-    if (stockMensual.length === 0) return alert("No hay producciones en el mes actual para generar estadísticas.");
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
     const allTracks = stockMensual.flatMap(p => p.tracks);
     
@@ -529,11 +497,30 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
     const topPerformers = getTop5(allTracks.map(t => t.performer));
     const topGenres = getTop5(allTracks.map(t => t.genre));
 
+    const tableRows = [
+        new TableRow({
+            children: [
+                new TableCell({ children: [new Paragraph({ text: "Título", style: "Strong" })] }),
+                new TableCell({ children: [new Paragraph({ text: "Aut/Int", style: "Strong" })] }),
+                new TableCell({ children: [new Paragraph({ text: "Países", style: "Strong" })] }),
+                new TableCell({ children: [new Paragraph({ text: "Género", style: "Strong" })] }),
+            ],
+        }),
+        ...allTracks.map(t => new TableRow({
+            children: [
+                new TableCell({ children: [new Paragraph(t.title)] }),
+                new TableCell({ children: [new Paragraph(`${t.author} / ${t.performer}`)] }),
+                new TableCell({ children: [new Paragraph(`${t.authorCountry} / ${t.performerCountry}`)] }),
+                new TableCell({ children: [new Paragraph(t.genre)] }),
+            ],
+        }))
+    ];
+
     const doc = new Document({
         sections: [{
             properties: {},
             children: [
-                new Paragraph({ text: "ESTADÍSTICAS DE DIFUSIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: "INFORME MENSUAL DE PRODUCCIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
                 new Paragraph({ text: `Mes: ${currentMonthStr}`, alignment: AlignmentType.CENTER }),
                 new Paragraph({ text: "" }),
 
@@ -568,12 +555,33 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                 new Paragraph({ text: "" }),
                 new Paragraph({ text: "Géneros más difundidos:", style: "Strong" }),
                 ...topGenres.map(([name, count]) => new Paragraph({ text: `• ${name} (${count})` })),
+                new Paragraph({ text: "" }),
+
+                new Paragraph({ text: "5. Detalle de Temas", heading: "Heading2" }),
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: tableRows,
+                }),
             ],
         }],
     });
 
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Estadisticas_Musica_${currentMonthStr}.docx`);
+    saveAs(blob, `Informe_Mensual_Musica_${currentMonthStr}.docx`);
+  };
+
+  const handleMoveToArchive = async () => {
+      if (stockMensual.length === 0) return alert("No hay producciones en el stock mensual para archivar.");
+      if (!window.confirm("¿Estás seguro de que deseas mover todas las producciones del mes al archivo?")) return;
+
+      const updatedProductions = stockMensual.map(p => ({ ...p, archived: true }));
+      try {
+          await bulkUpdateProductions(updatedProductions);
+          await fetchProductions();
+          alert("Todas las producciones del mes han sido movidas al archivo.");
+      } catch (error) {
+          alert("Error al archivar producciones.");
+      }
   };
 
   const currentDate = new Date();
@@ -581,7 +589,8 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const currentMonth = currentDate.getMonth() + 1;
   const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
-  const getYearMonth = (dateStr: string) => {
+  const getYearMonth = (dateStr: any) => {
+      if (typeof dateStr !== 'string') return { year: 0, month: 0, key: 'Desconocido' };
       const parts = dateStr.split('-');
       if (parts.length >= 2) {
           const year = parseInt(parts[0], 10);
@@ -776,23 +785,21 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                     <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr})</h3>
                     <div className="flex gap-2">
                         <button 
-                            onClick={handleGenerateDOCX} 
+                            onClick={handleGenerateMonthlyReportDOCX} 
                             className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
                         >
-                            <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe DOCX (Sesión)
+                            <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe
                         </button>
                         <button 
-                            onClick={handleExportHistoryCSV} 
+                            onClick={handleExportDB} 
                             className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
                         >
-                            <span className="material-symbols-outlined text-green-500 text-sm">table_view</span> Exportar CSV
+                            <span className="material-symbols-outlined text-green-500 text-sm">download</span> Exportar BD
                         </button>
-                        <button 
-                            onClick={handleGenerateDetailedStatsDOCX} 
-                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                        >
-                            <span className="material-symbols-outlined text-blue-400 text-sm">analytics</span> Estadísticas .docx
-                        </button>
+                        <label className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px] cursor-pointer">
+                            <span className="material-symbols-outlined text-green-400 text-sm">upload</span> Cargar BD
+                            <input type="file" accept=".json" onChange={handleImportDB} className="hidden" />
+                        </label>
                         <button 
                             onClick={handleMoveToArchive} 
                             className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
