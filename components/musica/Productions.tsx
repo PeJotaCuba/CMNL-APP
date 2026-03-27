@@ -45,6 +45,8 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   
   const [dbProductions, setDbProductions] = useState<Production[]>([]);
   
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  
   const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void}>({isOpen: false, message: '', onConfirm: () => {}});
   const [alertDialog, setAlertDialog] = useState<{isOpen: boolean, message: string}>({isOpen: false, message: ''});
 
@@ -619,7 +621,7 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   });
 
   return (
-    <div id="productions-container" className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24">
+    <div id="productions-container" className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24 relative">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white">
             <span className="material-symbols-outlined text-[#9E7649]">playlist_add</span> 
             Control de Producciones
@@ -781,38 +783,48 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
 
         {activeTab === 'stock' && (
             <div className="space-y-4">
-                <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
-                    <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr})</h3>
-                    <div className="flex gap-2">
+                <div className="sticky top-0 z-20 bg-[#1A100C] flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
+                    <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr}) - {stockMensual.length} cargadas</h3>
+                    <div className="relative">
                         <button 
-                            onClick={handleGenerateMonthlyReportDOCX} 
+                            onClick={() => setIsActionsOpen(!isActionsOpen)}
                             className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
                         >
-                            <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe
+                            <span className="material-symbols-outlined text-sm">settings</span> Acciones
                         </button>
-                        <button 
-                            onClick={handleExportDB} 
-                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                        >
-                            <span className="material-symbols-outlined text-green-500 text-sm">download</span> Exportar BD
-                        </button>
-                        <label className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px] cursor-pointer">
-                            <span className="material-symbols-outlined text-green-400 text-sm">upload</span> Cargar BD
-                            <input type="file" accept=".json" onChange={handleImportDB} className="hidden" />
-                        </label>
-                        <button 
-                            onClick={handleMoveToArchive} 
-                            className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
-                        >
-                            <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
-                        </button>
-                        {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.role === 'coordinador') && (
-                            <button 
-                                onClick={() => { if(confirm('¿Estás seguro de limpiar toda la lista de producciones?')) onUpdateTracks([]); }} 
-                                className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
-                            >
-                                <span className="material-symbols-outlined text-sm">delete_sweep</span> Limpiar lista
-                            </button>
+                        {isActionsOpen && (
+                            <div className="absolute right-0 top-full mt-2 bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-2 shadow-xl z-20 w-40 space-y-2">
+                                <button 
+                                    onClick={() => { handleGenerateMonthlyReportDOCX(); setIsActionsOpen(false); }} 
+                                    className="w-full text-left text-white font-bold py-1 px-2 rounded hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                                >
+                                    <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe
+                                </button>
+                                <button 
+                                    onClick={() => { handleExportDB(); setIsActionsOpen(false); }} 
+                                    className="w-full text-left text-white font-bold py-1 px-2 rounded hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                                >
+                                    <span className="material-symbols-outlined text-green-500 text-sm">download</span> Exportar BD
+                                </button>
+                                <label className="w-full text-left text-white font-bold py-1 px-2 rounded hover:bg-[#3E1E16] flex items-center gap-2 text-[10px] cursor-pointer">
+                                    <span className="material-symbols-outlined text-green-400 text-sm">upload</span> Cargar BD
+                                    <input type="file" accept=".json" onChange={(e) => { handleImportDB(e); setIsActionsOpen(false); }} className="hidden" />
+                                </label>
+                                <button 
+                                    onClick={() => { handleMoveToArchive(); setIsActionsOpen(false); }} 
+                                    className="w-full text-left text-red-200 font-bold py-1 px-2 rounded hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
+                                >
+                                    <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
+                                </button>
+                                {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.role === 'coordinador') && (
+                                    <button 
+                                        onClick={() => { if(confirm('¿Estás seguro de limpiar toda la lista de producciones?')) { onUpdateTracks([]); setIsActionsOpen(false); } }} 
+                                        className="w-full text-left text-red-200 font-bold py-1 px-2 rounded hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">delete_sweep</span> Limpiar lista
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
