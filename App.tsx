@@ -331,6 +331,82 @@ const App: React.FC = () => {
       }
   };
 
+  const handleSystemBackup = () => {
+      const backupData: any = {
+          timestamp: new Date().toISOString(),
+          // Global state data
+          users: users,
+          historyContent: historyContent,
+          aboutContent: aboutContent,
+          news: news,
+          // Specific keys from localStorage
+          fichas: JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'),
+          catalogo: JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'),
+          transmissionConfig: JSON.parse(localStorage.getItem('rcm_transmission_config') || '{}'),
+          equipo: JSON.parse(localStorage.getItem('rcm_equipo_cmnl') || '[]'),
+          agendaPrograms: JSON.parse(localStorage.getItem('rcm_programs') || '[]'),
+          agendaEfemerides: JSON.parse(localStorage.getItem('rcm_efemerides') || '{}'),
+          agendaConmemoraciones: JSON.parse(localStorage.getItem('rcm_conmemoraciones') || '{}'),
+          agendaDayThemes: JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'),
+          agendaUsers: JSON.parse(localStorage.getItem('rcm_users') || '[]'),
+          agendaPropaganda: JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'),
+      };
+
+      // Collect all relevant keys from localStorage
+      const dynamicData: Record<string, any> = {};
+      const musicKeys = [
+          'rcm_users_db', 
+          'rcm_programs_list', 
+          'rcm_custom_roots',
+          'rcm_current_selection',
+          'rcm_saved_selections'
+      ];
+
+      for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (!key) continue;
+
+          // Skip music-specific keys
+          if (musicKeys.some(mk => key.includes(mk))) continue;
+
+          // Include relevant patterns
+          const isGuion = key.startsWith('guionbd_data_');
+          const isSection = key.startsWith('rcm_sections_');
+          const isPayment = key.startsWith('rcm_payment_');
+          const isUserData = key.startsWith('user_') && (
+              key.includes('rcm_data_worklogs') || 
+              key.includes('rcm_data_consolidated') || 
+              key.includes('rcm_interruptions') || 
+              key.includes('rcm_consolidated_months') ||
+              key.includes('habitual_mode') ||
+              key.includes('habitual_exclusions')
+          );
+
+          if (isGuion || isSection || isPayment || isUserData) {
+              try {
+                  dynamicData[key] = JSON.parse(localStorage.getItem(key) || 'null');
+              } catch (e) {
+                  dynamicData[key] = localStorage.getItem(key);
+              }
+          }
+      }
+      
+      backupData.dynamicData = dynamicData;
+
+      const dataStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `actualcmnl.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      alert('Respaldo del sistema generado con éxito (actualcmnl.json)');
+  };
+
   // Logic to sync from GitHub (Used by Users and Admins)
   const handleCloudSync = async () => {
       if(isSyncing) return;
@@ -555,6 +631,7 @@ const App: React.FC = () => {
             currentUser={currentUser}
             onLogout={handleLogout}
             onSync={handleCloudSync}
+            onSystemBackup={handleSystemBackup}
             isSyncing={isSyncing}
             isPlaying={isPlaying}
             togglePlay={togglePlay}

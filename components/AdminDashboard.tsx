@@ -11,6 +11,7 @@ interface Props {
   currentUser: User | null;
   onLogout: () => void;
   onSync: () => void;
+  onSystemBackup: () => void;
   isSyncing: boolean;
   isPlaying: boolean;
   togglePlay: () => void;
@@ -36,6 +37,7 @@ const AdminDashboard: React.FC<Props> = ({
     currentUser, 
     onLogout, 
     onSync, 
+    onSystemBackup,
     isSyncing,
     isPlaying,
     togglePlay,
@@ -111,12 +113,20 @@ const AdminDashboard: React.FC<Props> = ({
          <div className="flex justify-between items-center">
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
             {currentUser?.classification === 'Administrador' && (
-              <button 
-               onClick={onSync}
-               className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
-              >
-                Actualizar Sistema
-              </button>
+              <div className="flex gap-2">
+                <button 
+                 onClick={onSystemBackup}
+                 className="text-xs bg-[#2C1B15] text-[#9E7649] px-3 py-1.5 rounded-lg font-bold border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                >
+                  Respaldar Sistema
+                </button>
+                <button 
+                 onClick={onSync}
+                 className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
+                >
+                  Actualizar Sistema
+                </button>
+              </div>
             )}
          </div>
 
