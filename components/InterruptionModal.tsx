@@ -165,25 +165,25 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
             if (overlap > 0) {
                 let isInterrupted = true;
 
-                // Regla A: Tolerancia de Inicio
-                // Si la interrupción comienza aunque sea 1 minuto después de la salida (inicio), no se cuenta
-                if (startTime > progStart) {
+                // Regla A: Exclusión por Inicio Tardío (Regla de los 5 Minutos)
+                if (startTime >= progStart + 5) {
                     isInterrupted = false;
                 }
 
-                // Regla B: Umbral de Restablecimiento (75%)
-                if (endTime < progStart + (progDuration * 0.75)) {
+                // Regla B: Exclusión por Restablecimiento Temprano (Regla del 75%)
+                if (endTime <= progStart + (progDuration * 0.75)) {
                     isInterrupted = false;
                 }
 
+                // Regla C: Aplicación de Afectación Total
                 if (isInterrupted) {
                     results.push({
                         id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                         date,
                         programName: prog.name,
                         category: prog.category,
-                        affectedMinutes: overlap,
-                        percentage: Math.round((overlap / progDuration) * 100)
+                        affectedMinutes: progDuration,
+                        percentage: 100
                     });
                 }
             }

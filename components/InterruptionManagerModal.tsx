@@ -61,6 +61,37 @@ export const InterruptionManagerModal: React.FC<Props> = ({
         setEditForm({ ...interruption });
     };
 
+    const getProgramDuration = (progName: string): number => {
+        const ficha = fichas.find(f => f.name.toLowerCase() === progName.toLowerCase());
+        if (ficha) {
+            const lower = (ficha.duration || '').toLowerCase();
+            let totalMinutes = 0;
+            const hoursMatch = lower.match(/(\d+)\s*hora/);
+            if (hoursMatch) totalMinutes += parseInt(hoursMatch[1]) * 60;
+            const minutesMatch = lower.match(/(\d+)\s*minuto/);
+            if (minutesMatch) totalMinutes += parseInt(minutesMatch[1]);
+            if (totalMinutes === 0) {
+                const match = lower.match(/(\d+)/);
+                if (match) totalMinutes = parseInt(match[1]);
+            }
+            return totalMinutes || 60;
+        }
+        if (progName.includes('Cabina')) return 30;
+        return 60; // Default
+    };
+
+    const handleProgramNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!editForm) return;
+        const newName = e.target.value;
+        const duration = getProgramDuration(newName);
+        setEditForm({
+            ...editForm,
+            programName: newName,
+            affectedMinutes: duration,
+            percentage: 100
+        });
+    };
+
     const handleSaveEdit = () => {
         if (editForm) {
             onUpdateInterruptions(interruptions.map(i => i.id === editForm.id ? editForm : i));
@@ -154,7 +185,7 @@ export const InterruptionManagerModal: React.FC<Props> = ({
                                                 <input 
                                                     type="text" 
                                                     value={editForm.programName}
-                                                    onChange={e => setEditForm({...editForm, programName: e.target.value})}
+                                                    onChange={handleProgramNameChange}
                                                     className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-[#E8DCCF] focus:outline-none focus:border-[#9E7649]"
                                                 />
                                             </div>
@@ -175,8 +206,8 @@ export const InterruptionManagerModal: React.FC<Props> = ({
                                                 <input 
                                                     type="number" 
                                                     value={editForm.affectedMinutes}
-                                                    onChange={e => setEditForm({...editForm, affectedMinutes: parseInt(e.target.value) || 0})}
-                                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-[#E8DCCF] focus:outline-none focus:border-[#9E7649]"
+                                                    disabled
+                                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-[#E8DCCF]/50 focus:outline-none cursor-not-allowed"
                                                 />
                                             </div>
                                             <div>
@@ -184,8 +215,8 @@ export const InterruptionManagerModal: React.FC<Props> = ({
                                                 <input 
                                                     type="number" 
                                                     value={editForm.percentage}
-                                                    onChange={e => setEditForm({...editForm, percentage: parseInt(e.target.value) || 0})}
-                                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-[#E8DCCF] focus:outline-none focus:border-[#9E7649]"
+                                                    disabled
+                                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-[#E8DCCF]/50 focus:outline-none cursor-not-allowed"
                                                 />
                                             </div>
                                         </div>
