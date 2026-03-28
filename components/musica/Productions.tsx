@@ -46,6 +46,7 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const [dbProductions, setDbProductions] = useState<Production[]>([]);
   
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [stockSearchTerm, setStockSearchTerm] = useState('');
   
   const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void}>({isOpen: false, message: '', onConfirm: () => {}});
   const [alertDialog, setAlertDialog] = useState<{isOpen: boolean, message: string}>({isOpen: false, message: ''});
@@ -605,6 +606,13 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const stockMensual = dbProductions.filter(p => {
       const { year, month } = getYearMonth(p.date);
       return year === currentYear && month === currentMonth && !p.archived;
+  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const filteredStockMensual = stockMensual.filter(p => {
+      if (!stockSearchTerm.trim()) return true;
+      const terms = stockSearchTerm.toLowerCase().split(/\s+/);
+      const combinedString = `${p.date} ${p.program} ${p.director || ''}`.toLowerCase();
+      return terms.every(term => combinedString.includes(term));
   });
   
   const archivo = dbProductions.filter(p => {
@@ -618,6 +626,11 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
       const { key } = getYearMonth(p.date);
       if (!archivoPorMes[key]) archivoPorMes[key] = [];
       archivoPorMes[key].push(p);
+  });
+
+  // Ordenar cada mes por fecha
+  Object.keys(archivoPorMes).forEach(key => {
+      archivoPorMes[key].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   });
 
   return (
@@ -828,12 +841,27 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                         )}
                     </div>
                 </div>
-                {stockMensual.length === 0 ? (
+
+                {/* Search Bar */}
+                <div className="mb-4">
+                    <div className="relative">
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#E8DCCF]/40 text-sm">search</span>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por fecha, programa o director..." 
+                            value={stockSearchTerm}
+                            onChange={(e) => setStockSearchTerm(e.target.value)}
+                            className="w-full bg-[#2C1B15] border border-[#9E7649]/30 text-white text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:border-[#9E7649] transition-colors"
+                        />
+                    </div>
+                </div>
+
+                {filteredStockMensual.length === 0 ? (
                     <div className="p-8 border-2 border-dashed border-[#9E7649]/20 rounded-2xl text-center text-[#E8DCCF]/40 text-xs">
-                        No hay producciones guardadas en este mes.
+                        {stockSearchTerm ? "No se encontraron producciones que coincidan con la búsqueda." : "No hay producciones guardadas en este mes."}
                     </div>
                 ) : (
-                    stockMensual.map(prod => (
+                    filteredStockMensual.map(prod => (
                         <div key={prod.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
