@@ -610,8 +610,9 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
 
   const filteredStockMensual = stockMensual.filter(p => {
       if (!stockSearchTerm.trim()) return true;
-      const terms = stockSearchTerm.toLowerCase().split(/\s+/);
-      const combinedString = `${p.date} ${p.program} ${p.director || ''}`.toLowerCase();
+      const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const terms = normalize(stockSearchTerm).split(/\s+/);
+      const combinedString = normalize(`${p.date} ${p.program} ${p.director || ''}`);
       return terms.every(term => combinedString.includes(term));
   });
   
@@ -844,15 +845,20 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
 
                 {/* Search Bar */}
                 <div className="mb-4">
-                    <div className="relative">
+                    <div className="relative flex items-center">
                         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#E8DCCF]/40 text-sm">search</span>
                         <input 
                             type="text" 
                             placeholder="Buscar por fecha, programa o director..." 
                             value={stockSearchTerm}
                             onChange={(e) => setStockSearchTerm(e.target.value)}
-                            className="w-full bg-[#2C1B15] border border-[#9E7649]/30 text-white text-sm rounded-xl py-2 pl-9 pr-4 focus:outline-none focus:border-[#9E7649] transition-colors"
+                            className="w-full bg-[#2C1B15] border border-[#9E7649]/30 text-white text-sm rounded-xl py-2 pl-9 pr-24 focus:outline-none focus:border-[#9E7649] transition-colors"
                         />
+                        {stockSearchTerm && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#E8DCCF]/60 bg-[#1A100C] px-2 py-1 rounded-md border border-[#9E7649]/20">
+                                {filteredStockMensual.length} {filteredStockMensual.length === 1 ? 'resultado' : 'resultados'}
+                            </span>
+                        )}
                     </div>
                 </div>
 
