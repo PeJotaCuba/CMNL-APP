@@ -3,6 +3,8 @@ import CMNLHeader from './CMNLHeader';
 import { User as GlobalUser } from '../types';
 import { Track, ViewState, AuthMode, User, DEFAULT_PROGRAMS_LIST, Report, ExportItem, SavedSelection } from './musica/types';
 import { parseTxtDatabase, GENRES_LIST, COUNTRIES_LIST } from './musica/constants';
+import { ProgramFicha } from '../types';
+import { INITIAL_FICHAS } from '../utils/fichasData';
 import TrackList from './musica/TrackList';
 import TrackDetail from './musica/TrackDetail';
 import CreditResults from './musica/CreditResults';
@@ -43,6 +45,10 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [view, setView] = useState<ViewState>(ViewState.LIST);
   const [users, setUsers] = useState<User[]>([]);
+  const [fichas, setFichas] = useState<ProgramFicha[]>(() => {
+      const saved = localStorage.getItem('rcm_data_fichas');
+      return saved ? JSON.parse(saved) : INITIAL_FICHAS;
+  });
 
   const [isLoaded, setIsLoaded] = useState(false);
   const isInitialMount = React.useRef(true);
@@ -804,7 +810,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             )}
 
             {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
-            {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} currentUser={currentUser} />}
+            {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} currentUser={currentUser} fichas={fichas} />}
             {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} refreshTrigger={refreshReportsTrigger} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
         </div>
