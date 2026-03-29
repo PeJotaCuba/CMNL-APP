@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Track, Production, DEFAULT_PROGRAMS_LIST, User } from './types';
 import { ProgramFicha } from '../../types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
@@ -51,6 +51,82 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [stockSearchTerm, setStockSearchTerm] = useState('');
+  
+  const monthName = new Date().toLocaleString('es-ES', { month: 'long' });
+  const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+
+  const totalBalance = useMemo(() => {
+      let totalQuota = 0;
+      let totalExecuted = 0;
+      
+      const PROGRAMS_TO_BALANCE = [
+          "Buenos Días Bayamo",
+          "La Cumbancha",
+          "Todos en Casa",
+          "Arte Bayamo",
+          "Parada Joven",
+          "Hablando con Juana",
+          "Al son de la radio",
+          "Sigue a tu ritmo",
+          "Cómplices",
+          "Estación 95.3",
+          "Palco de domingo"
+      ];
+
+      PROGRAMS_TO_BALANCE.forEach(program => {
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = now.getMonth();
+          
+          let targetFichas: ProgramFicha[] = [];
+          if (program === "La Cumbancha") {
+              targetFichas = fichas.filter(f => f.name.includes("La Cumbancha"));
+          } else {
+              targetFichas = fichas.filter(f => f.name === program);
+          }
+
+          if (targetFichas.length === 0) return;
+
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          for (let d = 1; d <= daysInMonth; d++) {
+              const date = new Date(year, month, d);
+              const dayOfWeek = date.getDay();
+              
+              const getDaysOfWeek = (frequency: string): number[] => {
+                  const days: number[] = [];
+                  const freq = frequency.toLowerCase();
+                  if (freq.includes('lunes a viernes')) return [1, 2, 3, 4, 5];
+                  if (freq.includes('lunes a sábado')) return [1, 2, 3, 4, 5, 6];
+                  if (freq.includes('lunes')) days.push(1);
+                  if (freq.includes('martes')) days.push(2);
+                  if (freq.includes('miércoles') || freq.includes('miercoles')) days.push(3);
+                  if (freq.includes('jueves')) days.push(4);
+                  if (freq.includes('viernes')) days.push(5);
+                  if (freq.includes('sábado') || freq.includes('sabado')) days.push(6);
+                  if (freq.includes('domingo')) days.push(0);
+                  return days;
+              };
+
+              if (targetFichas.some(f => getDaysOfWeek(f.frequency).includes(dayOfWeek))) {
+                  totalQuota++;
+              }
+          }
+
+          const executed = dbProductions.filter(p => {
+              const pDate = new Date(p.date);
+              return pDate.getFullYear() === year && pDate.getMonth() === month && 
+                     (program === "La Cumbancha" ? p.program.includes("La Cumbancha") : p.program === program);
+          }).length;
+          
+          totalExecuted += executed;
+      });
+
+      return {
+          quota: totalQuota,
+          executed: totalExecuted,
+          deficit: totalQuota - totalExecuted
+      };
+  }, [dbProductions, fichas]);
   
   const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void}>({isOpen: false, message: '', onConfirm: () => {}});
   const [alertDialog, setAlertDialog] = useState<{isOpen: boolean, message: string}>({isOpen: false, message: ''});
@@ -802,7 +878,7 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
         {activeTab === 'stock' && (
             <div className="space-y-4">
                 <div className="sticky top-0 z-20 bg-[#1A100C] flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
-                    <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr}) - {stockMensual.length} cargadas</h3>
+                    <h3 className="font-bold text-white">Producciones musicales del mes ({capitalizedMonth}) - Cuota: {totalBalance.quota} | Ejecutado: {totalBalance.executed} | Déficit: {totalBalance.deficit}</h3>
                     <div className="flex gap-2">
                         <button 
                             onClick={() => setIsBalanceModalOpen(true)}
