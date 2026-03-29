@@ -878,7 +878,14 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
         {activeTab === 'stock' && (
             <div className="space-y-4">
                 <div className="sticky top-0 z-20 bg-[#1A100C] flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
-                    <h3 className="font-bold text-white">Producciones musicales del mes ({capitalizedMonth}) - Cuota: {totalBalance.quota} | Ejecutado: {totalBalance.executed} | Déficit: {totalBalance.deficit}</h3>
+                    <div className="text-white text-sm">
+                        <div className="font-bold">Mes: {capitalizedMonth}</div>
+                        <div className="text-[11px]">
+                            <div>Plan: {totalBalance.quota}</div>
+                            <div>Real: {totalBalance.executed}</div>
+                            <div>Resto: {totalBalance.deficit}</div>
+                        </div>
+                    </div>
                     <div className="flex gap-2">
                         <button 
                             onClick={() => setIsBalanceModalOpen(true)}

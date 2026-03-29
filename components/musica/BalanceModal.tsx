@@ -110,9 +110,9 @@ const BalanceModal: React.FC<BalanceModalProps> = ({ isOpen, onClose, production
                     new Table({
                         rows: [
                             new TableRow({ children: [new TableCell({ children: [new Paragraph("Concepto")] }), new TableCell({ children: [new Paragraph("Cantidad")] })] }),
-                            new TableRow({ children: [new TableCell({ children: [new Paragraph("Cuota Mensual")] }), new TableCell({ children: [new Paragraph(balanceData.quota.toString())] })] }),
+                            new TableRow({ children: [new TableCell({ children: [new Paragraph("Plan Mensual")] }), new TableCell({ children: [new Paragraph(balanceData.quota.toString())] })] }),
                             new TableRow({ children: [new TableCell({ children: [new Paragraph("Ejecución")] }), new TableCell({ children: [new Paragraph(balanceData.executed.toString())] })] }),
-                            new TableRow({ children: [new TableCell({ children: [new Paragraph("Déficit")] }), new TableCell({ children: [new Paragraph(balanceData.deficit.toString())] })] }),
+                            new TableRow({ children: [new TableCell({ children: [new Paragraph("Resto")] }), new TableCell({ children: [new Paragraph(balanceData.deficit.toString())] })] }),
                         ]
                     }),
                     new Paragraph({ text: "" }),
@@ -130,9 +130,9 @@ const BalanceModal: React.FC<BalanceModalProps> = ({ isOpen, onClose, production
         if (!balanceData) return;
         const message = `Balance de Producción: ${selectedProgram}\n` +
                         `Mes: ${new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' })}\n` +
-                        `Cuota: ${balanceData.quota}\n` +
+                        `Plan: ${balanceData.quota}\n` +
                         `Ejecución: ${balanceData.executed}\n` +
-                        `Déficit: ${balanceData.deficit}\n` +
+                        `Resto: ${balanceData.deficit}\n` +
                         `Fechas de Omisión:\n${balanceData.omissions.map(d => d.toLocaleDateString()).join('\n')}`;
         
         window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
@@ -156,7 +156,7 @@ const BalanceModal: React.FC<BalanceModalProps> = ({ isOpen, onClose, production
                     <div className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                             <div className="bg-[#2C1B15] p-4 rounded-xl text-center">
-                                <p className="text-xs text-[#E8DCCF]/60">Cuota</p>
+                                <p className="text-xs text-[#E8DCCF]/60">Plan</p>
                                 <p className="text-2xl font-bold">{balanceData.quota}</p>
                             </div>
                             <div className="bg-[#2C1B15] p-4 rounded-xl text-center">
@@ -164,7 +164,7 @@ const BalanceModal: React.FC<BalanceModalProps> = ({ isOpen, onClose, production
                                 <p className="text-2xl font-bold text-green-400">{balanceData.executed}</p>
                             </div>
                             <div className="bg-[#2C1B15] p-4 rounded-xl text-center">
-                                <p className="text-xs text-[#E8DCCF]/60">Déficit</p>
+                                <p className="text-xs text-[#E8DCCF]/60">Resto</p>
                                 <p className="text-2xl font-bold text-red-400">{balanceData.deficit}</p>
                             </div>
                         </div>
