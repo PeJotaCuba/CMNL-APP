@@ -1,41 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Calendar, User } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { fetchNewsFromFacebook } from '../services/newsService';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { NewsItem } from '../../types';
 
 export const NewsCarousel: React.FC = () => {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadNews = async () => {
-      try {
-        const data = await fetchNewsFromFacebook();
-        setNews(data);
-      } catch (error) {
-        console.error('Error fetching news:', error);
-      } finally {
-        setLoading(false);
+  const loadNews = () => {
+    try {
+      const storedNews = localStorage.getItem('news');
+      if (storedNews) {
+        const parsed = JSON.parse(storedNews);
+        setNews(parsed);
+        // Resetear índice si queda fuera de rango tras la actualización
+        setCurrentIndex((prev) => (prev >= parsed.length ? 0 : prev));
       }
-    };
+    } catch (error) {
+      console.error('Error loading news:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadNews();
+
+    const handleStorageChange = () => {
+      loadNews();
+    };
+
+    // Escuchar el evento storage para actualización instantánea en la misma pestaña
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const nextSlide = () => {
+    if (news.length === 0) return;
     setCurrentIndex((prevIndex) => (prevIndex + 1) % news.length);
   };
 
   const prevSlide = () => {
+    if (news.length === 0) return;
     setCurrentIndex((prevIndex) => (prevIndex - 1 + news.length) % news.length);
   };
 
   useEffect(() => {
     if (news.length === 0) return;
-    const interval = setInterval(nextSlide, 5000);
+    const interval = setInterval(nextSlide, 10000);
     return () => clearInterval(interval);
   }, [news.length]);
 
@@ -58,77 +72,84 @@ export const NewsCarousel: React.FC = () => {
   const currentNews = news[currentIndex];
 
   return (
-    <div className="relative w-full h-96 rounded-3xl overflow-hidden shadow-xl group">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -50 }}
-          transition={{ duration: 0.5 }}
-          className="absolute inset-0"
-        >
-          {currentNews.image ? (
-            <div className="absolute inset-0">
-              <img
-                src={currentNews.image}
-                alt={currentNews.title}
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
-            </div>
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-900 to-indigo-900" />
-          )}
-
-          <div className="absolute inset-0 p-8 flex flex-col justify-end text-white">
-            <div className="flex items-center gap-4 mb-3 text-sm text-gray-300">
-              <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm">
-                <Calendar size={14} />
-                {format(new Date(currentNews.date), "d 'de' MMMM, yyyy", { locale: es })}
-              </span>
-              <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm">
-                <User size={14} />
-                {currentNews.author}
-              </span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4 leading-tight">
+    <>
+      {/* Carrusel: Al hacer clic se abre el Modal superpuesto */}
+      <div 
+        className="relative w-full rounded-3xl overflow-hidden shadow-xl group bg-white dark:bg-gray-800 p-8 cursor-pointer hover:shadow-2xl transition-shadow border border-gray-100 dark:border-gray-700" 
+        onClick={() => setSelectedNews(currentNews)}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentIndex}
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col gap-4"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white leading-tight">
               {currentNews.title}
             </h2>
-            <p className="text-gray-200 line-clamp-3 md:line-clamp-2 text-lg max-w-3xl">
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider">
+              Por {currentNews.author}
+            </p>
+            <p className="text-gray-700 dark:text-gray-300 text-lg leading-relaxed line-clamp-3">
               {currentNews.content}
             </p>
-          </div>
-        </motion.div>
-      </AnimatePresence>
+            <div className="mt-2 text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
+              Leer noticia completa &rarr;
+            </div>
+          </motion.div>
+        </AnimatePresence>
 
-      <div className="absolute bottom-6 right-8 flex gap-2">
-        <button
-          onClick={prevSlide}
-          className="p-2 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md text-white transition-colors focus:outline-none"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <button
-          onClick={nextSlide}
-          className="p-2 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md text-white transition-colors focus:outline-none"
-        >
-          <ChevronRight size={24} />
-        </button>
-      </div>
-
-      <div className="absolute bottom-8 left-8 flex gap-2">
-        {news.map((_, index) => (
+        <div className="absolute bottom-6 right-8 flex gap-2">
           <button
-            key={index}
-            onClick={() => setCurrentIndex(index)}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              index === currentIndex ? 'w-8 bg-blue-500' : 'bg-white/50 hover:bg-white/80'
-            }`}
-          />
-        ))}
+            onClick={(e) => { e.stopPropagation(); prevSlide(); }}
+            className="p-3 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white transition-colors focus:outline-none shadow-sm"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); nextSlide(); }}
+            className="p-3 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white transition-colors focus:outline-none shadow-sm"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
       </div>
-    </div>
+
+      {/* Modal de Detalle: Mantiene al usuario en la misma pantalla */}
+      <AnimatePresence>
+        {selectedNews && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-gray-800 rounded-[2.5rem] p-10 max-w-3xl w-full max-h-[85vh] overflow-y-auto shadow-2xl relative border border-gray-100 dark:border-gray-700"
+            >
+              <h2 className="text-4xl font-bold mb-4 text-gray-900 dark:text-white leading-tight">
+                {selectedNews.title}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-bold mb-8 uppercase tracking-widest border-b border-gray-100 dark:border-gray-700 pb-4">
+                Por {selectedNews.author}
+              </p>
+              <div className="text-gray-800 dark:text-gray-200 text-xl leading-relaxed space-y-4 whitespace-pre-wrap">
+                {selectedNews.content}
+              </div>
+              
+              <div className="mt-12">
+                <button
+                  onClick={() => setSelectedNews(null)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-lg shadow-blue-500/30 active:scale-[0.98]"
+                >
+                  Cerrar Noticia
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };

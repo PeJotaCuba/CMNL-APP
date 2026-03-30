@@ -21,7 +21,6 @@ import BackupDialog from './components/BackupDialog';
 import { GlobalFAB } from './src/components/GlobalFAB';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
-import { fetchNewsFromFacebook } from './src/services/newsService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
@@ -430,16 +429,6 @@ const App: React.FC = () => {
       const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
       try {
-          // Sincronizar noticias de Facebook
-          const fbNews = await fetchNewsFromFacebook();
-          if (fbNews.length > 0) {
-              setNews(prevNews => {
-                  const merged = [...fbNews, ...prevNews.filter(n => n.category !== 'Facebook')];
-                  localStorage.setItem('rcm_data_news', JSON.stringify(merged));
-                  return merged;
-              });
-          }
-
           const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
           if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
           

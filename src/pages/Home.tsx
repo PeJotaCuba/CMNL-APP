@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { NewsCarousel } from '../components/NewsCarousel';
 import { useAuth, Role } from '../context/AuthContext';
 import { LogIn, LogOut, Settings, Shield, User } from 'lucide-react';
@@ -61,13 +62,13 @@ export const Home: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Últimas Noticias</h2>
             {isAuthenticated && (role === 'Administrador' || role === 'Director') && (
-              <a
-                href="/noticias/gestion"
+              <Link
+                to="/noticias/gestion"
                 className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 rounded-full transition-colors"
               >
                 <Settings size={16} />
                 Gestión de Noticias
-              </a>
+              </Link>
             )}
           </div>
           <NewsCarousel />
@@ -80,7 +81,7 @@ export const Home: React.FC = () => {
               <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-700">
                 <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">Módulo de Música</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Gestiona la selección musical y reportes.</p>
-                <a href="/musica/seleccion" className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">Ir a Selección &rarr;</a>
+                <Link to="/musica/seleccion" className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">Ir a Selección &rarr;</Link>
               </div>
               {/* Placeholder cards for other modules */}
               <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-700">

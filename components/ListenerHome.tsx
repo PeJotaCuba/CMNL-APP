@@ -4,8 +4,6 @@ import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, Che
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 
-import { fetchNewsFromFacebook } from '../src/services/newsService';
-
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
@@ -29,29 +27,6 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, setNews, onSync, isSy
   const [isFetchingNews, setIsFetchingNews] = useState(false);
 
   // Auto-sync Facebook news on load
-  useEffect(() => {
-    const syncFacebookNews = async () => {
-      if (setNews && !isFetchingNews) {
-        setIsFetchingNews(true);
-        try {
-          const fbNews = await fetchNewsFromFacebook();
-          if (fbNews.length > 0) {
-            setNews(prevNews => {
-              const merged = [...fbNews, ...prevNews.filter(n => n.category !== 'Facebook')];
-              localStorage.setItem('rcm_data_news', JSON.stringify(merged));
-              return merged;
-            });
-          }
-        } catch (error) {
-          console.error("Error auto-syncing Facebook news:", error);
-        } finally {
-          setIsFetchingNews(false);
-        }
-      }
-    };
-    
-    syncFacebookNews();
-  }, []); // Run once on mount
   const [showFabMenu, setShowFabMenu] = useState(false);
 
   useEffect(() => {

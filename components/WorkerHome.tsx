@@ -4,7 +4,6 @@ import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, Messa
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 import { loadSelectionsFromDB, loadSavedSelectionsListFromDB, loadReportsFromDB, loadProductionsFromDB, saveSelectionsToDB, saveSavedSelectionsListToDB, saveReportToDB, saveProductionToDB, clearReportsDB, clearProductionsDB } from './musica/services/db';
-import { fetchNewsFromFacebook } from '../src/services/newsService';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
@@ -48,31 +47,6 @@ const WorkerHome: React.FC<Props> = ({
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [isFetchingNews, setIsFetchingNews] = useState(false);
-
-  // Auto-sync Facebook news on load
-  useEffect(() => {
-    const syncFacebookNews = async () => {
-      if (setNews && !isFetchingNews) {
-        setIsFetchingNews(true);
-        try {
-          const fbNews = await fetchNewsFromFacebook();
-          if (fbNews.length > 0) {
-            setNews(prevNews => {
-              const merged = [...fbNews, ...prevNews.filter(n => n.category !== 'Facebook')];
-              localStorage.setItem('rcm_data_news', JSON.stringify(merged));
-              return merged;
-            });
-          }
-        } catch (error) {
-          console.error("Error auto-syncing Facebook news:", error);
-        } finally {
-          setIsFetchingNews(false);
-        }
-      }
-    };
-    
-    syncFacebookNews();
-  }, []); // Run once on mount
 
   // Carousel logic
   useEffect(() => {
