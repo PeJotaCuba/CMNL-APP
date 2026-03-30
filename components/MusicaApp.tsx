@@ -14,8 +14,9 @@ import ReportsViewer from './musica/ReportsViewer';
 import Guide from './musica/Guide';
 import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB, saveSavedSelectionsListToDB, loadSavedSelectionsListFromDB, deleteReportFromDB } from './musica/services/db'; 
 import { generateReportPDF } from './musica/services/pdfService';
+import AddSongModal from './musica/AddSongModal';
 
-const USERS_KEY = 'rcm_users_db';
+const USERS_KEY = 'rcm_data_users';
 const PROGRAMS_KEY = 'rcm_programs_list';
 const getSelectionKey = () => `user_${localStorage.getItem('rcm_user_username') || 'default'}_rcm_current_selection`;
 const getSavedSelectionsKey = () => `user_${localStorage.getItem('rcm_user_username') || 'default'}_rcm_saved_selections`;
@@ -123,11 +124,42 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const [showBulkSuccessModal, setShowBulkSuccessModal] = useState(false);
   const [bulkCount, setBulkCount] = useState(0);
+  const [showAddSongModal, setShowAddSongModal] = useState(false);
+
+  const handleAddManualSong = (newTrack: Track) => {
+      setTracks(prev => [...prev, newTrack]);
+      setSelectedTracksList(prev => [...prev, newTrack]);
+      onDirtyChange(true);
+  };
 
   const navigateTo = (newView: ViewState) => {
       setNavStack(prev => [...prev, newView]);
       setView(newView);
+      window.location.hash = newView;
   };
+
+  useEffect(() => {
+      const handleHashChange = () => {
+          const rawHash = window.location.hash.replace('#', '');
+          const hash = rawHash as ViewState;
+          if (Object.values(ViewState).includes(hash)) {
+              setView(hash);
+          } else if (rawHash === '' || rawHash === 'LIST') {
+              setView(ViewState.LIST);
+          }
+      };
+
+      // Set initial hash if empty
+      if (!window.location.hash) {
+          window.history.replaceState(null, '', `#${ViewState.LIST}`);
+          setView(ViewState.LIST);
+      } else {
+          handleHashChange();
+      }
+
+      window.addEventListener('hashchange', handleHashChange);
+      return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const navigateBack = () => {
       if (currentPath !== '') {
@@ -138,7 +170,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       } else if (navStack.length > 1) {
           const newStack = navStack.slice(0, -1);
           setNavStack(newStack);
-          setView(newStack[newStack.length - 1]);
+          const prevView = newStack[newStack.length - 1];
+          setView(prevView);
+          window.location.hash = prevView;
       } else {
           onBack();
       }
@@ -809,8 +843,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             )}
 
-            {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
-            {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} currentUser={currentUser} fichas={fichas} />}
+            {view === ViewState.SETTINGS && (authMode === 'admin' || authMode === 'coordinador') && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
+            {view === ViewState.PRODUCTIONS && (authMode === 'admin' || authMode === 'coordinador') && <Productions onUpdateTracks={updateTracks} allTracks={tracks} currentUser={currentUser} fichas={fichas} />}
             {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} refreshTrigger={refreshReportsTrigger} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
         </div>
@@ -925,12 +959,28 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             </div>
         )}
 
+        {/* Global FAB for adding songs */}
+        {(view === ViewState.SELECTION && authMode === 'director') && (
+            <button
+                onClick={() => setShowAddSongModal(true)}
+                className="absolute bottom-24 right-6 w-14 h-14 bg-[#9E7649] text-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#8B653D] hover:scale-105 transition-all z-40"
+            >
+                <span className="material-symbols-outlined text-3xl">add</span>
+            </button>
+        )}
+
+        <AddSongModal 
+            isOpen={showAddSongModal}
+            onClose={() => setShowAddSongModal(false)}
+            onSave={handleAddManualSong}
+        />
+
         <nav className="bg-[#2C1B15] border-t border-[#9E7649]/20 h-20 px-4 flex items-center justify-between pb-2 z-20 shrink-0">
             <NavButton icon="folder_open" label="Explorar" active={view === ViewState.LIST} onClick={() => navigateTo(ViewState.LIST)} />
             <NavButton icon="checklist" label="Selección" active={view === ViewState.SELECTION} onClick={() => navigateTo(ViewState.SELECTION)} />
             {authMode === 'director' && <NavButton icon="description" label="Reportes" active={view === ViewState.REPORTS} onClick={() => navigateTo(ViewState.REPORTS)} />}
-            {authMode === 'admin' && <NavButton icon="playlist_add" label="Producción" active={view === ViewState.PRODUCTIONS} onClick={() => navigateTo(ViewState.PRODUCTIONS)} />}
-            {authMode === 'admin' && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => navigateTo(ViewState.SETTINGS)} />}
+            {(authMode === 'admin' || authMode === 'coordinador') && <NavButton icon="playlist_add" label="Producción" active={view === ViewState.PRODUCTIONS} onClick={() => navigateTo(ViewState.PRODUCTIONS)} />}
+            {(authMode === 'admin' || authMode === 'coordinador') && <NavButton icon="settings" label="Ajustes" active={view === ViewState.SETTINGS} onClick={() => navigateTo(ViewState.SETTINGS)} />}
             {authMode !== 'admin' && <NavButton icon="help" label="Guía" active={view === ViewState.GUIDE} onClick={() => navigateTo(ViewState.GUIDE)} />}
         </nav>
     </div>

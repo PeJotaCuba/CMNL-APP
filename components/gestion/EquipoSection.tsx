@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, MessageCircle } from 'lucide-react';
+import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, MessageCircle, Share2 } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import { User } from '../../types';
 
@@ -36,7 +36,7 @@ const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-
 const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
+  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
 
@@ -182,7 +182,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       if (processedCount > 0) {
         saveTeam(currentTeam);
         setUsers(updatedUsers);
-        localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+        localStorage.setItem('rcm_data_users', JSON.stringify(updatedUsers));
         alert(`Se procesaron ${processedCount} registros de equipo y usuarios.`);
       } else {
         alert("No se encontraron registros válidos en el archivo.");
@@ -256,7 +256,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     saveTeam([]);
                     const newUsers = users.filter(u => u.role === 'admin' || u.username === 'admin');
                     setUsers(newUsers);
-                    localStorage.setItem('rcm_users', JSON.stringify(newUsers));
+                    localStorage.setItem('rcm_data_users', JSON.stringify(newUsers));
                   }
                 }}
                 className="p-2 bg-red-600/80 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" 
@@ -293,36 +293,40 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   onClick={() => setViewingMember(member)}
                 >
                   {isAdmin && (
-                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-100 transition-opacity">
-                      {isAdmin && (
-                        (() => {
-                          const user = users.find(u => u.id === member.id || u.username.toLowerCase() === member.id.toLowerCase());
-                          if (user && user.mobile) {
-                            return (
-                              <button 
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  const pin = user.password ? user.password.slice(-4) : '0000';
-                                  const message = `Hola, acceda a https://cmnl-app.vercel.app/ con los siguientes datos,
+                    <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-100">
+                      {(() => {
+                        const user = users.find(u => 
+                          u.id === member.id || 
+                          u.username.toLowerCase() === member.id.toLowerCase() ||
+                          u.name.toLowerCase() === member.name.toLowerCase()
+                        );
+                        if (user && user.mobile) {
+                          return (
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                const pin = user.password ? user.password.slice(-4) : '0000';
+                                const message = `Hola, acceda a https://cmnl-app.vercel.app/ con los siguientes datos,
+Nombre: ${user.name}
+Rol: ${user.classification}
 Usuario: ${user.username}
 Móvil: ${user.mobile}
 Contraseña: ${user.password}
 Pin: ${pin}
 
 Recuerde Actualizar antes de autenticarse.`;
-                                  const url = `https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-                                  window.open(url, '_blank');
-                                }}
-                                className="p-1.5 bg-green-600/80 hover:bg-green-700 text-white rounded-lg transition-all shadow-lg border border-green-500/30"
-                                title="Enviar WhatsApp"
-                              >
-                                <MessageCircle size={14} />
-                              </button>
-                            );
-                          }
-                          return null;
-                        })()
-                      )}
+                                const url = `https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+                                window.open(url, '_blank');
+                              }}
+                              className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all shadow-lg border border-green-500/30 flex items-center justify-center"
+                              title="Compartir credenciales por WhatsApp"
+                            >
+                              <Share2 size={14} />
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
@@ -336,7 +340,7 @@ Recuerde Actualizar antes de autenticarse.`;
                             role: user?.classification || 'Usuario'
                           }); 
                         }}
-                        className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
+                        className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30 flex items-center justify-center"
                         title="Editar Información"
                       >
                         <Edit2 size={14} />
@@ -349,10 +353,10 @@ Recuerde Actualizar antes de autenticarse.`;
                             saveTeam(newTeam);
                             const newUsers = users.filter(u => u.id !== member.id && u.username !== member.id);
                             setUsers(newUsers);
-                            localStorage.setItem('rcm_users', JSON.stringify(newUsers));
+                            localStorage.setItem('rcm_data_users', JSON.stringify(newUsers));
                           }
                         }}
-                        className="p-1.5 bg-red-600/80 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-500/30"
+                        className="p-1.5 bg-red-600/80 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-500/30 flex items-center justify-center"
                         title="Eliminar Miembro"
                       >
                         <Trash2 size={14} />
@@ -423,6 +427,26 @@ Recuerde Actualizar antes de autenticarse.`;
                   {Array.from(new Set(viewingMember.level.split(' / '))).join(' / ')}
                 </span>
               )}
+              {(() => {
+                const user = users.find(u => u.id === viewingMember.id || u.username.toLowerCase() === viewingMember.id.toLowerCase());
+                if (user && user.mobile) {
+                  return (
+                    <button 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        const url = `https://wa.me/${user.mobile.replace(/\D/g, '')}`;
+                        window.open(url, '_blank');
+                      }}
+                      className="mt-4 px-4 py-2 bg-green-600/80 hover:bg-green-700 text-white rounded-full transition-all shadow-lg border border-green-500/30 flex items-center gap-2 text-sm font-medium"
+                      title="Contactar por WhatsApp"
+                    >
+                      <MessageCircle size={16} />
+                      Contactar
+                    </button>
+                  );
+                }
+                return null;
+              })()}
             </div>
             
             <div className="bg-[#2C1B15] rounded-xl p-4 border border-[#9E7649]/20">
@@ -635,7 +659,7 @@ Recuerde Actualizar antes de autenticarse.`;
                   }
                   
                   setUsers(updatedUsers);
-                  localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                  localStorage.setItem('rcm_data_users', JSON.stringify(updatedUsers));
                   
                   setEditingMember(null);
                 }}

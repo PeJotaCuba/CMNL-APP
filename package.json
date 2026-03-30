@@ -10,15 +10,20 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "docx": "^9.6.1",
     "file-saver": "^2.0.5",
+    "framer-motion": "^12.38.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "0.344.0",
     "pdfjs-dist": "^5.5.207",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "react-hook-form": "^7.72.0",
     "react-router-dom": "^7.13.1",
+    "tailwind-merge": "^3.5.0",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0"
   },

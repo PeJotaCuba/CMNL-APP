@@ -45,6 +45,7 @@ export interface NewsItem {
   content: string;
   image?: string;
   author?: string;
+  url?: string;
 }
 
 export interface ProgramItem {

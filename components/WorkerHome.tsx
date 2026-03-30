@@ -4,10 +4,12 @@ import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, Messa
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 import { loadSelectionsFromDB, loadSavedSelectionsListFromDB, loadReportsFromDB, loadProductionsFromDB, saveSelectionsToDB, saveSavedSelectionsListToDB, saveReportToDB, saveProductionToDB, clearReportsDB, clearProductionsDB } from './musica/services/db';
+import { fetchNewsFromFacebook } from '../src/services/newsService';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
+  setNews?: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   currentUser: User | null;
   onLogout: () => void;
   onSync: () => void;
@@ -32,6 +34,7 @@ const newsColors = [
 const WorkerHome: React.FC<Props> = ({ 
     onNavigate, 
     news, 
+    setNews,
     currentUser, 
     onLogout, 
     onSync, 
@@ -44,6 +47,32 @@ const WorkerHome: React.FC<Props> = ({
     onMenuClick
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
+  const [isFetchingNews, setIsFetchingNews] = useState(false);
+
+  // Auto-sync Facebook news on load
+  useEffect(() => {
+    const syncFacebookNews = async () => {
+      if (setNews && !isFetchingNews) {
+        setIsFetchingNews(true);
+        try {
+          const fbNews = await fetchNewsFromFacebook();
+          if (fbNews.length > 0) {
+            setNews(prevNews => {
+              const merged = [...fbNews, ...prevNews.filter(n => n.category !== 'Facebook')];
+              localStorage.setItem('rcm_data_news', JSON.stringify(merged));
+              return merged;
+            });
+          }
+        } catch (error) {
+          console.error("Error auto-syncing Facebook news:", error);
+        } finally {
+          setIsFetchingNews(false);
+        }
+      }
+    };
+    
+    syncFacebookNews();
+  }, []); // Run once on mount
 
   // Carousel logic
   useEffect(() => {
@@ -302,9 +331,23 @@ const WorkerHome: React.FC<Props> = ({
                      <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
                 </div>
                 <div 
-                    onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
-                    className={`w-full relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[200px] cursor-pointer group transition-colors duration-500`}
+                    onClick={() => {
+                        if (activeNews.url) {
+                            window.open(activeNews.url, '_blank', 'noopener,noreferrer');
+                        } else {
+                            onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews);
+                        }
+                    }} 
+                    className={`w-full relative rounded-xl ${activeNews.image ? 'bg-black' : currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[200px] cursor-pointer group transition-colors duration-500`}
                 >
+                    {activeNews.image && (
+                        <img 
+                            src={activeNews.image} 
+                            alt={activeNews.title} 
+                            className="absolute inset-0 w-full h-full object-cover opacity-60"
+                            referrerPolicy="no-referrer"
+                        />
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
 
                     {news.length > 1 && (
@@ -382,15 +425,6 @@ const WorkerHome: React.FC<Props> = ({
       </div>
       
       {/* Worker Group FAB */}
-      <a 
-         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
-         target="_blank" 
-         rel="noopener noreferrer"
-         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
-         title="Grupo de Trabajo WhatsApp"
-      >
-         <MessageSquare size={28} fill="white" />
-      </a>
     </div>
   );
 };

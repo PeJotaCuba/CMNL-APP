@@ -198,8 +198,16 @@ const AdminDashboard: React.FC<Props> = ({
             {activeNews ? (
                 <div 
                     onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
-                    className={`relative cursor-pointer rounded-xl ${currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all min-h-[200px] flex-1 group`}
+                    className={`relative cursor-pointer rounded-xl ${activeNews.image ? 'bg-black' : currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all min-h-[200px] flex-1 group`}
                 >
+                  {activeNews.image && (
+                      <img 
+                          src={activeNews.image} 
+                          alt={activeNews.title} 
+                          className="absolute inset-0 w-full h-full object-cover opacity-60"
+                          referrerPolicy="no-referrer"
+                      />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
 
                   {news.length > 1 && (
@@ -231,17 +239,6 @@ const AdminDashboard: React.FC<Props> = ({
          </div>
          
       </main>
-
-      {/* FAB - Worker Group */}
-      <a 
-         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
-         target="_blank" 
-         rel="noopener noreferrer"
-         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
-         title="Grupo de Trabajo WhatsApp"
-      >
-         <MessageSquare size={28} fill="white" />
-      </a>
       
       <style>{`
         @keyframes soundbar {

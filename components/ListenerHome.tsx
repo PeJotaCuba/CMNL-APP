@@ -4,9 +4,12 @@ import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, Che
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 
+import { fetchNewsFromFacebook } from '../src/services/newsService';
+
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
+  setNews?: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   onSync?: () => void;
   isSyncing?: boolean;
   onMenuClick?: () => void;
@@ -21,8 +24,34 @@ const newsColors = [
   'bg-[#263238]', // Dark Blue Grey
 ];
 
-const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, onMenuClick }) => {
+const ListenerHome: React.FC<Props> = ({ onNavigate, news, setNews, onSync, isSyncing, onMenuClick }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
+  const [isFetchingNews, setIsFetchingNews] = useState(false);
+
+  // Auto-sync Facebook news on load
+  useEffect(() => {
+    const syncFacebookNews = async () => {
+      if (setNews && !isFetchingNews) {
+        setIsFetchingNews(true);
+        try {
+          const fbNews = await fetchNewsFromFacebook();
+          if (fbNews.length > 0) {
+            setNews(prevNews => {
+              const merged = [...fbNews, ...prevNews.filter(n => n.category !== 'Facebook')];
+              localStorage.setItem('rcm_data_news', JSON.stringify(merged));
+              return merged;
+            });
+          }
+        } catch (error) {
+          console.error("Error auto-syncing Facebook news:", error);
+        } finally {
+          setIsFetchingNews(false);
+        }
+      }
+    };
+    
+    syncFacebookNews();
+  }, []); // Run once on mount
   const [showFabMenu, setShowFabMenu] = useState(false);
 
   useEffect(() => {
@@ -143,10 +172,24 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
              {/* News Carousel - Full Width on Desktop */}
              {activeNews ? (
                 <div 
-                    onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
-                    className={`relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[400px] cursor-pointer group transition-colors duration-500`}
+                    onClick={() => {
+                        if (activeNews.url) {
+                            window.open(activeNews.url, '_blank', 'noopener,noreferrer');
+                        } else {
+                            onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews);
+                        }
+                    }} 
+                    className={`relative rounded-xl ${activeNews.image ? 'bg-black' : currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[400px] cursor-pointer group transition-colors duration-500`}
                 >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none"></div>
+                    {activeNews.image && (
+                        <img 
+                            src={activeNews.image} 
+                            alt={activeNews.title} 
+                            className="absolute inset-0 w-full h-full object-cover opacity-60"
+                            referrerPolicy="no-referrer"
+                        />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"></div>
                     
                     {news.length > 1 && (
                         <>
@@ -192,36 +235,6 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
         </div>
 
       </main>
-      
-      {/* Floating WhatsApp Menu for Listeners */}
-      <div className="fixed bottom-28 right-5 z-40 flex flex-col items-end gap-3">
-         {showFabMenu && (
-             <div className="flex flex-col gap-3 animate-fade-in-up">
-                 <a 
-                    href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
-                 >
-                    Unirse a Comunidad CMNL
-                 </a>
-                 <a 
-                    href="https://wa.me/5354413935"
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
-                 >
-                    Escribir a administradores
-                 </a>
-             </div>
-         )}
-         <button 
-            onClick={() => setShowFabMenu(!showFabMenu)}
-            className="w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
-         >
-            {showFabMenu ? <X size={28} /> : <MessageCircle size={30} fill="white" />}
-         </button>
-      </div>
       
       <style>{`
         @keyframes fade-in-up {

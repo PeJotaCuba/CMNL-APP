@@ -18,8 +18,10 @@ import NewsUploadModal from './components/NewsUploadModal';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
+import { GlobalFAB } from './src/components/GlobalFAB';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
+import { fetchNewsFromFacebook } from './src/services/newsService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
@@ -225,10 +227,10 @@ const App: React.FC = () => {
   // Back Button Logic
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      // If in AgendaApp, GestionApp, or GuionesApp and navigating internally (hash exists), ignore this event
-      // to prevent App.tsx from unmounting the app
-      if ((currentView === AppView.APP_AGENDA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_GUIONES) && 
-          window.location.hash.length > 1) {
+      // If there is a hash, we assume it's internal navigation for one of the sub-apps
+      // (AgendaApp, GestionApp, GuionesApp, MusicaApp, or EquipoSection)
+      // We ignore this event to prevent App.tsx from unmounting the app
+      if (window.location.hash.length > 1) {
         return;
       }
 
@@ -251,6 +253,10 @@ const App: React.FC = () => {
   const handleNavigate = (view: AppView, data?: any) => {
     if (view === AppView.ADMIN_SECTION_NEWS) {
       setIsNewsModalOpen(true);
+      // If we are already in Admin Dashboard or Worker Home, don't change the main view
+      if (currentView === AppView.ADMIN_DASHBOARD || currentView === AppView.WORKER_HOME) {
+        return;
+      }
     }
     checkDirty(() => {
         window.history.pushState(null, '', window.location.pathname);
@@ -417,13 +423,23 @@ const App: React.FC = () => {
   const handleCloudSync = async () => {
       if(isSyncing) return;
       
-      const confirmSync = window.confirm('¿Desea actualizar los datos (Noticias, Parrilla, Usuarios) desde la nube?');
+      const confirmSync = window.confirm('¿Desea actualizar los datos (Noticias, Parrilla, Usuarios) desde la nube y sincronizar Facebook?');
       if(!confirmSync) return;
 
       setIsSyncing(true);
       const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
       try {
+          // Sincronizar noticias de Facebook
+          const fbNews = await fetchNewsFromFacebook();
+          if (fbNews.length > 0) {
+              setNews(prevNews => {
+                  const merged = [...fbNews, ...prevNews.filter(n => n.category !== 'Facebook')];
+                  localStorage.setItem('rcm_data_news', JSON.stringify(merged));
+                  return merged;
+              });
+          }
+
           const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
           if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
           
@@ -578,16 +594,41 @@ const App: React.FC = () => {
         const text = e.target?.result as string;
         const blocks = text.split(/---/).filter(b => b.trim());
         const newNews: NewsItem[] = blocks.map((block, index) => {
-          const lines = block.trim().split('\n').filter(l => l.trim());
+          let cleanBlock = block.trim();
+          
+          // Omit tags
+          cleanBlock = cleanBlock.replace(/Titular:\s*/gi, '');
+          cleanBlock = cleanBlock.replace(/Autor:\s*/gi, '');
+          cleanBlock = cleanBlock.replace(/Texto:\s*/gi, '');
+
+          const lines = cleanBlock.split('\n').filter(l => l.trim());
           const title = lines[0] || 'Sin Título';
-          const content = lines.slice(1).join('\n') || '';
+          
+          let author = 'Equipo CMNL';
+          let contentLines = lines.slice(1);
+          
+          if (contentLines.length > 0) {
+             // If the second line was originally "Autor: [Name]", it's now just "[Name]"
+             // If it starts with "Por ", we can remove it, otherwise we just take the whole line
+             const possibleAuthor = contentLines[0].trim();
+             if (possibleAuthor.toLowerCase().startsWith('por ')) {
+                 author = possibleAuthor.substring(4).trim();
+             } else {
+                 author = possibleAuthor;
+             }
+             contentLines = contentLines.slice(1);
+          }
+          
+          const content = contentLines.join('\n') || '';
+          
           return {
             id: `news-${Date.now()}-${index}`,
             title,
             content,
             category: 'General',
             date: new Date().toLocaleDateString(),
-            excerpt: content.slice(0, 100) + '...'
+            excerpt: content.slice(0, 100) + '...',
+            author
           };
         });
         setNews(newNews);
@@ -610,12 +651,13 @@ const App: React.FC = () => {
             }
         }} />;
       case AppView.LISTENER_HOME:
-        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
+        return <ListenerHome onNavigate={handleNavigate} news={news} setNews={setNews} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.WORKER_HOME:
         return (
             <WorkerHome 
                 onNavigate={handleNavigate} 
                 news={news} 
+                setNews={setNews}
                 currentUser={currentUser} 
                 onLogout={handleLogout}
                 onSync={handleCloudSync}
@@ -734,6 +776,26 @@ const App: React.FC = () => {
       case AppView.SECTION_NEWS:
         return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />; 
       case AppView.ADMIN_SECTION_NEWS:
+        if (currentUser?.role === 'admin') {
+          return (
+            <AdminDashboard 
+              onNavigate={handleNavigate} 
+              news={news} 
+              users={users} 
+              currentUser={currentUser} 
+              onLogout={handleLogout} 
+              onSync={handleCloudSync} 
+              onSystemBackup={handleSystemBackup}
+              isSyncing={isSyncing}
+              isPlaying={isPlaying}
+              togglePlay={togglePlay}
+              isRefreshing={isRefreshing}
+              onRefreshLive={handleRefreshLive}
+              currentProgram={currentProgram}
+              onMenuClick={() => setIsSidebarOpen(true)}
+            />
+          );
+        }
         return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_PODCAST:
         return <PlaceholderView title="Podcasts" subtitle="Escucha a tu ritmo" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
@@ -870,6 +932,10 @@ const App: React.FC = () => {
                 }
              `}</style>
            </>
+        )}
+        
+        {currentUser && (currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador') && (currentView === AppView.LISTENER_HOME || currentView === AppView.WORKER_HOME || currentView === AppView.ADMIN_DASHBOARD) && (
+          <GlobalFAB currentUser={currentUser} onNavigate={handleNavigate} />
         )}
       </div>
   );
