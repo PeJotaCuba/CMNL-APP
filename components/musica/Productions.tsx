@@ -43,6 +43,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [editingTrackIndex, setEditingTrackIndex] = useState<number | null>(null);
   
   const [dbProductions, setDbProductions] = useState<Production[]>([]);
+  const [importedProductions, setImportedProductions] = useState<Production[]>([]);
 
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
@@ -144,31 +145,59 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       }
   };
 
+  const handleSaveImportedProduction = async (index: number) => {
+      const prod = importedProductions[index];
+      try {
+          await saveProductionToDB(prod);
+          setImportedProductions(prev => prev.filter((_, i) => i !== index));
+          fetchProductions();
+      } catch (e) {
+          alert("Error guardando producción.");
+      }
+  };
+
+  const handleRemoveImportedProduction = (index: number) => {
+      setImportedProductions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveAllImported = async () => {
+      try {
+          for (const prod of importedProductions) {
+              await saveProductionToDB(prod);
+          }
+          setImportedProductions([]);
+          fetchProductions();
+          alert("Todas las producciones han sido guardadas.");
+      } catch (e) {
+          alert("Error guardando algunas producciones.");
+      }
+  };
+
   const handleImportTxt = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files || e.target.files.length === 0) return;
       const files = Array.from(e.target.files) as File[];
       
-      let allParsedTracks: TempTrack[] = [];
-      let lastParsedDate = date;
-      let lastParsedProgram = program;
+      const newImportedProds: Production[] = [];
 
       for (const file of files) {
           const text = await file.text();
           const lines = text.split('\n');
           
-          let current: Partial<TempTrack> = {};
+          let fileTracks: any[] = [];
+          let current: any = {};
+          let fileDate = date;
+          let fileProgram = program;
 
           const saveCurrent = () => {
               if (current.title && (current.author || current.performer)) {
-                   allParsedTracks.push({
-                       id: `imp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                       title: current.title,
-                       author: current.author || '',
-                       authorCountry: current.authorCountry || '',
-                       performer: current.performer || '',
-                       performerCountry: current.performerCountry || '',
-                       genre: current.genre || ''
-                   } as TempTrack);
+                  fileTracks.push({
+                      title: current.title,
+                      author: current.author || '',
+                      authorCountry: current.authorCountry || '',
+                      performer: current.performer || '',
+                      performerCountry: current.performerCountry || '',
+                      genre: current.genre || ''
+                  });
               }
               current = {};
           };
@@ -184,9 +213,9 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                       const parts = d.split('/');
                       if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`;
                   }
-                  lastParsedDate = d;
+                  fileDate = d;
               } else if (lower.startsWith('programa:')) {
-                  lastParsedProgram = l.substring(9).trim();
+                  fileProgram = l.substring(9).trim();
               } else if (/^\[\d+\]\s+/.test(l) || /\d+\.\s*titulo:/.test(lower) || lower.startsWith('titulo:')) {
                   saveCurrent();
                   let val = l;
@@ -229,22 +258,25 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
               }
           });
           saveCurrent();
+
+          if (fileTracks.length > 0) {
+              newImportedProds.push({
+                  id: `imp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  date: fileDate,
+                  program: fileProgram,
+                  tracks: fileTracks
+              });
+          }
       }
 
-      if (allParsedTracks.length === 0) {
+      if (newImportedProds.length === 0) {
           alert("No se encontraron temas válidos en los archivos TXT.");
           e.target.value = '';
           return;
       }
 
-      setDate(lastParsedDate);
-      if (DEFAULT_PROGRAMS_LIST.includes(lastParsedProgram)) {
-          setProgram(lastParsedProgram);
-      }
-      
-      setSessionTracks(prev => [...prev, ...allParsedTracks]);
-      alert(`Se han cargado ${allParsedTracks.length} temas a la sesión. Revisa y edita antes de guardar.`);
-      
+      setImportedProductions(prev => [...prev, ...newImportedProds]);
+      alert(`Se han cargado ${newImportedProds.length} producciones independientes.`);
       e.target.value = ''; 
   };
 
@@ -755,6 +787,41 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                         <span className="material-symbols-outlined">save</span> Guardar Producción (DB)
                      </button>
                 </div>
+
+                {importedProductions.length > 0 && (
+                    <div className="mt-8 space-y-4 border-t border-[#9E7649]/20 pt-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-bold text-white text-sm uppercase tracking-widest">Producciones Importadas ({importedProductions.length})</h3>
+                            <button onClick={handleSaveAllImported} className="text-[10px] bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold transition-colors uppercase tracking-wider">Guardar Todas</button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {importedProductions.map((prod, idx) => (
+                                <div key={prod.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/30 shadow-md">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-bold text-[#9E7649] uppercase">{prod.date}</p>
+                                            <h4 className="font-bold text-white text-sm truncate">{prod.program}</h4>
+                                            <p className="text-[10px] text-[#E8DCCF]/60">{prod.tracks.length} temas</p>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button onClick={() => handleSaveImportedProduction(idx)} className="text-green-400 hover:text-green-300 p-1" title="Guardar esta producción">
+                                                <span className="material-symbols-outlined text-sm">check_circle</span>
+                                            </button>
+                                            <button onClick={() => handleRemoveImportedProduction(idx)} className="text-red-400 hover:text-red-300 p-1" title="Eliminar de la lista">
+                                                <span className="material-symbols-outlined text-sm">delete</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1 max-h-24 overflow-y-auto pr-1 custom-scrollbar">
+                                        {prod.tracks.map((t, i) => (
+                                            <p key={i} className="text-[9px] text-[#E8DCCF]/80 truncate">• {t.title} - {t.performer}</p>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </>
         )}
 
