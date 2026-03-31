@@ -122,7 +122,12 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
               </div>
               
               <h3 className="text-lg font-bold text-white text-center leading-tight mb-1">{member.name}</h3>
-              <p className="text-sm text-[#9E7649] text-center font-medium mb-1">{member.specialty}</p>
+              <p className="text-sm text-[#9E7649] text-center font-medium mb-2">{member.specialty}</p>
+              {member.info && (
+                <p className="text-[10px] text-[#E8DCCF]/70 text-center line-clamp-3 mt-2 border-t border-[#9E7649]/10 pt-2">
+                  {member.info}
+                </p>
+              )}
             </div>
           ))}
           

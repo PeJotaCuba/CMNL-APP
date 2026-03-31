@@ -64,6 +64,8 @@ interface Interruption {
     category: keyof TransmissionBreakdown;
     affectedMinutes: number;
     percentage: number;
+    startTime: string;
+    endTime: string;
 }
 
 interface ConsolidatedMonth {
@@ -343,8 +345,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const [showPrematureAlert, setShowPrematureAlert] = useState(false);
   const [showRestrictionModal, setShowRestrictionModal] = useState(false);
   const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
+  const [showInterruptionChoiceModal, setShowInterruptionChoiceModal] = useState(false);
+  const [showEditInterruptionsModal, setShowEditInterruptionsModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<keyof TransmissionBreakdown | null>(null);
-  const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0 });
+  const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0, programs: [] as string[] });
   
   const [dialog, setDialog] = useState<{isOpen: boolean, title: string, message: string, type: 'alert' | 'confirm', onConfirm?: () => void}>({
       isOpen: false, title: '', message: '', type: 'alert'
@@ -1295,7 +1299,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       });
 
       const interruptionsByCategory = categories.reduce((acc, cat) => {
-          acc[cat] = currentMonthInterruptions.filter(i => i.category === cat).reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+          const catProgs = transmissionConfig.categoryPrograms?.[cat] || [];
+          acc[cat] = currentMonthInterruptions
+              .filter(i => catProgs.includes(i.programName))
+              .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
           return acc;
       }, {} as Record<keyof TransmissionBreakdown, number>);
       interruptionsByCategory.total = Object.values(interruptionsByCategory).reduce((a, b) => a + b, 0);
@@ -1313,6 +1320,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               newConfig.WEEKDAY[editingCategory] = categoryEditForm.WEEKDAY;
               newConfig.SATURDAY[editingCategory] = categoryEditForm.SATURDAY;
               newConfig.SUNDAY[editingCategory] = categoryEditForm.SUNDAY;
+              
+              // Update category programs
+              const updatedCategoryPrograms = { ...(transmissionConfig.categoryPrograms || {}) };
+              updatedCategoryPrograms[editingCategory] = categoryEditForm.programs;
+              newConfig.categoryPrograms = updatedCategoryPrograms;
+
               saveDayMinutesConfig(newConfig);
               setTransmissionConfig(newConfig);
               setEditingCategory(null);
@@ -1502,10 +1515,18 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               return;
           }
 
-          const emptyBreakdown: Record<keyof TransmissionBreakdown, number> = {
-              informativos: 0, boletines: 0, publicidad: 0, orientacion: 0,
-              cienciaTecnica: 0, variados: 0, historicosGrabado: 0, variadoInfantilGrabado: 0, literaturaArte: 0,
-              musicales: 0, total: manualInterruptions
+          const emptyBreakdown: TransmissionBreakdown = {
+              informativos: 0,
+              boletines: 0,
+              publicidad: 0,
+              orientacion: 0,
+              cienciaTecnica: 0,
+              variados: 0,
+              historicosGrabado: 0,
+              variadoInfantilGrabado: 0,
+              literaturaArte: 0,
+              musicales: 0,
+              total: manualInterruptions
           };
 
           const newConsolidated: ConsolidatedMonth = {
@@ -1744,7 +1765,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                               setCategoryEditForm({
                                                                   WEEKDAY: transmissionConfig.WEEKDAY[cat],
                                                                   SATURDAY: transmissionConfig.SATURDAY[cat],
-                                                                  SUNDAY: transmissionConfig.SUNDAY[cat]
+                                                                  SUNDAY: transmissionConfig.SUNDAY[cat],
+                                                                  programs: transmissionConfig.categoryPrograms?.[cat] || []
                                                               });
                                                           }}
                                                           className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
@@ -1788,22 +1810,23 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               </tbody>
                           </table>
                       </div>
-                      {isAdmin && (
-                          <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
-                              <button 
-                                  onClick={() => setShowInterruptionsModal(true)}
-                                  className="bg-red-900/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-900/60 transition-colors flex items-center gap-2"
-                              >
-                                  <Radio size={16} /> Registrar Interrupción
-                              </button>
-                              <button 
-                                  onClick={handleOpenConsolidateModal}
-                                  className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#8B653D] transition-colors flex items-center gap-2"
-                              >
-                                  <Save size={16} /> Consolidar Mes
-                              </button>
-                          </div>
-                      )}
+
+                        {isAdmin && (
+                            <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
+                                <button 
+                                    onClick={() => setShowInterruptionChoiceModal(true)}
+                                    className="bg-red-900/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-900/60 transition-colors flex items-center gap-2"
+                                >
+                                    <Radio size={16} /> Registrar Interrupción
+                                </button>
+                                <button 
+                                    onClick={handleOpenConsolidateModal}
+                                    className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#8B653D] transition-colors flex items-center gap-2"
+                                >
+                                    <Save size={16} /> Consolidar Mes
+                                </button>
+                            </div>
+                        )}
                   </div>
 
                   {/* Info Card */}
@@ -1822,13 +1845,89 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               </div>
 
               {/* Modals */}
+              {showInterruptionChoiceModal && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                      <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-8 max-w-sm w-full shadow-2xl">
+                          <div className="flex justify-between items-center mb-6">
+                              <h3 className="text-xl font-bold text-white">Interrupciones</h3>
+                              <button onClick={() => setShowInterruptionChoiceModal(false)} className="text-[#E8DCCF]/50 hover:text-white">
+                                  <X size={24} />
+                              </button>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4">
+                              <button 
+                                  onClick={() => {
+                                      setShowInterruptionChoiceModal(false);
+                                      setShowInterruptionsModal(true);
+                                  }}
+                                  className="flex items-center justify-center gap-3 p-4 bg-[#9E7649] text-white rounded-xl hover:bg-[#8B653D] transition-all font-bold shadow-lg"
+                              >
+                                  <Plus size={20} /> Agregar Interrupción
+                              </button>
+                              <button 
+                                  onClick={() => {
+                                      setShowInterruptionChoiceModal(false);
+                                      setShowEditInterruptionsModal(true);
+                                  }}
+                                  className="flex items-center justify-center gap-3 p-4 bg-[#1A100C] text-[#9E7649] border border-[#9E7649]/30 rounded-xl hover:bg-[#9E7649]/10 transition-all font-bold"
+                              >
+                                  <Edit2 size={20} /> Editar Interrupciones
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+              {showEditInterruptionsModal && (
+                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                      <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-2xl w-full shadow-2xl">
+                          <div className="flex justify-between items-center mb-6">
+                              <h3 className="text-xl font-bold text-white">Editar Interrupciones</h3>
+                              <button onClick={() => setShowEditInterruptionsModal(false)} className="text-[#E8DCCF]/50 hover:text-white">
+                                  <X size={24} />
+                              </button>
+                          </div>
+                          <div className="max-h-[400px] overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
+                              {interruptions.length > 0 ? (
+                                  interruptions.map(inter => (
+                                      <div key={inter.id} className="bg-[#1A100C] border border-[#9E7649]/20 p-4 rounded-xl flex justify-between items-center">
+                                          <div>
+                                              <div className="text-white font-bold">{inter.programName}</div>
+                                              <div className="text-xs text-[#E8DCCF]/50">{inter.date} | {inter.startTime} - {inter.endTime}</div>
+                                          </div>
+                                          <div className="flex items-center gap-4">
+                                              <span className="text-red-400 font-mono font-bold">-{inter.affectedMinutes} min</span>
+                                              <button 
+                                                  onClick={() => {
+                                                      if (window.confirm('¿Eliminar esta interrupción?')) {
+                                                          setInterruptions(interruptions.filter(i => i.id !== inter.id));
+                                                      }
+                                                  }}
+                                                  className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                              >
+                                                  <Trash2 size={18} />
+                                              </button>
+                                          </div>
+                                      </div>
+                                  ))
+                              ) : (
+                                  <p className="text-center text-[#E8DCCF]/30 py-10">No hay interrupciones registradas</p>
+                              )}
+                          </div>
+                          <div className="flex justify-end">
+                              <button onClick={() => setShowEditInterruptionsModal(false)} className="px-6 py-2 bg-[#9E7649] text-white rounded-lg font-bold">Cerrar</button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
               {editingCategory && (
                   <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                       <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
                           <h3 className="text-xl font-bold text-white mb-4">Editar {categoryLabels[editingCategory]}</h3>
-                          <p className="text-sm text-[#9E7649] mb-6">Modifica los minutos base por tipo de día. Esto recalculará todo el histórico.</p>
+                          <p className="text-sm text-[#9E7649] mb-6">Modifica los minutos base por tipo de día y asigna programas.</p>
                           
-                          <div className="space-y-4 mb-6">
+                          <div className="space-y-4 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Lunes a Viernes (min)</label>
                                   <input type="number" value={categoryEditForm.WEEKDAY === 0 ? '' : categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
@@ -1840,6 +1939,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Domingos (min)</label>
                                   <input type="number" value={categoryEditForm.SUNDAY === 0 ? '' : categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                              </div>
+
+                              <div>
+                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Programas Asignados</label>
+                                  <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
+                                      {fichas.map(ficha => (
+                                          <label key={ficha.name} className="flex items-center gap-2 p-1 hover:bg-[#9E7649]/10 rounded cursor-pointer">
+                                              <input 
+                                                  type="checkbox" 
+                                                  checked={(categoryEditForm.programs || []).includes(ficha.name)}
+                                                  onChange={e => {
+                                                      const current = categoryEditForm.programs || [];
+                                                      const updated = e.target.checked 
+                                                          ? [...current, ficha.name]
+                                                          : current.filter(p => p !== ficha.name);
+                                                      setCategoryEditForm({...categoryEditForm, programs: updated});
+                                                  }}
+                                                  className="accent-[#9E7649]"
+                                              />
+                                              <span className="text-sm text-white/90">{ficha.name}</span>
+                                          </label>
+                                      ))}
+                                  </div>
                               </div>
                           </div>
 
@@ -1902,13 +2024,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               {showInterruptionsModal && (
                   <InterruptionModal 
                       onClose={() => setShowInterruptionsModal(false)} 
-                      onSave={(interruption) => {
-                          setInterruptions([...interruptions, interruption]);
+                      onSave={(newInterruptions) => {
+                          setInterruptions([...interruptions, ...newInterruptions]);
                           setShowInterruptionsModal(false);
                       }}
                       fichas={fichas}
                       categories={categories}
                       categoryLabels={categoryLabels}
+                      categoryPrograms={transmissionConfig.categoryPrograms}
                   />
               )}
           </div>

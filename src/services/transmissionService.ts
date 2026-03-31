@@ -57,7 +57,7 @@ export const DEFAULT_DAY_MINUTES: Record<DayType, TransmissionBreakdown> = {
     }
 };
 
-export const getDayMinutesConfig = (): Record<DayType, TransmissionBreakdown> => {
+export const getDayMinutesConfig = (): Record<DayType, TransmissionBreakdown> & { categoryPrograms?: Record<string, string[]> } => {
     const saved = localStorage.getItem('rcm_transmission_config');
     if (saved) {
         try {

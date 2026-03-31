@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Upload, Download, RefreshCw, Edit2, Camera } from 'lucide-react';
+import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2 } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
-import { User } from '../../types';
+import { User, UserClassification } from '../../types';
 
 interface TeamMember {
   id: string;
@@ -81,145 +81,141 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       const updatedUsers = [...users];
       let processedCount = 0;
 
-      // Detect format: If it contains "Nombre completo:", it's the credentials format
-      if (text.toLowerCase().includes('nombre completo:')) {
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-        const userBlocks: string[] = [];
-        let currentBlock = "";
-        
-        lines.forEach(line => {
-          if (line.toLowerCase().includes('nombre completo:')) {
-            if (currentBlock) userBlocks.push(currentBlock);
-            currentBlock = line;
-          } else {
-            currentBlock += " " + line;
-          }
-        });
-        if (currentBlock) userBlocks.push(currentBlock);
+      const cleanValue = (val: string) => {
+        if (val.includes(':')) return val.split(':')[1].trim();
+        return val.trim();
+      };
 
-        userBlocks.forEach(block => {
-          const labels = ['Nombre completo', 'Nombre de usuario', 'Número de móvil', 'Contraseña'];
-          const getValue = (label: string) => {
-            const otherLabels = labels.filter(l => l !== label).join('|');
-            const regex = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\s*(?:${otherLabels}):|$)`, 'i');
-            const match = block.match(regex);
-            return match ? match[1].trim().replace(/,$/, '').trim() : '';
-          };
+      // Split by the separator lines (underscores or hyphens)
+      const blocks = text.split(/[_-]{10,}/).map(b => b.trim()).filter(b => b);
 
-          const namePart = getValue('Nombre completo');
-          const userPart = getValue('Nombre de usuario');
-          const mobilePart = getValue('Número de móvil');
-          const passPart = getValue('Contraseña');
+      blocks.forEach(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length >= 4) {
+          // Expected structure:
+          // Name
+          // Specialty
+          // Level (optional)
+          // Móvil: ...
+          // Usuario: ...
+          // Contraseña: ...
+          // Rol: ...
+          
+          let name = cleanValue(lines[0]);
+          let specialty = cleanValue(lines[1]);
+          let level = "";
+          let mobile = "";
+          let username = "";
+          let password = "";
+          let role = "";
 
-          if (namePart && userPart) {
-            const id = userPart.toLowerCase().replace(/[^a-z0-9]/g, '');
+          // Find labeled lines and level
+          lines.forEach((line, idx) => {
+            const lower = line.toLowerCase();
+            if (lower.startsWith('móvil:')) mobile = cleanValue(line);
+            else if (lower.startsWith('usuario:')) username = cleanValue(line);
+            else if (lower.startsWith('contraseña:')) password = cleanValue(line);
+            else if (lower.startsWith('rol:')) role = cleanValue(line);
+            else if (idx === 2 && !line.includes(':')) level = line; 
+          });
+
+          if (name && username) {
+            const id = username.toLowerCase().replace(/[^a-z0-9]/g, '');
             
-            // Update User
-            const userIdx = updatedUsers.findIndex(u => u.username.toLowerCase() === userPart.toLowerCase() || u.id === id);
+            // Overwrite logic - Team Member
+            const teamIdx = currentTeam.findIndex(m => m.id === id || m.name.toLowerCase() === name.toLowerCase());
+            const newMemberData = {
+              id,
+              name,
+              specialty,
+              level,
+              photoUrl: teamIdx >= 0 ? currentTeam[teamIdx].photoUrl : `https://picsum.photos/seed/${id}/400/400`,
+              info: teamIdx >= 0 ? currentTeam[teamIdx].info : ''
+            };
+
+            if (teamIdx >= 0) {
+              currentTeam[teamIdx] = { ...currentTeam[teamIdx], ...newMemberData };
+            } else {
+              currentTeam.push(newMemberData);
+            }
+
+            // Overwrite logic - User
+            const userIdx = updatedUsers.findIndex(u => u.id === id || u.username.toLowerCase() === username.toLowerCase());
             const newUser: User = {
               id,
-              username: userPart,
-              name: namePart,
-              mobile: mobilePart || (userIdx >= 0 ? updatedUsers[userIdx].mobile : ''),
-              password: passPart || (userIdx >= 0 ? updatedUsers[userIdx].password : '1234'),
-              role: userIdx >= 0 ? updatedUsers[userIdx].role : 'worker',
-              classification: userIdx >= 0 ? updatedUsers[userIdx].classification : 'especialista'
+              username,
+              name,
+              mobile,
+              password,
+              role: (role.toLowerCase().includes('director') || role.toLowerCase().includes('coordinador')) ? 'admin' : 'worker',
+              classification: (role || (userIdx >= 0 ? updatedUsers[userIdx].classification : 'Usuario')) as UserClassification
             };
 
             if (userIdx >= 0) {
-              updatedUsers[userIdx] = newUser;
-            } else {
-              updatedUsers.push(newUser);
-            }
-
-            // Update Team Member if exists or create basic one
-            const teamIdx = currentTeam.findIndex(m => m.id === id || m.name.toLowerCase() === namePart.toLowerCase());
-            if (teamIdx >= 0) {
-              currentTeam[teamIdx] = { ...currentTeam[teamIdx], name: namePart, id };
-            } else {
-              currentTeam.push({
-                id,
-                name: namePart,
-                specialty: 'Especialista',
-                level: '',
-                info: '',
-                photoUrl: `https://picsum.photos/seed/${id}/400/400`
-              });
-            }
-            processedCount++;
-          }
-        });
-      } else {
-        // Original Team Info format (separated by underscores/hyphens)
-        const blocks = text.split(/[-_]{10,}/);
-        blocks.forEach(block => {
-          const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-          if (lines.length >= 2) {
-            const name = lines[0];
-            
-            // Combine specialties and levels if there are multiple
-            const specialties = [];
-            const levels = [];
-            const infoLines: string[] = [];
-            
-            for (let i = 1; i < lines.length; i += 2) {
-              if (lines[i] && !lines[i].toLowerCase().includes('nivel') && lines[i].toLowerCase() !== 'habilitado' && lines[i].length > 50) {
-                // If it's a long text, it's probably info
-                infoLines.push(lines[i]);
-                if (lines[i+1]) infoLines.push(lines[i+1]);
-              } else {
-                if (lines[i]) specialties.push(lines[i]);
-                if (lines[i+1] && (lines[i+1].toLowerCase().includes('nivel') || lines[i+1].toLowerCase() === 'habilitado')) {
-                  levels.push(lines[i+1]);
-                } else if (lines[i+1]) {
-                  // Not a level, might be info or another specialty
-                  infoLines.push(lines[i+1]);
-                  i--; // Adjust step since we didn't consume a level
-                }
-              }
-            }
-            
-            const specialty = specialties.join(' / ');
-            const uniqueLevels = Array.from(new Set(levels));
-            const level = uniqueLevels.length > 0 ? uniqueLevels.join(' / ') : '';
-            const info = infoLines.join('\n');
-            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            
-            const newMember = { id, name, specialty, level, info };
-            
-            const existingIndex = currentTeam.findIndex(m => m.id === id || (m.name && name && m.name.toLowerCase() === name.toLowerCase()));
-            if (existingIndex >= 0) {
-              currentTeam[existingIndex] = { ...currentTeam[existingIndex], ...newMember, photoUrl: currentTeam[existingIndex].photoUrl };
-            } else {
-              currentTeam.push(newMember);
-            }
-
-            // Also update/create user
-            const existingUserIndex = updatedUsers.findIndex(u => u.id === id);
-            const specialtyLower = specialty.toLowerCase();
-            const newUser: User = {
-              id,
-              username: id,
-              name: name,
-              password: existingUserIndex >= 0 ? updatedUsers[existingUserIndex].password : '1234',
-              role: (specialtyLower.includes('director') || specialtyLower.includes('coordinador')) ? 'admin' : 'worker',
-              classification: specialty.split('/')[0].trim().toLowerCase() as any || 'especialista'
-            };
-
-            if (existingUserIndex >= 0) {
-              updatedUsers[existingUserIndex] = { ...updatedUsers[existingUserIndex], ...newUser };
+              updatedUsers[userIdx] = { ...updatedUsers[userIdx], ...newUser };
             } else {
               updatedUsers.push(newUser);
             }
             processedCount++;
           }
-        });
-      }
+        }
+      });
 
       saveTeam(currentTeam);
       setUsers(updatedUsers);
       localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
       alert(`Se procesaron ${processedCount} registros de equipo y usuarios.`);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleBioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const currentTeam = [...team];
+      let processedCount = 0;
+
+      // Split by the separator lines
+      const blocks = text.split(/[_-]{10,}/).map(b => b.trim()).filter(b => b);
+
+      blocks.forEach(block => {
+        const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length >= 2) {
+          const name = lines[0].trim();
+          let bio = "";
+          
+          // Find "Biografía:" line and take everything after it
+          const bioLineIdx = lines.findIndex(l => l.toLowerCase().startsWith('biografía:'));
+          if (bioLineIdx !== -1) {
+            const parts = lines[bioLineIdx].split(':');
+            if (parts.length > 1) {
+              bio = parts.slice(1).join(':').trim();
+            }
+            
+            // If there are more lines after the "Biografía:" line, append them
+            if (lines.length > bioLineIdx + 1) {
+              const remainingLines = lines.slice(bioLineIdx + 1).join('\n').trim();
+              if (remainingLines) {
+                bio += (bio ? "\n" : "") + remainingLines;
+              }
+            }
+          }
+
+          const teamIdx = currentTeam.findIndex(m => m.name.toLowerCase() === name.toLowerCase());
+          if (teamIdx >= 0) {
+            currentTeam[teamIdx].info = bio;
+            processedCount++;
+          }
+        }
+      });
+
+      saveTeam(currentTeam);
+      alert(`Se actualizaron ${processedCount} biografías.`);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -277,11 +273,18 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       >
         <div className="flex gap-2">
           {isAdmin && (
-            <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
-              <Upload size={20} />
-              <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
-              <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-            </label>
+            <>
+              <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
+                <Upload size={20} />
+                <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
+                <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+              </label>
+              <label className="p-2 bg-[#2C1B15] hover:bg-[#3D261D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2 border border-[#9E7649]/30" title="Cargar Biografías">
+                <Users size={20} />
+                <span className="hidden sm:inline text-sm font-medium">Cargar Biografías</span>
+                <input type="file" accept=".txt" onChange={handleBioUpload} className="hidden" />
+              </label>
+            </>
           )}
         </div>
       </CMNLHeader>
@@ -305,11 +308,27 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               return (
                 <div 
                   key={member.id} 
-                  className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 shadow-lg relative group cursor-pointer hover:border-[#9E7649]/50 transition-colors"
+                  className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden flex flex-col items-center p-6 pt-14 shadow-lg relative group cursor-pointer hover:border-[#9E7649]/50 transition-colors"
                   onClick={() => setViewingMember(member)}
                 >
                   {isAdmin && (
-                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-4 right-4 flex gap-2 z-20 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          const user = users.find(u => u.id === member.id);
+                          if (user) {
+                            const message = `Hola ${member.name}, aquí tienes tus credenciales para CMNL App:\n\nUsuario: ${user.username}\nMóvil: ${user.mobile}\nContraseña: ${user.password}\nPIN: 0326\n\nAccede aquí: https://cmnl-app.vercel.app/`;
+                            window.open(`https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+                          } else {
+                            alert('No se encontró información de usuario para este miembro.');
+                          }
+                        }}
+                        className="w-8 h-8 flex items-center justify-center bg-[#25D366] hover:bg-[#128C7E] text-white rounded-lg transition-all shadow-lg border border-[#25D366]/30"
+                        title="Compartir vía WhatsApp"
+                      >
+                        <Share2 size={16} />
+                      </button>
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
@@ -320,30 +339,29 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                             username: user?.username || '',
                             mobile: user?.mobile || '',
                             password: user?.password || '',
-                            role: user?.role || ''
+                            role: user?.classification || ''
                           }); 
                         }}
-                        className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
+                        className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
                         title="Editar Información"
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={16} />
                       </button>
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
-                          const user = users.find(u => u.id === member.id);
-                          setImpersonatedUser(user || {
-                            id: member.id,
-                            username: member.id,
-                            name: member.name,
-                            role: 'worker',
-                            classification: 'Trabajador'
-                          }); 
+                          if (window.confirm(`¿Estás seguro de eliminar a ${member.name}?`)) {
+                            const updatedTeam = team.filter(m => m.id !== member.id);
+                            saveTeam(updatedTeam);
+                            const updatedUsers = users.filter(u => u.id !== member.id);
+                            setUsers(updatedUsers);
+                            localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                          }
                         }}
-                        className="p-1.5 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
-                        title="Entrar como usuario"
+                        className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-700/30"
+                        title="Eliminar Miembro"
                       >
-                        <Users size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   )}
@@ -456,24 +474,66 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Especialidades (Separar con /)</label>
-                  <input 
-                    type="text" 
-                    value={editingMember.specialty}
-                    onChange={e => setEditingMember({...editingMember, specialty: e.target.value})}
-                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
-                    placeholder="Ej: locutor / realizador"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Niveles</label>
-                  <input 
-                    type="text" 
-                    value={editingMember.level}
-                    onChange={e => setEditingMember({...editingMember, level: e.target.value})}
-                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
-                  />
+                <div className="space-y-4">
+                  <label className="block text-xs text-[#9E7649] font-bold uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Especialidades y Niveles (Máx. 3)</label>
+                  <div className="space-y-3">
+                    {[0, 1, 2].map((idx) => {
+                      const specs = (editingMember.specialty || '').split('/').map(s => s.trim());
+                      const lvls = (editingMember.level || '').split('/').map(l => l.trim());
+                      
+                      return (
+                        <div key={idx} className="grid grid-cols-2 gap-3 bg-black/20 p-3 rounded-xl border border-[#9E7649]/10">
+                          <div>
+                            <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Especialidad {idx + 1}</label>
+                            <input 
+                              list="roles-list"
+                              type="text"
+                              value={specs[idx] || ''}
+                              onChange={e => {
+                                const newSpecs = [specs[0] || '', specs[1] || '', specs[2] || ''];
+                                newSpecs[idx] = e.target.value;
+                                setEditingMember({
+                                  ...editingMember, 
+                                  specialty: newSpecs.join(' / ').replace(/( \/ )+$/, '').trim()
+                                });
+                              }}
+                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
+                              placeholder="Seleccione o escriba..."
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Nivel {idx + 1}</label>
+                            <input 
+                              list="levels-list"
+                              type="text"
+                              value={lvls[idx] || ''}
+                              onChange={e => {
+                                const newLvls = [lvls[0] || '', lvls[1] || '', lvls[2] || ''];
+                                newLvls[idx] = e.target.value;
+                                setEditingMember({
+                                  ...editingMember, 
+                                  level: newLvls.join(' / ').replace(/( \/ )+$/, '').trim()
+                                });
+                              }}
+                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
+                              placeholder="Nivel..."
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <datalist id="roles-list">
+                    {ROLES.map(role => (
+                      <option key={role} value={role.charAt(0).toUpperCase() + role.slice(1)} />
+                    ))}
+                  </datalist>
+                  <datalist id="levels-list">
+                    <option value="Primer Nivel" />
+                    <option value="Segundo Nivel" />
+                    <option value="Tercer Nivel" />
+                    <option value="Habilitado" />
+                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs text-[#9E7649] mb-1 uppercase">Biografía / Información</label>
@@ -525,8 +585,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
                   >
                     <option value="">Seleccionar Rol</option>
-                    {ROLES.map(role => (
-                      <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
+                    {['Usuario', 'Coordinador', 'Director'].map(role => (
+                      <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
                 </div>
@@ -591,12 +651,15 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
               <button 
                 onClick={() => {
+                  // Helper to clean joined strings
+                  const cleanJoined = (str: string) => str.split('/').map(s => s.trim()).filter(s => s).join(' / ');
+
                   // 1. Update Team Member
                   const updatedTeam = team.map(m => m.id === editingMember.id ? {
                     id: editingMember.id,
                     name: editingMember.name,
-                    specialty: editingMember.specialty,
-                    level: editingMember.level,
+                    specialty: cleanJoined(editingMember.specialty),
+                    level: cleanJoined(editingMember.level),
                     info: editingMember.info,
                     photoUrl: editingMember.photoUrl,
                     habitualProgramsByRole: editingMember.habitualProgramsByRole
@@ -610,8 +673,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     username: editingMember.username,
                     mobile: editingMember.mobile,
                     password: editingMember.password,
-                    classification: editingMember.role || u.classification || 'Trabajador',
-                    role: (editingMember.role === 'director' || editingMember.role === 'coordinador' || u.role === 'admin') ? 'admin' : 'worker'
+                    classification: editingMember.role || u.classification || 'Usuario',
+                    role: (editingMember.role === 'Director' || editingMember.role === 'Coordinador' || u.role === 'admin') ? 'admin' : 'worker'
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -622,8 +685,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       username: editingMember.username || editingMember.id,
                       mobile: editingMember.mobile || '',
                       password: editingMember.password || '1234',
-                      classification: editingMember.role || 'especialista',
-                      role: (editingMember.role === 'director' || editingMember.role === 'coordinador') ? 'admin' : 'worker'
+                      classification: editingMember.role || 'Usuario',
+                      role: (editingMember.role === 'Director' || editingMember.role === 'Coordinador') ? 'admin' : 'worker'
                     });
                   }
                   

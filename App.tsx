@@ -639,15 +639,6 @@ const App: React.FC = () => {
           onPause={() => setIsPlaying(false)}
         ></audio>
 
-        {impersonatedUser && (
-          <button 
-              onClick={() => setImpersonatedUser(null)}
-              className="fixed bottom-24 right-5 z-50 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg text-sm border-2 border-white/10 hover:bg-red-700 transition-colors"
-          >
-              Regresar a Admin
-          </button>
-        )}
-
         <Sidebar 
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)} 
