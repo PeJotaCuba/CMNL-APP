@@ -13,6 +13,7 @@ interface ReportData {
     userFullName: string;
     userUniqueId: string;
     program: string;
+    date: string;
     items: {
         title: string;
         author: string;
@@ -26,7 +27,18 @@ interface ReportData {
 export const generateReportPDF = (data: ReportData): Blob => {
     const JsPDFCtor = (jsPDF as any).default || jsPDF;
     const doc = new JsPDFCtor();
-    const today = new Date().toLocaleDateString('es-ES');
+    
+    // Format date for display inside PDF
+    let displayDate = data.date;
+    try {
+        // If it's YYYY-MM-DD, we want to show it as is or formatted nicely
+        if (data.date.includes('-')) {
+            const [y, m, d] = data.date.split('T')[0].split('-');
+            displayDate = `${d}/${m}/${y}`;
+        }
+    } catch (e) {
+        displayDate = data.date;
+    }
 
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
@@ -37,7 +49,7 @@ export const generateReportPDF = (data: ReportData): Blob => {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`Director(a): ${data.userFullName}`, 20, 45);
-    doc.text(`Fecha: ${today}`, 20, 50);
+    doc.text(`Fecha: ${displayDate}`, 20, 50);
     doc.text(`Programa: ${data.program || 'Sin Especificar'}`, 20, 55);
 
     doc.setLineWidth(0.5);

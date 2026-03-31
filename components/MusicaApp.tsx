@@ -109,6 +109,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [editingReportId, setEditingReportId] = useState<string | null>(null); 
   const [isExportingFromSaved, setIsExportingFromSaved] = useState(false);
+  const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
 
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -280,12 +281,62 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const handleSaveSelectionClick = () => {
       if (selectedTracksList.length === 0) return alert("Selección vacía.");
       
-      // UPDATE EXISTING SELECTION
+      // Initialize editing state for the save modal
+      const items: ExportItem[] = selectedTracksList.map(t => ({ 
+          id: t.id, 
+          title: t.metadata.title, 
+          author: t.metadata.author, 
+          authorCountry: t.metadata.authorCountry || '', 
+          performer: t.metadata.performer, 
+          performerCountry: t.metadata.performerCountry || '', 
+          genre: t.metadata.genre || '', 
+          source: 'db', 
+          path: t.path 
+      }));
+      setExportItems(items);
+      
+      if (currentSelectionId) {
+          const sel = savedSelections.find(s => s.id === currentSelectionId);
+          if (sel) {
+              setSaveName(sel.name);
+              if (sel.program) setProgramName(sel.program);
+              if (sel.date) setReportDate(sel.date.split('T')[0]);
+          }
+      } else {
+          setSaveName('');
+          // Keep current programName and reportDate or reset them?
+          // User said "sale la fecha y el nombre... además del programa para escoger"
+          // So we use current state values.
+      }
+      
+      setShowSaveModal(true);
+  };
+
+  const confirmSaveSelection = () => {
+      if (!saveName.trim()) return;
+      
+      // Map exportItems back to Tracks to preserve edits in the saved selection
+      const updatedTracks: Track[] = exportItems.map(item => {
+          const original = selectedTracksList.find(t => t.id === item.id);
+          return {
+              ...original!,
+              metadata: {
+                  ...original!.metadata,
+                  title: item.title,
+                  author: item.author,
+                  authorCountry: item.authorCountry,
+                  performer: item.performer,
+                  performerCountry: item.performerCountry,
+                  genre: item.genre
+              }
+          };
+      });
+
       if (currentSelectionId) {
           setSavedSelections(prev => {
               const updated = prev.map(s => 
                   s.id === currentSelectionId 
-                      ? { ...s, tracks: [...selectedTracksList], date: new Date().toISOString() }
+                      ? { ...s, name: saveName.trim(), tracks: updatedTracks, date: new Date(reportDate).toISOString(), program: programName }
                       : s
               );
               saveSavedSelectionsListToDB(updated);
@@ -298,47 +349,42 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           localStorage.removeItem(getSelectionKey());
           
           alert("Selección actualizada correctamente.");
-          return;
-      }
-
-      // SAVE NEW SELECTION
-      if (savedSelections.length >= 5) return alert("Límite de 5 selecciones.");
-      setPendingSelectionToLoad(null);
-      setSaveName('');
-      setShowSaveModal(true);
-  };
-
-  const confirmSaveSelection = () => {
-      if (!saveName.trim()) return;
-      
-      const newSelection: SavedSelection = { 
-          id: `sel-${Date.now()}`, 
-          name: saveName.trim(), 
-          date: new Date().toISOString(), 
-          tracks: [...selectedTracksList] 
-      };
-      
-      setSavedSelections(prev => {
-          const updated = [newSelection, ...prev];
-          saveSavedSelectionsListToDB(updated);
-          return updated;
-      });
-      
-      if (pendingSelectionToLoad) {
-          setSelectedTracksList(pendingSelectionToLoad.tracks);
-          setCurrentSelectionId(pendingSelectionToLoad.id);
-          setPendingSelectionToLoad(null);
-          alert("Selección actual guardada y nueva selección cargada.");
       } else {
-          // Clear selection after save
-          setSelectedTracksList([]);
-          setCurrentSelectionId(null);
-          localStorage.removeItem(getSelectionKey());
+          if (savedSelections.length >= 5) return alert("Límite de 5 selecciones.");
           
-          alert("Selección guardada correctamente.");
+          const newSelection: SavedSelection = { 
+              id: `sel-${Date.now()}`, 
+              name: saveName.trim(), 
+              date: new Date(reportDate).toISOString(), 
+              tracks: updatedTracks,
+              program: programName
+          };
+          
+          setSavedSelections(prev => {
+              const updated = [newSelection, ...prev];
+              saveSavedSelectionsListToDB(updated);
+              return updated;
+          });
+          
+          if (pendingSelectionToLoad) {
+              setSelectedTracksList(pendingSelectionToLoad.tracks);
+              setCurrentSelectionId(pendingSelectionToLoad.id);
+              if (pendingSelectionToLoad.program) setProgramName(pendingSelectionToLoad.program);
+              if (pendingSelectionToLoad.date) setReportDate(pendingSelectionToLoad.date.split('T')[0]);
+              setPendingSelectionToLoad(null);
+              alert("Selección actual guardada y nueva selección cargada.");
+          } else {
+              // Clear selection after save
+              setSelectedTracksList([]);
+              setCurrentSelectionId(null);
+              localStorage.removeItem(getSelectionKey());
+              
+              alert("Selección guardada correctamente.");
+          }
       }
       
       setShowSaveModal(false);
+      onDirtyChange?.(true);
   };
 
   const handleClearSelectionClick = () => {
@@ -359,6 +405,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       } else {
           setSelectedTracksList(sel.tracks);
           setCurrentSelectionId(sel.id);
+          if (sel.program) setProgramName(sel.program);
+          if (sel.date) setReportDate(sel.date.split('T')[0]);
       }
   };
 
@@ -432,12 +480,28 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleDownloadReport = async () => {
       if (!currentUser) return;
-      const pdfBlob = generateReportPDF({ userFullName: currentUser.fullName, userUniqueId: currentUser.uniqueId || 'N/A', program: programName, items: exportItems });
+      const pdfBlob = generateReportPDF({ 
+          userFullName: currentUser.fullName, 
+          userUniqueId: currentUser.uniqueId || 'N/A', 
+          program: programName, 
+          date: reportDate,
+          items: exportItems 
+      });
       const fileName = `PM-${programName}-${reportDate}.pdf`;
-      await saveReportToDB({ id: editingReportId || `rep-${Date.now()}`, date: new Date(reportDate).toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: exportItems, status: { downloaded: false, sent: false } });
+      await saveReportToDB({ 
+          id: editingReportId || `rep-${Date.now()}`, 
+          date: reportDate, 
+          program: programName, 
+          generatedBy: currentUser.username, 
+          fileName, 
+          pdfBlob, 
+          items: exportItems, 
+          status: { downloaded: false, sent: false } 
+      });
       
       if (editingReportId) {
           alert("Reporte actualizado correctamente.");
+          setReportsRefreshKey(prev => prev + 1);
       } else {
           alert("Reporte generado y guardado en Registros.");
           
@@ -467,8 +531,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const handleEditReport = (report: Report) => {
       setEditingReportId(report.id);
       setProgramName(report.program);
-      setReportDate(new Date(report.date).toISOString().split('T')[0]);
-      setExportItems(report.items);
+      // Ensure we only take the date part if it's an ISO string
+      setReportDate(report.date.split('T')[0]);
+      setExportItems(report.items || []);
       setShowExportModal(true);
   };
 
@@ -477,12 +542,28 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       setIsUpdating(true);
       try {
           const now = Date.now();
+          const todayStr = new Date().toISOString().split('T')[0];
           for (let i = 0; i < savedSelections.length; i++) {
               const sel = savedSelections[i];
               const items: ExportItem[] = sel.tracks.map(t => ({ id: t.id, title: t.metadata.title, author: t.metadata.author, authorCountry: t.metadata.authorCountry || '', performer: t.metadata.performer, performerCountry: t.metadata.performerCountry || '', genre: t.metadata.genre || '', source: 'db', path: t.path }));
-              const pdfBlob = generateReportPDF({ userFullName: currentUser.fullName, userUniqueId: currentUser.uniqueId || 'N/A', program: programName, items: items });
-              const fileName = `PM-${sel.name}-${new Date().toISOString().split('T')[0]}.pdf`;
-              await saveReportToDB({ id: `rep-${now}-${i}-${sel.id}`, date: new Date().toISOString(), program: programName, generatedBy: currentUser.username, fileName, pdfBlob, items: items, status: { downloaded: false, sent: false } });
+              const pdfBlob = generateReportPDF({ 
+                  userFullName: currentUser.fullName, 
+                  userUniqueId: currentUser.uniqueId || 'N/A', 
+                  program: programName, 
+                  date: todayStr,
+                  items: items 
+              });
+              const fileName = `PM-${sel.name}-${todayStr}.pdf`;
+              await saveReportToDB({ 
+                  id: `rep-${now}-${i}-${sel.id}`, 
+                  date: todayStr, 
+                  program: programName, 
+                  generatedBy: currentUser.username, 
+                  fileName, 
+                  pdfBlob, 
+                  items: items, 
+                  status: { downloaded: false, sent: false } 
+              });
           }
           // Clear saved selections after bulk export
           setSavedSelections([]);
@@ -610,19 +691,78 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
             )}
             {showSaveModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowSaveModal(false)}>
-                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
-                        <h3 className="font-bold text-lg mb-4 text-white">Guardar Selección</h3>
-                        <input 
-                            autoFocus
-                            className="w-full p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-sm outline-none focus:border-[#9E7649] mb-4" 
-                            placeholder="Nombre de la selección..." 
-                            value={saveName} 
-                            onChange={e => setSaveName(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && confirmSaveSelection()}
-                        />
-                        <div className="flex gap-3">
+                    <div className="w-full max-w-lg bg-[#2C1B15] rounded-2xl shadow-2xl flex flex-col h-[85vh] border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        
+                        <div className="flex justify-between items-center p-4 border-b border-[#9E7649]/20 shrink-0 bg-[#1A100C] rounded-t-2xl">
+                            <div>
+                                <h3 className="font-bold text-white">Guardar Selección</h3>
+                                <p className="text-xs text-[#E8DCCF]/60">Edita los detalles antes de guardar</p>
+                            </div>
+                            <button onClick={() => setShowSaveModal(false)}><span className="material-symbols-outlined text-[#E8DCCF]/40 hover:text-white">close</span></button>
+                        </div>
+
+                        <div className="p-4 bg-[#2C1B15] border-b border-[#9E7649]/20 shrink-0 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Nombre de la Selección</label>
+                                <input 
+                                    autoFocus
+                                    className="w-full p-2 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-lg text-sm outline-none focus:border-[#9E7649]" 
+                                    placeholder="Ej: Programa Lunes..." 
+                                    value={saveName} 
+                                    onChange={e => setSaveName(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
+                                    <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
+                                        {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Fecha</label>
+                                    <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                            {exportItems.map((item, idx) => (
+                                <div key={item.id} className="p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
+                                    <div className="mb-2">
+                                        <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Título</label>
+                                        <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-sm font-bold outline-none focus:border-[#9E7649]" value={item.title} onChange={e => handleUpdateExportItem(idx, 'title', e.target.value)} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Autor</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" value={item.author} onChange={e => handleUpdateExportItem(idx, 'author', e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Intérprete</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" value={item.performer} onChange={e => handleUpdateExportItem(idx, 'performer', e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Género</label>
+                                            <select className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-xs outline-none focus:border-[#9E7649]" value={item.genre} onChange={e => handleUpdateExportItem(idx, 'genre', e.target.value)}>
+                                                <option value="" className="bg-[#2C1B15]">Seleccionar...</option>
+                                                {GENRES_LIST.map(g => <option key={g} value={g} className="bg-[#2C1B15]">{g}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Origen</label>
+                                            <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-[#E8DCCF]/40 text-[10px] outline-none" value={item.path} readOnly />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t border-[#9E7649]/20 shrink-0 bg-[#1A100C] rounded-b-2xl flex gap-3">
                             <button onClick={() => setShowSaveModal(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cancelar</button>
-                            <button onClick={confirmSaveSelection} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700">Guardar</button>
+                            <button onClick={confirmSaveSelection} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700">Guardar Selección</button>
                         </div>
                     </div>
                 </div>
@@ -663,7 +803,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
             {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
             {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} />}
-            {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} />}
+            {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} refreshTrigger={reportsRefreshKey} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
         </div>
 

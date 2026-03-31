@@ -18,6 +18,7 @@ interface Props {
   onRefreshLive: () => void;
   currentProgram: ProgramItem;
   onMenuClick?: () => void;
+  onBackup?: () => void;
 }
 
 const newsColors = [
@@ -41,7 +42,8 @@ const WorkerHome: React.FC<Props> = ({
     isRefreshing,
     onRefreshLive,
     currentProgram,
-    onMenuClick
+    onMenuClick,
+    onBackup
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
@@ -71,66 +73,22 @@ const WorkerHome: React.FC<Props> = ({
   };
 
   const handleDownloadBackup = async () => {
-    if (!currentUser) return;
-    const username = currentUser.username;
-
-    // 1. Agenda: Intereses de usuario
-    let userInterests = null;
-    try {
-        const users = JSON.parse(localStorage.getItem('rcm_users') || '[]');
-        const userProfile = users.find((u: any) => u.username === username);
-        if (userProfile && userProfile.interests) {
-            userInterests = userProfile.interests;
-        }
-    } catch (e) {}
-
-    // 2. Música: Selecciones y producciones
-    const selections = await loadSelectionsFromDB();
-    const savedSelections = await loadSavedSelectionsListFromDB();
-    const reports = await loadReportsFromDB();
-    const productions = await loadProductionsFromDB();
-
-    // 3. Gestión: Pagos
-    let worklogs = []; try { worklogs = JSON.parse(localStorage.getItem(`user_${username}_rcm_data_worklogs`) || '[]'); } catch (e) {}
-    let consolidated = []; try { consolidated = JSON.parse(localStorage.getItem(`user_${username}_rcm_data_consolidated`) || '[]'); } catch (e) {}
-    let consolidatedMonths = []; try { consolidatedMonths = JSON.parse(localStorage.getItem(`user_${username}_rcm_consolidated_months`) || '[]'); } catch (e) {}
-
-    const data = {
-        username,
-        agenda: {
-            interests: userInterests
-        },
-        musica: {
-            selections,
-            savedSelections,
-            reports,
-            productions
-        },
-        gestion: {
-            worklogs,
-            consolidated,
-            consolidatedMonths
-        }
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${username}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (onBackup) {
+      onBackup();
+    }
   };
 
   const handleLoadBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
 
-    const expectedFileName = `${currentUser.username}.json`;
-    if (file.name !== expectedFileName) {
-        alert(`El archivo de respaldo debe llamarse exactamente "${expectedFileName}".`);
+    const username = currentUser.username;
+    // Allow the standard filename format: Respaldo_[username]_[date]_[time].json
+    // or just [username].json for backward compatibility
+    const isValidName = file.name.startsWith(`Respaldo_${username}`) || file.name === `${username}.json`;
+
+    if (!isValidName) {
+        alert(`El archivo de respaldo debe pertenecer al usuario "${username}".`);
         e.target.value = '';
         return;
     }
@@ -150,43 +108,88 @@ const WorkerHome: React.FC<Props> = ({
                 throw new Error("El archivo no pertenece a este usuario o no tiene la estructura esperada.");
             }
             
-            // 1. Agenda: Intereses de usuario
-            if (json.agenda && json.agenda.interests) {
-                try {
-                    const users = JSON.parse(localStorage.getItem('rcm_users') || '[]');
-                    const userIndex = users.findIndex((u: any) => u.username === currentUser.username);
-                    if (userIndex !== -1) {
-                        users[userIndex].interests = json.agenda.interests;
-                        localStorage.setItem('rcm_users', JSON.stringify(users));
+            // Extract data depending on structure (legacy or new)
+            const data = json.data || json;
+            const music = data.music || data.musica;
+            const payments = data.payments || data.gestion;
+            const agenda = data.agenda;
+            const guiones = data.guiones;
+
+            // 1. Agenda: Intereses de usuario y otros
+            if (agenda) {
+                if (agenda.users) {
+                    // Update interests for current user in the users list
+                    try {
+                        const currentUsers = JSON.parse(localStorage.getItem('rcm_users') || '[]');
+                        const backupUsers = agenda.users;
+                        const backupUser = backupUsers.find((u: any) => u.username === currentUser.username);
+                        
+                        if (backupUser && backupUser.interests) {
+                            const userIndex = currentUsers.findIndex((u: any) => u.username === currentUser.username);
+                            if (userIndex !== -1) {
+                                currentUsers[userIndex].interests = backupUser.interests;
+                                localStorage.setItem('rcm_users', JSON.stringify(currentUsers));
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error updating agenda interests:", e);
                     }
-                } catch (e) {
-                    console.error("Error updating agenda interests:", e);
+                } else if (agenda.interests) {
+                    // Legacy structure
+                    try {
+                        const users = JSON.parse(localStorage.getItem('rcm_users') || '[]');
+                        const userIndex = users.findIndex((u: any) => u.username === currentUser.username);
+                        if (userIndex !== -1) {
+                            users[userIndex].interests = agenda.interests;
+                            localStorage.setItem('rcm_users', JSON.stringify(users));
+                        }
+                    } catch (e) {
+                        console.error("Error updating agenda interests:", e);
+                    }
                 }
             }
 
             // 2. Música: Selecciones y producciones
-            if (json.musica) {
-                if (json.musica.selections) await saveSelectionsToDB(json.musica.selections);
-                if (json.musica.savedSelections) await saveSavedSelectionsListToDB(json.musica.savedSelections);
-                if (json.musica.reports) {
+            if (music) {
+                if (music.selections) await saveSelectionsToDB(music.selections);
+                if (music.savedSelectionsList) await saveSavedSelectionsListToDB(music.savedSelectionsList);
+                else if (music.savedSelections) await saveSavedSelectionsListToDB(music.savedSelections); // Legacy
+
+                if (music.reports) {
                     await clearReportsDB();
-                    for (const report of json.musica.reports) {
+                    for (const report of music.reports) {
                         await saveReportToDB(report);
                     }
                 }
-                if (json.musica.productions) {
+                if (music.productions) {
                     await clearProductionsDB();
-                    for (const prod of json.musica.productions) {
+                    for (const prod of music.productions) {
                         await saveProductionToDB(prod);
                     }
+                }
+                if (music.currentSelection) {
+                    localStorage.setItem(`user_${currentUser.username}_rcm_current_selection`, JSON.stringify(music.currentSelection));
+                }
+                if (music.savedSelections) {
+                    localStorage.setItem(`user_${currentUser.username}_rcm_saved_selections`, JSON.stringify(music.savedSelections));
                 }
             }
 
             // 3. Gestión: Pagos
-            if (json.gestion) {
-                if (json.gestion.worklogs) localStorage.setItem(`user_${currentUser.username}_rcm_data_worklogs`, JSON.stringify(json.gestion.worklogs));
-                if (json.gestion.consolidated) localStorage.setItem(`user_${currentUser.username}_rcm_data_consolidated`, JSON.stringify(json.gestion.consolidated));
-                if (json.gestion.consolidatedMonths) localStorage.setItem(`user_${currentUser.username}_rcm_consolidated_months`, JSON.stringify(json.gestion.consolidatedMonths));
+            if (payments) {
+                if (payments.worklogs) localStorage.setItem(`user_${currentUser.username}_rcm_data_worklogs`, JSON.stringify(payments.worklogs));
+                if (payments.consolidated) localStorage.setItem(`user_${currentUser.username}_rcm_data_consolidated`, JSON.stringify(payments.consolidated));
+                if (payments.consolidatedMonths) localStorage.setItem(`user_${currentUser.username}_rcm_consolidated_months`, JSON.stringify(payments.consolidatedMonths));
+                if (payments.interruptions) localStorage.setItem(`user_${currentUser.username}_rcm_interruptions`, JSON.stringify(payments.interruptions));
+                if (payments.habitualExclusions) localStorage.setItem(`user_${currentUser.username}_habitual_exclusions`, JSON.stringify(payments.habitualExclusions));
+                if (payments.habitualMode !== undefined) localStorage.setItem(`user_${currentUser.username}_habitual_mode`, String(payments.habitualMode));
+            }
+
+            // 4. Guiones
+            if (guiones) {
+                Object.keys(guiones).forEach(key => {
+                    localStorage.setItem(key, JSON.stringify(guiones[key]));
+                });
             }
 
             alert('Sincronización completada con éxito. La aplicación se recargará.');

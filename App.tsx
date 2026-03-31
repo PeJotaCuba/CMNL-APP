@@ -29,10 +29,22 @@ const App: React.FC = () => {
 
   const checkDirty = (callback: () => void, isLogout = false) => {
       // Check if user should see the backup prompt
-      const isExcluded = currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador' || currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
-      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser?.classification || '');
+      const classification = (currentUser?.classification || '').toLowerCase();
+      const role = (currentUser?.role || '').toLowerCase();
+      
+      const isExcluded = classification === 'administrador' || classification === 'coordinador' || role === 'admin' || role === 'coordinator';
+      
+      const activeRoles = [
+          'director', 'asesor', 'realizador', 'locutor', 'guionista', 
+          'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 
+          'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'
+      ];
+      const isActiveRole = activeRoles.includes(classification);
+      
+      const isSensitiveView = currentView === AppView.APP_MUSICA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_EQUIPO;
 
-      if (isDirty && !isExcluded && isActiveRole) {
+      // Trigger if dirty, in sensitive view, or logging out
+      if ((isDirty || isSensitiveView || isLogout) && !isExcluded && isActiveRole) {
           pendingNavigation.current = callback;
           setIsLogoutTrigger(isLogout);
           setShowBackupDialog(true);
@@ -48,11 +60,12 @@ const App: React.FC = () => {
           
           // 1. Payments Data (LocalStorage)
           const paymentsData = {
-              worklogs: JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]').filter((l: any) => l.userId === username),
-              consolidated: JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]').filter((l: any) => l.userId === username),
-              interruptions: JSON.parse(localStorage.getItem('rcm_interruptions') || '[]').filter((l: any) => l.userId === username),
-              consolidatedMonths: JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]').filter((l: any) => l.userId === username),
-              habitualExclusions: JSON.parse(localStorage.getItem('rcm_habitual_exclusions') || '[]').filter((l: any) => l.username === username),
+              worklogs: JSON.parse(localStorage.getItem(`user_${username}_rcm_data_worklogs`) || '[]'),
+              consolidated: JSON.parse(localStorage.getItem(`user_${username}_rcm_data_consolidated`) || '[]'),
+              interruptions: JSON.parse(localStorage.getItem(`user_${username}_rcm_interruptions`) || '[]'),
+              consolidatedMonths: JSON.parse(localStorage.getItem(`user_${username}_rcm_consolidated_months`) || '[]'),
+              habitualExclusions: JSON.parse(localStorage.getItem(`user_${username}_habitual_exclusions`) || '[]'),
+              habitualMode: localStorage.getItem(`user_${username}_habitual_mode`) === 'true',
           };
 
           // 2. Music Data (IndexedDB + LocalStorage)
@@ -110,7 +123,16 @@ const App: React.FC = () => {
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `Respaldo_${username}_${new Date().toISOString().split('T')[0]}.json`;
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          const hours = String(now.getHours()).padStart(2, '0');
+          const minutes = String(now.getMinutes()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          const timeStr = `${hours}-${minutes}`;
+          
+          link.download = `Respaldo_${username}_${dateStr}_${timeStr}.json`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -246,6 +268,7 @@ const App: React.FC = () => {
   }, [history, currentView]);
 
   const handleNavigate = (view: AppView, data?: any) => {
+    if (view === currentView) return;
     checkDirty(() => {
         window.history.pushState(null, '', window.location.pathname);
         setHistory((prev) => [...prev, currentView]);
@@ -514,6 +537,7 @@ const App: React.FC = () => {
                 onRefreshLive={handleRefreshLive}
                 currentProgram={currentProgram}
                 onMenuClick={() => setIsSidebarOpen(true)}
+                onBackup={handleBackup}
             />
         );
       case AppView.ADMIN_DASHBOARD:

@@ -35,6 +35,7 @@ export interface SavedSelection {
     name: string;
     date: string;
     tracks: Track[];
+    program?: string;
 }
 
 export interface Production {

@@ -6,9 +6,10 @@ interface ReportsViewerProps {
     users?: User[]; 
     onEdit: (report: Report) => void;
     currentUser?: User | null;
+    refreshTrigger?: number;
 }
 
-const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, currentUser }) => {
+const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, currentUser, refreshTrigger = 0 }) => {
     const [reports, setReports] = useState<Report[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
@@ -20,7 +21,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             setShowTutorial(true);
         }
         loadData();
-    }, []);
+    }, [refreshTrigger]);
 
     const closeTutorial = () => {
         localStorage.setItem('rcm_tut_reports', 'true');
@@ -36,7 +37,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const handleDownload = async (report: Report) => {
-        const datePart = new Date(report.date).toISOString().split('T')[0];
+        const datePart = report.date.split('T')[0];
         const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
         const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
 
@@ -146,7 +147,10 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 <div className="min-w-0 flex-1">
                                     <h4 className="font-bold text-white truncate text-sm">{report.fileName}</h4>
                                     <div className="flex flex-wrap text-xs text-[#E8DCCF]/60 gap-x-3 gap-y-1 mt-1">
-                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">calendar_today</span> {new Date(report.date).toLocaleDateString()}</span>
+                                        <span className="flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[10px]">calendar_today</span> 
+                                            {report.date.includes('-') ? report.date.split('-').reverse().join('/') : new Date(report.date).toLocaleDateString()}
+                                        </span>
                                         <span className="flex items-center gap-1 truncate"><span className="material-symbols-outlined text-[10px]">radio</span> {report.program}</span>
                                     </div>
                                     <p className="text-[10px] text-[#E8DCCF]/40 mt-1 truncate">Generado por: {report.generatedBy}</p>

@@ -1,7 +1,7 @@
 import { Track } from "./types";
 
 export const GENRES_LIST = [
-    "Afrobeats", "Axé", "Bachata", "Bhangra", "Blues", "Bolero", "Bossa nova", "Canción popular", "Chachachá", 
+    "Afrobeats", "Axé", "Bachata", "Bhangra", "Blues", "Bolero", "Bossa nova", "Canción", "Canción popular", "Chachachá", 
     "Clásica", "Country", "C-Pop", "Cumbia", "Danzón", "Fado", "Flamenco", "Folk", "Forró", "Funk", "Gospel", 
     "Highlife", "Hip-Hop/Rap", "Indie/Alternativo", "J-Pop", "Jazz", "K-Pop", "Mambo", "Mbaqanga", "Merengue", 
     "Metal", "Música árabe", "Música electrónica", "Música india (clásica)", "Ópera", "Pop", "Punk", 
