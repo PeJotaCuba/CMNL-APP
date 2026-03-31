@@ -9,7 +9,7 @@ const REPORTS_STORE = 'reports';
 const PRODUCTIONS_STORE = 'productions';
 const SELECTIONS_STORE = 'selections';
 const SAVED_SELECTIONS_STORE = 'saved_selections_groups';
-const DB_VERSION = 5; // Incremented version
+const DB_VERSION = 6; // Incremented version
 
 const openDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {

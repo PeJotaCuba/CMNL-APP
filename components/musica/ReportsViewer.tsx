@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Report, User } from './types';
-import { loadReportsFromDB, deleteReportFromDB, updateReportStatus } from './services/db';
+import { loadReportsFromDB, deleteReportFromDB, updateReportStatus, clearReportsDB } from './services/db';
 
 interface ReportsViewerProps {
     users?: User[]; 
@@ -60,6 +60,13 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
     };
 
+    const handleClearAll = async () => {
+        if (window.confirm("¿Estás seguro de que deseas eliminar TODOS los reportes generados? Esta acción no se puede deshacer.")) {
+            await clearReportsDB();
+            loadData();
+        }
+    };
+
     const summaryData = React.useMemo(() => {
         const stats: Record<string, { total: number, downloaded: number }> = {};
         
@@ -81,13 +88,24 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                     <span className="material-symbols-outlined text-[#9E7649]">description</span>
                     Reportes
                 </h2>
-                <button 
-                    onClick={() => setShowSummary(true)}
-                    className="bg-[#9E7649] text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-[#8B653D] shadow-sm"
-                >
-                    <span className="material-symbols-outlined text-sm">analytics</span>
-                    Resumen
-                </button>
+                <div className="flex gap-2">
+                    {reports.length > 0 && (
+                        <button 
+                            onClick={handleClearAll}
+                            className="bg-red-900/20 text-red-400 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-red-900/40 shadow-sm"
+                        >
+                            <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                            Limpiar
+                        </button>
+                    )}
+                    <button 
+                        onClick={() => setShowSummary(true)}
+                        className="bg-[#9E7649] text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-[#8B653D] shadow-sm"
+                    >
+                        <span className="material-symbols-outlined text-sm">analytics</span>
+                        Resumen
+                    </button>
+                </div>
             </div>
 
             {showTutorial && (
