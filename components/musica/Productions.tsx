@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB, bulkUpdateProductions } from './services/db';
-import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType } from "docx";
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, HeadingLevel } from "docx";
+import { ChevronDown, FileText, Database, Upload, Archive, Trash2, Activity, X, Download } from 'lucide-react';
 
 interface ProductionsProps {
   onUpdateTracks: (updateFunc: (prev: Track[]) => Track[]) => void;
@@ -43,6 +44,26 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   
   const [dbProductions, setDbProductions] = useState<Production[]>([]);
 
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [selectedBalanceProgram, setSelectedBalanceProgram] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const BALANCE_PROGRAMS = [
+      "Buenos Días Bayamo",
+      "La Cumbancha (Lunes a Viernes)",
+      "La Cumbancha Sábado",
+      "Todos en Casa",
+      "Arte Bayamo",
+      "Parada Joven",
+      "Hablando con Juana",
+      "Al Son de la Radio",
+      "Sigue a tu Ritmo",
+      "Cómplices",
+      "Estación 95.3",
+      "Palco de Domingo"
+  ];
+
   const fetchProductions = async () => {
       const prods = await loadProductionsFromDB();
       setDbProductions(prods);
@@ -53,7 +74,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   }, [activeTab]);
 
   const handleAddTrack = () => {
-      if (!currentTrack.title || !currentTrack.author || !currentTrack.performer) {
+      if (!currentTrack?.title || !currentTrack?.author || !currentTrack?.performer) {
           alert("Título, Autor e Intérprete son obligatorios.");
           return;
       }
@@ -81,7 +102,15 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   };
 
   const handleEditTrack = (index: number) => {
-      setCurrentTrack(sessionTracks[index]);
+      setCurrentTrack(sessionTracks[index] || {
+          id: '',
+          title: '',
+          author: '',
+          authorCountry: '',
+          performer: '',
+          performerCountry: '',
+          genre: ''
+      });
       setEditingTrackIndex(index);
       // Scroll to top
       const container = document.getElementById('productions-container');
@@ -225,16 +254,18 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
       const rows: any[] = [];
       history.forEach(prod => {
-          prod.tracks.forEach(t => {
+          if (!prod) return;
+          (prod.tracks || []).forEach(t => {
+              if (!t) return;
               rows.push({
-                  Fecha: prod.date,
-                  Programa: prod.program,
-                  Título: t.title,
-                  Autor: t.author,
-                  "País Autor": t.authorCountry,
-                  Intérprete: t.performer,
-                  "País Intérprete": t.performerCountry,
-                  Género: t.genre
+                  Fecha: prod.date || '',
+                  Programa: prod.program || '',
+                  Título: t.title || '',
+                  Autor: t.author || '',
+                  "País Autor": t.authorCountry || '',
+                  Intérprete: t.performer || '',
+                  "País Intérprete": t.performerCountry || '',
+                  Género: t.genre || ''
               });
           });
       });
@@ -257,12 +288,12 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                 new TableCell({ children: [new Paragraph({ text: "Género", style: "Strong" })] }),
             ],
         }),
-        ...sessionTracks.map(t => new TableRow({
+        ...sessionTracks.filter(Boolean).map(t => new TableRow({
             children: [
-                new TableCell({ children: [new Paragraph(t.title)] }),
-                new TableCell({ children: [new Paragraph(`${t.author} / ${t.performer}`)] }),
-                new TableCell({ children: [new Paragraph(`${t.authorCountry} / ${t.performerCountry}`)] }),
-                new TableCell({ children: [new Paragraph(t.genre)] }),
+                new TableCell({ children: [new Paragraph(t?.title || '')] }),
+                new TableCell({ children: [new Paragraph(`${t?.author || ''} / ${t?.performer || ''}`)] }),
+                new TableCell({ children: [new Paragraph(`${t?.authorCountry || ''} / ${t?.performerCountry || ''}`)] }),
+                new TableCell({ children: [new Paragraph(t?.genre || '')] }),
             ],
         }))
     ];
@@ -305,14 +336,14 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const handleGenerateDetailedStatsDOCX = async () => {
     if (stockMensual.length === 0) return alert("No hay producciones en el mes actual para generar estadísticas.");
 
-    const allTracks = stockMensual.flatMap(p => p.tracks);
+    const allTracks = stockMensual.flatMap(p => p.tracks || []).filter(Boolean);
     
     // Stats calculations
-    const cubanWorks = allTracks.filter(t => t.authorCountry.toLowerCase() === 'cuba' || t.performerCountry.toLowerCase() === 'cuba').length;
+    const cubanWorks = allTracks.filter(t => (t.authorCountry || '').toLowerCase() === 'cuba' || (t.performerCountry || '').toLowerCase() === 'cuba').length;
     const foreignWorks = allTracks.length - cubanWorks;
 
-    const authors = allTracks.map(t => ({ name: t.author, country: t.authorCountry }));
-    const performers = allTracks.map(t => ({ name: t.performer, country: t.performerCountry }));
+    const authors = allTracks.map(t => ({ name: t.author, country: t.authorCountry || '' }));
+    const performers = allTracks.map(t => ({ name: t.performer, country: t.performerCountry || '' }));
     
     const uniqueAuthors = Array.from(new Set(authors.map(a => a.name)));
     const uniquePerformers = Array.from(new Set(performers.map(p => p.name)));
@@ -366,7 +397,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
             properties: {},
             children: [
                 new Paragraph({ text: "ESTADÍSTICAS DE DIFUSIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
-                new Paragraph({ text: `Mes: ${currentMonthStr}`, alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: `Mes: ${currentMonthName} ${currentYear}`, alignment: AlignmentType.CENTER }),
                 new Paragraph({ text: "" }),
 
                 new Paragraph({ text: "1. Resumen de Obras", heading: "Heading2" }),
@@ -408,12 +439,22 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
     saveAs(blob, `Estadisticas_Musica_${currentMonthStr}.docx`);
   };
 
+  const getMonthName = (monthNum: number) => {
+    const months = [
+      "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+    return months[monthNum - 1] || "Desconocido";
+  };
+
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth() + 1;
+  const currentMonthName = getMonthName(currentMonth);
   const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
-  const getYearMonth = (dateStr: string) => {
+  const getYearMonth = (dateStr?: string) => {
+      if (!dateStr || typeof dateStr !== 'string') return { year: 0, month: 0, key: 'Desconocido' };
       const parts = dateStr.split('-');
       if (parts.length >= 2) {
           const year = parseInt(parts[0], 10);
@@ -423,12 +464,14 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       return { year: 0, month: 0, key: 'Desconocido' };
   };
 
-  const stockMensual = dbProductions.filter(p => {
+  const stockMensual = (dbProductions || []).filter(p => {
+      if (!p) return false;
       const { year, month } = getYearMonth(p.date);
       return year === currentYear && month === currentMonth && !p.archived;
   });
   
-  const archivo = dbProductions.filter(p => {
+  const archivo = (dbProductions || []).filter(p => {
+      if (!p) return false;
       const { year, month } = getYearMonth(p.date);
       return !(year === currentYear && month === currentMonth) || p.archived;
   });
@@ -436,10 +479,131 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   // Agrupar archivo por mes (usando el formato normalizado YYYY-MM)
   const archivoPorMes: Record<string, Production[]> = {};
   archivo.forEach(p => {
+      if (!p) return;
       const { key } = getYearMonth(p.date);
       if (!archivoPorMes[key]) archivoPorMes[key] = [];
       archivoPorMes[key].push(p);
   });
+
+  const handleExportDB = async () => {
+      const history = await loadProductionsFromDB();
+      if (history.length === 0) return alert("No hay producciones para exportar.");
+      const dataStr = JSON.stringify(history, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      saveAs(blob, `RCM_Producciones_BD_${currentMonthStr}.json`);
+      setShowActionsMenu(false);
+  };
+
+  const handleLoadDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || e.target.files.length === 0) return;
+      const file = e.target.files[0];
+      const text = await file.text();
+      try {
+          const parsed = JSON.parse(text) as Production[];
+          if (!Array.isArray(parsed)) throw new Error("Invalid format");
+          for (const prod of parsed) {
+              await saveProductionToDB(prod);
+          }
+          await fetchProductions();
+          alert("Base de datos cargada correctamente.");
+      } catch (err) {
+          alert("Error al cargar la base de datos. Asegúrese de que sea un archivo JSON válido.");
+      }
+      e.target.value = '';
+      setShowActionsMenu(false);
+  };
+
+  const handleClearAll = async () => {
+      if (stockMensual.length === 0) return alert("No hay producciones en el stock mensual para limpiar.");
+      if (window.confirm("¿Estás seguro de que deseas eliminar TODAS las producciones del mes actual? Esta acción no se puede deshacer.")) {
+          for (const prod of stockMensual) {
+              await deleteProductionFromDB(prod.id);
+          }
+          await fetchProductions();
+          alert("Todas las producciones del mes han sido eliminadas.");
+      }
+      setShowActionsMenu(false);
+  };
+
+  const getExpectedDaysForProgram = (program: string, year: number, month: number) => {
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const expectedDates: string[] = [];
+      
+      let allowedDays: number[] = [];
+      if (program.includes("Lunes a Viernes") || ["Todos en Casa", "Arte Bayamo", "Parada Joven", "Hablando con Juana", "Al Son de la Radio", "Sigue a tu Ritmo"].includes(program)) {
+          allowedDays = [1, 2, 3, 4, 5];
+      } else if (program.includes("Sábado")) {
+          allowedDays = [6];
+      } else if (["Buenos Días Bayamo", "Buenos Días, Bayamo"].includes(program)) {
+          allowedDays = [1, 2, 3, 4, 5, 6];
+      } else if (["Cómplices", "Estación 95.3", "Palco de Domingo", "Coloreando Melodías", "Alba y Crisol"].includes(program)) {
+          allowedDays = [0];
+      } else {
+          allowedDays = [1, 2, 3, 4, 5, 6, 0];
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+          const d = new Date(year, month - 1, day);
+          if (allowedDays.includes(d.getDay())) {
+              expectedDates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+          }
+      }
+      return expectedDates;
+  };
+
+  const getBalanceData = () => {
+      return BALANCE_PROGRAMS.map(prog => {
+          const expectedDates = getExpectedDaysForProgram(prog, currentYear, currentMonth);
+          
+          const prods = stockMensual.filter(p => {
+              if (!p) return false;
+              const pName = (p.program || '').toString().toLowerCase();
+              const progLower = prog.toLowerCase();
+              if (progLower === "buenos días bayamo" && pName === "buenos días, bayamo") return true;
+              if (progLower === "la cumbancha (lunes a viernes)" && pName === "la cumbancha") {
+                  const d = new Date((p.date || '') + 'T12:00:00');
+                  return !isNaN(d.getTime()) && d.getDay() >= 1 && d.getDay() <= 5;
+              }
+              if (progLower === "la cumbancha sábado" && pName === "la cumbancha") {
+                  const d = new Date((p.date || '') + 'T12:00:00');
+                  return !isNaN(d.getTime()) && d.getDay() === 6;
+              }
+              return pName === progLower;
+          });
+
+          const completedDates = prods.map(p => p.date).filter(Boolean);
+          const missingDates = expectedDates.filter(d => !completedDates.includes(d));
+
+          return {
+              program: prog,
+              required: expectedDates.length,
+              completed: completedDates.length,
+              missing: expectedDates.length - completedDates.length,
+              missingDates
+          };
+      });
+  };
+
+  const handleExportAuditDOCX = async (programData: any) => {
+      const doc = new Document({
+          sections: [{
+              properties: {},
+              children: [
+                  new Paragraph({ text: `AUDITORÍA DE METAS - ${programData.program}`, heading: "Heading1", alignment: AlignmentType.CENTER }),
+                  new Paragraph({ text: `Mes: ${currentMonthName} ${currentYear}`, alignment: AlignmentType.CENTER }),
+                  new Paragraph({ text: "" }),
+                  new Paragraph({ text: `Producciones Requeridas: ${programData.required}` }),
+                  new Paragraph({ text: `Producciones Realizadas: ${programData.completed}` }),
+                  new Paragraph({ text: `Producciones Faltantes: ${programData.missing}` }),
+                  new Paragraph({ text: "" }),
+                  new Paragraph({ text: "Fechas Faltantes:", heading: "Heading2" }),
+                  ...programData.missingDates.map((d: string) => new Paragraph({ text: `• ${d}` }))
+              ]
+          }]
+      });
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `Auditoria_${programData.program.replace(/[^a-z0-9]/gi, '_')}_${currentMonthStr}.docx`);
+  };
 
   return (
     <div id="productions-container" className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24">
@@ -503,31 +667,31 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                         <div className="grid grid-cols-12 gap-3">
                             <div className="col-span-12 md:col-span-6">
                                  <label className="block text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Título</label>
-                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm" value={currentTrack.title} onChange={e => setCurrentTrack({...currentTrack, title: e.target.value})} placeholder="Nombre del tema" />
+                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm" value={currentTrack?.title || ''} onChange={e => setCurrentTrack({...currentTrack, title: e.target.value})} placeholder="Nombre del tema" />
                             </div>
                             <div className="col-span-12 md:col-span-6">
                                  <label className="block text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Género</label>
-                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm" list="genre-options" value={currentTrack.genre} onChange={e => setCurrentTrack({...currentTrack, genre: e.target.value})} placeholder="Ej: Salsa" />
+                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm" list="genre-options" value={currentTrack?.genre || ''} onChange={e => setCurrentTrack({...currentTrack, genre: e.target.value})} placeholder="Ej: Salsa" />
                             </div>
                         </div>
                         
                         <div className="grid grid-cols-12 gap-3 bg-[#1A100C] p-3 rounded-xl border border-dashed border-[#9E7649]/30">
                             <div className="col-span-12 md:col-span-6">
                                  <label className="block text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Autor</label>
-                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" value={currentTrack.author} onChange={e => setCurrentTrack({...currentTrack, author: e.target.value})} />
+                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" value={currentTrack?.author || ''} onChange={e => setCurrentTrack({...currentTrack, author: e.target.value})} />
                             </div>
                             <div className="col-span-12 md:col-span-6">
                                  <label className="block text-[10px] font-bold text-[#E8DCCF]/60 uppercase">País Autor</label>
-                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" list="country-options" value={currentTrack.authorCountry} onChange={e => setCurrentTrack({...currentTrack, authorCountry: e.target.value})} />
+                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" list="country-options" value={currentTrack?.authorCountry || ''} onChange={e => setCurrentTrack({...currentTrack, authorCountry: e.target.value})} />
                             </div>
                             
                             <div className="col-span-12 md:col-span-6">
                                  <label className="block text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Intérprete</label>
-                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" value={currentTrack.performer} onChange={e => setCurrentTrack({...currentTrack, performer: e.target.value})} />
+                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" value={currentTrack?.performer || ''} onChange={e => setCurrentTrack({...currentTrack, performer: e.target.value})} />
                             </div>
                             <div className="col-span-12 md:col-span-6">
                                  <label className="block text-[10px] font-bold text-[#E8DCCF]/60 uppercase">País Intérprete</label>
-                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" list="country-options" value={currentTrack.performerCountry} onChange={e => setCurrentTrack({...currentTrack, performerCountry: e.target.value})} />
+                                 <input className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#2C1B15] text-white text-sm" list="country-options" value={currentTrack?.performerCountry || ''} onChange={e => setCurrentTrack({...currentTrack, performerCountry: e.target.value})} />
                             </div>
                         </div>
 
@@ -555,11 +719,13 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                     </div>
                     
                     <div className="space-y-2">
-                        {sessionTracks.map((t, idx) => (
+                        {sessionTracks.map((t, idx) => {
+                            if (!t) return null;
+                            return (
                             <div key={idx} className={`bg-[#2C1B15] p-3 rounded-xl border flex items-center justify-between shadow-sm ${editingTrackIndex === idx ? 'border-[#9E7649]' : 'border-[#9E7649]/20'}`}>
                                 <div className="min-w-0">
-                                    <p className="font-bold text-sm truncate text-white">{t.title}</p>
-                                    <p className="text-[10px] text-[#E8DCCF]/60 truncate">{t.performer} • {t.genre}</p>
+                                    <p className="font-bold text-sm truncate text-white">{t.title || 'Sin título'}</p>
+                                    <p className="text-[10px] text-[#E8DCCF]/60 truncate">{t.performer || 'Desconocido'} • {t.genre || 'Sin género'}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button onClick={() => handleEditTrack(idx)} className="text-[#E8DCCF]/60 hover:text-[#9E7649] p-1">
@@ -570,7 +736,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                     </button>
                                 </div>
                             </div>
-                        ))}
+                        )})}
                         {sessionTracks.length === 0 && (
                             <div className="p-8 border-2 border-dashed border-[#9E7649]/20 rounded-2xl text-center text-[#E8DCCF]/40 text-xs">
                                 Agrega temas arriba para comenzar la producción.
@@ -594,33 +760,68 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
         {activeTab === 'stock' && (
             <div className="space-y-4">
-                <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
-                    <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr})</h3>
-                    <div className="flex gap-2">
+                <div className="bg-[#2C1B15] p-5 rounded-2xl border border-[#9E7649]/20 shadow-inner">
+                    <h3 className="font-bold text-[#9E7649] text-[10px] uppercase tracking-widest mb-4 border-b border-[#9E7649]/10 pb-2 text-center sm:text-left">Resumen Mensual</h3>
+                    <div className="grid grid-cols-4 gap-2 sm:gap-6">
+                        <div className="flex flex-col items-center sm:items-start gap-1">
+                            <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Mes</p>
+                            <p className="font-bold text-white text-sm sm:text-lg truncate w-full text-center sm:text-left">{currentMonthName}</p>
+                        </div>
+                        <div className="flex flex-col items-center sm:items-start gap-1">
+                            <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Plan</p>
+                            <p className="font-bold text-white text-sm sm:text-lg">{getBalanceData().reduce((acc, curr) => acc + curr.required, 0)}</p>
+                        </div>
+                        <div className="flex flex-col items-center sm:items-start gap-1">
+                            <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Real</p>
+                            <p className="font-bold text-green-400 text-sm sm:text-lg">{getBalanceData().reduce((acc, curr) => acc + curr.completed, 0)}</p>
+                        </div>
+                        <div className="flex flex-col items-center sm:items-start gap-1">
+                            <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Resto</p>
+                            <p className="font-bold text-red-400 text-sm sm:text-lg">{getBalanceData().reduce((acc, curr) => acc + curr.missing, 0)}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-6 mb-6 border-b border-[#9E7649]/20 pb-6">
+                    <h3 className="font-bold text-white text-xs uppercase tracking-widest hidden sm:block">En Stock</h3>
+                    <div className="flex gap-4 w-full sm:w-auto justify-center px-2">
                         <button 
-                            onClick={handleGenerateDOCX} 
-                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                            onClick={() => setShowBalanceModal(true)} 
+                            className="flex-1 sm:flex-none bg-[#9E7649] text-white font-bold py-3 px-6 rounded-xl hover:bg-[#8B653D] flex items-center justify-center gap-2 text-xs shadow-lg transition-all active:scale-95"
                         >
-                            <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe DOCX (Sesión)
+                            <Activity size={18} /> Balance
                         </button>
-                        <button 
-                            onClick={handleExportHistoryCSV} 
-                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                        >
-                            <span className="material-symbols-outlined text-green-500 text-sm">table_view</span> Exportar CSV
-                        </button>
-                        <button 
-                            onClick={handleGenerateDetailedStatsDOCX} 
-                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                        >
-                            <span className="material-symbols-outlined text-blue-400 text-sm">analytics</span> Estadísticas .docx
-                        </button>
-                        <button 
-                            onClick={handleMoveToArchive} 
-                            className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
-                        >
-                            <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
-                        </button>
+                        
+                        <div className="relative flex-1 sm:flex-none">
+                            <button 
+                                onClick={() => setShowActionsMenu(!showActionsMenu)} 
+                                className="w-full bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-3 px-6 rounded-xl hover:bg-[#3E1E16] flex items-center justify-center gap-2 text-xs transition-all active:scale-95"
+                            >
+                                Acciones <ChevronDown size={18} />
+                            </button>
+                            
+                            {showActionsMenu && (
+                                <div className="absolute right-0 mt-2 w-48 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl shadow-xl z-50 overflow-hidden">
+                                    <button onClick={() => { handleGenerateDetailedStatsDOCX(); setShowActionsMenu(false); }} className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-[#3E1E16] flex items-center gap-2">
+                                        <FileText size={14} className="text-blue-400" /> Informe
+                                    </button>
+                                    <button onClick={handleExportDB} className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-[#3E1E16] flex items-center gap-2">
+                                        <Database size={14} className="text-green-400" /> Exportar BD
+                                    </button>
+                                    <button onClick={() => { fileInputRef.current?.click(); }} className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-[#3E1E16] flex items-center gap-2">
+                                        <Upload size={14} className="text-yellow-400" /> Cargar BD
+                                    </button>
+                                    <button onClick={() => { handleMoveToArchive(); setShowActionsMenu(false); }} className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-[#3E1E16] flex items-center gap-2">
+                                        <Archive size={14} className="text-purple-400" /> Pasar Archivo
+                                    </button>
+                                    <div className="border-t border-[#9E7649]/20 my-1"></div>
+                                    <button onClick={handleClearAll} className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-900/30 flex items-center gap-2">
+                                        <Trash2 size={14} /> Limpiar Todo
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        <input type="file" accept=".json" ref={fileInputRef} onChange={handleLoadDB} className="hidden" />
                     </div>
                 </div>
                 {stockMensual.length === 0 ? (
@@ -628,27 +829,29 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                         No hay producciones guardadas en este mes.
                     </div>
                 ) : (
-                    stockMensual.map(prod => (
-                        <div key={prod.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
+                    stockMensual.map(prod => {
+                        if (!prod) return null;
+                        return (
+                        <div key={prod.id || Math.random()} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <h4 className="font-bold text-white text-sm">{prod.program}</h4>
-                                    <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas</p>
+                                    <h4 className="font-bold text-white text-sm">{prod.program || 'Sin programa'}</h4>
+                                    <p className="text-xs text-[#E8DCCF]/60">{prod.date || 'Sin fecha'} • {prod.tracks?.length || 0} temas</p>
                                 </div>
-                                <button onClick={() => handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
+                                <button onClick={() => prod.id && handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
                                     <span className="material-symbols-outlined text-sm">delete</span>
                                 </button>
                             </div>
                             <div className="mt-3 space-y-1">
-                                {prod.tracks.slice(0, 3).map((t, i) => (
-                                    <p key={i} className="text-[10px] text-[#E8DCCF]/80 truncate">• {t.title} - {t.author}</p>
+                                {(prod.tracks || []).slice(0, 3).map((t, i) => (
+                                    <p key={i} className="text-[10px] text-[#E8DCCF]/80 truncate">• {t?.title || 'Sin título'} - {t?.author || 'Desconocido'}</p>
                                 ))}
-                                {prod.tracks.length > 3 && (
-                                    <p className="text-[10px] text-[#9E7649] italic">...y {prod.tracks.length - 3} temas más</p>
+                                {(prod.tracks || []).length > 3 && (
+                                    <p className="text-[10px] text-[#9E7649] italic">...y {(prod.tracks || []).length - 3} temas más</p>
                                 )}
                             </div>
                         </div>
-                    ))
+                    )})
                 )}
             </div>
         )}
@@ -664,19 +867,21 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                     Object.keys(archivoPorMes).sort().reverse().map(month => (
                         <div key={month} className="space-y-3">
                             <h4 className="text-xs font-bold text-[#E8DCCF]/60 uppercase tracking-widest sticky top-0 bg-[#1A100C] py-2 z-10">{month}</h4>
-                            {archivoPorMes[month].map(prod => (
-                                <div key={prod.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
+                            {archivoPorMes[month].map(prod => {
+                                if (!prod) return null;
+                                return (
+                                <div key={prod.id || Math.random()} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
-                                            <h4 className="font-bold text-white text-sm">{prod.program}</h4>
-                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas</p>
+                                            <h4 className="font-bold text-white text-sm">{prod.program || 'Sin programa'}</h4>
+                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date || 'Sin fecha'} • {prod.tracks?.length || 0} temas</p>
                                         </div>
-                                        <button onClick={() => handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
+                                        <button onClick={() => prod.id && handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
                                             <span className="material-symbols-outlined text-sm">delete</span>
                                         </button>
                                     </div>
                                 </div>
-                            ))}
+                            )})}
                         </div>
                     ))
                 )}
@@ -689,6 +894,66 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
         <datalist id="country-options">
             {COUNTRIES_LIST.map(c => <option key={c} value={c} />)}
         </datalist>
+
+        {showBalanceModal && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4">
+                <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+                    <div className="flex justify-between items-center p-6 border-b border-[#9E7649]/20">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Activity className="text-[#9E7649]" /> Balance Mensual de Producción ({currentMonthStr})
+                        </h2>
+                        <button onClick={() => setShowBalanceModal(false)} className="text-[#E8DCCF]/60 hover:text-white transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+                    
+                    <div className="p-6 overflow-y-auto flex-1">
+                        <select 
+                            value={selectedBalanceProgram || ''} 
+                            onChange={e => setSelectedBalanceProgram(e.target.value)} 
+                            className="w-full p-3 border border-[#9E7649]/30 rounded-lg bg-[#2C1B15] text-white text-sm outline-none focus:border-[#9E7649] mb-4"
+                        >
+                            <option value="">Seleccione un programa...</option>
+                            {BALANCE_PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+
+                        {selectedBalanceProgram && getBalanceData().filter(d => d.program === selectedBalanceProgram).map((data, idx) => (
+                            <div key={idx} className="space-y-4">
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-[#2C1B15] p-4 rounded-lg text-center">
+                                        <p className="text-xs text-[#E8DCCF]/60 uppercase">Plan</p>
+                                        <p className="text-2xl font-bold text-white">{data.required}</p>
+                                    </div>
+                                    <div className="bg-[#2C1B15] p-4 rounded-lg text-center">
+                                        <p className="text-xs text-[#E8DCCF]/60 uppercase">Real</p>
+                                        <p className="text-2xl font-bold text-green-400">{data.completed}</p>
+                                    </div>
+                                    <div className="bg-[#2C1B15] p-4 rounded-lg text-center">
+                                        <p className="text-xs text-[#E8DCCF]/60 uppercase">Resto</p>
+                                        <p className="text-2xl font-bold text-red-400">{data.missing}</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-[#2C1B15] p-4 rounded-lg">
+                                    <p className="text-sm font-bold text-[#E8DCCF]/60 mb-2">Días faltantes:</p>
+                                    <div className="text-sm text-white space-y-1">
+                                        {data.missingDates.map(d => <p key={d}>{d}</p>)}
+                                    </div>
+                                </div>
+                                
+                                <div className="flex justify-between mt-6">
+                                    <button onClick={() => handleExportAuditDOCX(data)} className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold">Generar DOCX</button>
+                                    <button onClick={() => {
+                                        let message = `*BALANCE ${data.program} - ${currentMonthStr}*\n\n*Plan:* ${data.required}\n*Real:* ${data.completed}\n*Resto:* ${data.missing}\n\n*Días faltantes:*\n${data.missingDates.join('\n')}`;
+                                        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+                                    }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Compartir WhatsApp</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

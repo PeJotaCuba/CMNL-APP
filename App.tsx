@@ -349,6 +349,30 @@ const App: React.FC = () => {
       }
   };
 
+  const handleAdminBackup = () => {
+      const dataToExport = {
+          users: JSON.parse(localStorage.getItem('rcm_data_users') || '[]'),
+          historyContent: localStorage.getItem('rcm_data_history') || '',
+          aboutContent: localStorage.getItem('rcm_data_about') || '',
+          news: JSON.parse(localStorage.getItem('rcm_data_news') || '[]'),
+          fichas: JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'),
+          catalogo: JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'),
+          worklogs: JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]'),
+          consolidated: JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]'),
+          interruptions: JSON.parse(localStorage.getItem('rcm_interruptions') || '[]'),
+          consolidatedMonths: JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]'),
+          transmissionConfig: JSON.parse(localStorage.getItem('rcm_transmission_config') || 'null')
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "actualcmnl.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+  };
+
   // Logic to sync from GitHub (Used by Users and Admins)
   const handleCloudSync = async () => {
       if(isSyncing) return;
@@ -556,6 +580,7 @@ const App: React.FC = () => {
             onRefreshLive={handleRefreshLive}
             currentProgram={currentProgram}
             onMenuClick={() => setIsSidebarOpen(true)}
+            onBackup={handleAdminBackup}
           />
         );
       case AppView.APP_EQUIPO:

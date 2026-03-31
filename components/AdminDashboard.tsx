@@ -18,6 +18,7 @@ interface Props {
   onRefreshLive: () => void;
   currentProgram: ProgramItem;
   onMenuClick?: () => void;
+  onBackup?: () => void;
 }
 
 const newsColors = [
@@ -42,7 +43,8 @@ const AdminDashboard: React.FC<Props> = ({
     isRefreshing,
     onRefreshLive,
     currentProgram,
-    onMenuClick
+    onMenuClick,
+    onBackup
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
@@ -111,12 +113,20 @@ const AdminDashboard: React.FC<Props> = ({
          <div className="flex justify-between items-center">
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
             {currentUser?.classification === 'Administrador' && (
-              <button 
-               onClick={onSync}
-               className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
-              >
-                Actualizar Sistema
-              </button>
+              <div className="flex gap-2">
+                <button 
+                 onClick={onBackup}
+                 className="text-xs bg-[#2C1B15] text-[#9E7649] border border-[#9E7649]/30 px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/10 transition-all"
+                >
+                  Respaldar sistema
+                </button>
+                <button 
+                 onClick={onSync}
+                 className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
+                >
+                  Actualizar Sistema
+                </button>
+              </div>
             )}
          </div>
 

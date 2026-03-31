@@ -1305,7 +1305,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
           return acc;
       }, {} as Record<keyof TransmissionBreakdown, number>);
-      interruptionsByCategory.total = Object.values(interruptionsByCategory).reduce((a, b) => a + b, 0);
+      
+      // Calculate total interruptions by summing ALL interruptions, regardless of category mapping
+      interruptionsByCategory.total = currentMonthInterruptions
+          .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
 
       const renderCategoryLabel = (cat: keyof TransmissionBreakdown) => {
           if (cat === 'publicidad') return <span className="flex items-center">Publicidad<sup className="text-red-600 text-[10px] font-bold ml-1">GRABADO</sup></span>;
@@ -1316,15 +1319,20 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
       const handleSaveCategoryEdit = () => {
           if (editingCategory) {
-              const newConfig = { ...transmissionConfig };
+              const newConfig = { 
+                  ...transmissionConfig,
+                  WEEKDAY: { ...transmissionConfig.WEEKDAY },
+                  SATURDAY: { ...transmissionConfig.SATURDAY },
+                  SUNDAY: { ...transmissionConfig.SUNDAY },
+                  categoryPrograms: { ...(transmissionConfig.categoryPrograms || {}) }
+              };
+              
               newConfig.WEEKDAY[editingCategory] = categoryEditForm.WEEKDAY;
               newConfig.SATURDAY[editingCategory] = categoryEditForm.SATURDAY;
               newConfig.SUNDAY[editingCategory] = categoryEditForm.SUNDAY;
               
-              // Update category programs
-              const updatedCategoryPrograms = { ...(transmissionConfig.categoryPrograms || {}) };
-              updatedCategoryPrograms[editingCategory] = categoryEditForm.programs;
-              newConfig.categoryPrograms = updatedCategoryPrograms;
+              const selectedPrograms = categoryEditForm.programs || [];
+              newConfig.categoryPrograms[editingCategory] = selectedPrograms;
 
               saveDayMinutesConfig(newConfig);
               setTransmissionConfig(newConfig);
@@ -1366,40 +1374,42 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
       const getExportDataRows = (monthData: ConsolidatedMonth) => {
           const getReal = (cat: keyof TransmissionBreakdown) => monthData.accumulated[cat] - monthData.interruptions[cat];
+          const getBase = (cat: keyof TransmissionBreakdown) => monthData.accumulated[cat];
 
           const rows = [
-              { group: 'Información', isGroup: true, total: getReal('informativos') + getReal('boletines'), vivo: getReal('informativos') + getReal('boletines'), grabado: 0 },
-              { name: 'Espacios informativos', total: getReal('informativos'), vivo: getReal('informativos'), grabado: 0 },
-              { name: 'Boletines informativos', total: getReal('boletines'), vivo: getReal('boletines'), grabado: 0 },
+              { group: 'Información', isGroup: true, baseTotal: getBase('informativos') + getBase('boletines'), total: getReal('informativos') + getReal('boletines'), vivo: getReal('informativos') + getReal('boletines'), grabado: 0 },
+              { name: 'Espacios informativos', baseTotal: getBase('informativos'), total: getReal('informativos'), vivo: getReal('informativos'), grabado: 0 },
+              { name: 'Boletines informativos', baseTotal: getBase('boletines'), total: getReal('boletines'), vivo: getReal('boletines'), grabado: 0 },
               
-              { group: 'Orientación', isGroup: true, total: getReal('publicidad') + getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados'), grabado: getReal('publicidad') + getReal('variadoInfantilGrabado') },
-              { name: 'Publicidad', total: getReal('publicidad'), vivo: 0, grabado: getReal('publicidad') },
-              { name: 'Espacios Educativos', total: 0, vivo: 0, grabado: 0 },
-              { name: 'Espacios de Orientación', total: getReal('orientacion'), vivo: getReal('orientacion'), grabado: 0 },
-              { name: 'Espacios de Ciencia y Técnica', total: getReal('cienciaTecnica'), vivo: getReal('cienciaTecnica'), grabado: 0 },
-              { name: 'Espacios Variados', total: getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('variados'), grabado: getReal('variadoInfantilGrabado') },
+              { group: 'Orientación', isGroup: true, baseTotal: getBase('publicidad') + getBase('orientacion') + getBase('cienciaTecnica') + getBase('variados') + getBase('variadoInfantilGrabado'), total: getReal('publicidad') + getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados'), grabado: getReal('publicidad') + getReal('variadoInfantilGrabado') },
+              { name: 'Publicidad', baseTotal: getBase('publicidad'), total: getReal('publicidad'), vivo: 0, grabado: getReal('publicidad') },
+              { name: 'Espacios Educativos', baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
+              { name: 'Espacios de Orientación', baseTotal: getBase('orientacion'), total: getReal('orientacion'), vivo: getReal('orientacion'), grabado: 0 },
+              { name: 'Espacios de Ciencia y Técnica', baseTotal: getBase('cienciaTecnica'), total: getReal('cienciaTecnica'), vivo: getReal('cienciaTecnica'), grabado: 0 },
+              { name: 'Espacios Variados', baseTotal: getBase('variados') + getBase('variadoInfantilGrabado'), total: getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('variados'), grabado: getReal('variadoInfantilGrabado') },
               
-              { group: 'Cultura', isGroup: true, total: getReal('historicosGrabado') + getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: getReal('historicosGrabado') },
-              { name: 'Espacios Históricos', total: getReal('historicosGrabado'), vivo: 0, grabado: getReal('historicosGrabado') },
-              { name: 'Espacios Dramatizados', total: 0, vivo: 0, grabado: 0 },
-              { name: 'Espacios de Literatura y Arte', total: getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: 0 },
+              { group: 'Cultura', isGroup: true, baseTotal: getBase('historicosGrabado') + getBase('literaturaArte'), total: getReal('historicosGrabado') + getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: getReal('historicosGrabado') },
+              { name: 'Espacios Históricos', baseTotal: getBase('historicosGrabado'), total: getReal('historicosGrabado'), vivo: 0, grabado: getReal('historicosGrabado') },
+              { name: 'Espacios Dramatizados', baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
+              { name: 'Espacios de Literatura y Arte', baseTotal: getBase('literaturaArte'), total: getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: 0 },
               
-              { group: 'Música', isGroup: true, total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
-              { name: 'Espacios musicales', total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
+              { group: 'Música', isGroup: true, baseTotal: getBase('musicales'), total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
+              { name: 'Espacios musicales', baseTotal: getBase('musicales'), total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
               
-              { group: 'Deportes', isGroup: true, total: 0, vivo: 0, grabado: 0 },
-              { name: 'Espacios deportivos', total: 0, vivo: 0, grabado: 0 },
+              { group: 'Deportes', isGroup: true, baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
+              { name: 'Espacios deportivos', baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
           ];
 
-          const totalGeneral = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.total, 0);
+          const totalPlanificado = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.baseTotal, 0);
+          const totalGeneral = totalPlanificado - monthData.interruptions.total;
           const totalVivo = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.vivo, 0);
           const totalGrabado = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.grabado, 0);
 
-          return { rows, totalGeneral, totalVivo, totalGrabado };
+          return { rows, totalGeneral, totalVivo, totalGrabado, totalPlanificado };
       };
 
       const exportToExcel = (monthData: ConsolidatedMonth) => {
-          const { rows, totalGeneral, totalVivo, totalGrabado } = getExportDataRows(monthData);
+          const { rows, totalGeneral, totalVivo, totalGrabado, totalPlanificado } = getExportDataRows(monthData);
           
           const data = rows.map(row => ({
               'GRUPO DE PROGRAMAS': row.isGroup ? row.group : `    ${row.name}`,
@@ -1410,6 +1420,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           }));
 
           data.push({
+              'GRUPO DE PROGRAMAS': 'Total Planificado:',
+              'Total horas emisión': formatMinutesToHHMMSS(totalPlanificado),
+              'En vivo': '',
+              'Grabado': '',
+              'OBSERVACIONES': ''
+          });
+
+          data.push({
               'GRUPO DE PROGRAMAS': 'Interrupciones:',
               'Total horas emisión': formatMinutesToHHMMSS(monthData.interruptions.total),
               'En vivo': '',
@@ -1418,7 +1436,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           });
 
           data.push({
-              'GRUPO DE PROGRAMAS': 'Totales:',
+              'GRUPO DE PROGRAMAS': 'Total Real Transmisión:',
               'Total horas emisión': formatMinutesToHHMMSS(totalGeneral),
               'En vivo': formatMinutesToHHMMSS(totalVivo),
               'Grabado': formatMinutesToHHMMSS(totalGrabado),
@@ -1440,7 +1458,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               verticalAlign: "center",
           });
 
-          const { rows, totalGeneral, totalVivo, totalGrabado } = getExportDataRows(monthData);
+          const { rows, totalGeneral, totalVivo, totalGrabado, totalPlanificado } = getExportDataRows(monthData);
 
           const tableRows = [
               new TableRow({
@@ -1463,6 +1481,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               })),
               new TableRow({
                   children: [
+                      createCell("Total Planificado:", true, AlignmentType.RIGHT),
+                      createCell(formatMinutesToHHMMSS(totalPlanificado), true),
+                      createCell("", true),
+                      createCell("", true),
+                      createCell(""),
+                  ],
+              }),
+              new TableRow({
+                  children: [
                       createCell("Interrupciones:", true, AlignmentType.RIGHT),
                       createCell(formatMinutesToHHMMSS(monthData.interruptions.total), true),
                       createCell("", true),
@@ -1472,7 +1499,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               }),
               new TableRow({
                   children: [
-                      createCell("Totales:", true, AlignmentType.RIGHT),
+                      createCell("Total Real Transmisión:", true, AlignmentType.RIGHT),
                       createCell(formatMinutesToHHMMSS(totalGeneral), true),
                       createCell(formatMinutesToHHMMSS(totalVivo), true),
                       createCell(formatMinutesToHHMMSS(totalGrabado), true),
@@ -1763,9 +1790,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                           onClick={() => {
                                                               setEditingCategory(cat);
                                                               setCategoryEditForm({
-                                                                  WEEKDAY: transmissionConfig.WEEKDAY[cat],
-                                                                  SATURDAY: transmissionConfig.SATURDAY[cat],
-                                                                  SUNDAY: transmissionConfig.SUNDAY[cat],
+                                                                  WEEKDAY: transmissionConfig.WEEKDAY?.[cat] || 0,
+                                                                  SATURDAY: transmissionConfig.SATURDAY?.[cat] || 0,
+                                                                  SUNDAY: transmissionConfig.SUNDAY?.[cat] || 0,
                                                                   programs: transmissionConfig.categoryPrograms?.[cat] || []
                                                               });
                                                           }}
@@ -1798,8 +1825,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                           </tr>
                                       );
                                   })}
+                                  <tr className="bg-[#3E1E16]/30 font-medium">
+                                      <td className="px-6 py-4 text-[#9E7649]/70">TOTAL INTERRUPCIONES</td>
+                                      <td className="px-6 py-4 text-center text-[#E8DCCF]/50"></td>
+                                      <td className="px-6 py-4 text-center text-red-400">-{interruptionsByCategory.total}</td>
+                                      <td className="px-6 py-4 text-center text-green-400"></td>
+                                      <td className="px-6 py-4 text-right"></td>
+                                  </tr>
                                   <tr className="bg-[#3E1E16]/50 font-bold">
-                                      <td className="px-6 py-4 text-[#9E7649]">TOTAL GENERAL</td>
+                                      <td className="px-6 py-4 text-[#9E7649]">TOTAL REAL TRANSMISIÓN</td>
                                       <td className="px-6 py-4 text-center text-[#E8DCCF]/50">{accumulated.breakdown.total}</td>
                                       <td className="px-6 py-4 text-center text-red-400">-{interruptionsByCategory.total}</td>
                                       <td className="px-6 py-4 text-center text-green-400">{accumulated.breakdown.total - interruptionsByCategory.total}</td>
@@ -1930,15 +1964,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                           <div className="space-y-4 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Lunes a Viernes (min)</label>
-                                  <input type="number" value={categoryEditForm.WEEKDAY === 0 ? '' : categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                                  <input type="number" value={categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
                               </div>
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Sábados (min)</label>
-                                  <input type="number" value={categoryEditForm.SATURDAY === 0 ? '' : categoryEditForm.SATURDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SATURDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                                  <input type="number" value={categoryEditForm.SATURDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SATURDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
                               </div>
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Domingos (min)</label>
-                                  <input type="number" value={categoryEditForm.SUNDAY === 0 ? '' : categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
+                                  <input type="number" value={categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
                               </div>
 
                               <div>

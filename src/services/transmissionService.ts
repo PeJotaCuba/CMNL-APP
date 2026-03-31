@@ -61,24 +61,35 @@ export const getDayMinutesConfig = (): Record<DayType, TransmissionBreakdown> & 
     const saved = localStorage.getItem('rcm_transmission_config');
     if (saved) {
         try {
-            return JSON.parse(saved);
+            const parsed = JSON.parse(saved);
+            return {
+                WEEKDAY: { ...DEFAULT_DAY_MINUTES.WEEKDAY, ...(parsed.WEEKDAY || {}) },
+                SATURDAY: { ...DEFAULT_DAY_MINUTES.SATURDAY, ...(parsed.SATURDAY || {}) },
+                SUNDAY: { ...DEFAULT_DAY_MINUTES.SUNDAY, ...(parsed.SUNDAY || {}) },
+                categoryPrograms: parsed.categoryPrograms || {}
+            };
         } catch (e) {
             console.error(e);
         }
     }
-    return DEFAULT_DAY_MINUTES;
+    return {
+        ...DEFAULT_DAY_MINUTES,
+        categoryPrograms: {}
+    };
 };
 
-export const saveDayMinutesConfig = (config: Record<DayType, TransmissionBreakdown>) => {
-    for (const key of Object.keys(config) as DayType[]) {
-        const day = config[key];
-        let total = 0;
-        for (const cat of Object.keys(day) as (keyof TransmissionBreakdown)[]) {
-            if (cat !== 'total') {
-                total += Number(day[cat]) || 0;
+export const saveDayMinutesConfig = (config: Record<DayType, TransmissionBreakdown> & { categoryPrograms?: Record<string, string[]> }) => {
+    for (const key of ['WEEKDAY', 'SATURDAY', 'SUNDAY'] as DayType[]) {
+        if (config[key]) {
+            const day = config[key];
+            let total = 0;
+            for (const cat of Object.keys(day) as (keyof TransmissionBreakdown)[]) {
+                if (cat !== 'total') {
+                    total += Number(day[cat]) || 0;
+                }
             }
+            day.total = total;
         }
-        day.total = total;
     }
     localStorage.setItem('rcm_transmission_config', JSON.stringify(config));
 };
