@@ -11,7 +11,6 @@ interface Props {
   currentUser: User | null;
   onLogout: () => void;
   onSync: () => void;
-  onSystemBackup: () => void;
   isSyncing: boolean;
   isPlaying: boolean;
   togglePlay: () => void;
@@ -37,7 +36,6 @@ const AdminDashboard: React.FC<Props> = ({
     currentUser, 
     onLogout, 
     onSync, 
-    onSystemBackup,
     isSyncing,
     isPlaying,
     togglePlay,
@@ -112,21 +110,13 @@ const AdminDashboard: React.FC<Props> = ({
          {/* Welcome (Simplified) */}
          <div className="flex justify-between items-center">
             <h2 className="text-sm text-stone-400 font-medium">Panel de Control</h2>
-            {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') && (
-              <div className="flex gap-2">
-                <button 
-                 onClick={onSystemBackup}
-                 className="text-xs bg-[#2C1B15] text-[#9E7649] px-3 py-1.5 rounded-lg font-bold border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
-                >
-                  Respaldar Sistema
-                </button>
-                <button 
-                 onClick={onSync}
-                 className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
-                >
-                  Actualizar Sistema
-                </button>
-              </div>
+            {currentUser?.classification === 'Administrador' && (
+              <button 
+               onClick={onSync}
+               className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
+              >
+                Actualizar Sistema
+              </button>
             )}
          </div>
 
@@ -198,16 +188,8 @@ const AdminDashboard: React.FC<Props> = ({
             {activeNews ? (
                 <div 
                     onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
-                    className={`relative cursor-pointer rounded-xl ${activeNews.image ? 'bg-black' : currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all min-h-[200px] flex-1 group`}
+                    className={`relative cursor-pointer rounded-xl ${currentColor} overflow-hidden shadow-sm border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all min-h-[200px] flex-1 group`}
                 >
-                  {activeNews.image && (
-                      <img 
-                          src={activeNews.image} 
-                          alt={activeNews.title} 
-                          className="absolute inset-0 w-full h-full object-cover opacity-60"
-                          referrerPolicy="no-referrer"
-                      />
-                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
 
                   {news.length > 1 && (
@@ -239,6 +221,17 @@ const AdminDashboard: React.FC<Props> = ({
          </div>
          
       </main>
+
+      {/* FAB - Worker Group */}
+      <a 
+         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+         target="_blank" 
+         rel="noopener noreferrer"
+         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         title="Grupo de Trabajo WhatsApp"
+      >
+         <MessageSquare size={28} fill="white" />
+      </a>
       
       <style>{`
         @keyframes soundbar {

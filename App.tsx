@@ -4,27 +4,22 @@ import PublicLanding from './components/PublicLanding';
 import ListenerHome from './components/ListenerHome';
 import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
-import ContentManagementSection from './components/gestion/ContentManagementSection';
 import EquipoSection from './components/gestion/EquipoSection';
 import GestionApp from './components/GestionApp';
 import GuionesApp from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
 import MusicaApp from './components/MusicaApp';
-import GuiaSection from './components/GuiaSection';
 import HistoryEvolutionView from './src/components/HistoryEvolutionView';
 import Sidebar from './components/Sidebar';
 import QuienesSomos from './components/QuienesSomos';
-import NewsUploadModal from './components/NewsUploadModal';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
-import { GlobalFAB } from './src/components/GlobalFAB';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
-  const [isNewsModalOpen, setIsNewsModalOpen] = useState(false);
   const [history, setHistory] = useState<AppView[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -33,8 +28,8 @@ const App: React.FC = () => {
 
   const checkDirty = (callback: () => void, isLogout = false) => {
       // Check if user should see the backup prompt
-      const isExcluded = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
-      const isActiveRole = ['Director', 'Coordinador', 'Trabajador', 'Usuario'].includes(currentUser?.classification || '');
+      const isExcluded = currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador' || currentUser?.role === 'admin' || currentUser?.role === 'coordinator';
+      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser?.classification || '');
 
       if (isDirty && !isExcluded && isActiveRole) {
           pendingNavigation.current = callback;
@@ -170,7 +165,7 @@ const App: React.FC = () => {
   // 24-Hour Backup Reminder Effect
   useEffect(() => {
     if (currentUser) {
-      const isExcluded = currentUser.username === 'admin' || currentUser.classification === 'Administrador';
+      const isExcluded = currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador' || currentUser.role === 'admin' || currentUser.role === 'coordinator';
       const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser.classification || '');
       
       if (!isExcluded && isActiveRole) {
@@ -226,10 +221,10 @@ const App: React.FC = () => {
   // Back Button Logic
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      // If there is a hash, we assume it's internal navigation for one of the sub-apps
-      // (AgendaApp, GestionApp, GuionesApp, MusicaApp, or EquipoSection)
-      // We ignore this event to prevent App.tsx from unmounting the app
-      if (window.location.hash.length > 1) {
+      // If in AgendaApp, GestionApp, or GuionesApp and navigating internally (hash exists), ignore this event
+      // to prevent App.tsx from unmounting the app
+      if ((currentView === AppView.APP_AGENDA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_GUIONES) && 
+          window.location.hash.length > 1) {
         return;
       }
 
@@ -250,13 +245,6 @@ const App: React.FC = () => {
   }, [history, currentView]);
 
   const handleNavigate = (view: AppView, data?: any) => {
-    if (view === AppView.ADMIN_SECTION_NEWS) {
-      setIsNewsModalOpen(true);
-      // If we are already in Admin Dashboard or Worker Home, don't change the main view
-      if (currentView === AppView.ADMIN_DASHBOARD || currentView === AppView.WORKER_HOME) {
-        return;
-      }
-    }
     checkDirty(() => {
         window.history.pushState(null, '', window.location.pathname);
         setHistory((prev) => [...prev, currentView]);
@@ -337,92 +325,11 @@ const App: React.FC = () => {
       }
   };
 
-  const handleSystemBackup = () => {
-      const backupData: any = {
-          timestamp: new Date().toISOString(),
-          // Global state data
-          users: users,
-          historyContent: historyContent,
-          aboutContent: aboutContent,
-          news: news,
-          // Specific keys from localStorage
-          fichas: JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'),
-          catalogo: JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'),
-          transmissionConfig: JSON.parse(localStorage.getItem('rcm_transmission_config') || '{}'),
-          equipo: JSON.parse(localStorage.getItem('rcm_equipo_cmnl') || '[]'),
-          agendaPrograms: JSON.parse(localStorage.getItem('rcm_programs') || '[]'),
-          agendaEfemerides: JSON.parse(localStorage.getItem('rcm_efemerides') || '{}'),
-          agendaConmemoraciones: JSON.parse(localStorage.getItem('rcm_conmemoraciones') || '{}'),
-          agendaDayThemes: JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'),
-          agendaUsers: JSON.parse(localStorage.getItem('rcm_users') || '[]'),
-          agendaPropaganda: JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'),
-          programming: JSON.parse(localStorage.getItem('rcm_programming') || '[]'),
-          history: localStorage.getItem('rcm_data_history') || '',
-          about: localStorage.getItem('rcm_data_about') || '',
-          news_data: JSON.parse(localStorage.getItem('rcm_data_news') || '[]'),
-      };
-
-      // Collect all relevant keys from localStorage
-      const dynamicData: Record<string, any> = {};
-      const musicKeys = [
-          'rcm_users_db', 
-          'rcm_programs_list', 
-          'rcm_custom_roots',
-          'rcm_current_selection',
-          'rcm_saved_selections',
-          'rcm_data_tracks'
-      ];
-
-      for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (!key) continue;
-
-          // Skip music-specific keys
-          if (musicKeys.some(mk => key.includes(mk))) continue;
-
-          // Include relevant patterns
-          const isGuion = key.startsWith('guionbd_data_');
-          const isSection = key.startsWith('rcm_sections_');
-          const isPayment = key.startsWith('rcm_payment_');
-          const isUserData = key.startsWith('user_') && (
-              key.includes('rcm_data_worklogs') || 
-              key.includes('rcm_data_consolidated') || 
-              key.includes('rcm_interruptions') || 
-              key.includes('rcm_consolidated_months') ||
-              key.includes('habitual_mode') ||
-              key.includes('habitual_exclusions')
-          );
-
-          if (isGuion || isSection || isPayment || isUserData) {
-              try {
-                  dynamicData[key] = JSON.parse(localStorage.getItem(key) || 'null');
-              } catch (e) {
-                  dynamicData[key] = localStorage.getItem(key);
-              }
-          }
-      }
-      
-      backupData.dynamicData = dynamicData;
-
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `actualcmnl.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      alert('Respaldo del sistema generado con éxito (actualcmnl.json)');
-  };
-
   // Logic to sync from GitHub (Used by Users and Admins)
   const handleCloudSync = async () => {
       if(isSyncing) return;
       
-      const confirmSync = window.confirm('¿Desea actualizar los datos (Noticias, Parrilla, Usuarios) desde la nube y sincronizar Facebook?');
+      const confirmSync = window.confirm('¿Desea actualizar los datos (Noticias, Parrilla, Usuarios) desde la nube?');
       if(!confirmSync) return;
 
       setIsSyncing(true);
@@ -577,76 +484,25 @@ const App: React.FC = () => {
   const isIntegratedPlayerView = currentView === AppView.WORKER_HOME || currentView === AppView.ADMIN_DASHBOARD;
   const showPlayer = !isAppView && !isLoginScreen && !isIntegratedPlayerView;
 
-  const handleNewsUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const text = e.target?.result as string;
-        const blocks = text.split(/---/).filter(b => b.trim());
-        const newNews: NewsItem[] = blocks.map((block, index) => {
-          let cleanBlock = block.trim();
-          
-          // Omit tags
-          cleanBlock = cleanBlock.replace(/Titular:\s*/gi, '');
-          cleanBlock = cleanBlock.replace(/Autor:\s*/gi, '');
-          cleanBlock = cleanBlock.replace(/Texto:\s*/gi, '');
-
-          const lines = cleanBlock.split('\n').filter(l => l.trim());
-          const title = lines[0] || 'Sin Título';
-          
-          let author = 'Equipo CMNL';
-          let contentLines = lines.slice(1);
-          
-          if (contentLines.length > 0) {
-             // If the second line was originally "Autor: [Name]", it's now just "[Name]"
-             // If it starts with "Por ", we can remove it, otherwise we just take the whole line
-             const possibleAuthor = contentLines[0].trim();
-             if (possibleAuthor.toLowerCase().startsWith('por ')) {
-                 author = possibleAuthor.substring(4).trim();
-             } else {
-                 author = possibleAuthor;
-             }
-             contentLines = contentLines.slice(1);
-          }
-          
-          const content = contentLines.join('\n') || '';
-          
-          return {
-            id: `news-${Date.now()}-${index}`,
-            title,
-            content,
-            category: 'General',
-            date: new Date().toLocaleDateString(),
-            excerpt: content.slice(0, 100) + '...',
-            author
-          };
-        });
-        setNews(newNews);
-        localStorage.setItem('rcm_data_news', JSON.stringify(newNews));
-        alert(`${newNews.length} noticias cargadas y actualizadas correctamente.`);
-    };
-    reader.readAsText(file);
-  };
-
   const renderView = () => {
     switch (currentView) {
       case AppView.LANDING: // Acts as LOGIN view now
         return <PublicLanding onNavigate={setCurrentView} users={users} onLoginSuccess={(user) => {
             setCurrentUser(user);
             localStorage.setItem('rcm_user_username', user.username);
-            if(user.username === 'admin' || user.classification === 'Administrador') {
+            if(user.role === 'admin') {
                 handleNavigate(AppView.ADMIN_DASHBOARD);
             } else {
                 handleNavigate(AppView.WORKER_HOME);
             }
         }} />;
       case AppView.LISTENER_HOME:
-        return <ListenerHome onNavigate={handleNavigate} news={news} setNews={setNews} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
+        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.WORKER_HOME:
         return (
             <WorkerHome 
                 onNavigate={handleNavigate} 
                 news={news} 
-                setNews={setNews}
                 currentUser={currentUser} 
                 onLogout={handleLogout}
                 onSync={handleCloudSync}
@@ -668,7 +524,6 @@ const App: React.FC = () => {
             currentUser={currentUser}
             onLogout={handleLogout}
             onSync={handleCloudSync}
-            onSystemBackup={handleSystemBackup}
             isSyncing={isSyncing}
             isPlaying={isPlaying}
             togglePlay={togglePlay}
@@ -703,8 +558,6 @@ const App: React.FC = () => {
         return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_MUSICA:
         return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
-      case AppView.APP_GUIA:
-        return <GuiaSection onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_PROGRAMACION:
@@ -729,63 +582,16 @@ const App: React.FC = () => {
       // Public Sections
       case AppView.SECTION_HISTORY:
         return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} />;
-      case AppView.ADMIN_SECTION_HISTORY:
-        return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} isAdmin={true} onUpload={(file) => {
-            const reader = new FileReader();
-            reader.onload = (e) => setHistoryContent(e.target?.result as string);
-            reader.readAsText(file);
-        }} />;
       case AppView.SECTION_HISTORY_EVOLUTION:
         return <HistoryEvolutionView currentUser={currentUser} onBack={handleBack} />;
       case AppView.SECTION_PROGRAMMING_PUBLIC:
         return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
-      case AppView.ADMIN_SECTION_PROGRAMMING:
-        return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} isAdmin={true} onUpload={(file) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const text = e.target?.result as string;
-                const lines = text.split('\n').filter(l => l.trim());
-                const newPrograms = lines.map((line, index) => {
-                  const [time, name, description] = line.split('|').map(s => s.trim());
-                  return {
-                    id: `prog-${Date.now()}-${index}`,
-                    time: time || '00:00',
-                    name: name || 'Programa sin nombre',
-                    description: description || '',
-                    days: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-                  };
-                });
-                localStorage.setItem('rcm_programming', JSON.stringify(newPrograms));
-                alert(`${newPrograms.length} programas cargados correctamente.`);
-            };
-            reader.readAsText(file);
-        }} />;
       case AppView.SECTION_ABOUT:
         return <QuienesSomos onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_NEWS:
         return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />; 
-      case AppView.ADMIN_SECTION_NEWS:
-        if (currentUser?.role === 'admin') {
-          return (
-            <AdminDashboard 
-              onNavigate={handleNavigate} 
-              news={news} 
-              users={users} 
-              currentUser={currentUser} 
-              onLogout={handleLogout} 
-              onSync={handleCloudSync} 
-              onSystemBackup={handleSystemBackup}
-              isSyncing={isSyncing}
-              isPlaying={isPlaying}
-              togglePlay={togglePlay}
-              isRefreshing={isRefreshing}
-              onRefreshLive={handleRefreshLive}
-              currentProgram={currentProgram}
-              onMenuClick={() => setIsSidebarOpen(true)}
-            />
-          );
-        }
-        return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />;
+      case AppView.SECTION_NEWS_DETAIL:
+        return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} newsItem={selectedNews} />;
       case AppView.SECTION_PODCAST:
         return <PlaceholderView title="Podcasts" subtitle="Escucha a tu ritmo" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_PROFILE:
@@ -854,18 +660,12 @@ const App: React.FC = () => {
           isLogoutTrigger={isLogoutTrigger}
         />
 
-        <NewsUploadModal 
-          isOpen={isNewsModalOpen} 
-          onClose={() => setIsNewsModalOpen(false)} 
-          onUpload={handleNewsUpload} 
-        />
-
         {showPlayer && (
            <>
              <div className={`fixed bottom-0 left-0 right-0 z-[100] bg-[#3E1E16]/95 backdrop-blur-xl border-t border-[#9E7649]/20 transition-all duration-300 flex`}>
                  
                  {/* Left Info Box (Only on Desktop Listener Home) */}
-                 {(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS || currentView === AppView.ADMIN_SECTION_NEWS) && (
+                 {(currentView === AppView.LISTENER_HOME || currentView === AppView.SECTION_NEWS) && (
                     <div className="hidden md:flex flex-col justify-center w-64 bg-[#2C1B15] border-r border-white/5 px-6 shrink-0 py-3">
                         <p className="font-bold text-[#C69C6D] uppercase tracking-widest text-[10px] mb-1">Radio Ciudad Monumento</p>
                         <p className="text-[10px] text-stone-500">Voz de la segunda villa cubana</p>
@@ -921,10 +721,6 @@ const App: React.FC = () => {
                 }
              `}</style>
            </>
-        )}
-        
-        {currentUser && (currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador') && (currentView === AppView.LISTENER_HOME || currentView === AppView.WORKER_HOME || currentView === AppView.ADMIN_DASHBOARD) && (
-          <GlobalFAB currentUser={currentUser} onNavigate={handleNavigate} />
         )}
       </div>
   );

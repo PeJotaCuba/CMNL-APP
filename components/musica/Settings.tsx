@@ -53,9 +53,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
       password: '',
       confirmPassword: '',
       uniqueId: '',
-      role: 'user' as 'user' | 'director' | 'admin' | 'coordinador',
-      specialties: [] as string[],
-      category: ''
+      role: 'user' as 'user' | 'director' | 'admin'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -126,14 +124,14 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
   };
 
   const handleResetForm = () => {
-      setFormData({ username: '', fullName: '', phone: '', password: '', confirmPassword: '', uniqueId: '', role: 'user', specialties: [], category: '' });
+      setFormData({ username: '', fullName: '', phone: '', password: '', confirmPassword: '', uniqueId: '', role: 'user' });
       setIsEditing(false); setShowUserModal(false); setOriginalUsername('');
   };
 
   const handleOpenCreate = () => { handleResetForm(); setShowUserModal(true); };
 
   const handleEditClick = (user: User) => {
-      setFormData({ username: user.username, fullName: user.fullName || '', phone: user.phone || '', password: user.password || '', confirmPassword: user.password || '', uniqueId: user.uniqueId || '', role: user.role, specialties: user.specialties || [], category: user.category || '' });
+      setFormData({ username: user.username, fullName: user.fullName || '', phone: user.phone || '', password: user.password || '', confirmPassword: user.password || '', uniqueId: user.uniqueId || '', role: user.role });
       setOriginalUsername(user.username); setIsEditing(true); setShowUserModal(true);
   };
 
@@ -144,7 +142,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
       
       if ((!isEditing || formData.username !== originalUsername) && users.some(u => u.username === formData.username)) { return alert("El nombre de usuario ya existe."); }
       const finalUniqueId = formData.uniqueId.trim() || generateUniqueId(formData.fullName);
-      const userObj: User = { username: formData.username, password: formData.password, role: formData.role, fullName: formData.fullName, phone: formData.phone, uniqueId: finalUniqueId, specialties: formData.specialties, category: formData.category };
+      const userObj: User = { username: formData.username, password: formData.password, role: formData.role, fullName: formData.fullName, phone: formData.phone, uniqueId: finalUniqueId };
       if (isEditing) { onEditUser(userObj, originalUsername); alert("Usuario actualizado correctamente."); } else { onAddUser(userObj); alert(`Usuario creado correctamente.`); }
       handleResetForm();
   };
@@ -163,55 +161,10 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
       const reader = new FileReader();
       reader.onload = (event) => {
           const text = event.target?.result as string; if (!text) return;
-          const blocks = text.split(/_{10,}/); // Split by long underscores
-          const newUsers: User[] = [];
-          
-          blocks.forEach(block => {
-              const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-              if (lines.length < 5) return; // Need at least name, specialty, mobile, user, pass
-              
-              let current: Partial<User> = { role: 'user', specialties: [] };
-              
-              // First line is Name
-              current.fullName = lines[0];
-              
-              // Second line is Specialties (separated by /)
-              if (lines[1] && !lines[1].toLowerCase().startsWith('móvil:')) {
-                  current.specialties = lines[1].split('/').map(s => s.trim()).filter(s => s).slice(0, 3);
-              }
-              
-              // Third line might be Category/Level
-              let lineIndex = 2;
-              if (lines[lineIndex] && !lines[lineIndex].toLowerCase().startsWith('móvil:')) {
-                  current.category = lines[lineIndex];
-                  lineIndex++;
-              }
-              
-              for (let i = lineIndex; i < lines.length; i++) {
-                  const l = lines[i];
-                  const lower = l.toLowerCase();
-                  if (lower.startsWith('móvil:') || lower.startsWith('movil:')) {
-                      current.phone = l.substring(6).trim();
-                  } else if (lower.startsWith('usuario:')) {
-                      current.username = l.substring(8).trim();
-                  } else if (lower.startsWith('contraseña:') || lower.startsWith('contrasena:')) {
-                      current.password = l.substring(11).trim();
-                  } else if (lower.startsWith('rol:')) {
-                      const roleStr = l.substring(4).trim().toLowerCase();
-                      if (roleStr === 'admin' || roleStr === 'administrador') current.role = 'admin';
-                      else if (roleStr === 'director') current.role = 'director';
-                      else if (roleStr === 'coordinador') current.role = 'coordinador';
-                      else current.role = 'user';
-                  }
-              }
-              
-              if (current.username && current.password && current.fullName) {
-                  if (!current.phone) current.phone = '';
-                  if (!current.uniqueId) current.uniqueId = generateUniqueId(current.fullName);
-                  newUsers.push(current as User);
-              }
-          });
-          
+          const lines = text.split('\n'); const newUsers: User[] = []; let current: Partial<User> = { role: 'user' };
+          const saveCurrent = () => { if (current.username && current.password && current.fullName) { if(!current.phone) current.phone = ''; if(!current.uniqueId) current.uniqueId = generateUniqueId(current.fullName); newUsers.push(current as User); } };
+          lines.forEach(line => { const l = line.trim(); if (l.toLowerCase().startsWith('nombre:')) { saveCurrent(); current = { role: 'user', fullName: l.substring(7).trim() }; } else if (l.toLowerCase().startsWith('móvil:') || l.toLowerCase().startsWith('movil:')) { current.phone = l.substring(6).trim(); } else if (l.toLowerCase().startsWith('usuario:')) { current.username = l.substring(8).trim(); } else if (l.toLowerCase().startsWith('contraseña:') || l.toLowerCase().startsWith('contrasena:')) { current.password = l.substring(11).trim(); } });
+          saveCurrent();
           if (newUsers.length > 0) { onImportUsers(newUsers); } else { alert("No se encontraron usuarios válidos."); }
           e.target.value = '';
       };
@@ -226,13 +179,10 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
   };
 
   const getRoleLabel = (role: string) => {
-      if (role === 'admin') return 'Administrador';
-      if (role === 'coordinador') return 'Coordinador';
+      if (role === 'admin') return 'Coordinador';
       if (role === 'director') return 'Director';
       return 'Usuario';
   };
-
-  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
 
   const canDelete = (u: User) => {
       if (u.username === 'admin') return false;
@@ -244,35 +194,6 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
       const val = e.target.value;
       if (/^\d{0,4}$/.test(val)) {
           setFormData({...formData, [field]: val});
-      }
-  };
-
-  const SPECIALTIES_LIST = [
-      'Locutor',
-      'Director',
-      'Asesor',
-      'Guionista',
-      'Realizador de sonido',
-      'Especialista',
-      'Coordinador de Programas',
-      'Asistente de dirección',
-      'Director de emisora',
-      'Jefe de Programación',
-      'Periodista',
-      'Auxiliar General',
-      'Recepcionista'
-  ];
-
-  const handleToggleSpecialty = (specialty: string) => {
-      const current = formData.specialties || [];
-      if (current.includes(specialty)) {
-          setFormData({...formData, specialties: current.filter(s => s !== specialty)});
-      } else {
-          if (current.length >= 3) {
-              alert("Puedes seleccionar un máximo de 3 especialidades.");
-              return;
-          }
-          setFormData({...formData, specialties: [...current, specialty]});
       }
   };
 
@@ -293,7 +214,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
             </button>
         </div>
 
-        {isAdmin && (
+        {currentUser?.role === 'admin' && (
         <div className="mb-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -327,19 +248,6 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
                         
                         <h4 className="font-bold text-white truncate">{user.fullName}</h4>
                         <p className="text-xs text-[#E8DCCF]/60 mb-1">@{user.username}</p>
-                        
-                        {user.specialties && user.specialties.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2 mb-1">
-                                {user.specialties.map(s => (
-                                    <span key={s} className="text-[9px] bg-[#9E7649]/20 text-[#E8DCCF] px-1.5 py-0.5 rounded border border-[#9E7649]/30">
-                                        {s}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        {user.category && (
-                            <p className="text-[10px] text-[#E8DCCF]/40 italic">{user.category}</p>
-                        )}
                         {user.phone && <p className="text-xs text-[#E8DCCF]/40 flex items-center gap-1 mb-3"><span className="material-symbols-outlined text-[14px]">call</span> {user.phone}</p>}
                         
                         <div className="flex gap-2 mt-2 pt-2 border-t border-[#9E7649]/10">
@@ -351,11 +259,11 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
                                     <span className="material-symbols-outlined text-sm">chat</span>
                                 </button>
                             )}
-                            {canDelete(user) || isAdmin ? (
+                            {canDelete(user) && (
                                 <button onClick={() => handleDeleteConfirm(user.username)} className="size-7 flex items-center justify-center rounded bg-red-900/20 text-red-500 hover:bg-red-900/40 border border-red-500/20" title="Eliminar">
                                     <span className="material-symbols-outlined text-sm">delete</span>
                                 </button>
-                            ) : null}
+                            )}
                         </div>
                     </div>
                 ))}
@@ -364,13 +272,8 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
         )}
 
         {showUserModal && (
-            <div 
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" 
-                onMouseDown={(e) => {
-                    if (e.target === e.currentTarget) handleResetForm();
-                }}
-            >
-                <div className="w-full max-w-md bg-[#2C1B15] rounded-2xl shadow-2xl overflow-hidden border border-[#9E7649]/30">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={handleResetForm}>
+                <div className="w-full max-w-md bg-[#2C1B15] rounded-2xl shadow-2xl overflow-hidden border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
                     <div className="p-4 border-b border-[#9E7649]/20 flex justify-between items-center bg-[#1A100C]">
                         <h3 className="font-bold text-white">{isEditing ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
                         <button onClick={handleResetForm} className="text-[#E8DCCF]/40 hover:text-white"><span className="material-symbols-outlined">close</span></button>
@@ -382,25 +285,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
                             <div><label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Usuario *</label><input className="w-full p-2.5 rounded-lg border border-[#9E7649]/30 bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} placeholder="usuario123"/></div>
                             <div><label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Teléfono</label><input className="w-full p-2.5 rounded-lg border border-[#9E7649]/30 bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="55555555"/></div>
                         </div>
-                        <div><label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Rol</label><div className="flex gap-2">{['user', 'director', 'coordinador'].map(r => (<button key={r} type="button" onClick={() => setFormData({...formData, role: r as any})} className={`flex-1 py-2 text-xs font-bold rounded-lg uppercase border ${formData.role === r ? 'bg-[#9E7649] text-white border-[#9E7649]' : 'bg-[#1A100C] text-[#E8DCCF]/60 border-[#9E7649]/30'}`}>{getRoleLabel(r)}</button>))}</div></div>
-                        <div>
-                            <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Especialidades (Máx. 3)</label>
-                            <div className="flex flex-wrap gap-2">
-                                {SPECIALTIES_LIST.map(s => {
-                                    const isSelected = (formData.specialties || []).includes(s);
-                                    return (
-                                        <button 
-                                            key={s} 
-                                            type="button" 
-                                            onClick={() => handleToggleSpecialty(s)}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-full border ${isSelected ? 'bg-[#9E7649] text-white border-[#9E7649]' : 'bg-[#1A100C] text-[#E8DCCF]/60 border-[#9E7649]/30'}`}
-                                        >
-                                            {s}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <div><label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Rol</label><div className="flex gap-2">{['user', 'director', 'admin'].map(r => (<button key={r} type="button" onClick={() => setFormData({...formData, role: r as any})} className={`flex-1 py-2 text-xs font-bold rounded-lg uppercase border ${formData.role === r ? 'bg-[#9E7649] text-white border-[#9E7649]' : 'bg-[#1A100C] text-[#E8DCCF]/60 border-[#9E7649]/30'}`}>{getRoleLabel(r)}</button>))}</div></div>
                         <div className="grid grid-cols-2 gap-4">
                              <div>
                                 <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">PIN (4 Dígitos) *</label>

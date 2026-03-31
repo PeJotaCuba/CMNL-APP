@@ -20,7 +20,7 @@
     <meta name="msapplication-TileImage" content="/icons/icon-192-192.png">
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="manifest.json" />
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22 fill=%22%238B5E3C%22><path d=%22M25,80 V45 A15,15 0 0,1 55,45 V80 M55,80 V35 A25,25 0 0,1 105,35 V80%22 stroke=%22%238B5E3C%22 stroke-width=%2212%22 fill=%22none%22 stroke-linecap=%22round%22 /></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -108,11 +108,13 @@
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+    
     <!-- Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+          navigator.serviceWorker.register('./service-worker.js', { scope: '/' })
             .then((registration) => {
               console.log('ServiceWorker registrado con éxito: ', registration.scope);
             })

@@ -9,7 +9,7 @@ import { getAccumulatedData, getMonthlyTotalData, getDayMinutesConfig, saveDayMi
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
-import { InterruptionManagerModal } from './InterruptionManagerModal';
+import { InterruptionModal } from './InterruptionModal';
 import EquipoSection from './gestion/EquipoSection';
 
 interface Props {
@@ -344,12 +344,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const [showRestrictionModal, setShowRestrictionModal] = useState(false);
   const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
   const [editingCategory, setEditingCategory] = useState<keyof TransmissionBreakdown | null>(null);
-  const [programCategories, setProgramCategories] = useState<Record<string, string[]>>(() => {
-      const saved = localStorage.getItem('rcm_program_categories');
-      return saved ? JSON.parse(saved) : {};
-  });
   const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0 });
-  const [categoryEditPrograms, setCategoryEditPrograms] = useState<string[]>([]);
   
   const [dialog, setDialog] = useState<{isOpen: boolean, title: string, message: string, type: 'alert' | 'confirm', onConfirm?: () => void}>({
       isOpen: false, title: '', message: '', type: 'alert'
@@ -364,10 +359,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   useEffect(() => {
     localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_interruptions`, JSON.stringify(interruptions));
   }, [interruptions, currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem('rcm_program_categories', JSON.stringify(programCategories));
-  }, [programCategories]);
 
   useEffect(() => {
     localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`, JSON.stringify(consolidatedMonths));
@@ -415,8 +406,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
     { id: 'reportes', icon: <FileBarChart size={32} />, label: 'Reportes', color: 'bg-blue-900/40 text-blue-400 border-blue-500/30' },
   ];
 
-  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador';
-  const isAdminOrCoordinator = isAdmin || currentUser?.classification === 'Coordinador';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
 
   const formatPercentage = (value: string) => {
       if (!value) return '';
@@ -1317,14 +1307,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           return categoryLabels[cat];
       };
 
-      const toggleCategoryEditProgram = (programName: string) => {
-          setCategoryEditPrograms(prev => 
-              prev.includes(programName) 
-                  ? prev.filter(p => p !== programName)
-                  : [...prev, programName]
-          );
-      };
-
       const handleSaveCategoryEdit = () => {
           if (editingCategory) {
               const newConfig = { ...transmissionConfig };
@@ -1333,12 +1315,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               newConfig.SUNDAY[editingCategory] = categoryEditForm.SUNDAY;
               saveDayMinutesConfig(newConfig);
               setTransmissionConfig(newConfig);
-              
-              setProgramCategories(prev => ({
-                  ...prev,
-                  [editingCategory]: categoryEditPrograms
-              }));
-
               setEditingCategory(null);
           }
       };
@@ -1761,25 +1737,22 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                       return (
                                           <tr key={cat} className="hover:bg-white/5 transition-colors">
                                               <td className="px-6 py-4 font-medium text-white">
-                                                  {isAdminOrCoordinator ? (
-                                                      <div className="flex items-center gap-3">
-                                                          <button 
-                                                              onClick={() => {
-                                                                  setEditingCategory(cat);
-                                                                  setCategoryEditForm({
-                                                                      WEEKDAY: transmissionConfig.WEEKDAY[cat],
-                                                                      SATURDAY: transmissionConfig.SATURDAY[cat],
-                                                                      SUNDAY: transmissionConfig.SUNDAY[cat]
-                                                                  });
-                                                                  setCategoryEditPrograms(programCategories[cat] || []);
-                                                              }}
-                                                              className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
-                                                              title="Editar minutos base"
-                                                          >
-                                                              {renderCategoryLabel(cat)}
-                                                              <Edit2 size={12} className="opacity-50" />
-                                                          </button>
-                                                      </div>
+                                                  {isAdmin ? (
+                                                      <button 
+                                                          onClick={() => {
+                                                              setEditingCategory(cat);
+                                                              setCategoryEditForm({
+                                                                  WEEKDAY: transmissionConfig.WEEKDAY[cat],
+                                                                  SATURDAY: transmissionConfig.SATURDAY[cat],
+                                                                  SUNDAY: transmissionConfig.SUNDAY[cat]
+                                                              });
+                                                          }}
+                                                          className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
+                                                          title="Editar minutos base"
+                                                      >
+                                                          {renderCategoryLabel(cat)}
+                                                          <Edit2 size={12} className="opacity-50" />
+                                                      </button>
                                                   ) : (
                                                       <span className="flex items-center gap-2">
                                                           {renderCategoryLabel(cat)}
@@ -1815,7 +1788,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               </tbody>
                           </table>
                       </div>
-                      {isAdminOrCoordinator && (
+                      {isAdmin && (
                           <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
                               <button 
                                   onClick={() => setShowInterruptionsModal(true)}
@@ -1867,37 +1840,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               <div>
                                   <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Domingos (min)</label>
                                   <input type="number" value={categoryEditForm.SUNDAY === 0 ? '' : categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
-                              </div>
-                          </div>
-
-                          <div className="mb-6">
-                              <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-2 block">Programas de esta categoría</label>
-                              <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar bg-[#1A100C] p-3 rounded-lg border border-[#9E7649]/30">
-                                  {fichas.map(ficha => (
-                                      <label key={ficha.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
-                                          <input 
-                                              type="checkbox" 
-                                              checked={categoryEditPrograms.includes(ficha.name)}
-                                              onChange={() => toggleCategoryEditProgram(ficha.name)}
-                                              className="w-4 h-4 rounded border-[#9E7649]/30 bg-black/20 text-[#9E7649] focus:ring-[#9E7649]/50"
-                                          />
-                                          <span className="text-white text-sm">{ficha.name}</span>
-                                      </label>
-                                  ))}
-                                  {['Cabina 12:00-12:30', 'Cabina 13:00-13:30'].map(cabina => (
-                                      <label key={cabina} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
-                                          <input 
-                                              type="checkbox" 
-                                              checked={categoryEditPrograms.includes(cabina)}
-                                              onChange={() => toggleCategoryEditProgram(cabina)}
-                                              className="w-4 h-4 rounded border-[#9E7649]/30 bg-black/20 text-[#9E7649] focus:ring-[#9E7649]/50"
-                                          />
-                                          <span className="text-white text-sm">{cabina}</span>
-                                      </label>
-                                  ))}
-                                  {fichas.length === 0 && (
-                                      <p className="text-sm text-[#E8DCCF]/50 text-center py-2">No hay fichas registradas.</p>
-                                  )}
                               </div>
                           </div>
 
@@ -1958,19 +1900,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               )}
 
               {showInterruptionsModal && (
-                  <InterruptionManagerModal 
+                  <InterruptionModal 
                       onClose={() => setShowInterruptionsModal(false)} 
-                      onSaveAdd={(newInterruptions) => {
-                          setInterruptions([...interruptions, ...newInterruptions]);
-                      }}
-                      interruptions={interruptions}
-                      onUpdateInterruptions={(newInterruptions) => {
-                          setInterruptions(newInterruptions);
+                      onSave={(interruption) => {
+                          setInterruptions([...interruptions, interruption]);
+                          setShowInterruptionsModal(false);
                       }}
                       fichas={fichas}
                       categories={categories}
                       categoryLabels={categoryLabels}
-                      programCategories={programCategories}
                   />
               )}
           </div>

@@ -8,7 +8,6 @@ import { loadSelectionsFromDB, loadSavedSelectionsListFromDB, loadReportsFromDB,
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
-  setNews?: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   currentUser: User | null;
   onLogout: () => void;
   onSync: () => void;
@@ -33,7 +32,6 @@ const newsColors = [
 const WorkerHome: React.FC<Props> = ({ 
     onNavigate, 
     news, 
-    setNews,
     currentUser, 
     onLogout, 
     onSync, 
@@ -46,7 +44,6 @@ const WorkerHome: React.FC<Props> = ({
     onMenuClick
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-  const [isFetchingNews, setIsFetchingNews] = useState(false);
 
   // Carousel logic
   useEffect(() => {
@@ -120,8 +117,7 @@ const WorkerHome: React.FC<Props> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-    a.download = `${username}_${dateStr}.json`;
+    a.download = `${username}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -132,8 +128,9 @@ const WorkerHome: React.FC<Props> = ({
     const file = e.target.files?.[0];
     if (!file || !currentUser) return;
 
-    if (!file.name.startsWith(currentUser.username) || !file.name.endsWith('.json')) {
-        alert(`El archivo de respaldo debe comenzar con "${currentUser.username}" y ser un archivo .json.`);
+    const expectedFileName = `${currentUser.username}.json`;
+    if (file.name !== expectedFileName) {
+        alert(`El archivo de respaldo debe llamarse exactamente "${expectedFileName}".`);
         e.target.value = '';
         return;
     }
@@ -305,23 +302,9 @@ const WorkerHome: React.FC<Props> = ({
                      <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
                 </div>
                 <div 
-                    onClick={() => {
-                        if (activeNews.url) {
-                            window.open(activeNews.url, '_blank', 'noopener,noreferrer');
-                        } else {
-                            onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews);
-                        }
-                    }} 
-                    className={`w-full relative rounded-xl ${activeNews.image ? 'bg-black' : currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[200px] cursor-pointer group transition-colors duration-500`}
+                    onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
+                    className={`w-full relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[200px] cursor-pointer group transition-colors duration-500`}
                 >
-                    {activeNews.image && (
-                        <img 
-                            src={activeNews.image} 
-                            alt={activeNews.title} 
-                            className="absolute inset-0 w-full h-full object-cover opacity-60"
-                            referrerPolicy="no-referrer"
-                        />
-                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
 
                     {news.length > 1 && (
@@ -382,7 +365,7 @@ const WorkerHome: React.FC<Props> = ({
                  <div>
                     <p className="text-[10px] text-stone-400 uppercase tracking-wide">Usuario conectado</p>
                     <p className="text-sm text-[#FFF8DC] font-medium">{currentUser?.name}</p>
-                    <p className="text-xs text-[#CD853F]">{currentUser?.classification || 'Usuario'}</p>
+                    <p className="text-xs text-[#CD853F]">{currentUser?.classification || 'Trabajador'}</p>
                  </div>
               </div>
               <div className="flex gap-2">
@@ -399,6 +382,15 @@ const WorkerHome: React.FC<Props> = ({
       </div>
       
       {/* Worker Group FAB */}
+      <a 
+         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+         target="_blank" 
+         rel="noopener noreferrer"
+         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         title="Grupo de Trabajo WhatsApp"
+      >
+         <MessageSquare size={28} fill="white" />
+      </a>
     </div>
   );
 };

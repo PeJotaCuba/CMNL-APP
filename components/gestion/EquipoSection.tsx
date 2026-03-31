@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, MessageCircle, Share2 } from 'lucide-react';
+import { Users, Upload, Download, RefreshCw, Edit2, Camera } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
+import ContentManagementSection from './ContentManagementSection';
 import { User } from '../../types';
 
 interface TeamMember {
@@ -29,18 +30,23 @@ interface EquipoSectionProps {
   setAboutContent: React.Dispatch<React.SetStateAction<string>>;
   news: any[];
   setNews: React.Dispatch<React.SetStateAction<any[]>>;
+  setImpersonatedUser: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
 const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
 
-const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews }) => {
+const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const isAdmin = currentUser?.username === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
 
-  const ROLES = ['Usuario', 'Director', 'Coordinador', 'Administrador'];
+  const ROLES = [
+    'director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 
+    'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 
+    'auxiliar general', 'asistente de dirección', 'recepcionista'
+  ];
 
   useEffect(() => {
     const saved = localStorage.getItem('rcm_equipo_cmnl');
@@ -70,123 +76,150 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
-      if (!text) return;
       
       const currentTeam = [...team];
       const updatedUsers = [...users];
       let processedCount = 0;
 
-      const blocks = text.split(/_{10,}/); // Split by long underscores
-      
-      blocks.forEach(block => {
-          const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-          if (lines.length < 4) return; // Need at least name, specialty, mobile, user, pass
-          
-          let name = lines[0];
-          let specialtyRaw = '';
-          let level = '';
-          let mobile = '';
-          let username = '';
-          let password = '';
-          let role = 'worker'; 
-          let classification: any = 'Trabajador';
-          
-          // Second line is Specialties (separated by /)
-          if (lines[1] && !lines[1].toLowerCase().includes('móvil:') && !lines[1].toLowerCase().includes('usuario:')) {
-              specialtyRaw = lines[1];
+      // Detect format: If it contains "Nombre completo:", it's the credentials format
+      if (text.toLowerCase().includes('nombre completo:')) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        const userBlocks: string[] = [];
+        let currentBlock = "";
+        
+        lines.forEach(line => {
+          if (line.toLowerCase().includes('nombre completo:')) {
+            if (currentBlock) userBlocks.push(currentBlock);
+            currentBlock = line;
+          } else {
+            currentBlock += " " + line;
           }
-          
-          // Third line might be Category/Level
-          let lineIndex = 2;
-          if (lines[lineIndex] && !lines[lineIndex].toLowerCase().includes('móvil:') && !lines[lineIndex].toLowerCase().includes('usuario:')) {
-              level = lines[lineIndex];
-              lineIndex++;
-          }
-          
-          for (let i = lineIndex; i < lines.length; i++) {
-              const l = lines[i];
-              const lower = l.toLowerCase();
-              if (lower.startsWith('móvil:') || lower.startsWith('movil:')) {
-                  mobile = l.split(':')[1]?.trim() || '';
-              } else if (lower.startsWith('usuario:')) {
-                  username = l.split(':')[1]?.trim() || '';
-              } else if (lower.startsWith('contraseña:') || lower.startsWith('contrasena:')) {
-                  password = l.split(':')[1]?.trim() || '';
-              } else if (lower.startsWith('rol:')) {
-                  const roleStr = l.split(':')[1]?.trim().toLowerCase() || '';
-                  
-                  if (roleStr === 'admin' || roleStr === 'administrador') {
-                      role = 'admin';
-                      classification = 'Administrador';
-                  } else if (roleStr === 'director') {
-                      role = 'worker';
-                      classification = 'Director';
-                  } else if (roleStr === 'coordinador') {
-                      role = 'worker';
-                      classification = 'Coordinador';
-                  } else if (roleStr === 'usuario') {
-                      role = 'worker';
-                      classification = 'Usuario';
-                  } else {
-                      role = 'worker';
-                      classification = 'Usuario';
-                  }
-              }
-          }
-          
-          if (username && password && name) {
-              const id = username.toLowerCase().replace(/[^a-z0-9]/g, '');
-              
-              // Update User
-              const userIdx = updatedUsers.findIndex(u => u.username.toLowerCase() === username.toLowerCase() || u.id === id);
-              const newUser: User = {
-                  id,
-                  username,
-                  name: name,
-                  mobile: mobile,
-                  password,
-                  role: role as any,
-                  classification: classification
-              }; 
+        });
+        if (currentBlock) userBlocks.push(currentBlock);
 
-              if (userIdx >= 0) {
-                  updatedUsers[userIdx] = { ...updatedUsers[userIdx], ...newUser };
-              } else {
-                  updatedUsers.push(newUser);
-              }
+        userBlocks.forEach(block => {
+          const labels = ['Nombre completo', 'Nombre de usuario', 'Número de móvil', 'Contraseña'];
+          const getValue = (label: string) => {
+            const otherLabels = labels.filter(l => l !== label).join('|');
+            const regex = new RegExp(`${label}:\\s*([\\s\\S]*?)(?=\\s*(?:${otherLabels}):|$)`, 'i');
+            const match = block.match(regex);
+            return match ? match[1].trim().replace(/,$/, '').trim() : '';
+          };
 
-              // Update Team Member
-              const teamIdx = currentTeam.findIndex(m => m.id === id || m.name.toLowerCase() === name.toLowerCase());
-              if (teamIdx >= 0) {
-                  currentTeam[teamIdx] = { 
-                    ...currentTeam[teamIdx], 
-                    name, 
-                    specialty: specialtyRaw, 
-                    level, 
-                    id 
-                  };
-              } else {
-                  currentTeam.push({
-                      id,
-                      name,
-                      specialty: specialtyRaw,
-                      level,
-                      info: '',
-                      photoUrl: `https://picsum.photos/seed/${id}/400/400`
-                  });
-              }
-              processedCount++;
+          const namePart = getValue('Nombre completo');
+          const userPart = getValue('Nombre de usuario');
+          const mobilePart = getValue('Número de móvil');
+          const passPart = getValue('Contraseña');
+
+          if (namePart && userPart) {
+            const id = userPart.toLowerCase().replace(/[^a-z0-9]/g, '');
+            
+            // Update User
+            const userIdx = updatedUsers.findIndex(u => u.username.toLowerCase() === userPart.toLowerCase() || u.id === id);
+            const newUser: User = {
+              id,
+              username: userPart,
+              name: namePart,
+              mobile: mobilePart || (userIdx >= 0 ? updatedUsers[userIdx].mobile : ''),
+              password: passPart || (userIdx >= 0 ? updatedUsers[userIdx].password : '1234'),
+              role: userIdx >= 0 ? updatedUsers[userIdx].role : 'worker',
+              classification: userIdx >= 0 ? updatedUsers[userIdx].classification : 'especialista'
+            };
+
+            if (userIdx >= 0) {
+              updatedUsers[userIdx] = newUser;
+            } else {
+              updatedUsers.push(newUser);
+            }
+
+            // Update Team Member if exists or create basic one
+            const teamIdx = currentTeam.findIndex(m => m.id === id || m.name.toLowerCase() === namePart.toLowerCase());
+            if (teamIdx >= 0) {
+              currentTeam[teamIdx] = { ...currentTeam[teamIdx], name: namePart, id };
+            } else {
+              currentTeam.push({
+                id,
+                name: namePart,
+                specialty: 'Especialista',
+                level: '',
+                info: '',
+                photoUrl: `https://picsum.photos/seed/${id}/400/400`
+              });
+            }
+            processedCount++;
           }
-      });
-
-      if (processedCount > 0) {
-        saveTeam(currentTeam);
-        setUsers(updatedUsers);
-        localStorage.setItem('rcm_data_users', JSON.stringify(updatedUsers));
-        alert(`Se procesaron ${processedCount} registros de equipo y usuarios.`);
+        });
       } else {
-        alert("No se encontraron registros válidos en el archivo.");
+        // Original Team Info format (separated by underscores/hyphens)
+        const blocks = text.split(/[-_]{10,}/);
+        blocks.forEach(block => {
+          const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+          if (lines.length >= 2) {
+            const name = lines[0];
+            
+            // Combine specialties and levels if there are multiple
+            const specialties = [];
+            const levels = [];
+            const infoLines: string[] = [];
+            
+            for (let i = 1; i < lines.length; i += 2) {
+              if (lines[i] && !lines[i].toLowerCase().includes('nivel') && lines[i].toLowerCase() !== 'habilitado' && lines[i].length > 50) {
+                // If it's a long text, it's probably info
+                infoLines.push(lines[i]);
+                if (lines[i+1]) infoLines.push(lines[i+1]);
+              } else {
+                if (lines[i]) specialties.push(lines[i]);
+                if (lines[i+1] && (lines[i+1].toLowerCase().includes('nivel') || lines[i+1].toLowerCase() === 'habilitado')) {
+                  levels.push(lines[i+1]);
+                } else if (lines[i+1]) {
+                  // Not a level, might be info or another specialty
+                  infoLines.push(lines[i+1]);
+                  i--; // Adjust step since we didn't consume a level
+                }
+              }
+            }
+            
+            const specialty = specialties.join(' / ');
+            const uniqueLevels = Array.from(new Set(levels));
+            const level = uniqueLevels.length > 0 ? uniqueLevels.join(' / ') : '';
+            const info = infoLines.join('\n');
+            const id = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            
+            const newMember = { id, name, specialty, level, info };
+            
+            const existingIndex = currentTeam.findIndex(m => m.id === id || (m.name && name && m.name.toLowerCase() === name.toLowerCase()));
+            if (existingIndex >= 0) {
+              currentTeam[existingIndex] = { ...currentTeam[existingIndex], ...newMember, photoUrl: currentTeam[existingIndex].photoUrl };
+            } else {
+              currentTeam.push(newMember);
+            }
+
+            // Also update/create user
+            const existingUserIndex = updatedUsers.findIndex(u => u.id === id);
+            const specialtyLower = specialty.toLowerCase();
+            const newUser: User = {
+              id,
+              username: id,
+              name: name,
+              password: existingUserIndex >= 0 ? updatedUsers[existingUserIndex].password : '1234',
+              role: (specialtyLower.includes('director') || specialtyLower.includes('coordinador')) ? 'admin' : 'worker',
+              classification: specialty.split('/')[0].trim().toLowerCase() as any || 'especialista'
+            };
+
+            if (existingUserIndex >= 0) {
+              updatedUsers[existingUserIndex] = { ...updatedUsers[existingUserIndex], ...newUser };
+            } else {
+              updatedUsers.push(newUser);
+            }
+            processedCount++;
+          }
+        });
       }
+
+      saveTeam(currentTeam);
+      setUsers(updatedUsers);
+      localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+      alert(`Se procesaron ${processedCount} registros de equipo y usuarios.`);
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -244,28 +277,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       >
         <div className="flex gap-2">
           {isAdmin && (
-            <>
-              <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
-                <Upload size={20} />
-                <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
-                <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-              </label>
-              <button 
-                onClick={() => {
-                  if (window.confirm('¿Estás seguro de que deseas eliminar a todos los miembros del equipo? Esta acción no se puede deshacer.')) {
-                    saveTeam([]);
-                    const newUsers = users.filter(u => u.role === 'admin' || u.username === 'admin');
-                    setUsers(newUsers);
-                    localStorage.setItem('rcm_data_users', JSON.stringify(newUsers));
-                  }
-                }}
-                className="p-2 bg-red-600/80 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" 
-                title="Eliminar todo"
-              >
-                <Trash2 size={20} />
-                <span className="hidden sm:inline text-sm font-medium">Eliminar todo</span>
-              </button>
-            </>
+            <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
+              <Upload size={20} />
+              <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
+              <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+            </label>
           )}
         </div>
       </CMNLHeader>
@@ -293,54 +309,21 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   onClick={() => setViewingMember(member)}
                 >
                   {isAdmin && (
-                    <div className="absolute top-2 right-2 flex gap-1 z-30 opacity-100">
-                      {(() => {
-                        const user = users.find(u => 
-                          u.id === member.id || 
-                          u.username.toLowerCase() === member.id.toLowerCase() ||
-                          u.name.toLowerCase() === member.name.toLowerCase()
-                        );
-                        if (user && user.mobile) {
-                          return (
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                const pin = user.password ? user.password.slice(-4) : '0000';
-                                const message = `Hola, acceda a https://cmnl-app.vercel.app/ con los siguientes datos,
-Nombre: ${user.name}
-Rol: ${user.classification}
-Usuario: ${user.username}
-Móvil: ${user.mobile}
-Contraseña: ${user.password}
-Pin: ${pin}
-
-Recuerde Actualizar antes de autenticarse.`;
-                                const url = `https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-                                window.open(url, '_blank');
-                              }}
-                              className="p-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all shadow-lg border border-green-500/30 flex items-center justify-center"
-                              title="Compartir credenciales por WhatsApp"
-                            >
-                              <Share2 size={14} />
-                            </button>
-                          );
-                        }
-                        return null;
-                      })()}
+                    <div className="absolute top-3 right-3 flex gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
                           // Find corresponding user
-                          const user = users.find(u => u.id === member.id || u.username.toLowerCase() === member.id.toLowerCase());
+                          const user = users.find(u => u.id === member.id);
                           setEditingMember({
                             ...member,
                             username: user?.username || '',
                             mobile: user?.mobile || '',
                             password: user?.password || '',
-                            role: user?.classification || 'Usuario'
+                            role: user?.role || ''
                           }); 
                         }}
-                        className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30 flex items-center justify-center"
+                        className="p-1.5 bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
                         title="Editar Información"
                       >
                         <Edit2 size={14} />
@@ -348,18 +331,19 @@ Recuerde Actualizar antes de autenticarse.`;
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
-                          if (window.confirm(`¿Estás seguro de que deseas eliminar a ${member.name}?`)) {
-                            const newTeam = team.filter(m => m.id !== member.id);
-                            saveTeam(newTeam);
-                            const newUsers = users.filter(u => u.id !== member.id && u.username !== member.id);
-                            setUsers(newUsers);
-                            localStorage.setItem('rcm_data_users', JSON.stringify(newUsers));
-                          }
+                          const user = users.find(u => u.id === member.id);
+                          setImpersonatedUser(user || {
+                            id: member.id,
+                            username: member.id,
+                            name: member.name,
+                            role: 'worker',
+                            classification: 'Trabajador'
+                          }); 
                         }}
-                        className="p-1.5 bg-red-600/80 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-500/30 flex items-center justify-center"
-                        title="Eliminar Miembro"
+                        className="p-1.5 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
+                        title="Entrar como usuario"
                       >
-                        <Trash2 size={14} />
+                        <Users size={14} />
                       </button>
                     </div>
                   )}
@@ -403,6 +387,20 @@ Recuerde Actualizar antes de autenticarse.`;
           </div>
         
         {/* Content Management integrated below team list for admins */}
+        {isAdmin && (
+          <div className="mt-12 pt-12 border-t border-[#9E7649]/20">
+            <h2 className="text-xl font-bold text-white mb-6 uppercase tracking-widest">Gestión de Contenido</h2>
+            <ContentManagementSection 
+                historyContent={historyContent}
+                setHistoryContent={setHistoryContent}
+                aboutContent={aboutContent}
+                setAboutContent={setAboutContent}
+                news={news}
+                setNews={setNews}
+                onDirtyChange={onDirtyChange}
+            />
+          </div>
+        )}
       </div>
 
       {/* Viewing Modal */}
@@ -427,26 +425,6 @@ Recuerde Actualizar antes de autenticarse.`;
                   {Array.from(new Set(viewingMember.level.split(' / '))).join(' / ')}
                 </span>
               )}
-              {(() => {
-                const user = users.find(u => u.id === viewingMember.id || u.username.toLowerCase() === viewingMember.id.toLowerCase());
-                if (user && user.mobile) {
-                  return (
-                    <button 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        const url = `https://wa.me/${user.mobile.replace(/\D/g, '')}`;
-                        window.open(url, '_blank');
-                      }}
-                      className="mt-4 px-4 py-2 bg-green-600/80 hover:bg-green-700 text-white rounded-full transition-all shadow-lg border border-green-500/30 flex items-center gap-2 text-sm font-medium"
-                      title="Contactar por WhatsApp"
-                    >
-                      <MessageCircle size={16} />
-                      Contactar
-                    </button>
-                  );
-                }
-                return null;
-              })()}
             </div>
             
             <div className="bg-[#2C1B15] rounded-xl p-4 border border-[#9E7649]/20">
@@ -482,17 +460,11 @@ Recuerde Actualizar antes de autenticarse.`;
                   <label className="block text-xs text-[#9E7649] mb-1 uppercase">Especialidades (Separar con /)</label>
                   <input 
                     type="text" 
-                    list="specialties-list"
                     value={editingMember.specialty}
                     onChange={e => setEditingMember({...editingMember, specialty: e.target.value})}
                     className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
                     placeholder="Ej: locutor / realizador"
                   />
-                  <datalist id="specialties-list">
-                    {ROLES.map(role => (
-                      <option key={role} value={role.charAt(0).toUpperCase() + role.slice(1)} />
-                    ))}
-                  </datalist>
                 </div>
                 <div>
                   <label className="block text-xs text-[#9E7649] mb-1 uppercase">Niveles</label>
@@ -554,7 +526,7 @@ Recuerde Actualizar antes de autenticarse.`;
                   >
                     <option value="">Seleccionar Rol</option>
                     {ROLES.map(role => (
-                      <option key={role} value={role}>{role}</option>
+                      <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
                     ))}
                   </select>
                 </div>
@@ -632,16 +604,14 @@ Recuerde Actualizar antes de autenticarse.`;
                   saveTeam(updatedTeam);
 
                   // 2. Update User
-                  const newClassification = editingMember.role || 'Usuario';
                   let updatedUsers = users.map(u => u.id === editingMember.id ? {
                     ...u,
                     name: editingMember.name,
                     username: editingMember.username,
                     mobile: editingMember.mobile,
                     password: editingMember.password,
-                    classification: newClassification,
-                    role: (editingMember.username === 'admin' || newClassification === 'Administrador') ? 'admin' : 
-                          (newClassification === 'Coordinador' ? 'coordinator' : 'worker')
+                    classification: editingMember.role || u.classification || 'Trabajador',
+                    role: (editingMember.role === 'director' || editingMember.role === 'coordinador' || u.role === 'admin') ? 'admin' : 'worker'
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -652,14 +622,13 @@ Recuerde Actualizar antes de autenticarse.`;
                       username: editingMember.username || editingMember.id,
                       mobile: editingMember.mobile || '',
                       password: editingMember.password || '1234',
-                      classification: newClassification,
-                      role: (editingMember.username === 'admin' || newClassification === 'Administrador') ? 'admin' : 
-                            (newClassification === 'Coordinador' ? 'coordinator' : 'worker')
+                      classification: editingMember.role || 'especialista',
+                      role: (editingMember.role === 'director' || editingMember.role === 'coordinador') ? 'admin' : 'worker'
                     });
                   }
                   
                   setUsers(updatedUsers);
-                  localStorage.setItem('rcm_data_users', JSON.stringify(updatedUsers));
+                  localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
                   
                   setEditingMember(null);
                 }}

@@ -10,17 +10,13 @@ export enum AppView {
   APP_MUSICA = 'APP_MUSICA',
   APP_GUIONES = 'APP_GUIONES',
   APP_PROGRAMACION = 'APP_PROGRAMACION',
-  APP_GUIA = 'APP_GUIA',
 
   // Sections
   SECTION_HISTORY = 'SECTION_HISTORY',
-  ADMIN_SECTION_HISTORY = 'ADMIN_SECTION_HISTORY',
   SECTION_HISTORY_EVOLUTION = 'SECTION_HISTORY_EVOLUTION', // Nueva vista
   SECTION_PROGRAMMING_PUBLIC = 'SECTION_PROGRAMMING_PUBLIC',
-  ADMIN_SECTION_PROGRAMMING = 'ADMIN_SECTION_PROGRAMMING',
   SECTION_ABOUT = 'SECTION_ABOUT',
   SECTION_NEWS = 'SECTION_NEWS',
-  ADMIN_SECTION_NEWS = 'ADMIN_SECTION_NEWS',
   SECTION_NEWS_DETAIL = 'SECTION_NEWS_DETAIL', // New view for reading news
   SECTION_PODCAST = 'SECTION_PODCAST',
   SECTION_PROFILE = 'SECTION_PROFILE',
@@ -34,7 +30,7 @@ export interface HistoricalMonthData {
   consolidated: boolean;
 }
 
-export type UserClassification = 'Usuario' | 'Director' | 'Coordinador' | 'Administrador' | 'Trabajador';
+export type UserClassification = 'director' | 'asesor' | 'realizador' | 'locutor' | 'guionista' | 'periodista' | 'coordinador' | 'director de emisora' | 'jefe de programación' | 'especialista' | 'auxiliar general' | 'asistente de dirección' | 'recepcionista' | 'Administrador' | 'Trabajador';
 
 export interface NewsItem {
   id: string;
@@ -45,7 +41,6 @@ export interface NewsItem {
   content: string;
   image?: string;
   author?: string;
-  url?: string;
 }
 
 export interface ProgramItem {

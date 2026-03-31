@@ -6,10 +6,9 @@ interface ReportsViewerProps {
     users?: User[]; 
     onEdit: (report: Report) => void;
     currentUser?: User | null;
-    refreshTrigger?: number;
 }
 
-const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, currentUser, refreshTrigger = 0 }) => {
+const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, currentUser }) => {
     const [reports, setReports] = useState<Report[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
@@ -21,7 +20,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             setShowTutorial(true);
         }
         loadData();
-    }, [refreshTrigger, currentUser]);
+    }, []);
 
     const closeTutorial = () => {
         localStorage.setItem('rcm_tut_reports', 'true');
@@ -129,7 +128,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 <div className="min-w-0 flex-1">
                                     <h4 className="font-bold text-white truncate text-sm">{report.fileName}</h4>
                                     <div className="flex flex-wrap text-xs text-[#E8DCCF]/60 gap-x-3 gap-y-1 mt-1">
-                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">calendar_today</span> {new Date(report.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}</span>
+                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">calendar_today</span> {new Date(report.date).toLocaleDateString()}</span>
                                         <span className="flex items-center gap-1 truncate"><span className="material-symbols-outlined text-[10px]">radio</span> {report.program}</span>
                                     </div>
                                     <p className="text-[10px] text-[#E8DCCF]/40 mt-1 truncate">Generado por: {report.generatedBy}</p>
@@ -165,13 +164,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             )}
 
             {showSummary && (
-                <div 
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" 
-                    onMouseDown={(e) => {
-                        if (e.target === e.currentTarget) setShowSummary(false);
-                    }}
-                >
-                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSummary(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
                              <h3 className="text-lg font-bold text-white">Resumen Estadístico</h3>
                              <button onClick={() => setShowSummary(false)} className="text-[#E8DCCF]/40 hover:text-white"><span className="material-symbols-outlined">close</span></button>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X, Upload } from 'lucide-react';
+import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X } from 'lucide-react';
 import { NewsItem } from '../types';
 import CMNLHeader from './CMNLHeader';
 
@@ -12,8 +12,6 @@ interface ViewProps {
   customContent?: string;
   newsItem?: NewsItem | null;
   user?: { name: string; role: string; photo?: string } | null;
-  onUpload?: (file: File) => void;
-  isAdmin?: boolean;
 }
 
 const newsColors = [
@@ -25,17 +23,11 @@ const newsColors = [
   'bg-[#263238]',
 ];
 
-export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem, onUpload, isAdmin }) => {
+export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const isProgramming = title.includes('Programación');
   // Logic to show FAB on specific public views (History, About, Programming)
   const showListenerFab = title.includes('Historia') || title.includes('Quiénes Somos') || title.includes('Programación');
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0] && onUpload) {
-      onUpload(e.target.files[0]);
-    }
-  };
 
   // Specific Layout for News Detail
   if (newsItem) {
@@ -84,15 +76,6 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
       <div className="flex-1 overflow-y-auto p-4 pb-24"> {/* Added pb-24 for player clearance */}
         {isProgramming ? (
           <div className="max-w-2xl mx-auto">
-             {isAdmin && (
-               <div className="mb-4">
-                 <label className="flex items-center justify-center gap-2 bg-[#5D3A24] text-white py-2 px-4 rounded-lg cursor-pointer hover:bg-[#4A2E1C] transition-colors">
-                   <Upload size={16} />
-                   Cargar Parrilla (TXT)
-                   <input type="file" accept=".txt" onChange={handleFileChange} className="hidden" />
-                 </label>
-               </div>
-             )}
              <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-[#5D3A24]/10">
                <div className="p-4 bg-[#F5F0EB] border-b border-[#5D3A24]/10">
                   <h3 className="font-bold text-[#5D3A24] uppercase tracking-wide text-sm">Parrilla Oficial</h3>
@@ -131,19 +114,8 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
              </div>
           </div>
         ) : customContent ? (
-            <div className="max-w-2xl mx-auto">
-                {isAdmin && (
-                    <div className="mb-4">
-                        <label className="flex items-center justify-center gap-2 bg-[#5D3A24] text-white py-2 px-4 rounded-lg cursor-pointer hover:bg-[#4A2E1C] transition-colors">
-                            <Upload size={16} />
-                            Cargar Contenido (TXT)
-                            <input type="file" accept=".txt" onChange={handleFileChange} className="hidden" />
-                        </label>
-                    </div>
-                )}
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-[#5D3A24]/10 whitespace-pre-wrap">
-                    {customContent}
-                </div>
+            <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-[#5D3A24]/10 whitespace-pre-wrap">
+                {customContent}
             </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full opacity-50">
@@ -153,6 +125,48 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
           </div>
         )}
       </div>
+
+      {/* Floating WhatsApp Menu for Listener Views */}
+      {showListenerFab && (
+          <div className="fixed bottom-24 right-5 z-40 flex flex-col items-end gap-3">
+             {showFabMenu && (
+                 <div className="flex flex-col gap-3 animate-fade-in-up">
+                     <a 
+                        href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                     >
+                        Unirse a Comunidad CMNL
+                     </a>
+                     <a 
+                        href="https://wa.me/5354413935"
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                     >
+                        Escribir a administradores
+                     </a>
+                 </div>
+             )}
+             <button 
+                onClick={() => setShowFabMenu(!showFabMenu)}
+                className="w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+             >
+                {showFabMenu ? <X size={28} /> : <MessageCircle size={30} fill="white" />}
+             </button>
+             
+             <style>{`
+                @keyframes fade-in-up {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in-up {
+                    animation: fade-in-up 0.2s ease-out forwards;
+                }
+             `}</style>
+          </div>
+      )}
     </div>
   );
 };

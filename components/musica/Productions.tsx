@@ -1,18 +1,14 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Track, Production, DEFAULT_PROGRAMS_LIST, User } from './types';
-import { ProgramFicha } from '../../types';
+import React, { useEffect, useState } from 'react';
+import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB, bulkUpdateProductions } from './services/db';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType } from "docx";
-import BalanceModal from './BalanceModal';
 
 interface ProductionsProps {
   onUpdateTracks: (updateFunc: (prev: Track[]) => Track[]) => void;
   allTracks?: Track[];
-  currentUser: User | null;
-  fichas: ProgramFicha[];
 }
 
 interface TempTrack {
@@ -27,11 +23,10 @@ interface TempTrack {
 
 type TabType = 'intro' | 'stock' | 'archive';
 
-const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, currentUser, fichas }) => {
+const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [activeTab, setActiveTab] = useState<TabType>('intro');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [program, setProgram] = useState(DEFAULT_PROGRAMS_LIST[0]);
-  const [director, setDirector] = useState('');
   
   const [currentTrack, setCurrentTrack] = useState<TempTrack>({
       id: '',
@@ -47,89 +42,6 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const [editingTrackIndex, setEditingTrackIndex] = useState<number | null>(null);
   
   const [dbProductions, setDbProductions] = useState<Production[]>([]);
-  
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
-  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
-  const [stockSearchTerm, setStockSearchTerm] = useState('');
-  
-  const monthName = new Date().toLocaleString('es-ES', { month: 'long' });
-  const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-
-  const totalBalance = useMemo(() => {
-      let totalQuota = 0;
-      let totalExecuted = 0;
-      
-      const PROGRAMS_TO_BALANCE = [
-          "Buenos Días Bayamo",
-          "La Cumbancha",
-          "Todos en Casa",
-          "Arte Bayamo",
-          "Parada Joven",
-          "Hablando con Juana",
-          "Al son de la radio",
-          "Sigue a tu ritmo",
-          "Cómplices",
-          "Estación 95.3",
-          "Palco de domingo"
-      ];
-
-      PROGRAMS_TO_BALANCE.forEach(program => {
-          const now = new Date();
-          const year = now.getFullYear();
-          const month = now.getMonth();
-          
-          let targetFichas: ProgramFicha[] = [];
-          if (program === "La Cumbancha") {
-              targetFichas = fichas.filter(f => f.name.includes("La Cumbancha"));
-          } else {
-              targetFichas = fichas.filter(f => f.name === program);
-          }
-
-          if (targetFichas.length === 0) return;
-
-          const daysInMonth = new Date(year, month + 1, 0).getDate();
-          for (let d = 1; d <= daysInMonth; d++) {
-              const date = new Date(year, month, d);
-              const dayOfWeek = date.getDay();
-              
-              const getDaysOfWeek = (frequency: string): number[] => {
-                  const days: number[] = [];
-                  const freq = frequency.toLowerCase();
-                  if (freq.includes('lunes a viernes')) return [1, 2, 3, 4, 5];
-                  if (freq.includes('lunes a sábado')) return [1, 2, 3, 4, 5, 6];
-                  if (freq.includes('lunes')) days.push(1);
-                  if (freq.includes('martes')) days.push(2);
-                  if (freq.includes('miércoles') || freq.includes('miercoles')) days.push(3);
-                  if (freq.includes('jueves')) days.push(4);
-                  if (freq.includes('viernes')) days.push(5);
-                  if (freq.includes('sábado') || freq.includes('sabado')) days.push(6);
-                  if (freq.includes('domingo')) days.push(0);
-                  return days;
-              };
-
-              if (targetFichas.some(f => getDaysOfWeek(f.frequency).includes(dayOfWeek))) {
-                  totalQuota++;
-              }
-          }
-
-          const executed = dbProductions.filter(p => {
-              const pDate = new Date(p.date);
-              return pDate.getFullYear() === year && pDate.getMonth() === month && 
-                     (program === "La Cumbancha" ? p.program.includes("La Cumbancha") : p.program === program);
-          }).length;
-          
-          totalExecuted += executed;
-      });
-
-      return {
-          quota: totalQuota,
-          executed: totalExecuted,
-          deficit: totalQuota - totalExecuted
-      };
-  }, [dbProductions, fichas]);
-  
-  const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void}>({isOpen: false, message: '', onConfirm: () => {}});
-  const [alertDialog, setAlertDialog] = useState<{isOpen: boolean, message: string}>({isOpen: false, message: ''});
 
   const fetchProductions = async () => {
       const prods = await loadProductionsFromDB();
@@ -183,35 +95,12 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
           id: `prod-${Date.now()}`,
           date,
           program,
-          director,
           tracks: sessionTracks
       };
 
       try {
           await saveProductionToDB(newProduction);
-          
-          // Sincronización de Datos: Add tracks to the main music section
-          onUpdateTracks(prev => {
-              const newTracks: Track[] = sessionTracks.map(t => ({
-                  id: `prod-track-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                  filename: `${t.title} - ${t.performer}.mp3`,
-                  path: `Producciones/${program}/${date}`,
-                  isVerified: true,
-                  metadata: {
-                      title: t.title,
-                      author: t.author,
-                      authorCountry: t.authorCountry,
-                      performer: t.performer,
-                      performerCountry: t.performerCountry,
-                      genre: t.genre,
-                      album: program,
-                      year: date.split('-')[0]
-                  }
-              }));
-              return [...prev, ...newTracks];
-          });
-
-          alert("Producción guardada correctamente y sincronizada con la sección de música.");
+          alert("Producción guardada correctamente en la base de datos.");
           setSessionTracks([]); 
           fetchProductions();
       } catch (e) {
@@ -221,13 +110,8 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
 
   const handleDeleteProduction = async (id: string) => {
       if (window.confirm("¿Estás seguro de que deseas eliminar esta producción?")) {
-          try {
-              await deleteProductionFromDB(id);
-              fetchProductions();
-          } catch (e) {
-              console.error("Error deleting production:", e);
-              alert("Error al eliminar la producción.");
-          }
+          await deleteProductionFromDB(id);
+          fetchProductions();
       }
   };
 
@@ -235,140 +119,9 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
       if (!e.target.files || e.target.files.length === 0) return;
       const files = Array.from(e.target.files) as File[];
       
-      if (files.length > 1) {
-          let importedCount = 0;
-          let allNewTracks: Track[] = [];
-          
-          for (const file of files) {
-              const text = await file.text();
-              const lines = text.split('\n');
-              
-              let fileTracks: TempTrack[] = [];
-              let fileDate = date;
-              let fileProgram = program;
-              let fileDirector = '';
-              let current: Partial<TempTrack> = {};
-
-              const saveCurrent = () => {
-                  if (current.title && (current.author || current.performer)) {
-                       fileTracks.push({
-                           id: `imp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                           title: current.title,
-                           author: current.author || '',
-                           authorCountry: current.authorCountry || '',
-                           performer: current.performer || '',
-                           performerCountry: current.performerCountry || '',
-                           genre: current.genre || ''
-                       } as TempTrack);
-                  }
-                  current = {};
-              };
-
-              lines.forEach(line => {
-                  const l = line.trim();
-                  if (!l) return;
-                  const lower = l.toLowerCase();
-
-                  if (lower.startsWith('fecha:')) {
-                      let d = l.substring(6).trim();
-                      if (d.includes('/')) {
-                          const parts = d.split('/');
-                          if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                      }
-                      fileDate = d;
-                  } else if (lower.startsWith('programa:')) {
-                      fileProgram = l.substring(9).trim();
-                  } else if (lower.startsWith('director:')) {
-                      fileDirector = l.substring(9).trim();
-                  } else if (/^\[\d+\]\s+/.test(l) || /\d+\.\s*titulo:/.test(lower) || lower.startsWith('titulo:')) {
-                      saveCurrent();
-                      let val = l;
-                      if (/^\[\d+\]\s+/.test(l)) {
-                          val = l.replace(/^\[\d+\]\s+/, '').trim();
-                      } else {
-                          val = l.replace(/^\d+\.\s*/, '').replace(/^titulo:\s*/i, '').trim();
-                      }
-                      current.title = val;
-                  } else if (lower.startsWith('autor:')) {
-                      const val = l.substring(6).trim();
-                      const match = val.match(/^(.*?)\s*\((.*?)\)$/);
-                      if (match) {
-                          current.author = match[1].trim();
-                          current.authorCountry = match[2].trim() !== '-' ? match[2].trim() : '';
-                      } else {
-                          current.author = val;
-                      }
-                      if (current.author === '[No encontrado]') current.author = '';
-                  } else if (lower.startsWith('intérprete:') || lower.startsWith('interprete:')) {
-                       const val = l.substring(l.indexOf(':') + 1).trim();
-                       const match = val.match(/^(.*?)\s*\((.*?)\)$/);
-                       if (match) {
-                           current.performer = match[1].trim();
-                           current.performerCountry = match[2].trim() !== '-' ? match[2].trim() : '';
-                       } else {
-                           current.performer = val;
-                       }
-                       if (current.performer === '[No encontrado]') current.performer = '';
-                  } else if (lower.startsWith('país:') || lower.startsWith('pais:')) {
-                       const val = l.substring(5).trim();
-                       if (current.performer && !current.performerCountry) {
-                           current.performerCountry = val !== '-' ? val : '';
-                       } else if (current.author && !current.authorCountry) {
-                           current.authorCountry = val !== '-' ? val : '';
-                       }
-                  } else if (lower.startsWith('género:') || lower.startsWith('genero:')) {
-                       const val = l.substring(l.indexOf(':') + 1).trim();
-                       current.genre = val !== '---' ? val : '';
-                  }
-              });
-              saveCurrent();
-
-              if (fileTracks.length > 0) {
-                  const newProduction: Production = {
-                      id: `prod-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                      date: fileDate,
-                      program: fileProgram,
-                      director: fileDirector,
-                      tracks: fileTracks
-                  };
-                  await saveProductionToDB(newProduction);
-                  importedCount++;
-
-                  const newTracks: Track[] = fileTracks.map(t => ({
-                      id: `prod-track-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                      filename: `${t.title} - ${t.performer}.mp3`,
-                      path: `Producciones/${fileProgram}/${fileDate}`,
-                      isVerified: true,
-                      metadata: {
-                          title: t.title,
-                          author: t.author,
-                          authorCountry: t.authorCountry,
-                          performer: t.performer,
-                          performerCountry: t.performerCountry,
-                          genre: t.genre,
-                          album: fileProgram,
-                          year: fileDate.split('-')[0]
-                      }
-                  }));
-                  allNewTracks = [...allNewTracks, ...newTracks];
-              }
-          }
-          
-          if (allNewTracks.length > 0) {
-              onUpdateTracks(prev => [...prev, ...allNewTracks]);
-          }
-          
-          alert(`Se han importado ${importedCount} producciones correctamente.`);
-          fetchProductions();
-          e.target.value = '';
-          return;
-      }
-
-      // Single file logic
       let allParsedTracks: TempTrack[] = [];
       let lastParsedDate = date;
       let lastParsedProgram = program;
-      let lastParsedDirector = director;
 
       for (const file of files) {
           const text = await file.text();
@@ -405,8 +158,6 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                   lastParsedDate = d;
               } else if (lower.startsWith('programa:')) {
                   lastParsedProgram = l.substring(9).trim();
-              } else if (lower.startsWith('director:')) {
-                  lastParsedDirector = l.substring(9).trim();
               } else if (/^\[\d+\]\s+/.test(l) || /\d+\.\s*titulo:/.test(lower) || lower.startsWith('titulo:')) {
                   saveCurrent();
                   let val = l;
@@ -458,7 +209,6 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
       }
 
       setDate(lastParsedDate);
-      setDirector(lastParsedDirector);
       if (DEFAULT_PROGRAMS_LIST.includes(lastParsedProgram)) {
           setProgram(lastParsedProgram);
       }
@@ -469,60 +219,91 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
       e.target.value = ''; 
   };
 
-  const handleExportDB = async () => {
+  const handleExportHistoryCSV = async () => {
       const history = await loadProductionsFromDB();
-      if (history.length === 0) return alert("No hay producciones para exportar.");
+      if (history.length === 0) return alert("No hay historial de producciones.");
 
-      const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
-      saveAs(blob, `RCM_Producciones_BD.json`);
+      const rows: any[] = [];
+      history.forEach(prod => {
+          prod.tracks.forEach(t => {
+              rows.push({
+                  Fecha: prod.date,
+                  Programa: prod.program,
+                  Título: t.title,
+                  Autor: t.author,
+                  "País Autor": t.authorCountry,
+                  Intérprete: t.performer,
+                  "País Intérprete": t.performerCountry,
+                  Género: t.genre
+              });
+          });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Historial_Producciones");
+      XLSX.writeFile(wb, `RCM_Historial_Producciones_${date}.csv`);
   };
 
-  const handleImportDB = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+  const handleGenerateDOCX = async () => {
+    if (sessionTracks.length === 0) return alert("Agregue temas para generar el informe DOCX.");
 
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-          try {
-              const content = evt.target?.result as string;
-              const importedProductions = JSON.parse(content);
+    const tableRows = [
+        new TableRow({
+            children: [
+                new TableCell({ children: [new Paragraph({ text: "Título", style: "Strong" })] }),
+                new TableCell({ children: [new Paragraph({ text: "Aut/Int", style: "Strong" })] }),
+                new TableCell({ children: [new Paragraph({ text: "Países", style: "Strong" })] }),
+                new TableCell({ children: [new Paragraph({ text: "Género", style: "Strong" })] }),
+            ],
+        }),
+        ...sessionTracks.map(t => new TableRow({
+            children: [
+                new TableCell({ children: [new Paragraph(t.title)] }),
+                new TableCell({ children: [new Paragraph(`${t.author} / ${t.performer}`)] }),
+                new TableCell({ children: [new Paragraph(`${t.authorCountry} / ${t.performerCountry}`)] }),
+                new TableCell({ children: [new Paragraph(t.genre)] }),
+            ],
+        }))
+    ];
 
-              if (!Array.isArray(importedProductions)) return alert("El archivo no tiene un formato válido.");
+    const doc = new Document({
+        sections: [{
+            properties: {},
+            children: [
+                new Paragraph({ text: "REPORTE DE PRODUCCIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: "" }),
+                new Paragraph({ text: `Fecha: ${date}` }),
+                new Paragraph({ text: `Programa: ${program}` }),
+                new Paragraph({ text: "" }),
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: tableRows,
+                }),
+            ],
+        }],
+    });
 
-              const currentProductions = await loadProductionsFromDB();
-              
-              for (const importedProd of importedProductions) {
-                  // Find if exists
-                  const existingIndex = currentProductions.findIndex(p => p.date === importedProd.date && p.program === importedProd.program);
-                  if (existingIndex !== -1) {
-                      // Update: keep the existing ID
-                      importedProd.id = currentProductions[existingIndex].id;
-                      await saveProductionToDB(importedProd);
-                  } else {
-                      // Add: generate a new ID
-                      importedProd.id = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                      await saveProductionToDB(importedProd);
-                  }
-              }
-
-              await fetchProductions();
-              alert("Base de datos cargada correctamente.");
-          } catch (error) {
-              console.error("Error importing DB:", error);
-              alert("Error al importar el archivo JSON.");
-          }
-      };
-      reader.readAsText(file);
-      e.target.value = '';
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `Produccion_${program}_${date}.docx`);
   };
 
-  const handleGenerateMonthlyReportDOCX = async () => {
-    if (stockMensual.length === 0) return alert("No hay producciones en el mes actual para generar el informe.");
+  const handleMoveToArchive = async () => {
+      if (stockMensual.length === 0) return alert("No hay producciones en el stock mensual para archivar.");
+      if (!window.confirm("¿Estás seguro de que deseas mover todas las producciones del mes al archivo?")) return;
 
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth() + 1;
-    const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+      const updatedProductions = stockMensual.map(p => ({ ...p, archived: true }));
+      try {
+          await bulkUpdateProductions(updatedProductions);
+          await fetchProductions();
+          alert("Todas las producciones del mes han sido movidas al archivo.");
+      } catch (error) {
+          alert("Error al archivar producciones.");
+      }
+  };
+
+  const handleGenerateDetailedStatsDOCX = async () => {
+    if (stockMensual.length === 0) return alert("No hay producciones en el mes actual para generar estadísticas.");
 
     const allTracks = stockMensual.flatMap(p => p.tracks);
     
@@ -580,30 +361,11 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
     const topPerformers = getTop5(allTracks.map(t => t.performer));
     const topGenres = getTop5(allTracks.map(t => t.genre));
 
-    const tableRows = [
-        new TableRow({
-            children: [
-                new TableCell({ children: [new Paragraph({ text: "Título", style: "Strong" })] }),
-                new TableCell({ children: [new Paragraph({ text: "Aut/Int", style: "Strong" })] }),
-                new TableCell({ children: [new Paragraph({ text: "Países", style: "Strong" })] }),
-                new TableCell({ children: [new Paragraph({ text: "Género", style: "Strong" })] }),
-            ],
-        }),
-        ...allTracks.map(t => new TableRow({
-            children: [
-                new TableCell({ children: [new Paragraph(t.title)] }),
-                new TableCell({ children: [new Paragraph(`${t.author} / ${t.performer}`)] }),
-                new TableCell({ children: [new Paragraph(`${t.authorCountry} / ${t.performerCountry}`)] }),
-                new TableCell({ children: [new Paragraph(t.genre)] }),
-            ],
-        }))
-    ];
-
     const doc = new Document({
         sections: [{
             properties: {},
             children: [
-                new Paragraph({ text: "INFORME MENSUAL DE PRODUCCIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: "ESTADÍSTICAS DE DIFUSIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
                 new Paragraph({ text: `Mes: ${currentMonthStr}`, alignment: AlignmentType.CENTER }),
                 new Paragraph({ text: "" }),
 
@@ -638,33 +400,12 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                 new Paragraph({ text: "" }),
                 new Paragraph({ text: "Géneros más difundidos:", style: "Strong" }),
                 ...topGenres.map(([name, count]) => new Paragraph({ text: `• ${name} (${count})` })),
-                new Paragraph({ text: "" }),
-
-                new Paragraph({ text: "5. Detalle de Temas", heading: "Heading2" }),
-                new Table({
-                    width: { size: 100, type: WidthType.PERCENTAGE },
-                    rows: tableRows,
-                }),
             ],
         }],
     });
 
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Informe_Mensual_Musica_${currentMonthStr}.docx`);
-  };
-
-  const handleMoveToArchive = async () => {
-      if (stockMensual.length === 0) return alert("No hay producciones en el stock mensual para archivar.");
-      if (!window.confirm("¿Estás seguro de que deseas mover todas las producciones del mes al archivo?")) return;
-
-      const updatedProductions = stockMensual.map(p => ({ ...p, archived: true }));
-      try {
-          await bulkUpdateProductions(updatedProductions);
-          await fetchProductions();
-          alert("Todas las producciones del mes han sido movidas al archivo.");
-      } catch (error) {
-          alert("Error al archivar producciones.");
-      }
+    saveAs(blob, `Estadisticas_Musica_${currentMonthStr}.docx`);
   };
 
   const currentDate = new Date();
@@ -672,8 +413,7 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const currentMonth = currentDate.getMonth() + 1;
   const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
-  const getYearMonth = (dateStr: any) => {
-      if (typeof dateStr !== 'string') return { year: 0, month: 0, key: 'Desconocido' };
+  const getYearMonth = (dateStr: string) => {
       const parts = dateStr.split('-');
       if (parts.length >= 2) {
           const year = parseInt(parts[0], 10);
@@ -686,14 +426,6 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
   const stockMensual = dbProductions.filter(p => {
       const { year, month } = getYearMonth(p.date);
       return year === currentYear && month === currentMonth && !p.archived;
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-  const filteredStockMensual = stockMensual.filter(p => {
-      if (!stockSearchTerm.trim()) return true;
-      const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const terms = normalize(stockSearchTerm).split(/\s+/);
-      const combinedString = normalize(`${p.date} ${p.program} ${p.director || ''}`);
-      return terms.every(term => combinedString.includes(term));
   });
   
   const archivo = dbProductions.filter(p => {
@@ -709,13 +441,8 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
       archivoPorMes[key].push(p);
   });
 
-  // Ordenar cada mes por fecha
-  Object.keys(archivoPorMes).forEach(key => {
-      archivoPorMes[key].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  });
-
   return (
-    <div id="productions-container" className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24 relative">
+    <div id="productions-container" className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24">
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white">
             <span className="material-symbols-outlined text-[#9E7649]">playlist_add</span> 
             Control de Producciones
@@ -766,16 +493,6 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                             >
                                 {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-[#E8DCCF]/60 mb-1">Director</label>
-                            <input 
-                                type="text" 
-                                value={director} 
-                                onChange={e => setDirector(e.target.value)} 
-                                className="w-full p-2 border border-[#9E7649]/30 rounded-lg bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]"
-                                placeholder="Nombre del director"
-                            />
                         </div>
                     </div>
 
@@ -877,104 +594,46 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
 
         {activeTab === 'stock' && (
             <div className="space-y-4">
-                <div className="sticky top-0 z-20 bg-[#1A100C] flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
-                    <div className="text-white text-sm">
-                        <div className="font-bold">Mes: {capitalizedMonth}</div>
-                        <div className="text-[11px]">
-                            <div>Plan: {totalBalance.quota}</div>
-                            <div>Real: {totalBalance.executed}</div>
-                            <div>Resto: {totalBalance.deficit}</div>
-                        </div>
-                    </div>
+                <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
+                    <h3 className="font-bold text-white">Producciones del Mes ({currentMonthStr})</h3>
                     <div className="flex gap-2">
                         <button 
-                            onClick={() => setIsBalanceModalOpen(true)}
-                            className="bg-[#9E7649] text-white font-bold py-1 px-3 rounded-lg hover:bg-[#8B653D] flex items-center gap-2 text-[10px]"
+                            onClick={handleGenerateDOCX} 
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
                         >
-                            <span className="material-symbols-outlined text-sm">balance</span> Balance
+                            <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe DOCX (Sesión)
                         </button>
-                        <div className="relative">
-                            <button 
-                                onClick={() => setIsActionsOpen(!isActionsOpen)}
-                                className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                            >
-                                <span className="material-symbols-outlined text-sm">settings</span> Acciones
-                            </button>
-                            {isActionsOpen && (
-                                <div className="absolute right-0 top-full mt-2 bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-2 shadow-xl z-20 w-40 space-y-2">
-                                    <button 
-                                        onClick={() => { handleGenerateMonthlyReportDOCX(); setIsActionsOpen(false); }} 
-                                        className="w-full text-left text-white font-bold py-1 px-2 rounded hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                                    >
-                                        <span className="material-symbols-outlined text-blue-400 text-sm">description</span> Informe
-                                    </button>
-                                    <button 
-                                        onClick={() => { handleExportDB(); setIsActionsOpen(false); }} 
-                                        className="w-full text-left text-white font-bold py-1 px-2 rounded hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
-                                    >
-                                        <span className="material-symbols-outlined text-green-500 text-sm">download</span> Exportar BD
-                                    </button>
-                                    <label className="w-full text-left text-white font-bold py-1 px-2 rounded hover:bg-[#3E1E16] flex items-center gap-2 text-[10px] cursor-pointer">
-                                        <span className="material-symbols-outlined text-green-400 text-sm">upload</span> Cargar BD
-                                        <input type="file" accept=".json" onChange={(e) => { handleImportDB(e); setIsActionsOpen(false); }} className="hidden" />
-                                    </label>
-                                    <button 
-                                        onClick={() => { handleMoveToArchive(); setIsActionsOpen(false); }} 
-                                        className="w-full text-left text-red-200 font-bold py-1 px-2 rounded hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
-                                    >
-                                        <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
-                                    </button>
-                                    {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.role === 'coordinador') && (
-                                        <button 
-                                            onClick={() => { if(confirm('¿Estás seguro de limpiar toda la lista de producciones?')) { onUpdateTracks([]); setIsActionsOpen(false); } }} 
-                                            className="w-full text-left text-red-200 font-bold py-1 px-2 rounded hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
-                                        >
-                                            <span className="material-symbols-outlined text-sm">delete_sweep</span> Limpiar lista
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
+                        <button 
+                            onClick={handleExportHistoryCSV} 
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-green-500 text-sm">table_view</span> Exportar CSV
+                        </button>
+                        <button 
+                            onClick={handleGenerateDetailedStatsDOCX} 
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-1 px-3 rounded-lg hover:bg-[#3E1E16] flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-blue-400 text-sm">analytics</span> Estadísticas .docx
+                        </button>
+                        <button 
+                            onClick={handleMoveToArchive} 
+                            className="bg-red-900/40 border border-red-500/30 text-red-200 font-bold py-1 px-3 rounded-lg hover:bg-red-900/60 flex items-center gap-2 text-[10px]"
+                        >
+                            <span className="material-symbols-outlined text-sm">archive</span> Pasar a archivo
+                        </button>
                     </div>
                 </div>
-
-                <BalanceModal 
-                    isOpen={isBalanceModalOpen}
-                    onClose={() => setIsBalanceModalOpen(false)}
-                    productions={stockMensual}
-                    fichas={fichas}
-                />
-
-                {/* Search Bar */}
-                <div className="mb-4">
-                    <div className="relative flex items-center">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#E8DCCF]/40 text-sm">search</span>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar por fecha, programa o director..." 
-                            value={stockSearchTerm}
-                            onChange={(e) => setStockSearchTerm(e.target.value)}
-                            className="w-full bg-[#2C1B15] border border-[#9E7649]/30 text-white text-sm rounded-xl py-2 pl-9 pr-24 focus:outline-none focus:border-[#9E7649] transition-colors"
-                        />
-                        {stockSearchTerm && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#E8DCCF]/60 bg-[#1A100C] px-2 py-1 rounded-md border border-[#9E7649]/20">
-                                {filteredStockMensual.length} {filteredStockMensual.length === 1 ? 'resultado' : 'resultados'}
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {filteredStockMensual.length === 0 ? (
+                {stockMensual.length === 0 ? (
                     <div className="p-8 border-2 border-dashed border-[#9E7649]/20 rounded-2xl text-center text-[#E8DCCF]/40 text-xs">
-                        {stockSearchTerm ? "No se encontraron producciones que coincidan con la búsqueda." : "No hay producciones guardadas en este mes."}
+                        No hay producciones guardadas en este mes.
                     </div>
                 ) : (
-                    filteredStockMensual.map(prod => (
+                    stockMensual.map(prod => (
                         <div key={prod.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <h4 className="font-bold text-white text-sm">{prod.program}</h4>
-                                    <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas {prod.director ? `• Dir: ${prod.director}` : ''}</p>
+                                    <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas</p>
                                 </div>
                                 <button onClick={() => handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
                                     <span className="material-symbols-outlined text-sm">delete</span>
@@ -1010,7 +669,7 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <h4 className="font-bold text-white text-sm">{prod.program}</h4>
-                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas {prod.director ? `• Dir: ${prod.director}` : ''}</p>
+                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date} • {prod.tracks.length} temas</p>
                                         </div>
                                         <button onClick={() => handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
                                             <span className="material-symbols-outlined text-sm">delete</span>
@@ -1030,42 +689,6 @@ const Productions: React.FC<ProductionsProps> = ({ onUpdateTracks, allTracks, cu
         <datalist id="country-options">
             {COUNTRIES_LIST.map(c => <option key={c} value={c} />)}
         </datalist>
-
-        {/* Custom Alert Dialog */}
-        {alertDialog.isOpen && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-                    <h3 className="text-white font-bold mb-4">Aviso</h3>
-                    <p className="text-[#E8DCCF]/80 text-sm mb-6 whitespace-pre-wrap">{alertDialog.message}</p>
-                    <div className="flex justify-end">
-                        <button onClick={() => setAlertDialog({isOpen: false, message: ''})} className="bg-[#9E7649] hover:bg-[#8B653D] text-white px-6 py-2 rounded-xl font-bold transition-colors">
-                            Aceptar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* Custom Confirm Dialog */}
-        {confirmDialog.isOpen && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-                    <h3 className="text-white font-bold mb-4">Confirmar Acción</h3>
-                    <p className="text-[#E8DCCF]/80 text-sm mb-6 whitespace-pre-wrap">{confirmDialog.message}</p>
-                    <div className="flex justify-end gap-3">
-                        <button onClick={() => setConfirmDialog({isOpen: false, message: '', onConfirm: () => {}})} className="bg-transparent border border-[#9E7649]/30 text-white px-4 py-2 rounded-xl hover:bg-[#3E1E16] transition-colors">
-                            Cancelar
-                        </button>
-                        <button onClick={() => {
-                            confirmDialog.onConfirm();
-                            setConfirmDialog({isOpen: false, message: '', onConfirm: () => {}});
-                        }} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl font-bold transition-colors">
-                            Confirmar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
     </div>
   );
 };

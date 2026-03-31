@@ -14,8 +14,7 @@ import {
   FileText, 
   Podcast, 
   Newspaper,
-  Home,
-  BookOpen
+  Home
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -47,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleInicio = () => {
     if (currentUser) {
-      if (currentUser.username === 'admin' || currentUser.classification === 'Administrador') {
+      if (currentUser.role === 'admin') {
         handleNavigation(AppView.ADMIN_DASHBOARD);
       } else {
         handleNavigation(AppView.WORKER_HOME);
@@ -101,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <SidebarItem 
               icon={<ScrollText size={20} />} 
               label="Historia" 
-              onClick={() => handleNavigation((currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') ? AppView.ADMIN_SECTION_HISTORY : AppView.SECTION_HISTORY)} 
+              onClick={() => handleNavigation(AppView.SECTION_HISTORY)} 
             />
             <SidebarItem 
               icon={<Users size={20} />} 
@@ -111,23 +110,13 @@ const Sidebar: React.FC<SidebarProps> = ({
             <SidebarItem 
               icon={<Mic size={20} />} 
               label="Programación" 
-              onClick={() => handleNavigation((currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') ? AppView.ADMIN_SECTION_PROGRAMMING : AppView.SECTION_PROGRAMMING_PUBLIC)} 
+              onClick={() => handleNavigation(AppView.SECTION_PROGRAMMING_PUBLIC)} 
             />
-            {!currentUser && onSync && (
-              <div className="flex flex-col items-center pt-2 pb-4">
-                <button 
-                  onClick={() => { onSync(); onClose(); }} 
-                  disabled={isSyncing}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-xl ${
-                    isSyncing ? 'bg-stone-700 cursor-not-allowed' : 'bg-[#C69C6D] hover:bg-[#B58B5C] active:scale-95 ring-4 ring-[#C69C6D]/20'
-                  } text-white mb-2`}
-                  title="Actualizar"
-                >
-                  <RefreshCw size={28} className={isSyncing ? 'animate-spin' : ''} />
-                </button>
-                <span className="text-[10px] font-bold text-[#C69C6D] uppercase tracking-widest">Actualizar</span>
-              </div>
-            )}
+            <SidebarItem 
+              icon={<Newspaper size={20} />} 
+              label="Noticias" 
+              onClick={() => handleNavigation(AppView.SECTION_NEWS)} 
+            />
           </div>
 
           {/* Divider */}
@@ -135,27 +124,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Section 2: Apps */}
           <div className="px-4 flex flex-col gap-2">
-            {(currentUser?.username === 'admin' || currentUser?.classification === 'Administrador') && (
-              <SidebarItem 
-                icon={<Newspaper size={20} />} 
-                label="Gestión de Noticias" 
-                onClick={() => handleNavigation(AppView.ADMIN_SECTION_NEWS)} 
-                className="text-[#C69C6D] border border-[#C69C6D]/20 bg-[#C69C6D]/5"
-              />
-            )}
             {currentUser ? (
               // Worker/Admin Apps
               <>
-                {(currentUser.classification === 'Usuario' || 
-                  currentUser.classification === 'Coordinador' || 
-                  currentUser.classification === 'Director') && (
-                  <SidebarItem 
-                    icon={<BookOpen size={20} />} 
-                    label="Guía" 
-                    onClick={() => handleNavigation(AppView.APP_GUIA)} 
-                    className="text-[#C69C6D] border border-[#C69C6D]/20 bg-[#C69C6D]/5 mb-2"
-                  />
-                )}
                 <SidebarItem 
                   icon={<CalendarDays size={20} />} 
                   label="Agenda" 
@@ -190,14 +161,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Section 3: System */}
           <div className="px-4 flex flex-col gap-2">
-            {currentUser && onSync && (
+            {onSync && (
               <SidebarItem 
                 icon={<RefreshCw size={20} className={isSyncing ? 'animate-spin' : ''} />} 
-                label={isSyncing ? 'Sincronizando...' : 'Actualizar'} 
+                label="Actualizar" 
                 onClick={() => { onSync(); onClose(); }} 
                 disabled={isSyncing}
               />
             )}
+            
+            {/* Removed Configuración and Equipo direct access as per requirements */}
+
             {currentUser ? (
               <SidebarItem 
                 icon={<LogOut size={20} />} 

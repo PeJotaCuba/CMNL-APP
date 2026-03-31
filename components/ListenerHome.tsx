@@ -7,7 +7,6 @@ import Sidebar from './Sidebar';
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
-  setNews?: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   onSync?: () => void;
   isSyncing?: boolean;
   onMenuClick?: () => void;
@@ -22,11 +21,8 @@ const newsColors = [
   'bg-[#263238]', // Dark Blue Grey
 ];
 
-const ListenerHome: React.FC<Props> = ({ onNavigate, news, setNews, onSync, isSyncing, onMenuClick }) => {
+const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, onMenuClick }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-  const [isFetchingNews, setIsFetchingNews] = useState(false);
-
-  // Auto-sync Facebook news on load
   const [showFabMenu, setShowFabMenu] = useState(false);
 
   useEffect(() => {
@@ -108,25 +104,16 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, setNews, onSync, isSy
              <SidebarLink icon={<ScrollText size={18} />} label="Historia" onClick={() => onNavigate(AppView.SECTION_HISTORY)} />
              <SidebarLink icon={<Users size={18} />} label="Quiénes Somos" onClick={() => onNavigate(AppView.SECTION_ABOUT)} />
              <SidebarLink icon={<Mic size={18} />} label="Programación" onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} />
-             
-             {onSync && (
-                <div className="mt-8 flex flex-col items-center">
-                  <button 
-                    onClick={onSync} 
-                    disabled={isSyncing} 
-                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                      isSyncing ? 'bg-stone-700 cursor-not-allowed' : 'bg-[#C69C6D] hover:bg-[#B58B5C] active:scale-95 ring-4 ring-[#C69C6D]/10'
-                    } text-white mb-2`}
-                  >
-                      <RefreshCw size={24} className={isSyncing ? 'animate-spin' : ''} />
-                  </button>
-                  <span className="text-[10px] font-bold text-[#C69C6D] uppercase tracking-widest">Actualizar</span>
-                </div>
-             )}
+             <SidebarLink icon={<Newspaper size={18} />} label="Noticias" onClick={() => onNavigate(AppView.SECTION_NEWS)} />
          </div>
 
-         <div className="mt-4 pt-4 border-t border-white/5">
-            {/* Divider only */}
+         <div className="mt-auto pt-6 border-t border-white/5">
+            {onSync && (
+                <button onClick={onSync} disabled={isSyncing} className="flex items-center gap-3 text-stone-400 hover:text-[#CD853F] transition-colors w-full p-2 rounded-lg hover:bg-white/5 mb-2">
+                    <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+                    <span className="text-sm font-medium">Actualizar</span>
+                </button>
+            )}
          </div>
       </aside>
 
@@ -147,24 +134,10 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, setNews, onSync, isSy
              {/* News Carousel - Full Width on Desktop */}
              {activeNews ? (
                 <div 
-                    onClick={() => {
-                        if (activeNews.url) {
-                            window.open(activeNews.url, '_blank', 'noopener,noreferrer');
-                        } else {
-                            onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews);
-                        }
-                    }} 
-                    className={`relative rounded-xl ${activeNews.image ? 'bg-black' : currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[400px] cursor-pointer group transition-colors duration-500`}
+                    onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
+                    className={`relative rounded-xl ${currentColor} border border-white/5 overflow-hidden shadow-lg flex-1 min-h-[400px] cursor-pointer group transition-colors duration-500`}
                 >
-                    {activeNews.image && (
-                        <img 
-                            src={activeNews.image} 
-                            alt={activeNews.title} 
-                            className="absolute inset-0 w-full h-full object-cover opacity-60"
-                            referrerPolicy="no-referrer"
-                        />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent pointer-events-none"></div>
                     
                     {news.length > 1 && (
                         <>
@@ -210,6 +183,36 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, setNews, onSync, isSy
         </div>
 
       </main>
+      
+      {/* Floating WhatsApp Menu for Listeners */}
+      <div className="fixed bottom-28 right-5 z-40 flex flex-col items-end gap-3">
+         {showFabMenu && (
+             <div className="flex flex-col gap-3 animate-fade-in-up">
+                 <a 
+                    href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                 >
+                    Unirse a Comunidad CMNL
+                 </a>
+                 <a 
+                    href="https://wa.me/5354413935"
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"
+                 >
+                    Escribir a administradores
+                 </a>
+             </div>
+         )}
+         <button 
+            onClick={() => setShowFabMenu(!showFabMenu)}
+            className="w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         >
+            {showFabMenu ? <X size={28} /> : <MessageCircle size={30} fill="white" />}
+         </button>
+      </div>
       
       <style>{`
         @keyframes fade-in-up {

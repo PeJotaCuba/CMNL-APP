@@ -413,10 +413,9 @@ const Editorial: React.FC<EditorialProps> = ({
       for (const day of visibleDays) {
           if (!day) continue;
           
-          const targetMonth = day.monthName || currentMonthLabel;
           const dayTheme = getEffectiveTheme(selectedWeekId!, day.name);
-          const dayEfemerides = efemerides[targetMonth]?.filter(e => e.day === day.date) || [];
-          const dayConmemoraciones = conmemoraciones[targetMonth]?.filter(c => c.day === day.date) || [];
+          const dayEfemerides = efemerides[currentMonthLabel]?.filter(e => e.day === day.date) || [];
+          const dayConmemoraciones = conmemoraciones[currentMonthLabel]?.filter(c => c.day === day.date) || [];
 
           const efemeridesParagraphs: Paragraph[] = [];
           if (dayEfemerides.length > 0) {
@@ -468,14 +467,8 @@ const Editorial: React.FC<EditorialProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      
-      // FORMATO: Agenda-Mes-Inicio-Fin (Reflejando meses si cruza)
-      let filename = `Agenda-${currentMonthLabel}-${activeWeek.start}-${activeWeek.end}.docx`;
-      if (activeWeek.startMonth && activeWeek.endMonth && activeWeek.startMonth !== activeWeek.endMonth) {
-          filename = `Agenda-${activeWeek.startMonth}-${activeWeek.endMonth}-${activeWeek.start}-${activeWeek.end}.docx`;
-      }
-      
-      a.download = filename;
+      // FORMATO: Agenda-Mes-Inicio-Fin
+      a.download = `Agenda-${currentMonthLabel}-${activeWeek.start}-${activeWeek.end}.docx`;
       a.click();
       window.URL.revokeObjectURL(url);
   };
