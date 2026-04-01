@@ -91,8 +91,8 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       const prods = await loadProductionsFromDB();
       // Sort by date descending (most recent first)
       const sortedProds = [...prods].sort((a, b) => {
-          const dateA = a.date || '';
-          const dateB = b.date || '';
+          const dateA = String(a?.date || '');
+          const dateB = String(b?.date || '');
           return dateB.localeCompare(dateA);
       });
       setDbProductions(sortedProds);
