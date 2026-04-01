@@ -166,10 +166,11 @@ export const loadSelectionsFromDB = async (): Promise<Track[]> => {
 // --- TRACKS OPERATIONS ---
 
 export const saveTracksToDB = async (tracks: Track[]): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(TRACKS_STORE, 'readwrite');
+            const tx = db!.transaction(TRACKS_STORE, 'readwrite');
             const store = tx.objectStore(TRACKS_STORE);
             
             const clearReq = store.clear();
@@ -182,27 +183,42 @@ export const saveTracksToDB = async (tracks: Track[]): Promise<void> => {
                 tracks.forEach(track => store.put(track));
             };
 
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
         });
     } catch (error) {
+        db?.close();
         console.error("Error guardando en DB:", error);
         throw error;
     }
 };
 
 export const loadTracksFromDB = async (): Promise<Track[]> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(TRACKS_STORE, 'readonly');
+            const tx = db!.transaction(TRACKS_STORE, 'readonly');
             const store = tx.objectStore(TRACKS_STORE);
             const request = store.getAll();
             
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                db?.close();
+                resolve(request.result || []);
+            };
+            request.onerror = () => {
+                db?.close();
+                reject(request.error);
+            };
         });
     } catch (error) {
+        db?.close();
         console.error("Error cargando DB:", error);
         return [];
     }
@@ -211,26 +227,31 @@ export const loadTracksFromDB = async (): Promise<Track[]> => {
 // --- REPORTS OPERATIONS ---
 
 export const saveReportToDB = async (report: Report): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(REPORTS_STORE, 'readwrite');
+            const tx = db!.transaction(REPORTS_STORE, 'readwrite');
             const store = tx.objectStore(REPORTS_STORE);
             const request = store.put(report);
             
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
+            tx.oncomplete = () => db?.close();
+            tx.onabort = () => db?.close();
         });
     } catch (error) {
+        db?.close();
         console.error("Error guardando reporte:", error);
     }
 };
 
 export const updateReportStatus = async (id: string, statusPartial: { downloaded?: boolean; sent?: boolean }): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(REPORTS_STORE, 'readwrite');
+            const tx = db!.transaction(REPORTS_STORE, 'readwrite');
             const store = tx.objectStore(REPORTS_STORE);
             const getReq = store.get(id);
 
@@ -246,15 +267,21 @@ export const updateReportStatus = async (id: string, statusPartial: { downloaded
                 resolve();
             };
             getReq.onerror = () => reject();
+            tx.oncomplete = () => db?.close();
+            tx.onabort = () => db?.close();
         });
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        db?.close();
+        console.error(e); 
+    }
 };
 
 export const loadReportsFromDB = async (usernameFilter?: string): Promise<Report[]> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(REPORTS_STORE, 'readonly');
+            const tx = db!.transaction(REPORTS_STORE, 'readonly');
             const store = tx.objectStore(REPORTS_STORE);
             const request = store.getAll();
             
@@ -269,79 +296,128 @@ export const loadReportsFromDB = async (usernameFilter?: string): Promise<Report
                 resolve(results);
             };
             request.onerror = () => reject(request.error);
+            tx.oncomplete = () => db?.close();
         });
     } catch (error) {
+        db?.close();
         return [];
     }
 };
 
 export const deleteReportFromDB = async (id: string): Promise<void> => {
-     const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(REPORTS_STORE, 'readwrite');
-        const store = tx.objectStore(REPORTS_STORE);
-        store.delete(id);
-        tx.oncomplete = () => resolve();
-    });
+    let db: IDBDatabase | null = null;
+    try {
+        db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(REPORTS_STORE, 'readwrite');
+            const store = tx.objectStore(REPORTS_STORE);
+            store.delete(id);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
+        });
+    } catch (e) {
+        db?.close();
+        throw e;
+    }
 };
 
 // --- PRODUCTIONS OPERATIONS ---
 
 export const saveProductionToDB = async (production: Production): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
+            const tx = db!.transaction(PRODUCTIONS_STORE, 'readwrite');
             const store = tx.objectStore(PRODUCTIONS_STORE);
             const request = store.put(production);
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
+            tx.oncomplete = () => db?.close();
+            tx.onabort = () => db?.close();
         });
     } catch (error) {
+        db?.close();
         console.error("Error guardando producción:", error);
         throw error;
     }
 };
 
 export const bulkUpdateProductions = async (productions: Production[]): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
+            const tx = db!.transaction(PRODUCTIONS_STORE, 'readwrite');
             const store = tx.objectStore(PRODUCTIONS_STORE);
             productions.forEach(p => store.put(p));
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
+            tx.onabort = () => db?.close();
         });
     } catch (error) {
+        db?.close();
         console.error("Error en actualización masiva de producciones:", error);
         throw error;
     }
 };
 
 export const loadProductionsFromDB = async (): Promise<Production[]> => {
+    let db: IDBDatabase | null = null;
     try {
-        const db = await openDB();
+        db = await openDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(PRODUCTIONS_STORE, 'readonly');
+            const tx = db!.transaction(PRODUCTIONS_STORE, 'readonly');
             const store = tx.objectStore(PRODUCTIONS_STORE);
             const request = store.getAll();
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                db?.close();
+                resolve(request.result || []);
+            };
+            request.onerror = () => {
+                db?.close();
+                reject(request.error);
+            };
         });
     } catch (error) {
+        db?.close();
         return [];
     }
 };
 
 export const deleteProductionFromDB = async (id: string): Promise<void> => {
-    const db = await openDB();
-    return new Promise((resolve) => {
-        const tx = db.transaction(PRODUCTIONS_STORE, 'readwrite');
-        const store = tx.objectStore(PRODUCTIONS_STORE);
-        store.delete(id);
-        tx.oncomplete = () => resolve();
-    });
+    let db: IDBDatabase | null = null;
+    try {
+        db = await openDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(PRODUCTIONS_STORE, 'readwrite');
+            const store = tx.objectStore(PRODUCTIONS_STORE);
+            store.delete(id);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
+        });
+    } catch (e) {
+        db?.close();
+        throw e;
+    }
 };
 
 export const clearReportsDB = async (): Promise<void> => {

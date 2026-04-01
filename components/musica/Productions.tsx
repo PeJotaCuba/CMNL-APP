@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
+import { ProgramFicha } from '../../types';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB, bulkUpdateProductions } from './services/db';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, HeadingLevel } from "docx";
-import { ChevronDown, FileText, Database, Upload, Archive, Trash2, Activity, X, Download } from 'lucide-react';
+import { ChevronDown, FileText, Database, Upload, Archive, Trash2, Activity, X, Download, Plus, Edit2 } from 'lucide-react';
 
 interface ProductionsProps {
   onUpdateTracks: (updateFunc: (prev: Track[]) => Track[]) => void;
@@ -48,22 +49,43 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [selectedBalanceProgram, setSelectedBalanceProgram] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showAddProgramModal, setShowAddProgramModal] = useState(false);
+  const [newProgramName, setNewProgramName] = useState('');
+  const [editingProgramIndex, setEditingProgramIndex] = useState<number | null>(null);
 
-  const BALANCE_PROGRAMS = [
-      "Buenos Días Bayamo",
-      "La Cumbancha (Lunes a Viernes)",
-      "La Cumbancha Sábado",
-      "Todos en Casa",
-      "Arte Bayamo",
-      "Parada Joven",
-      "Hablando con Juana",
-      "Al Son de la Radio",
-      "Sigue a tu Ritmo",
-      "Cómplices",
-      "Estación 95.3",
-      "Palco de Domingo"
-  ];
+  const [balancePrograms, setBalancePrograms] = useState<string[]>(() => {
+      const saved = localStorage.getItem('rcm_musica_balance_programs');
+      if (saved) return JSON.parse(saved);
+      return [
+          "Buenos Días Bayamo",
+          "La Cumbancha (Lunes a Viernes)",
+          "La Cumbancha Sábado",
+          "Todos en Casa",
+          "Arte Bayamo",
+          "Parada Joven",
+          "Hablando con Juana",
+          "Al Son de la Radio",
+          "Sigue a tu Ritmo",
+          "Cómplices",
+          "Estación 95.3",
+          "Palco de Domingo"
+      ];
+  });
+
+  const [fichas, setFichas] = useState<ProgramFicha[]>([]);
+
+  useEffect(() => {
+      const savedFichas = localStorage.getItem('rcm_data_fichas');
+      if (savedFichas) {
+          setFichas(JSON.parse(savedFichas));
+      }
+  }, []);
+
+  useEffect(() => {
+      localStorage.setItem('rcm_musica_balance_programs', JSON.stringify(balancePrograms));
+  }, [balancePrograms]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchProductions = async () => {
       const prods = await loadProductionsFromDB();
@@ -161,15 +183,15 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   };
 
   const handleSaveAllImported = async () => {
+      if (importedProductions.length === 0) return;
       try {
-          for (const prod of importedProductions) {
-              await saveProductionToDB(prod);
-          }
+          await bulkUpdateProductions(importedProductions);
           setImportedProductions([]);
           fetchProductions();
           alert("Todas las producciones han sido guardadas.");
       } catch (e) {
-          alert("Error guardando algunas producciones.");
+          console.error("Error saving all productions:", e);
+          alert("Error guardando las producciones. Por favor, intente de nuevo.");
       }
   };
 
@@ -261,7 +283,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
           if (fileTracks.length > 0) {
               newImportedProds.push({
-                  id: `imp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  id: `imp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${newImportedProds.length}`,
                   date: fileDate,
                   program: fileProgram,
                   tracks: fileTracks
@@ -557,34 +579,74 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       setShowActionsMenu(false);
   };
 
-  const getExpectedDaysForProgram = (program: string, year: number, month: number) => {
+  const isProgramOnDay = (programFicha: ProgramFicha, dateStr: string) => {
+      const date = new Date(dateStr + 'T12:00:00');
+      const day = date.getDay();
+      const freq = programFicha.frequency.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      if (freq.includes('diario') || freq.includes('lunes a domingo') || freq.includes('lunes-domingo')) return true;
+      if ((freq.includes('lunes a sabado') || freq.includes('lunes-sabado')) && day !== 0) return true;
+      if ((freq.includes('lunes a viernes') || freq.includes('lunes-viernes')) && day >= 1 && day <= 5) return true;
+      if ((freq.includes('lunes a jueves') || freq.includes('lunes-jueves')) && day >= 1 && day <= 4) return true;
+      if ((freq.includes('fines de semana') || freq.includes('fin de semana')) && (day === 0 || day === 6)) return true;
+      
+      const daysMap: { [key: number]: string[] } = {
+          0: ['domingo', 'dominical'],
+          1: ['lunes'],
+          2: ['martes'],
+          3: ['miercoles'],
+          4: ['jueves'],
+          5: ['viernes'],
+          6: ['sabado']
+      };
+      return daysMap[day].some(d => freq.includes(d));
+  };
+
+  const getExpectedDaysForProgram = (programName: string, year: number, month: number) => {
       const daysInMonth = new Date(year, month, 0).getDate();
       const expectedDates: string[] = [];
       
-      let allowedDays: number[] = [];
-      if (program.includes("Lunes a Viernes") || ["Todos en Casa", "Arte Bayamo", "Parada Joven", "Hablando con Juana", "Al Son de la Radio", "Sigue a tu Ritmo"].includes(program)) {
-          allowedDays = [1, 2, 3, 4, 5];
-      } else if (program.includes("Sábado")) {
-          allowedDays = [6];
-      } else if (["Buenos Días Bayamo", "Buenos Días, Bayamo"].includes(program)) {
-          allowedDays = [1, 2, 3, 4, 5, 6];
-      } else if (["Cómplices", "Estación 95.3", "Palco de Domingo", "Coloreando Melodías", "Alba y Crisol"].includes(program)) {
-          allowedDays = [0];
-      } else {
-          allowedDays = [1, 2, 3, 4, 5, 6, 0];
-      }
+      const ficha = fichas.find(f => f.name.toLowerCase() === programName.toLowerCase() || 
+                                    (programName.includes("(") && f.name.toLowerCase() === programName.split("(")[0].trim().toLowerCase()));
 
       for (let day = 1; day <= daysInMonth; day++) {
-          const d = new Date(year, month - 1, day);
-          if (allowedDays.includes(d.getDay())) {
-              expectedDates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const d = new Date(dateStr + 'T12:00:00');
+          
+          if (ficha) {
+              if (isProgramOnDay(ficha, dateStr)) {
+                  // Special handling for programs that might have "Lunes a Viernes" or "Sábado" in their balance name
+                  if (programName.toLowerCase().includes("lunes a viernes") && (d.getDay() < 1 || d.getDay() > 5)) continue;
+                  if (programName.toLowerCase().includes("sabado") && d.getDay() !== 6) continue;
+                  expectedDates.push(dateStr);
+              }
+          } else {
+              // Fallback to old logic if no ficha found
+              let allowedDays: number[] = [];
+              if (programName.includes("Lunes a Viernes")) {
+                  allowedDays = [1, 2, 3, 4, 5];
+              } else if (programName.toLowerCase().includes("sábado") || 
+                         programName.toLowerCase().includes("sabado") ||
+                         ["al son de la radio", "sigue a tu ritmo"].includes(programName.toLowerCase())) {
+                  allowedDays = [6];
+              } else if (["buenos días bayamo", "buenos días, bayamo"].includes(programName.toLowerCase())) {
+                  allowedDays = [1, 2, 3, 4, 5, 6];
+              } else if (["Cómplices", "Estación 95.3", "Palco de Domingo", "Coloreando Melodías", "Alba y Crisol"].includes(programName)) {
+                  allowedDays = [0];
+              } else {
+                  allowedDays = [1, 2, 3, 4, 5, 6, 0];
+              }
+
+              if (allowedDays.includes(d.getDay())) {
+                  expectedDates.push(dateStr);
+              }
           }
       }
       return expectedDates;
   };
 
   const getBalanceData = () => {
-      return BALANCE_PROGRAMS.map(prog => {
+      return balancePrograms.map(prog => {
           const expectedDates = getExpectedDaysForProgram(prog, currentYear, currentMonth);
           
           const prods = stockMensual.filter(p => {
@@ -603,14 +665,14 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
               return pName === progLower;
           });
 
-          const completedDates = prods.map(p => p.date).filter(Boolean);
+          const completedDates = [...new Set(prods.map(p => p.date).filter(Boolean))];
           const missingDates = expectedDates.filter(d => !completedDates.includes(d));
 
           return {
               program: prog,
               required: expectedDates.length,
               completed: completedDates.length,
-              missing: expectedDates.length - completedDates.length,
+              missing: Math.max(0, expectedDates.length - completedDates.length),
               missingDates
           };
       });
@@ -962,6 +1024,65 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
             {COUNTRIES_LIST.map(c => <option key={c} value={c} />)}
         </datalist>
 
+        {showAddProgramModal && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+                    <div className="p-6 border-b border-[#9E7649]/20 flex justify-between items-center bg-[#2C1B15]">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            {editingProgramIndex !== null ? 'Editar Programa' : 'Agregar Programa al Balance'}
+                        </h3>
+                        <button onClick={() => setShowAddProgramModal(false)} className="text-[#E8DCCF]/60 hover:text-white">
+                            <X size={24} />
+                        </button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <div>
+                            <label className="block text-xs font-medium text-[#9E7649] uppercase tracking-wider mb-2">Nombre del Programa</label>
+                            <input 
+                                type="text"
+                                className="w-full bg-black/40 border border-[#9E7649]/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#9E7649]"
+                                placeholder="Ej: Buenos Días Bayamo"
+                                value={newProgramName}
+                                onChange={e => setNewProgramName(e.target.value)}
+                            />
+                            <p className="text-[10px] text-[#E8DCCF]/40 mt-2">
+                                * Debe coincidir con el nombre en la ficha de programa para sincronizar los días.
+                            </p>
+                        </div>
+                        <div className="flex gap-3 pt-4">
+                            <button 
+                                onClick={() => setShowAddProgramModal(false)}
+                                className="flex-1 py-3 rounded-xl border border-[#9E7649]/30 text-[#E8DCCF] hover:bg-white/5 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    if (!newProgramName.trim()) return alert("El nombre es obligatorio");
+                                    if (editingProgramIndex !== null) {
+                                        setBalancePrograms(prev => {
+                                            const next = [...prev];
+                                            next[editingProgramIndex] = newProgramName.trim();
+                                            return next;
+                                        });
+                                        setSelectedBalanceProgram(newProgramName.trim());
+                                    } else {
+                                        if (balancePrograms.includes(newProgramName.trim())) return alert("Este programa ya está en el balance");
+                                        setBalancePrograms(prev => [...prev, newProgramName.trim()]);
+                                        setSelectedBalanceProgram(newProgramName.trim());
+                                    }
+                                    setShowAddProgramModal(false);
+                                }}
+                                className="flex-1 py-3 rounded-xl bg-[#9E7649] text-white font-bold hover:bg-[#8A653D] transition-colors"
+                            >
+                                {editingProgramIndex !== null ? 'Guardar Cambios' : 'Agregar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {showBalanceModal && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4">
                 <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
@@ -975,14 +1096,60 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                     </div>
                     
                     <div className="p-6 overflow-y-auto flex-1">
-                        <select 
-                            value={selectedBalanceProgram || ''} 
-                            onChange={e => setSelectedBalanceProgram(e.target.value)} 
-                            className="w-full p-3 border border-[#9E7649]/30 rounded-lg bg-[#2C1B15] text-white text-sm outline-none focus:border-[#9E7649] mb-4"
-                        >
-                            <option value="">Seleccione un programa...</option>
-                            {BALANCE_PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
+                        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                            <div className="flex-1">
+                                <label className="block text-xs font-medium text-[#9E7649] uppercase tracking-wider mb-2">Seleccionar Programa</label>
+                                <div className="flex gap-2">
+                                    <select 
+                                        className="flex-1 bg-black/40 border border-[#9E7649]/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#9E7649] transition-colors"
+                                        value={selectedBalanceProgram || ''} 
+                                        onChange={e => setSelectedBalanceProgram(e.target.value)} 
+                                    >
+                                        <option value="">Seleccione un programa...</option>
+                                        {balancePrograms.map(p => <option key={p} value={p}>{p}</option>)}
+                                    </select>
+                                    <button 
+                                        onClick={() => {
+                                            setEditingProgramIndex(null);
+                                            setNewProgramName('');
+                                            setShowAddProgramModal(true);
+                                        }}
+                                        className="p-2 bg-[#9E7649]/20 text-[#9E7649] rounded-lg hover:bg-[#9E7649]/30 transition-colors"
+                                        title="Agregar Programa"
+                                    >
+                                        <Plus size={20} />
+                                    </button>
+                                </div>
+                            </div>
+                            {selectedBalanceProgram && (
+                                <div className="flex items-end gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            const idx = balancePrograms.indexOf(selectedBalanceProgram);
+                                            setEditingProgramIndex(idx);
+                                            setNewProgramName(selectedBalanceProgram);
+                                            setShowAddProgramModal(true);
+                                        }}
+                                        className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
+                                        title="Editar Programa"
+                                    >
+                                        <Edit2 size={20} />
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            if (confirm(`¿Eliminar "${selectedBalanceProgram}" del balance?`)) {
+                                                setBalancePrograms(prev => prev.filter(p => p !== selectedBalanceProgram));
+                                                setSelectedBalanceProgram(null);
+                                            }
+                                        }}
+                                        className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                                        title="Eliminar Programa"
+                                    >
+                                        <Trash2 size={20} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         {selectedBalanceProgram && getBalanceData().filter(d => d.program === selectedBalanceProgram).map((data, idx) => (
                             <div key={idx} className="space-y-4">
