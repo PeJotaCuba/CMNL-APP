@@ -6,7 +6,12 @@ import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB, bulkUpdateProductions } from './services/db';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, HeadingLevel } from "docx";
-import { ChevronDown, FileText, Database, Upload, Archive, Trash2, Activity, X, Download, Plus, Edit2 } from 'lucide-react';
+import { ChevronDown, FileText, Database, Upload, Archive, Trash2, Activity, X, Download, Plus, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
 
 interface ProductionsProps {
   onUpdateTracks: (updateFunc: (prev: Track[]) => Track[]) => void;
@@ -26,9 +31,53 @@ interface TempTrack {
 type TabType = 'intro' | 'stock' | 'archive';
 
 const Productions: React.FC<ProductionsProps> = ({ }) => {
+  const now = new Date();
+  const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const localMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
   const [activeTab, setActiveTab] = useState<TabType>('intro');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(localDateStr);
+  const [selectedMonthStr, setSelectedMonthStr] = useState<string>(localMonthStr);
+  const [monthInputValue, setMonthInputValue] = useState(MONTH_NAMES[now.getMonth()]);
   const [program, setProgram] = useState(DEFAULT_PROGRAMS_LIST[0]);
+
+  useEffect(() => {
+      const monthIndex = parseInt(selectedMonthStr.split('-')[1], 10) - 1;
+      if (monthIndex >= 0 && monthIndex < 12) {
+          setMonthInputValue(MONTH_NAMES[monthIndex]);
+      }
+  }, [selectedMonthStr]);
+
+  const handlePrevMonth = () => {
+      const [year, month] = selectedMonthStr.split('-').map(Number);
+      const d = new Date(year, month - 2, 1);
+      setSelectedMonthStr(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
+
+  const handleNextMonth = () => {
+      const [year, month] = selectedMonthStr.split('-').map(Number);
+      const d = new Date(year, month, 1);
+      setSelectedMonthStr(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
+
+  const handleMonthInputBlur = () => {
+      const val = monthInputValue.toLowerCase().trim();
+      const index = MONTH_NAMES.findIndex(m => m.toLowerCase().startsWith(val));
+      if (index !== -1 && val.length >= 3) {
+          const [year] = selectedMonthStr.split('-');
+          setSelectedMonthStr(`${year}-${String(index + 1).padStart(2, '0')}`);
+      } else {
+          // Reset to current selected month if invalid
+          const monthIndex = parseInt(selectedMonthStr.split('-')[1], 10) - 1;
+          setMonthInputValue(MONTH_NAMES[monthIndex] || "");
+      }
+  };
+
+  const handleMonthInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+          handleMonthInputBlur();
+      }
+  };
   
   const [currentTrack, setCurrentTrack] = useState<TempTrack>({
       id: '',
@@ -521,7 +570,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
             properties: {},
             children: [
                 new Paragraph({ text: "ESTADÍSTICAS DE DIFUSIÓN MUSICAL - RCM", heading: "Heading1", alignment: AlignmentType.CENTER }),
-                new Paragraph({ text: `Mes: ${currentMonthName} ${currentYear}`, alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: `Mes: ${selectedMonthName} ${selectedYear}`, alignment: AlignmentType.CENTER }),
                 new Paragraph({ text: "" }),
 
                 new Paragraph({ text: "1. Resumen de Obras", heading: "Heading2" }),
@@ -560,7 +609,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
     });
 
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Estadisticas_Musica_${currentMonthStr}.docx`);
+    saveAs(blob, `Estadisticas_Musica_${selectedMonthStr}.docx`);
   };
 
   const getMonthName = (monthNum: number) => {
@@ -571,11 +620,9 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
     return months[monthNum - 1] || "Desconocido";
   };
 
-  const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
-  const currentMonth = currentDate.getMonth() + 1;
-  const currentMonthName = getMonthName(currentMonth);
-  const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  const selectedYear = parseInt(selectedMonthStr.split('-')[0], 10);
+  const selectedMonth = parseInt(selectedMonthStr.split('-')[1], 10);
+  const selectedMonthName = getMonthName(selectedMonth);
 
   const getYearMonth = (dateStr?: string) => {
       if (!dateStr || typeof dateStr !== 'string') return { year: 0, month: 0, key: 'Desconocido' };
@@ -591,13 +638,13 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const stockMensual = (dbProductions || []).filter(p => {
       if (!p) return false;
       const { year, month } = getYearMonth(p.date);
-      return year === currentYear && month === currentMonth && !p.archived;
+      return year === selectedYear && month === selectedMonth && !p.archived;
   });
   
   const archivo = (dbProductions || []).filter(p => {
       if (!p) return false;
       const { year, month } = getYearMonth(p.date);
-      return !(year === currentYear && month === currentMonth) || p.archived;
+      return !(year === selectedYear && month === selectedMonth) || p.archived;
   });
 
   // Agrupar archivo por mes (usando el formato normalizado YYYY-MM)
@@ -614,7 +661,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       if (history.length === 0) return alert("No hay producciones para exportar.");
       const dataStr = JSON.stringify(history, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
-      saveAs(blob, `RCM_Producciones_BD_${currentMonthStr}.json`);
+      saveAs(blob, `RCM_Producciones_BD_${selectedMonthStr}.json`);
       setShowActionsMenu(false);
   };
 
@@ -717,7 +764,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const getBalanceData = () => {
       return balancePrograms.map(prog => {
-          const expectedDates = getExpectedDaysForProgram(prog, currentYear, currentMonth);
+          const expectedDates = getExpectedDaysForProgram(prog, selectedYear, selectedMonth);
           
           const prods = stockMensual.filter(p => {
               if (!p) return false;
@@ -754,7 +801,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
               properties: {},
               children: [
                   new Paragraph({ text: `AUDITORÍA DE METAS - ${programData.program}`, heading: "Heading1", alignment: AlignmentType.CENTER }),
-                  new Paragraph({ text: `Mes: ${currentMonthName} ${currentYear}`, alignment: AlignmentType.CENTER }),
+                  new Paragraph({ text: `Mes: ${selectedMonthName} ${selectedYear}`, alignment: AlignmentType.CENTER }),
                   new Paragraph({ text: "" }),
                   new Paragraph({ text: `Producciones Requeridas: ${programData.required}` }),
                   new Paragraph({ text: `Producciones Realizadas: ${programData.completed}` }),
@@ -766,7 +813,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
           }]
       });
       const blob = await Packer.toBlob(doc);
-      saveAs(blob, `Auditoria_${programData.program.replace(/[^a-z0-9]/gi, '_')}_${currentMonthStr}.docx`);
+      saveAs(blob, `Auditoria_${programData.program.replace(/[^a-z0-9]/gi, '_')}_${selectedMonthStr}.docx`);
   };
 
   return (
@@ -964,7 +1011,22 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                     <div className="grid grid-cols-4 gap-2 sm:gap-6">
                         <div className="flex flex-col items-center sm:items-start gap-1">
                             <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Mes</p>
-                            <p className="font-bold text-white text-sm sm:text-lg truncate w-full text-center sm:text-left">{currentMonthName}</p>
+                            <div className="flex items-center gap-1 w-full justify-center sm:justify-start">
+                                <button onClick={handlePrevMonth} className="text-[#9E7649] hover:text-white transition-colors">
+                                    <ChevronLeft size={16} />
+                                </button>
+                                <input 
+                                    type="text" 
+                                    value={monthInputValue} 
+                                    onChange={(e) => setMonthInputValue(e.target.value)}
+                                    onBlur={handleMonthInputBlur}
+                                    onKeyDown={handleMonthInputKeyDown}
+                                    className="bg-transparent border-b border-[#9E7649]/30 text-white font-bold text-sm sm:text-lg focus:outline-none focus:border-[#9E7649] w-24 text-center"
+                                />
+                                <button onClick={handleNextMonth} className="text-[#9E7649] hover:text-white transition-colors">
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
                         </div>
                         <div className="flex flex-col items-center sm:items-start gap-1">
                             <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Plan</p>
@@ -1158,7 +1220,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                 <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
                     <div className="flex justify-between items-center p-6 border-b border-[#9E7649]/20">
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                            <Activity className="text-[#9E7649]" /> Balance Mensual de Producción ({currentMonthStr})
+                            <Activity className="text-[#9E7649]" /> Balance Mensual de Producción ({selectedMonthStr})
                         </h2>
                         <button onClick={() => setShowBalanceModal(false)} className="text-[#E8DCCF]/60 hover:text-white transition-colors">
                             <X size={24} />
@@ -1248,7 +1310,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                 <div className="flex justify-between mt-6">
                                     <button onClick={() => handleExportAuditDOCX(data)} className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold">Generar DOCX</button>
                                     <button onClick={() => {
-                                        let message = `*BALANCE ${data.program} - ${currentMonthStr}*\n\n*Plan:* ${data.required}\n*Real:* ${data.completed}\n*Resto:* ${data.missing}\n\n*Días faltantes:*\n${data.missingDates.join('\n')}`;
+                                        let message = `*BALANCE ${data.program} - ${selectedMonthStr}*\n\n*Plan:* ${data.required}\n*Real:* ${data.completed}\n*Resto:* ${data.missing}\n\n*Días faltantes:*\n${data.missingDates.join('\n')}`;
                                         window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
                                     }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Compartir WhatsApp</button>
                                 </div>
