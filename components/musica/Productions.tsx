@@ -150,7 +150,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       if (sessionTracks.length === 0) return alert("No hay temas en esta producción.");
 
       // Check for duplicates
-      const isDuplicate = dbProductions.some(p => p.date === date && p.program === program);
+      const isDuplicate = dbProductions.some(p => p && p.date === date && p.program === program);
       if (isDuplicate) {
           alert(`Ya existe una producción para el programa "${program}" en la fecha ${date}.`);
           return;
@@ -167,7 +167,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
           await saveProductionToDB(newProduction);
           alert("Producción guardada correctamente en la base de datos.");
           setSessionTracks([]); 
-          fetchProductions();
+          await fetchProductions();
       } catch (e) {
           alert("Error guardando producción.");
       }
@@ -184,7 +184,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       const prod = importedProductions[index];
       
       // Check for duplicates
-      const isDuplicate = dbProductions.some(p => p.date === prod.date && p.program === prod.program);
+      const isDuplicate = dbProductions.some(p => p && p.date === prod.date && p.program === prod.program);
       if (isDuplicate) {
           alert(`Ya existe una producción para el programa "${prod.program}" en la fecha ${prod.date}.`);
           return;
@@ -193,7 +193,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       try {
           await saveProductionToDB(prod);
           setImportedProductions(prev => prev.filter((_, i) => i !== index));
-          fetchProductions();
+          await fetchProductions();
       } catch (e) {
           alert("Error guardando producción.");
       }
@@ -212,7 +212,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       
       importedProductions.forEach(imp => {
           const key = `${imp.date}-${imp.program}`;
-          const existsInDB = dbProductions.some(dbP => dbP.date === imp.date && dbP.program === imp.program);
+          const existsInDB = dbProductions.some(dbP => dbP && dbP.date === imp.date && dbP.program === imp.program);
           if (!existsInDB && !seen.has(key)) {
               toSave.push(imp);
               seen.add(key);
@@ -230,7 +230,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       try {
           await bulkUpdateProductions(toSave);
           setImportedProductions([]);
-          fetchProductions();
+          await fetchProductions();
           if (skippedCount > 0) {
               alert(`Se guardaron ${toSave.length} producciones. ${skippedCount} fueron omitidas por estar duplicadas.`);
           } else {
@@ -280,7 +280,11 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                   let d = l.substring(6).trim();
                   if (d.includes('/')) {
                       const parts = d.split('/');
-                      if (parts.length === 3) d = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                      if (parts.length === 3) {
+                          let year = parts[2];
+                          if (year.length === 2) year = `20${year}`;
+                          d = `${year}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                      }
                   }
                   fileDate = d;
               } else if (lower.startsWith('programa:')) {
@@ -340,8 +344,8 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
       // Filter out productions that already exist in DB or in current imported list
       const filteredNewProds = newImportedProds.filter(newP => {
-          const existsInDB = dbProductions.some(dbP => dbP.date === newP.date && dbP.program === newP.program);
-          const existsInImported = importedProductions.some(impP => impP.date === newP.date && impP.program === newP.program);
+          const existsInDB = dbProductions.some(dbP => dbP && dbP.date === newP.date && dbP.program === newP.program);
+          const existsInImported = importedProductions.some(impP => impP && impP.date === newP.date && impP.program === newP.program);
           return !existsInDB && !existsInImported;
       });
 
