@@ -89,7 +89,13 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const fetchProductions = async () => {
       const prods = await loadProductionsFromDB();
-      setDbProductions(prods);
+      // Sort by date descending (most recent first)
+      const sortedProds = [...prods].sort((a, b) => {
+          const dateA = a.date || '';
+          const dateB = b.date || '';
+          return dateB.localeCompare(dateA);
+      });
+      setDbProductions(sortedProds);
   };
 
   useEffect(() => {
@@ -143,6 +149,13 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const handleSaveProduction = async () => {
       if (sessionTracks.length === 0) return alert("No hay temas en esta producción.");
 
+      // Check for duplicates
+      const isDuplicate = dbProductions.some(p => p.date === date && p.program === program);
+      if (isDuplicate) {
+          alert(`Ya existe una producción para el programa "${program}" en la fecha ${date}.`);
+          return;
+      }
+
       const newProduction: Production = {
           id: `prod-${Date.now()}`,
           date,
@@ -169,6 +182,14 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const handleSaveImportedProduction = async (index: number) => {
       const prod = importedProductions[index];
+      
+      // Check for duplicates
+      const isDuplicate = dbProductions.some(p => p.date === prod.date && p.program === prod.program);
+      if (isDuplicate) {
+          alert(`Ya existe una producción para el programa "${prod.program}" en la fecha ${prod.date}.`);
+          return;
+      }
+
       try {
           await saveProductionToDB(prod);
           setImportedProductions(prev => prev.filter((_, i) => i !== index));
@@ -184,11 +205,37 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const handleSaveAllImported = async () => {
       if (importedProductions.length === 0) return;
+      
+      // Filter out productions that already exist in DB and within the list itself
+      const toSave: Production[] = [];
+      const seen = new Set<string>();
+      
+      importedProductions.forEach(imp => {
+          const key = `${imp.date}-${imp.program}`;
+          const existsInDB = dbProductions.some(dbP => dbP.date === imp.date && dbP.program === imp.program);
+          if (!existsInDB && !seen.has(key)) {
+              toSave.push(imp);
+              seen.add(key);
+          }
+      });
+
+      if (toSave.length === 0) {
+          alert("Todas las producciones seleccionadas ya existen en el stock o están duplicadas en la lista.");
+          setImportedProductions([]);
+          return;
+      }
+
+      const skippedCount = importedProductions.length - toSave.length;
+
       try {
-          await bulkUpdateProductions(importedProductions);
+          await bulkUpdateProductions(toSave);
           setImportedProductions([]);
           fetchProductions();
-          alert("Todas las producciones han sido guardadas.");
+          if (skippedCount > 0) {
+              alert(`Se guardaron ${toSave.length} producciones. ${skippedCount} fueron omitidas por estar duplicadas.`);
+          } else {
+              alert("Todas las producciones han sido guardadas.");
+          }
       } catch (e) {
           console.error("Error saving all productions:", e);
           alert("Error guardando las producciones. Por favor, intente de nuevo.");
@@ -291,14 +338,33 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
           }
       }
 
-      if (newImportedProds.length === 0) {
+      // Filter out productions that already exist in DB or in current imported list
+      const filteredNewProds = newImportedProds.filter(newP => {
+          const existsInDB = dbProductions.some(dbP => dbP.date === newP.date && dbP.program === newP.program);
+          const existsInImported = importedProductions.some(impP => impP.date === newP.date && impP.program === newP.program);
+          return !existsInDB && !existsInImported;
+      });
+
+      if (filteredNewProds.length === 0 && newImportedProds.length > 0) {
+          alert("Todas las producciones en los archivos ya existen en el stock o en la lista de introducción.");
+          e.target.value = '';
+          return;
+      }
+
+      if (filteredNewProds.length === 0) {
           alert("No se encontraron temas válidos en los archivos TXT.");
           e.target.value = '';
           return;
       }
 
-      setImportedProductions(prev => [...prev, ...newImportedProds]);
-      alert(`Se han cargado ${newImportedProds.length} producciones independientes.`);
+      const skipped = newImportedProds.length - filteredNewProds.length;
+      setImportedProductions(prev => [...prev, ...filteredNewProds]);
+      
+      if (skipped > 0) {
+          alert(`Se han cargado ${filteredNewProds.length} producciones. ${skipped} fueron omitidas por estar duplicadas.`);
+      } else {
+          alert(`Se han cargado ${filteredNewProds.length} producciones independientes.`);
+      }
       e.target.value = ''; 
   };
 
@@ -665,14 +731,14 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
               return pName === progLower;
           });
 
-          const completedDates = [...new Set(prods.map(p => p.date).filter(Boolean))];
-          const missingDates = expectedDates.filter(d => !completedDates.includes(d));
+          const uniqueCompletedDates = [...new Set(prods.map(p => p.date).filter(Boolean))];
+          const missingDates = expectedDates.filter(d => !uniqueCompletedDates.includes(d));
 
           return {
               program: prog,
               required: expectedDates.length,
-              completed: completedDates.length,
-              missing: Math.max(0, expectedDates.length - completedDates.length),
+              completed: prods.length,
+              missing: Math.max(0, expectedDates.length - prods.length),
               missingDates
           };
       });
@@ -902,11 +968,11 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                         </div>
                         <div className="flex flex-col items-center sm:items-start gap-1">
                             <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Real</p>
-                            <p className="font-bold text-green-400 text-sm sm:text-lg">{getBalanceData().reduce((acc, curr) => acc + curr.completed, 0)}</p>
+                            <p className="font-bold text-green-400 text-sm sm:text-lg">{stockMensual.length}</p>
                         </div>
                         <div className="flex flex-col items-center sm:items-start gap-1">
                             <p className="text-[9px] font-bold text-[#E8DCCF]/40 uppercase tracking-tighter">Resto</p>
-                            <p className="font-bold text-red-400 text-sm sm:text-lg">{getBalanceData().reduce((acc, curr) => acc + curr.missing, 0)}</p>
+                            <p className="font-bold text-red-400 text-sm sm:text-lg">{Math.max(0, getBalanceData().reduce((acc, curr) => acc + curr.required, 0) - stockMensual.length)}</p>
                         </div>
                     </div>
                 </div>
