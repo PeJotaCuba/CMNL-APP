@@ -1,5 +1,6 @@
 import { User, NewsItem } from '../types';
 import { appData } from './initialData';
+import { generateProgramming } from '../src/services/programmingService';
 
 // Simulacion de archivo en carpeta Iconos - Logo sin el punto central
 export const LOGO_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='white' rx='80' ry='80'/%3E%3Cpath d='M140,380 V200 A60,60 0 0,1 260,200 V380' fill='none' stroke='%233E1E16' stroke-width='65' stroke-linecap='round' /%3E%3Cpath d='M260,380 V160 A100,100 0 0,1 460,160 V380' fill='none' stroke='%238B5E3C' stroke-width='65' stroke-linecap='round' /%3E%3C/svg%3E";
@@ -9,6 +10,24 @@ const utf8_to_b64 = (str: string) => {
   return window.btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
       (match, p1) => String.fromCharCode(parseInt(p1, 16)))
   );
+};
+
+const formatTo12Hour = (timeStr: string): string => {
+    if (!timeStr || !timeStr.includes(':')) return timeStr;
+    // If already formatted with AM/PM, return as is
+    if (timeStr.toUpperCase().includes('AM') || timeStr.toUpperCase().includes('PM')) {
+        return timeStr.trim();
+    }
+    try {
+        const [hourStr, minStr] = timeStr.trim().split(':');
+        let hour = parseInt(hourStr, 10);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        hour = hour ? hour : 12; // the hour '0' should be '12'
+        return `${hour}:${minStr} ${ampm}`;
+    } catch (e) {
+        return timeStr;
+    }
 };
 
 // Helper to generate SVG Vector Backgrounds based on category
@@ -93,6 +112,43 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
   const minute = now.getMinutes();
   const totalMinutes = hour * 60 + minute;
 
+  const savedFichas = localStorage.getItem('rcm_data_fichas');
+  const manualData = localStorage.getItem('rcm_manual_programming');
+  const fichas = savedFichas ? JSON.parse(savedFichas) : [];
+  
+  let programming: any[] = [];
+  if (manualData) {
+      programming = JSON.parse(manualData);
+  } else {
+      programming = generateProgramming(fichas);
+  }
+
+  // Find current program from programming
+  const current = programming.find(p => {
+    if (!p.days.includes(day)) return false;
+    
+    const [startH, startM] = p.start.split(':').map(Number);
+    const [endH, endM] = p.end.split(':').map(Number);
+    
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+    
+    if (endTotal < startTotal) {
+      return totalMinutes >= startTotal || totalMinutes < endTotal;
+    }
+    
+    return totalMinutes >= startTotal && totalMinutes < endTotal;
+  });
+
+  if (current) {
+    return {
+      name: current.name,
+      time: `${formatTo12Hour(current.start)} - ${formatTo12Hour(current.end)}`,
+      image: getCategoryVector("Programa", current.name)
+    };
+  }
+
+  // Fallback logic
   // --- PRIORITY 1: Enlace a Radio Bayamo (3:00 PM to 7:00 AM next day) ---
   if (totalMinutes >= 900 || totalMinutes < 420) {
     return { 
@@ -111,63 +167,6 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
 
   if (totalMinutes >= 780 && totalMinutes < 810) {
     return { name: "Noticiero Nacional", time: "1:00 PM - 1:30 PM", image: getCategoryVector("Noticias", "Nacional") };
-  }
-
-  // --- PRIORITY 3: Daily Programs ---
-  if (day >= 1 && day <= 6) {
-    if (totalMinutes >= 420 && totalMinutes < 538) 
-      return { name: "Buenos Días Bayamo", time: "7:00 AM - 8:58 AM", image: getCategoryVector("Variada", "Mañana") };
-    
-    if (day >= 1 && day <= 5) {
-      if (totalMinutes >= 540 && totalMinutes < 598) 
-        return { name: "La Cumbancha", time: "9:00 AM - 9:58 AM", image: getCategoryVector("Musica", "Cumbancha") };
-    } else if (day === 6) {
-      if (totalMinutes >= 540 && totalMinutes < 658) 
-        return { name: "La Cumbancha", time: "9:00 AM - 10:58 AM", image: getCategoryVector("Musica", "Cumbancha") };
-    }
-
-    if (totalMinutes >= 660 && totalMinutes < 675)
-       return { name: "RCM Noticias", time: "11:00 AM - 11:15 AM", image: getCategoryVector("Noticias", "Boletin") };
-  }
-
-  if (day >= 1 && day <= 5) {
-    if (totalMinutes >= 600 && totalMinutes < 658) 
-      return { name: "Todos en Casa", time: "10:00 AM - 10:58 AM", image: getCategoryVector("Familia", "Casa") };
-
-    if (totalMinutes >= 675 && totalMinutes < 718) 
-      return { name: "Arte Bayamo", time: "11:15 AM - 11:58 AM", image: getCategoryVector("Cultura", "Arte") };
-
-    if (totalMinutes >= 750 && totalMinutes < 778) 
-      return { name: "Parada Joven", time: "12:30 PM - 12:58 PM", image: getCategoryVector("Juventud", "Joven") };
-
-    if (totalMinutes >= 810 && totalMinutes < 898) 
-      return { name: "Hablando con Juana", time: "1:30 PM - 2:58 PM", image: getCategoryVector("Sociedad", "Juana") };
-  }
-
-  if (day === 6) { 
-     if ((totalMinutes >= 675 && totalMinutes < 720) || (totalMinutes >= 750 && totalMinutes < 778))
-        return { name: "Sigue a tu ritmo", time: "11:15 AM - 12:58 PM", image: getCategoryVector("Musica", "Ritmo") };
-
-     if (totalMinutes >= 810 && totalMinutes < 898) 
-        return { name: "Al son de la radio", time: "1:30 PM - 2:58 PM", image: getCategoryVector("Musica", "Son") };
-  }
-
-  if (day === 0) { 
-    if (totalMinutes >= 420 && totalMinutes < 598) {
-        if (totalMinutes >= 540 && totalMinutes < 555) 
-           return { name: "Coloreando melodías", time: "9:00 AM - 9:15 AM", image: getCategoryVector("Infantil", "Melodias") };
-        
-        if (totalMinutes >= 555 && totalMinutes < 570) 
-           return { name: "Alba y Crisol", time: "9:15 AM - 9:30 AM", image: getCategoryVector("Cultura", "Alba") };
-        
-        return { name: "Cómplices", time: "7:00 AM - 9:58 AM", image: getCategoryVector("Variada", "Complices") };
-    }
-
-    if (totalMinutes >= 600 && totalMinutes < 778)
-       return { name: "Estación 95.3", time: "10:00 AM - 12:58 PM", image: getCategoryVector("Variada", "Estacion") };
-
-    if (totalMinutes >= 810 && totalMinutes < 898) 
-       return { name: "Palco de Domingo", time: "1:30 PM - 2:58 PM", image: getCategoryVector("Debate", "Palco") };
   }
 
   return { name: "Música RCM", time: "Transmisión Continua", image: getCategoryVector("Musica", "General") };

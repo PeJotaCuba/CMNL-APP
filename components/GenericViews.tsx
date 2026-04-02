@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X } from 'lucide-react';
-import { NewsItem } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X, Edit2, Save, Plus, Trash2 } from 'lucide-react';
+import { NewsItem, ProgramFicha } from '../types';
 import CMNLHeader from './CMNLHeader';
+import { generateProgramming, ProgramSchedule } from '../src/services/programmingService';
 
 interface ViewProps {
   title: string;
@@ -23,11 +24,136 @@ const newsColors = [
   'bg-[#263238]',
 ];
 
+const formatTo12Hour = (timeStr: string): string => {
+    if (!timeStr || !timeStr.includes(':')) return timeStr;
+    // If already formatted with AM/PM, return as is
+    if (timeStr.toUpperCase().includes('AM') || timeStr.toUpperCase().includes('PM')) {
+        return timeStr.trim();
+    }
+    try {
+        const [hourStr, minStr] = timeStr.trim().split(':');
+        let hour = parseInt(hourStr, 10);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        hour = hour % 12;
+        hour = hour ? hour : 12; // the hour '0' should be '12'
+        return `${hour}:${minStr} ${ampm}`;
+    } catch (e) {
+        return timeStr;
+    }
+};
+
 export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
   const [showFabMenu, setShowFabMenu] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedProgramming, setEditedProgramming] = useState<ProgramSchedule[] | null>(null);
+  
   const isProgramming = title.includes('Programación');
   // Logic to show FAB on specific public views (History, About, Programming)
   const showListenerFab = title.includes('Historia') || title.includes('Quiénes Somos') || title.includes('Programación');
+
+  const programmingData = useMemo(() => {
+    if (!isProgramming) return null;
+    
+    const savedFichas = localStorage.getItem('rcm_data_fichas');
+    const fichas: ProgramFicha[] = savedFichas ? JSON.parse(savedFichas) : [];
+    
+    // Fichas change detection
+    const fichasHash = JSON.stringify(fichas.map(f => ({ n: f.name, f: f.frequency, s: f.schedule })));
+    const lastHash = localStorage.getItem('rcm_fichas_hash');
+    
+    if (lastHash && lastHash !== fichasHash) {
+        // Fichas changed, clear manual override
+        localStorage.removeItem('rcm_manual_programming');
+    }
+    localStorage.setItem('rcm_fichas_hash', fichasHash);
+
+    // Check for manual override
+    const manualData = localStorage.getItem('rcm_manual_programming');
+    
+    let allPrograms: ProgramSchedule[] = [];
+    
+    if (manualData) {
+        allPrograms = JSON.parse(manualData);
+    } else {
+        allPrograms = generateProgramming(fichas);
+    }
+
+    // Ensure sorting by time
+    const getMinutes = (time: string) => {
+        const match = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (match) {
+            let h = parseInt(match[1], 10);
+            const m = parseInt(match[2], 10);
+            const ampm = match[3].toUpperCase();
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            return h * 60 + m;
+        }
+        const [h, m] = time.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    };
+
+    allPrograms.sort((a, b) => {
+        // Special case: Cómplices first on Sunday
+        if (a.name.toLowerCase().includes('cómplices') && a.days.includes(0) && b.days.includes(0)) return -1;
+        if (b.name.toLowerCase().includes('cómplices') && b.days.includes(0) && a.days.includes(0)) return 1;
+        return getMinutes(a.start) - getMinutes(b.start);
+    });
+
+    const monFri = allPrograms.filter(p => p.days.some(d => [1, 2, 3, 4, 5].includes(d)));
+    const saturday = allPrograms.filter(p => p.days.includes(6));
+    const sunday = allPrograms.filter(p => p.days.includes(0));
+
+    return { monFri, saturday, sunday, all: allPrograms };
+  }, [isProgramming, isEditing]); // Re-run when isEditing changes (after save)
+
+  const handleStartEdit = () => {
+      setEditedProgramming(programmingData?.all || []);
+      setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+      if (editedProgramming) {
+          localStorage.setItem('rcm_manual_programming', JSON.stringify(editedProgramming));
+          setIsEditing(false);
+      }
+  };
+
+  const handleCancelEdit = () => {
+      setIsEditing(false);
+      setEditedProgramming(null);
+  };
+
+  const updateProgram = (index: number, field: keyof ProgramSchedule, value: any) => {
+      if (!editedProgramming) return;
+      const newProg = [...editedProgramming];
+      newProg[index] = { ...newProg[index], [field]: value };
+      setEditedProgramming(newProg);
+  };
+
+  const addProgram = () => {
+      if (!editedProgramming) return;
+      const newProg = [...editedProgramming, { name: 'Nuevo Programa', start: '00:00', end: '00:00', days: [1,2,3,4,5] }];
+      setEditedProgramming(newProg);
+  };
+
+  const removeProgram = (index: number) => {
+      if (!editedProgramming) return;
+      const newProg = editedProgramming.filter((_, i) => i !== index);
+      setEditedProgramming(newProg);
+  };
+
+  const toggleDay = (index: number, day: number) => {
+      if (!editedProgramming) return;
+      const newProg = [...editedProgramming];
+      const days = [...newProg[index].days];
+      if (days.includes(day)) {
+          newProg[index].days = days.filter(d => d !== day);
+      } else {
+          newProg[index].days = [...days, day].sort();
+      }
+      setEditedProgramming(newProg);
+  };
 
   // Specific Layout for News Detail
   if (newsItem) {
@@ -63,22 +189,104 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
 
   return (
     <div className="flex flex-col h-full w-full bg-[#FDFCF8] text-[#4A3B32]">
-      <div className="bg-[#5D3A24] text-white p-4 pt-8 flex items-center gap-4 shadow-md z-10 sticky top-0">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-          <ArrowLeft size={24} />
-        </button>
-        <div>
-          <h2 className="font-serif font-bold text-lg leading-tight">{title}</h2>
-          {subtitle && <p className="text-xs text-[#E8DCCF] opacity-80">{subtitle}</p>}
+      <div className="bg-[#5D3A24] text-white p-4 pt-8 flex items-center justify-between shadow-md z-10 sticky top-0">
+        <div className="flex items-center gap-4">
+            <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+            <ArrowLeft size={24} />
+            </button>
+            <div>
+            <h2 className="font-serif font-bold text-lg leading-tight">{title}</h2>
+            {subtitle && <p className="text-xs text-[#E8DCCF] opacity-80">{subtitle}</p>}
+            </div>
         </div>
+        
+        {isProgramming && (
+            <div className="flex gap-2">
+                {isEditing ? (
+                    <>
+                        <button onClick={handleSaveEdit} className="p-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
+                            <Save size={18} /> Guardar
+                        </button>
+                        <button onClick={handleCancelEdit} className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
+                            <X size={18} /> Cancelar
+                        </button>
+                    </>
+                ) : (
+                    <button onClick={handleStartEdit} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
+                        <Edit2 size={18} /> Editar
+                    </button>
+                )}
+            </div>
+        )}
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 pb-24"> {/* Added pb-24 for player clearance */}
         {isProgramming ? (
-          <div className="max-w-2xl mx-auto">
+          isEditing ? (
+              <div className="max-w-4xl mx-auto space-y-4">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-[#5D3A24]">Editor de Programación</h3>
+                      <button onClick={addProgram} className="bg-[#5D3A24] text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm">
+                          <Plus size={18} /> Añadir Programa
+                      </button>
+                  </div>
+                  <div className="space-y-3">
+                      {editedProgramming?.map((p, idx) => (
+                          <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-[#5D3A24]/10 flex flex-col gap-3">
+                              <div className="flex justify-between gap-4">
+                                  <input 
+                                    type="text" 
+                                    value={p.name} 
+                                    onChange={(e) => updateProgram(idx, 'name', e.target.value)}
+                                    className="flex-1 border-b border-[#5D3A24]/20 p-1 font-bold text-[#5D3A24] focus:outline-none focus:border-[#5D3A24]"
+                                    placeholder="Nombre del programa"
+                                  />
+                                  <button onClick={() => removeProgram(idx)} className="text-red-500 p-1 hover:bg-red-50 rounded">
+                                      <Trash2 size={18} />
+                                  </button>
+                              </div>
+                              <div className="flex gap-4 items-center">
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs text-[#9E7649] font-bold">Inicio:</span>
+                                      <input 
+                                        type="text" 
+                                        value={p.start} 
+                                        onChange={(e) => updateProgram(idx, 'start', e.target.value)}
+                                        className="border border-[#5D3A24]/20 rounded px-2 py-1 text-sm w-20"
+                                        placeholder="00:00"
+                                      />
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <span className="text-xs text-[#9E7649] font-bold">Fin:</span>
+                                      <input 
+                                        type="text" 
+                                        value={p.end} 
+                                        onChange={(e) => updateProgram(idx, 'end', e.target.value)}
+                                        className="border border-[#5D3A24]/20 rounded px-2 py-1 text-sm w-20"
+                                        placeholder="00:00"
+                                      />
+                                  </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                  {['D', 'L', 'M', 'X', 'J', 'V', 'S'].map((day, dIdx) => (
+                                      <button 
+                                        key={dIdx}
+                                        onClick={() => toggleDay(idx, dIdx)}
+                                        className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${p.days.includes(dIdx) ? 'bg-[#5D3A24] text-white' : 'bg-[#F5F0EB] text-[#9E7649]'}`}
+                                      >
+                                          {day}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          ) : (
+          <div className="max-w-2xl mx-auto space-y-8">
              <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-[#5D3A24]/10">
                <div className="p-4 bg-[#F5F0EB] border-b border-[#5D3A24]/10">
-                  <h3 className="font-bold text-[#5D3A24] uppercase tracking-wide text-sm">Parrilla Oficial</h3>
+                  <h3 className="font-bold text-[#5D3A24] uppercase tracking-wide text-sm">Lunes a Viernes</h3>
                </div>
                <div className="overflow-x-auto">
                  <table className="w-full text-sm text-left">
@@ -86,34 +294,79 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
                        <tr>
                           <th className="px-4 py-3 font-semibold">Programa</th>
                           <th className="px-4 py-3 font-semibold">Horario</th>
-                          <th className="px-4 py-3 font-semibold">Día</th>
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-[#5D3A24]/10">
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Buenos Días Bayamo</td><td className="px-4 py-3">7:00-8:58 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Sábado</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">La Cumbancha</td><td className="px-4 py-3">9:00-9:58 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Sábado</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Todos en Casa</td><td className="px-4 py-3">10:00-10:58 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Viernes</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">RCM Noticias</td><td className="px-4 py-3">11:00-11:15 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Sábado</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Arte Bayamo</td><td className="px-4 py-3">11:15-11:58 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Viernes</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">Noticiero Provincial</td><td className="px-4 py-3">12:00-12:30 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70 text-red-600 font-bold">Diario</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Parada Joven</td><td className="px-4 py-3">12:30-12:58 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Viernes</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">Noticiero Nacional</td><td className="px-4 py-3">1:00-1:30 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70 text-red-600 font-bold">Diario</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Hablando con Juana</td><td className="px-4 py-3">1:30-2:58 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Lunes a Viernes</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">Cadena Provincial</td><td className="px-4 py-3">3:00-7:00 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70 text-red-600 font-bold">Diario</td></tr>
-                       <tr className="bg-[#e0f2f1] border-l-4 border-l-[#8B5E3C]"><td className="px-4 py-3 font-bold" colSpan={3}>Fin de Semana</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Sigue a tu ritmo</td><td className="px-4 py-3">11:15-12:58 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Sábado</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">Al son de la radio</td><td className="px-4 py-3">1:30-2:58 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Sábado</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Cómplices</td><td className="px-4 py-3">7:00-9:58 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Domingo</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">Coloreando melodías</td><td className="px-4 py-3">9:00-9:15 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Domingo</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Alba y Crisol</td><td className="px-4 py-3">9:15-9:30 AM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Domingo</td></tr>
-                       <tr className="bg-[#F5F0EB]"><td className="px-4 py-3 font-medium">Estación 95.3</td><td className="px-4 py-3">10:00-12:58 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Domingo</td></tr>
-                       <tr className="bg-[#FDFCF8]"><td className="px-4 py-3 font-medium">Palco de Domingo</td><td className="px-4 py-3">1:30-2:58 PM</td><td className="px-4 py-3 text-xs uppercase tracking-wide opacity-70">Domingo</td></tr>
+                       {programmingData?.monFri.map((p, idx) => (
+                         <tr key={idx} className={idx % 2 === 0 ? "bg-[#FDFCF8]" : "bg-[#F5F0EB]"}>
+                           <td className="px-4 py-3 font-medium">
+                             {p.name}
+                             {p.parent && <span className="text-xs text-[#9E7649] block font-normal italic">Dentro de {p.parent}</span>}
+                           </td>
+                           <td className="px-4 py-3">{formatTo12Hour(p.start)} - {formatTo12Hour(p.end)}</td>
+                         </tr>
+                       ))}
+                    </tbody>
+                 </table>
+               </div>
+             </div>
+
+             <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-[#5D3A24]/10">
+               <div className="p-4 bg-[#F5F0EB] border-b border-[#5D3A24]/10">
+                  <h3 className="font-bold text-[#5D3A24] uppercase tracking-wide text-sm">Sábado</h3>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full text-sm text-left">
+                    <thead className="bg-[#5D3A24] text-white">
+                       <tr>
+                          <th className="px-4 py-3 font-semibold">Programa</th>
+                          <th className="px-4 py-3 font-semibold">Horario</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#5D3A24]/10">
+                       {programmingData?.saturday.map((p, idx) => (
+                         <tr key={idx} className={idx % 2 === 0 ? "bg-[#FDFCF8]" : "bg-[#F5F0EB]"}>
+                           <td className="px-4 py-3 font-medium">
+                             {p.name}
+                             {p.parent && <span className="text-xs text-[#9E7649] block font-normal italic">Dentro de {p.parent}</span>}
+                           </td>
+                           <td className="px-4 py-3">{formatTo12Hour(p.start)} - {formatTo12Hour(p.end)}</td>
+                         </tr>
+                       ))}
+                    </tbody>
+                 </table>
+               </div>
+             </div>
+
+             <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-[#5D3A24]/10">
+               <div className="p-4 bg-[#F5F0EB] border-b border-[#5D3A24]/10">
+                  <h3 className="font-bold text-[#5D3A24] uppercase tracking-wide text-sm">Domingo</h3>
+               </div>
+               <div className="overflow-x-auto">
+                 <table className="w-full text-sm text-left">
+                    <thead className="bg-[#5D3A24] text-white">
+                       <tr>
+                          <th className="px-4 py-3 font-semibold">Programa</th>
+                          <th className="px-4 py-3 font-semibold">Horario</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#5D3A24]/10">
+                       {programmingData?.sunday.map((p, idx) => (
+                         <tr key={idx} className={idx % 2 === 0 ? "bg-[#FDFCF8]" : "bg-[#F5F0EB]"}>
+                           <td className="px-4 py-3 font-medium">
+                             {p.name}
+                             {p.parent && <span className="text-xs text-[#9E7649] block font-normal italic">Dentro de {p.parent}</span>}
+                           </td>
+                           <td className="px-4 py-3">{formatTo12Hour(p.start)} - {formatTo12Hour(p.end)}</td>
+                         </tr>
+                       ))}
                     </tbody>
                  </table>
                </div>
              </div>
           </div>
-        ) : customContent ? (
+        )
+      ) : customContent ? (
             <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-[#5D3A24]/10 whitespace-pre-wrap">
                 {customContent}
             </div>

@@ -21,39 +21,39 @@ export type DayType = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY'
 
 export const DEFAULT_DAY_MINUTES: Record<DayType, TransmissionBreakdown> = {
     MONDAY: {
-        informativos: 69, boletines: 20, publicidad: 20, educativos: 0, orientacion: 171,
-        cienciaTecnica: 0, variados: 99, historicosGrabado: 0,
+        informativos: 69, boletines: 15, publicidad: 20, educativos: 0, orientacion: 171,
+        cienciaTecnica: 3, variados: 101, historicosGrabado: 0,
         variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 43, musicales: 58, deportivos: 0, reposiciones: 0, total: 480
     },
     TUESDAY: {
-        informativos: 69, boletines: 20, publicidad: 20, educativos: 0, orientacion: 171,
-        cienciaTecnica: 0, variados: 99, historicosGrabado: 0,
+        informativos: 69, boletines: 15, publicidad: 20, educativos: 0, orientacion: 171,
+        cienciaTecnica: 3, variados: 101, historicosGrabado: 0,
         variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 43, musicales: 58, deportivos: 0, reposiciones: 0, total: 480
     },
     WEDNESDAY: {
-        informativos: 69, boletines: 20, publicidad: 20, educativos: 0, orientacion: 171,
-        cienciaTecnica: 0, variados: 99, historicosGrabado: 0,
+        informativos: 69, boletines: 15, publicidad: 20, educativos: 0, orientacion: 171,
+        cienciaTecnica: 3, variados: 101, historicosGrabado: 0,
         variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 43, musicales: 58, deportivos: 0, reposiciones: 0, total: 480
     },
     THURSDAY: {
-        informativos: 69, boletines: 20, publicidad: 20, educativos: 0, orientacion: 171,
-        cienciaTecnica: 0, variados: 99, historicosGrabado: 0,
+        informativos: 69, boletines: 15, publicidad: 20, educativos: 0, orientacion: 171,
+        cienciaTecnica: 3, variados: 101, historicosGrabado: 0,
         variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 43, musicales: 58, deportivos: 0, reposiciones: 0, total: 480
     },
     FRIDAY: {
-        informativos: 69, boletines: 20, publicidad: 20, educativos: 0, orientacion: 171,
-        cienciaTecnica: 0, variados: 99, historicosGrabado: 0,
+        informativos: 69, boletines: 15, publicidad: 20, educativos: 0, orientacion: 171,
+        cienciaTecnica: 3, variados: 101, historicosGrabado: 0,
         variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 43, musicales: 58, deportivos: 0, reposiciones: 0, total: 480
     },
     SATURDAY: {
-        informativos: 69, boletines: 20, publicidad: 20, educativos: 0, orientacion: 80,
-        cienciaTecnica: 0, variados: 184, historicosGrabado: 0,
-        variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 0, musicales: 101, deportivos: 0, reposiciones: 0, total: 474
+        informativos: 69, boletines: 15, publicidad: 16, educativos: 0, orientacion: 80,
+        cienciaTecnica: 0, variados: 195, historicosGrabado: 0,
+        variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 0, musicales: 105, deportivos: 0, reposiciones: 0, total: 480
     },
     SUNDAY: {
         informativos: 28, boletines: 15, publicidad: 10, educativos: 0, orientacion: 139,
         cienciaTecnica: 5, variados: 0, historicosGrabado: 13,
-        variadoInfantilGrabado: 13, dramatizados: 0, literaturaArte: 85, musicales: 172, deportivos: 0, reposiciones: 0, total: 493
+        variadoInfantilGrabado: 13, dramatizados: 0, literaturaArte: 85, musicales: 172, deportivos: 0, reposiciones: 0, total: 480
     }
 };
 
@@ -91,7 +91,13 @@ export const getDayMinutesConfig = (): Record<DayType, TransmissionBreakdown> & 
     }
     return {
         ...DEFAULT_DAY_MINUTES,
-        categoryPrograms: {}
+        categoryPrograms: {
+            informativos: ["Noticiero Nacional", "Noticiero Provincial", "RCM Noticias"],
+            variados: ["Buenos Días Bayamo"],
+            orientacion: ["Todos en Casa", "Parada Joven", "Hablando con Juana", "Cómplices", "Coloreando Melodías", "Sigue a tu ritmo"],
+            literaturaArte: ["Arte Bayamo", "Alba y Crisol", "Palco de domingo"],
+            musicales: ["La Cumbancha", "Estación 95.3"]
+        }
     };
 };
 
@@ -210,4 +216,32 @@ export const getMonthlyTotalData = (month: number, year: number, config: Record<
         hours: parseFloat((total.total / 60).toFixed(2)) || 0,
         breakdown: total
     };
+};
+
+/**
+ * Calculates the totals for the main program groups as requested by the user.
+ * Groups: INFORMACIÓN, ORIENTACIÓN, CULTURA, MÚSICA, DEPORTES, REPOSICIONES.
+ * @param breakdown The transmission breakdown data.
+ * @returns An object with the totals for each group.
+ */
+export const getGroupTotals = (breakdown: TransmissionBreakdown) => {
+    return {
+        INFORMACION: (Number(breakdown.informativos) || 0) + (Number(breakdown.boletines) || 0) + (Number(breakdown.publicidad) || 0),
+        ORIENTACION: (Number(breakdown.orientacion) || 0) + (Number(breakdown.educativos) || 0) + (Number(breakdown.cienciaTecnica) || 0),
+        CULTURA: (Number(breakdown.literaturaArte) || 0) + (Number(breakdown.dramatizados) || 0) + (Number(breakdown.historicosGrabado) || 0) + (Number(breakdown.variadoInfantilGrabado) || 0) + (Number(breakdown.variados) || 0),
+        MUSICA: Number(breakdown.musicales) || 0,
+        DEPORTES: Number(breakdown.deportivos) || 0,
+        REPOSICIONES: Number(breakdown.reposiciones) || 0
+    };
+};
+
+/**
+ * Validates if the sum of group totals equals 8 hours (480 minutes).
+ * @param breakdown The transmission breakdown data.
+ * @returns Boolean indicating if it sums to 480.
+ */
+export const validateEightHourRule = (breakdown: TransmissionBreakdown): boolean => {
+    const groups = getGroupTotals(breakdown);
+    const sum = Object.values(groups).reduce((acc, val) => acc + val, 0);
+    return Math.abs(sum - 480) < 0.001;
 };

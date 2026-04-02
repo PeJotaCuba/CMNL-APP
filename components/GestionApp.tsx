@@ -378,25 +378,41 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
       const dayTypes: DayType[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
-      categories.forEach(cat => {
-          dayTypes.forEach(dayType => {
+      dayTypes.forEach(dayType => {
+          let dayTotal = 0;
+          categories.forEach(cat => {
               const calculatedMinutes = calculateCategoryMinutes(cat, dayType, fichas, newConfig.categoryPrograms || {});
-              if (newConfig[dayType][cat] !== calculatedMinutes) {
-                  newConfig[dayType][cat] = calculatedMinutes;
+              newConfig[dayType][cat] = calculatedMinutes;
+              dayTotal += calculatedMinutes;
+          });
+
+          // Ensure 8-hour rule (480 minutes)
+          if (dayTotal !== 480 && dayTotal > 0) {
+              const diff = 480 - dayTotal;
+              // Adjust musicales as the buffer category, or variados if musicales is 0
+              if (newConfig[dayType].musicales > 0) {
+                  newConfig[dayType].musicales += diff;
+              } else {
+                  newConfig[dayType].variados += diff;
+              }
+              dayTotal = 480;
+          }
+          newConfig[dayType].total = dayTotal;
+      });
+
+      // Check if anything actually changed compared to transmissionConfig
+      dayTypes.forEach(dayType => {
+          categories.forEach(cat => {
+              if (newConfig[dayType][cat] !== transmissionConfig[dayType][cat]) {
                   changed = true;
               }
           });
+          if (newConfig[dayType].total !== transmissionConfig[dayType].total) {
+              changed = true;
+          }
       });
 
       if (changed) {
-          dayTypes.forEach(dayType => {
-              let total = 0;
-              categories.forEach(cat => {
-                  total += newConfig[dayType][cat];
-              });
-              newConfig[dayType].total = total;
-          });
-          
           setTransmissionConfig(newConfig);
           saveDayMinutesConfig(newConfig);
       }
@@ -431,23 +447,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   useEffect(() => {
     localStorage.setItem(`user_${currentUser?.username || 'default'}_rcm_consolidated_months`, JSON.stringify(consolidatedMonths));
   }, [consolidatedMonths, currentUser]);
-
-  useEffect(() => {
-    const today = new Date();
-    // Restriction starts April 1st, 2026
-    const isApril2026OrLater = today.getFullYear() > 2026 || (today.getFullYear() === 2026 && today.getMonth() >= 3); // 3 is April
-    const isDays1To3 = today.getDate() >= 1 && today.getDate() <= 3;
-    
-    if (isApril2026OrLater && isDays1To3) {
-        // Check if previous month is consolidated
-        const prevMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const prevMonthString = `${prevMonthDate.getFullYear()}-${(prevMonthDate.getMonth() + 1).toString().padStart(2, '0')}`;
-        const isConsolidated = consolidatedMonths.some(c => c.month === prevMonthString);
-        if (!isConsolidated) {
-            setShowRestrictionModal(true);
-        }
-    }
-  }, [consolidatedMonths]);
 
   useEffect(() => {
     localStorage.setItem('rcm_data_fichas', JSON.stringify(fichas));
@@ -488,6 +487,19 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       // Use T12:00:00 to avoid timezone issues with YYYY-MM-DD
       const date = new Date(dateStr + 'T12:00:00');
       const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+      
+      // Check for manual override first
+      const manualData = localStorage.getItem('rcm_manual_programming');
+      if (manualData) {
+          try {
+              const manualPrograms: any[] = JSON.parse(manualData);
+              const onDay = manualPrograms.find(p => p.name.toLowerCase() === program.name.toLowerCase() && p.days.includes(day));
+              return !!onDay;
+          } catch (e) {
+              console.error("Error parsing manual programming", e);
+          }
+      }
+
       const freq = program.frequency.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       
       // Normalize frequency string
@@ -517,8 +529,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   };
 
   const DEFAULT_PROGRAMS = [
-      { name: "Noticiero Nacional", duration: "28 min", frequency: "Lunes a Domingo", schedule: "00:00-00:00" },
-      { name: "Noticiero Provincial", duration: "28 min", frequency: "Lunes a Sábado", schedule: "00:00-00:00" }
+      { name: "Noticiero Nacional", duration: "28 min", frequency: "Lunes a Domingo", schedule: "13:00-13:30" },
+      { name: "Noticiero Provincial", duration: "28 min", frequency: "Lunes a Sábado", schedule: "12:00-12:28" }
   ];
 
   const calculateCategoryMinutes = (
@@ -536,6 +548,79 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       if (dayType === 'SUNDAY') dummyDateStr = '2024-01-07';
 
       const allPrograms = [...fichas, ...DEFAULT_PROGRAMS];
+
+      const getBoletinesMinutes = (f: any): number => {
+          const fName = f.name.toLowerCase();
+          if (fName.includes('buenos días bayamo') || fName.includes('buenos dias bayamo')) return 12;
+          if (fName.includes('hablando con juana')) return 3;
+          if (fName.includes('cómplices') || fName.includes('complices')) return 6;
+          if (fName.includes('estación 95.3') || fName.includes('estacion 95.3')) return 3;
+          if (fName.includes('palco de domingo')) return 3;
+
+          let programTotal = 0;
+          const profile = f.profile?.toLowerCase() || '';
+          
+          // Check for "boletín (n)" or "boletin (n)"
+          const boletinMatch = profile.match(/bolet[ií]n\s*\((\d+)\)/);
+          if (boletinMatch) {
+              programTotal += parseInt(boletinMatch[1], 10) * 3;
+          } else {
+              // Check for "n boletines"
+              const boletinesCountMatch = profile.match(/(\d+)\s*bolet[ií]nes/);
+              if (boletinesCountMatch) {
+                  programTotal += parseInt(boletinesCountMatch[1], 10) * 3;
+              } else if (profile.includes('tres boletines')) {
+                  programTotal += 9;
+              } else if (profile.includes('dos boletines')) {
+                  programTotal += 6;
+              } else if (profile.includes('un boletín') || profile.includes('un boletin') || profile.includes('el boletín') || profile.includes('el boletin')) {
+                  programTotal += 3;
+              }
+          }
+          
+          if (profile.includes('un resumen informativo') || profile.includes('el resumen informativo') || profile.includes('resumen informativo')) {
+              programTotal += 3; // Summary is 3 mins as per user logic
+          }
+          
+          f.sections?.forEach((s: any) => {
+              const sName = s.name.toLowerCase();
+              const sDesc = s.description?.toLowerCase() || '';
+              if (sName.includes('boletín') || sName.includes('boletin') || sDesc.includes('boletín') || sDesc.includes('boletin')) {
+                  const dur = parseDuration(s.duration);
+                  programTotal += dur > 0 ? dur : 3;
+              }
+          });
+          return programTotal;
+      };
+
+      const getCienciaTecnicaMinutes = (f: any, day: string): number => {
+          const fName = f.name.toLowerCase();
+          const profile = f.profile?.toLowerCase() || '';
+          
+          // Specific programs
+          if (fName.includes('buenos días bayamo') || fName.includes('buenos dias bayamo')) {
+              if (['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'].includes(day)) return 3;
+          }
+          if (fName.includes('parada joven')) {
+              if (['TUESDAY', 'FRIDAY'].includes(day)) return 3;
+          }
+          
+          // General check in profile
+          if (profile.includes('ciencia y técnica') || profile.includes('ciencia y tecnica')) {
+              // If it's a daily program, it might be every day or specific days
+              // For now, we assume if it's in the profile and not handled above, we might need more info
+              // But let's check if it specifies a day
+              if (profile.includes('lunes') && day === 'MONDAY') return 3;
+              if (profile.includes('martes') && day === 'TUESDAY') return 3;
+              if (profile.includes('miércoles') && day === 'WEDNESDAY') return 3;
+              if (profile.includes('jueves') && day === 'THURSDAY') return 3;
+              if (profile.includes('viernes') && day === 'FRIDAY') return 3;
+              if (profile.includes('sábado') && day === 'SATURDAY') return 3;
+              if (profile.includes('domingo') && day === 'SUNDAY') return 3;
+          }
+          
+          return 0;
+      };
 
       const parseDuration = (dur: string): number => {
           if (!dur) return 0;
@@ -555,33 +640,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           let total = 0;
           allPrograms.forEach(f => {
               if (isProgramOnDay(f as any, dummyDateStr)) {
-                  let programTotal = 0;
-                  const profile = (f as any).profile?.toLowerCase() || '';
-                  
-                  if (profile.includes('3 boletines') || profile.includes('tres boletines')) {
-                      programTotal += 9;
-                  } else if (profile.includes('2 boletines') || profile.includes('dos boletines')) {
-                      programTotal += 6;
-                  } else if (profile.includes('un boletín') || profile.includes('un boletin') || profile.includes('el boletín') || profile.includes('el boletin')) {
-                      programTotal += 3;
-                  }
-                  
-                  if (profile.includes('un resumen informativo') || profile.includes('el resumen informativo')) {
-                      programTotal += 5;
-                  }
-                  
-                  if (programTotal === 0) {
-                      (f as any).sections?.forEach((s: any) => {
-                          const sName = s.name.toLowerCase();
-                          const sDesc = s.description?.toLowerCase() || '';
-                          if (sName.includes('boletín') || sName.includes('boletin') || sDesc.includes('boletín') || sDesc.includes('boletin')) {
-                              const dur = parseDuration(s.duration);
-                              programTotal += dur > 0 ? dur : 3;
-                          }
-                      });
-                  }
-                  
-                  total += programTotal;
+                  const fName = f.name.toLowerCase();
+                  if (fName.includes('alba y crisol') || fName.includes('coloreando melodías')) return;
+                  total += getBoletinesMinutes(f);
               }
           });
           return total;
@@ -591,66 +652,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           let total = 0;
           allPrograms.forEach(f => {
               if (isProgramOnDay(f as any, dummyDateStr)) {
-                  if (f.name.toLowerCase().includes('buenos días bayamo') || f.name.toLowerCase().includes('buenos dias bayamo')) {
-                      if (['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'].includes(dayType)) {
-                          total += 3;
-                      }
-                  }
-                  if (f.name.toLowerCase().includes('parada joven')) {
-                      if (['TUESDAY', 'FRIDAY'].includes(dayType)) {
-                          total += 3;
-                      }
-                  }
+                  total += getCienciaTecnicaMinutes(f, dayType);
               }
           });
           return total;
       }
 
       if (cat === 'publicidad') {
-          const schedules: { start: number, end: number }[] = [];
-          
-          allPrograms.forEach(f => {
-              if (isProgramOnDay(f as any, dummyDateStr)) {
-                  if (f.schedule && f.schedule !== "00:00-00:00") {
-                      const parts = f.schedule.split('-');
-                      if (parts.length === 2) {
-                          const parseTime = (t: string) => {
-                              const match = t.trim().match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/);
-                              if (match) {
-                                  let h = parseInt(match[1], 10);
-                                  const m = parseInt(match[2], 10);
-                                  const ampm = match[3]?.toLowerCase();
-                                  if (ampm === 'pm' && h < 12) h += 12;
-                                  if (ampm === 'am' && h === 12) h = 0;
-                                  return h * 60 + m;
-                              }
-                              return -1;
-                          };
-                          const start = parseTime(parts[0]);
-                          const end = parseTime(parts[1]);
-                          if (start !== -1 && end !== -1) {
-                              schedules.push({ start, end });
-                          }
-                      }
-                  }
-              }
-          });
-          
-          schedules.sort((a, b) => a.start - b.start);
-          
-          let gaps = 0;
-          let currentEnd = -1;
-          
-          schedules.forEach(s => {
-              if (currentEnd !== -1 && s.start > currentEnd) {
-                  gaps++;
-              }
-              if (s.end > currentEnd) {
-                  currentEnd = s.end;
-              }
-          });
-          
-          return 4 + (gaps * 2);
+          if (dayType === 'SUNDAY') return 10;
+          if (dayType === 'SATURDAY') return 16;
+          return 20;
       }
 
       const assignedProgramNames = categoryPrograms[cat] || [];
@@ -658,7 +669,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       assignedProgramNames.forEach(progName => {
           const ficha = allPrograms.find(f => f.name === progName);
           if (ficha && isProgramOnDay(ficha as any, dummyDateStr)) {
-              total += parseDuration(ficha.duration);
+              const fName = ficha.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+              let duration = parseDuration(ficha.duration);
+              
+              // Subtract 26 minutes from Cómplices (Alba y Crisol + Coloreando Melodías)
+              if (fName.includes('complices')) {
+                  duration = Math.max(0, duration - 26);
+              }
+              
+              // Subtract Boletines and Ciencia y Técnica
+              duration -= getBoletinesMinutes(ficha);
+              duration -= getCienciaTecnicaMinutes(ficha, dayType);
+              
+              // Special case for Buenos Días Bayamo: User says 101 mins
+              if (fName.includes('buenos días bayamo') || fName.includes('buenos dias bayamo')) {
+                  duration = 101;
+              }
+              
+              // Special case for Sigue a tu ritmo: 103 mins total - 28 mins news = 75 mins
+              if (fName.includes('sigue a tu ritmo')) {
+                  duration = 75;
+              }
+              
+              total += Math.max(0, duration);
           }
       });
       return total;
@@ -1025,6 +1058,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       if (editForm && editForm.sections) {
           const updatedSections = [...editForm.sections];
           updatedSections[index] = { ...updatedSections[index], [field]: value };
+          setEditForm({ ...editForm, sections: updatedSections });
+      }
+  };
+
+  const handleRemoveSection = (index: number) => {
+      if (editForm && editForm.sections) {
+          const updatedSections = editForm.sections.filter((_, i) => i !== index);
           setEditForm({ ...editForm, sections: updatedSections });
       }
   };
@@ -2014,37 +2054,43 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   ) : (
                       <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
-                              <button 
-                                  onClick={() => {
-                                      const [y, m] = selectedMonth.split('-').map(Number);
-                                      const date = new Date(y, m - 2, 1);
-                                      setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
-                                  }}
-                                  className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
-                              >
-                                  <ChevronLeft size={20} />
-                              </button>
+                              {isAdmin && (
+                                  <button 
+                                      onClick={() => {
+                                          const [y, m] = selectedMonth.split('-').map(Number);
+                                          const date = new Date(y, m - 2, 1);
+                                          setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                                      }}
+                                      className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
+                                  >
+                                      <ChevronLeft size={20} />
+                                  </button>
+                              )}
                               <span className="font-bold text-sm text-[#9E7649] capitalize">
                                   {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
                               </span>
-                              <button 
-                                  onClick={() => {
-                                      const [y, m] = selectedMonth.split('-').map(Number);
-                                      const date = new Date(y, m, 1);
-                                      setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
-                                  }}
-                                  className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
-                              >
-                                  <ChevronRight size={20} />
-                              </button>
+                              {isAdmin && (
+                                  <button 
+                                      onClick={() => {
+                                          const [y, m] = selectedMonth.split('-').map(Number);
+                                          const date = new Date(y, m, 1);
+                                          setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                                      }}
+                                      className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
+                                  >
+                                      <ChevronRight size={20} />
+                                  </button>
+                              )}
                           </div>
-                          <button 
-                              onClick={() => setShowAccumulatedMonths(true)}
-                              className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
-                          >
-                              <Library size={16} />
-                              <span className="hidden sm:inline">Histórico</span>
-                          </button>
+                          {isAdmin && (
+                              <button 
+                                  onClick={() => setShowAccumulatedMonths(true)}
+                                  className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                              >
+                                  <Library size={16} />
+                                  <span className="hidden sm:inline">Histórico</span>
+                              </button>
+                          )}
                       </div>
                   )}
               </CMNLHeader>
@@ -3312,16 +3358,38 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       </div>
 
                       {/* Sections */}
-                      {selectedFicha.sections && selectedFicha.sections.length > 0 && (
+                      {((selectedFicha.sections && selectedFicha.sections.length > 0) || isEditing) && (
                           <div>
-                              <h3 className="text-[#9E7649] font-bold text-lg mb-3 flex items-center gap-2">
-                                  <Library size={20}/> Secciones
-                              </h3>
+                              <div className="flex justify-between items-center mb-3">
+                                  <h3 className="text-[#9E7649] font-bold text-lg flex items-center gap-2">
+                                      <Library size={20}/> Secciones
+                                  </h3>
+                                  {isEditing && (
+                                      <button 
+                                          onClick={() => {
+                                              if (editForm) {
+                                                  const newSections = [...(editForm.sections || []), { name: '', schedule: '', description: '' }];
+                                                  setEditForm({ ...editForm, sections: newSections });
+                                              }
+                                          }}
+                                          className="text-xs bg-[#9E7649]/20 hover:bg-[#9E7649]/40 text-[#9E7649] px-3 py-1 rounded-lg border border-[#9E7649]/30 transition-colors flex items-center gap-1"
+                                      >
+                                          <Plus size={14} /> Añadir Sección
+                                      </button>
+                                  )}
+                              </div>
                               <div className="grid gap-3">
                                   {(isEditing && editForm ? editForm.sections : selectedFicha.sections).map((sec, idx) => (
-                                      <div key={idx} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-colors">
+                                      <div key={idx} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-colors relative group/sec">
                                           {isEditing && editForm ? (
                                               <div className="space-y-2">
+                                                  <button 
+                                                      onClick={() => handleRemoveSection(idx)}
+                                                      className="absolute top-2 right-2 p-1 text-red-400 hover:text-red-300 opacity-0 group-hover/sec:opacity-100 transition-opacity"
+                                                      title="Eliminar Sección"
+                                                  >
+                                                      <Trash2 size={14} />
+                                                  </button>
                                                   <div className="flex flex-wrap gap-2">
                                                       <input 
                                                           type="text" 
@@ -3504,29 +3572,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           </div>
       )}
 
-      {/* Restriction Modal */}
-      {showRestrictionModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
-                  <div className="flex items-center gap-3 mb-4">
-                      <AlertTriangle className="text-yellow-500" size={24} />
-                      <h3 className="text-xl font-bold text-white">Acción no permitida</h3>
-                  </div>
-                  <p className="text-sm text-[#E8DCCF] mb-6">
-                      {isAdmin 
-                        ? "Acción Requerida: Debe consolidar el mes anterior para habilitar la visualización del mes actual."
-                        : "Datos en proceso de consolidación. Por favor, consulte en 24 horas."}
-                  </p>
-                  {isAdmin && (
-                      <div className="flex justify-end">
-                          <button onClick={() => { setShowRestrictionModal(false); setActiveSection('pagos'); }} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">
-                              Ir a Consolidar
-                          </button>
-                      </div>
-                  )}
-              </div>
-          </div>
-      )}
+      {/* Restriction Modal removed as per user request */}
     </div>
   );
 };
