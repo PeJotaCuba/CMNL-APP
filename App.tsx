@@ -350,19 +350,80 @@ const App: React.FC = () => {
   };
 
   const handleAdminBackup = () => {
-      const dataToExport = {
-          users: JSON.parse(localStorage.getItem('rcm_data_users') || '[]'),
-          historyContent: localStorage.getItem('rcm_data_history') || '',
-          aboutContent: localStorage.getItem('rcm_data_about') || '',
-          news: JSON.parse(localStorage.getItem('rcm_data_news') || '[]'),
-          fichas: JSON.parse(localStorage.getItem('rcm_data_fichas') || '[]'),
-          catalogo: JSON.parse(localStorage.getItem('rcm_data_catalogo') || '[]'),
-          worklogs: JSON.parse(localStorage.getItem('rcm_data_worklogs') || '[]'),
-          consolidated: JSON.parse(localStorage.getItem('rcm_data_consolidated') || '[]'),
-          interruptions: JSON.parse(localStorage.getItem('rcm_interruptions') || '[]'),
-          consolidatedMonths: JSON.parse(localStorage.getItem('rcm_consolidated_months') || '[]'),
-          transmissionConfig: JSON.parse(localStorage.getItem('rcm_transmission_config') || 'null')
+      const dataToExport: Record<string, any> = {};
+      
+      const getLocal = (key: string) => {
+          const val = localStorage.getItem(key);
+          if (!val) return undefined;
+          try { return JSON.parse(val); } catch (e) { return val; }
       };
+
+      // Map local keys to the structure expected by handleCloudSync
+      dataToExport.users = getLocal('rcm_data_users');
+      dataToExport.historyContent = getLocal('rcm_data_history');
+      dataToExport.aboutContent = getLocal('rcm_data_about');
+      dataToExport.news = getLocal('rcm_data_news');
+      dataToExport.fichas = getLocal('rcm_data_fichas');
+      dataToExport.catalogo = getLocal('rcm_data_catalogo');
+      dataToExport.worklogs = getLocal('rcm_data_worklogs');
+      dataToExport.consolidated = getLocal('rcm_data_consolidated');
+      dataToExport.interruptions = getLocal('rcm_interruptions');
+      dataToExport.consolidatedMonths = getLocal('rcm_consolidated_months');
+      dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
+      
+      // Payment configs
+      dataToExport.paymentConfigs = {
+          rcm_payment_config: getLocal('rcm_payment_config'),
+          rcm_payment_workers: getLocal('rcm_payment_workers'),
+          rcm_payment_programs: getLocal('rcm_payment_programs'),
+          rcm_payment_roles: getLocal('rcm_payment_roles'),
+          rcm_payment_history: getLocal('rcm_payment_history')
+      };
+
+      // Scripts
+      dataToExport.scripts = {
+          rcm_scripts_programs: getLocal('rcm_scripts_programs'),
+          rcm_scripts_history: getLocal('rcm_scripts_history')
+      };
+
+      // Program Sections
+      dataToExport.programSections = {
+          rcm_program_sections: getLocal('rcm_program_sections')
+      };
+
+      // Agenda
+      dataToExport.agendaPrograms = getLocal('rcm_programs');
+      dataToExport.agendaEfemerides = getLocal('rcm_efemerides');
+      dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones');
+      dataToExport.agendaDayThemes = getLocal('rcm_day_themes');
+      dataToExport.agendaUsers = getLocal('rcm_users');
+      dataToExport.agendaPropaganda = getLocal('rcm_propaganda');
+
+      dataToExport.programsList = getLocal('rcm_programs_list');
+      dataToExport.customRoots = getLocal('rcm_custom_roots');
+      dataToExport.equipo = getLocal('rcm_equipo_cmnl');
+
+      // User Data
+      dataToExport.userData = {
+          rcm_user_preferences: getLocal('rcm_user_preferences'),
+          rcm_user_notifications: getLocal('rcm_user_notifications')
+      };
+
+      // Clean up undefined values
+      Object.keys(dataToExport).forEach(key => {
+          if (dataToExport[key] === undefined) {
+              delete dataToExport[key];
+          } else if (typeof dataToExport[key] === 'object' && !Array.isArray(dataToExport[key])) {
+              Object.keys(dataToExport[key]).forEach(subKey => {
+                  if (dataToExport[key][subKey] === undefined) {
+                      delete dataToExport[key][subKey];
+                  }
+              });
+              if (Object.keys(dataToExport[key]).length === 0) {
+                  delete dataToExport[key];
+              }
+          }
+      });
 
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
       const downloadAnchorNode = document.createElement('a');

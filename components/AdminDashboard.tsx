@@ -121,8 +121,9 @@ const AdminDashboard: React.FC<Props> = ({
                   Respaldar sistema
                 </button>
                 <button 
-                 onClick={onSync}
-                 className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold hover:bg-[#9E7649]/90 transition-all"
+                 onClick={() => {}}
+                 className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold opacity-50 cursor-not-allowed transition-all"
+                 title="Utilice el botón Actualizar del menú lateral"
                 >
                   Actualizar Sistema
                 </button>

@@ -5,7 +5,7 @@ import CMNLHeader from './CMNLHeader';
 import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getAccumulatedData, getMonthlyTotalData, getDayMinutesConfig, saveDayMinutesConfig, DayType, TransmissionBreakdown } from '../src/services/transmissionService';
+import { getAccumulatedData, getMonthlyTotalData, getDayMinutesConfig, saveDayMinutesConfig, DayType, TransmissionBreakdown, getDayType } from '../src/services/transmissionService';
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -115,6 +115,22 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const [teamData, setTeamData] = useState<any[]>(() => {
       const saved = localStorage.getItem('rcm_equipo_cmnl');
       return saved ? JSON.parse(saved) : [];
+  });
+
+  const getProgrammedMinutesForMonth = (cat: keyof TransmissionBreakdown, month: number, year: number) => {
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      let total = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+          const current = new Date(year, month, d);
+          const dayType = getDayType(current);
+          total += calculateCategoryMinutes(cat, dayType, fichas, transmissionConfig.categoryPrograms || {});
+      }
+      return total;
+  };
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
   const [habitualMode, setHabitualMode] = useState<boolean>(() => {
@@ -340,15 +356,63 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
   // Transmission State
   const [transmissionConfig, setTransmissionConfig] = useState(getDayMinutesConfig());
+
+  useEffect(() => {
+      const newConfig = { 
+          ...transmissionConfig,
+          MONDAY: { ...transmissionConfig.MONDAY },
+          TUESDAY: { ...transmissionConfig.TUESDAY },
+          WEDNESDAY: { ...transmissionConfig.WEDNESDAY },
+          THURSDAY: { ...transmissionConfig.THURSDAY },
+          FRIDAY: { ...transmissionConfig.FRIDAY },
+          SATURDAY: { ...transmissionConfig.SATURDAY },
+          SUNDAY: { ...transmissionConfig.SUNDAY },
+          categoryPrograms: { ...(transmissionConfig.categoryPrograms || {}) }
+      };
+      let changed = false;
+
+      const categories: (keyof TransmissionBreakdown)[] = [
+          'informativos', 'boletines', 'publicidad', 'educativos', 'orientacion', 'cienciaTecnica',
+          'variados', 'variadoInfantilGrabado', 'historicosGrabado', 'dramatizados', 'literaturaArte', 'musicales', 'deportivos', 'reposiciones'
+      ];
+
+      const dayTypes: DayType[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+      categories.forEach(cat => {
+          dayTypes.forEach(dayType => {
+              const calculatedMinutes = calculateCategoryMinutes(cat, dayType, fichas, newConfig.categoryPrograms || {});
+              if (newConfig[dayType][cat] !== calculatedMinutes) {
+                  newConfig[dayType][cat] = calculatedMinutes;
+                  changed = true;
+              }
+          });
+      });
+
+      if (changed) {
+          dayTypes.forEach(dayType => {
+              let total = 0;
+              categories.forEach(cat => {
+                  total += newConfig[dayType][cat];
+              });
+              newConfig[dayType].total = total;
+          });
+          
+          setTransmissionConfig(newConfig);
+          saveDayMinutesConfig(newConfig);
+      }
+  }, [fichas, transmissionConfig.categoryPrograms]);
+
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [showPrematureAlert, setShowPrematureAlert] = useState(false);
   const [showRestrictionModal, setShowRestrictionModal] = useState(false);
   const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
+  const [editingHistoricalMonthId, setEditingHistoricalMonthId] = useState<string | null>(null);
+  const [historicalEditData, setHistoricalEditData] = useState<ConsolidatedMonth | null>(null);
   const [showInterruptionChoiceModal, setShowInterruptionChoiceModal] = useState(false);
   const [showEditInterruptionsModal, setShowEditInterruptionsModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<keyof TransmissionBreakdown | null>(null);
-  const [categoryEditForm, setCategoryEditForm] = useState({ WEEKDAY: 0, SATURDAY: 0, SUNDAY: 0, programs: [] as string[] });
+  const [categoryEditForm, setCategoryEditForm] = useState({ programs: [] as string[] });
   
   const [dialog, setDialog] = useState<{isOpen: boolean, title: string, message: string, type: 'alert' | 'confirm', onConfirm?: () => void}>({
       isOpen: false, title: '', message: '', type: 'alert'
@@ -450,6 +514,154 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       };
 
       return daysMap[day].some(d => freq.includes(d));
+  };
+
+  const DEFAULT_PROGRAMS = [
+      { name: "Noticiero Nacional", duration: "28 min", frequency: "Lunes a Domingo", schedule: "00:00-00:00" },
+      { name: "Noticiero Provincial", duration: "28 min", frequency: "Lunes a Sábado", schedule: "00:00-00:00" }
+  ];
+
+  const calculateCategoryMinutes = (
+      cat: keyof TransmissionBreakdown,
+      dayType: DayType,
+      fichas: ProgramFicha[],
+      categoryPrograms: Record<string, string[]>
+  ): number => {
+      let dummyDateStr = '2024-01-01'; // Monday
+      if (dayType === 'TUESDAY') dummyDateStr = '2024-01-02';
+      if (dayType === 'WEDNESDAY') dummyDateStr = '2024-01-03';
+      if (dayType === 'THURSDAY') dummyDateStr = '2024-01-04';
+      if (dayType === 'FRIDAY') dummyDateStr = '2024-01-05';
+      if (dayType === 'SATURDAY') dummyDateStr = '2024-01-06';
+      if (dayType === 'SUNDAY') dummyDateStr = '2024-01-07';
+
+      const allPrograms = [...fichas, ...DEFAULT_PROGRAMS];
+
+      const parseDuration = (dur: string): number => {
+          if (!dur) return 0;
+          const str = dur.toLowerCase().trim();
+          const timeMatch = str.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+          if (timeMatch) return parseInt(timeMatch[1], 10) * 60 + parseInt(timeMatch[2], 10);
+          const minMatch = str.match(/(\d+)\s*(?:min|m)/);
+          if (minMatch) return parseInt(minMatch[1], 10);
+          const hourMatch = str.match(/(\d+)\s*(?:hora|h)/);
+          if (hourMatch) return parseInt(hourMatch[1], 10) * 60;
+          const numMatch = str.match(/^(\d+)$/);
+          if (numMatch) return parseInt(numMatch[1], 10);
+          return 0;
+      };
+
+      if (cat === 'boletines') {
+          let total = 0;
+          allPrograms.forEach(f => {
+              if (isProgramOnDay(f as any, dummyDateStr)) {
+                  let programTotal = 0;
+                  const profile = (f as any).profile?.toLowerCase() || '';
+                  
+                  if (profile.includes('3 boletines') || profile.includes('tres boletines')) {
+                      programTotal += 9;
+                  } else if (profile.includes('2 boletines') || profile.includes('dos boletines')) {
+                      programTotal += 6;
+                  } else if (profile.includes('un boletín') || profile.includes('un boletin') || profile.includes('el boletín') || profile.includes('el boletin')) {
+                      programTotal += 3;
+                  }
+                  
+                  if (profile.includes('un resumen informativo') || profile.includes('el resumen informativo')) {
+                      programTotal += 5;
+                  }
+                  
+                  if (programTotal === 0) {
+                      (f as any).sections?.forEach((s: any) => {
+                          const sName = s.name.toLowerCase();
+                          const sDesc = s.description?.toLowerCase() || '';
+                          if (sName.includes('boletín') || sName.includes('boletin') || sDesc.includes('boletín') || sDesc.includes('boletin')) {
+                              const dur = parseDuration(s.duration);
+                              programTotal += dur > 0 ? dur : 3;
+                          }
+                      });
+                  }
+                  
+                  total += programTotal;
+              }
+          });
+          return total;
+      }
+
+      if (cat === 'cienciaTecnica') {
+          let total = 0;
+          allPrograms.forEach(f => {
+              if (isProgramOnDay(f as any, dummyDateStr)) {
+                  if (f.name.toLowerCase().includes('buenos días bayamo') || f.name.toLowerCase().includes('buenos dias bayamo')) {
+                      if (['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'].includes(dayType)) {
+                          total += 3;
+                      }
+                  }
+                  if (f.name.toLowerCase().includes('parada joven')) {
+                      if (['TUESDAY', 'FRIDAY'].includes(dayType)) {
+                          total += 3;
+                      }
+                  }
+              }
+          });
+          return total;
+      }
+
+      if (cat === 'publicidad') {
+          const schedules: { start: number, end: number }[] = [];
+          
+          allPrograms.forEach(f => {
+              if (isProgramOnDay(f as any, dummyDateStr)) {
+                  if (f.schedule && f.schedule !== "00:00-00:00") {
+                      const parts = f.schedule.split('-');
+                      if (parts.length === 2) {
+                          const parseTime = (t: string) => {
+                              const match = t.trim().match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/);
+                              if (match) {
+                                  let h = parseInt(match[1], 10);
+                                  const m = parseInt(match[2], 10);
+                                  const ampm = match[3]?.toLowerCase();
+                                  if (ampm === 'pm' && h < 12) h += 12;
+                                  if (ampm === 'am' && h === 12) h = 0;
+                                  return h * 60 + m;
+                              }
+                              return -1;
+                          };
+                          const start = parseTime(parts[0]);
+                          const end = parseTime(parts[1]);
+                          if (start !== -1 && end !== -1) {
+                              schedules.push({ start, end });
+                          }
+                      }
+                  }
+              }
+          });
+          
+          schedules.sort((a, b) => a.start - b.start);
+          
+          let gaps = 0;
+          let currentEnd = -1;
+          
+          schedules.forEach(s => {
+              if (currentEnd !== -1 && s.start > currentEnd) {
+                  gaps++;
+              }
+              if (s.end > currentEnd) {
+                  currentEnd = s.end;
+              }
+          });
+          
+          return 4 + (gaps * 2);
+      }
+
+      const assignedProgramNames = categoryPrograms[cat] || [];
+      let total = 0;
+      assignedProgramNames.forEach(progName => {
+          const ficha = allPrograms.find(f => f.name === progName);
+          if (ficha && isProgramOnDay(ficha as any, dummyDateStr)) {
+              total += parseDuration(ficha.duration);
+          }
+      });
+      return total;
   };
 
   const getProgramRate = (programName: string, role: string, level: string) => {
@@ -754,6 +966,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       const data = {
           fichas,
           catalogo,
+          transmissionConfig
       };
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
@@ -1235,61 +1448,72 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       const now = new Date();
       const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       
-      let targetYear = now.getFullYear();
-      let targetMonth = now.getMonth();
-      let isPending = false;
+      const [targetYear, targetMonthPlusOne] = selectedMonth.split('-').map(Number);
+      const targetMonth = targetMonthPlusOne - 1; // 0-indexed month
+      const isPast = selectedMonth < currentMonthStr;
+      const isFuture = selectedMonth > currentMonthStr;
 
-      // Restricción Obligatoria a partir del 1 de Abril de 2026
-      const isApril2026OrLater = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() >= 3);
+      const targetMonthString = selectedMonth;
+      const isPending = pendingConsolidationMonth === targetMonthString;
 
-      if (isApril2026OrLater) {
-          if (consolidatedMonths.length > 0) {
-              const sorted = [...consolidatedMonths].sort((a, b) => a.month.localeCompare(b.month));
-              const lastConsolidated = sorted[sorted.length - 1].month;
-              const [year, month] = lastConsolidated.split('-').map(Number);
-              
-              const nextMonthDate = new Date(year, month, 1);
-              const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}`;
-              
-              if (nextMonthStr < currentMonthStr) {
-                  targetYear = nextMonthDate.getFullYear();
-                  targetMonth = nextMonthDate.getMonth();
-                  isPending = true;
-              }
-          } else {
-              // Si no hay meses consolidados, asumimos que el mes anterior está pendiente
-              const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-              targetYear = prevMonthDate.getFullYear();
-              targetMonth = prevMonthDate.getMonth();
-              isPending = true;
-          }
-      }
+      const emptyBreakdownObj: TransmissionBreakdown = { informativos: 0, boletines: 0, publicidad: 0, educativos: 0, orientacion: 0, cienciaTecnica: 0, variados: 0, historicosGrabado: 0, variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 0, musicales: 0, deportivos: 0, reposiciones: 0, total: 0 };
 
-      const targetMonthString = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
-
-      const accumulated = isPending 
-          ? getMonthlyTotalData(targetMonth, targetYear, transmissionConfig)
-          : getAccumulatedData(now, transmissionConfig);
+      const accumulated = isFuture 
+          ? { breakdown: emptyBreakdownObj }
+          : isPast
+              ? getMonthlyTotalData(targetMonth, targetYear, transmissionConfig)
+              : getAccumulatedData(now, transmissionConfig);
           
       const monthly = getMonthlyTotalData(targetMonth, targetYear, transmissionConfig);
 
       const categories: (keyof TransmissionBreakdown)[] = [
-          'informativos', 'boletines', 'publicidad', 'orientacion', 
-          'cienciaTecnica', 'variados', 'historicosGrabado', 
-          'variadoInfantilGrabado', 'literaturaArte', 'musicales'
+          'informativos', 'boletines', 'publicidad', 'educativos', 'orientacion', 
+          'cienciaTecnica', 'variados', 'variadoInfantilGrabado', 'historicosGrabado', 
+          'dramatizados', 'literaturaArte', 'musicales', 'deportivos', 'reposiciones'
+      ];
+
+      const groups = [
+          {
+              name: 'Información',
+              categories: ['informativos', 'boletines'] as (keyof TransmissionBreakdown)[]
+          },
+          {
+              name: 'Orientación',
+              categories: ['publicidad', 'educativos', 'orientacion', 'cienciaTecnica', 'variados', 'variadoInfantilGrabado'] as (keyof TransmissionBreakdown)[]
+          },
+          {
+              name: 'Cultura',
+              categories: ['historicosGrabado', 'dramatizados', 'literaturaArte'] as (keyof TransmissionBreakdown)[]
+          },
+          {
+              name: 'Música',
+              categories: ['musicales'] as (keyof TransmissionBreakdown)[]
+          },
+          {
+              name: 'Deportes',
+              categories: ['deportivos'] as (keyof TransmissionBreakdown)[]
+          },
+          {
+              name: 'Reposiciones',
+              categories: ['reposiciones'] as (keyof TransmissionBreakdown)[]
+          }
       ];
 
       const categoryLabels: Record<keyof TransmissionBreakdown, string> = {
-          informativos: 'Informativos',
-          boletines: 'Boletines',
+          informativos: 'Espacios informativos',
+          boletines: 'Boletines informativos',
           publicidad: 'Publicidad',
-          orientacion: 'Orientación',
-          cienciaTecnica: 'Ciencia/Técnica',
-          variados: 'Variados',
-          historicosGrabado: 'Histórico (Grabado)',
-          variadoInfantilGrabado: 'Variado/Infantil (Grabado)',
-          literaturaArte: 'Literatura/Arte',
-          musicales: 'Musicales',
+          educativos: 'Espacios Educativos',
+          orientacion: 'Espacios de Orientación',
+          cienciaTecnica: 'Espacios de Ciencia y Técnica',
+          variados: 'Espacios Variados',
+          variadoInfantilGrabado: 'Espacio Variado Infantil',
+          historicosGrabado: 'Espacios Históricos',
+          dramatizados: 'Espacios Dramatizados',
+          literaturaArte: 'Espacios de Literatura y Arte',
+          musicales: 'Espacios musicales',
+          deportivos: 'Espacios deportivos',
+          reposiciones: 'Reposiciones',
           total: 'Total'
       };
 
@@ -1310,6 +1534,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       interruptionsByCategory.total = currentMonthInterruptions
           .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
 
+      const isEditingHistorical = !!historicalEditData;
+      const displayAccumulated = isEditingHistorical ? historicalEditData.accumulated : accumulated.breakdown;
+      const displayInterruptions = isEditingHistorical ? historicalEditData.interruptions : interruptionsByCategory;
+      const displayMonthly = isEditingHistorical ? historicalEditData.accumulated : monthly.breakdown;
+      const displayMonthlyHours = isEditingHistorical ? historicalEditData.accumulated.total / 60 : monthly.hours;
+
       const renderCategoryLabel = (cat: keyof TransmissionBreakdown) => {
           if (cat === 'publicidad') return <span className="flex items-center">Publicidad<sup className="text-red-600 text-[10px] font-bold ml-1">GRABADO</sup></span>;
           if (cat === 'historicosGrabado') return <span className="flex items-center">Histórico<sup className="text-red-600 text-[10px] font-bold ml-1">GRABADO</sup></span>;
@@ -1321,15 +1551,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           if (editingCategory) {
               const newConfig = { 
                   ...transmissionConfig,
-                  WEEKDAY: { ...transmissionConfig.WEEKDAY },
+                  MONDAY: { ...transmissionConfig.MONDAY },
+                  TUESDAY: { ...transmissionConfig.TUESDAY },
+                  WEDNESDAY: { ...transmissionConfig.WEDNESDAY },
+                  THURSDAY: { ...transmissionConfig.THURSDAY },
+                  FRIDAY: { ...transmissionConfig.FRIDAY },
                   SATURDAY: { ...transmissionConfig.SATURDAY },
                   SUNDAY: { ...transmissionConfig.SUNDAY },
                   categoryPrograms: { ...(transmissionConfig.categoryPrograms || {}) }
               };
-              
-              newConfig.WEEKDAY[editingCategory] = categoryEditForm.WEEKDAY;
-              newConfig.SATURDAY[editingCategory] = categoryEditForm.SATURDAY;
-              newConfig.SUNDAY[editingCategory] = categoryEditForm.SUNDAY;
               
               const selectedPrograms = categoryEditForm.programs || [];
               newConfig.categoryPrograms[editingCategory] = selectedPrograms;
@@ -1546,13 +1776,17 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               informativos: 0,
               boletines: 0,
               publicidad: 0,
+              educativos: 0,
               orientacion: 0,
               cienciaTecnica: 0,
               variados: 0,
               historicosGrabado: 0,
               variadoInfantilGrabado: 0,
+              dramatizados: 0,
               literaturaArte: 0,
               musicales: 0,
+              deportivos: 0,
+              reposiciones: 0,
               total: manualInterruptions
           };
 
@@ -1570,6 +1804,46 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
       const handleDeleteConsolidatedMonth = (id: string) => {
           setItemToDelete(id);
+      };
+
+      const handleEditHistoricalMonth = (month: ConsolidatedMonth) => {
+          setEditingHistoricalMonthId(month.id);
+          setHistoricalEditData(JSON.parse(JSON.stringify(month))); // Deep copy
+          setShowAccumulatedMonths(false);
+      };
+
+      const handleCancelHistoricalEdit = () => {
+          setEditingHistoricalMonthId(null);
+          setHistoricalEditData(null);
+          setShowAccumulatedMonths(true);
+      };
+
+      const handleSaveHistoricalEdit = () => {
+          if (!historicalEditData) return;
+          setConsolidatedMonths(prev => prev.map(m => m.id === historicalEditData.id ? historicalEditData : m));
+          setEditingHistoricalMonthId(null);
+          setHistoricalEditData(null);
+          setShowAccumulatedMonths(true);
+      };
+
+      const handleHistoricalEdit = (type: 'accumulated' | 'interruptions', cat: keyof TransmissionBreakdown, value: number) => {
+          if (!historicalEditData) return;
+          const newData = { ...historicalEditData };
+          newData[type][cat] = value;
+          
+          let newTotal = 0;
+          const categories: (keyof TransmissionBreakdown)[] = [
+              'informativos', 'boletines', 'publicidad', 'educativos', 'orientacion', 
+              'cienciaTecnica', 'variados', 'variadoInfantilGrabado', 'historicosGrabado', 
+              'dramatizados', 'literaturaArte', 'musicales', 'deportivos', 'reposiciones'
+          ];
+          categories.forEach(c => {
+              newTotal += newData[type][c] || 0;
+          });
+          newData[type].total = newTotal;
+          newData.totalRealMinutes = newData.accumulated.total - newData.interruptions.total;
+          
+          setHistoricalEditData(newData);
       };
 
       if (showAccumulatedMonths) {
@@ -1689,6 +1963,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                           <button onClick={() => exportToWord(month)} className="bg-blue-900/40 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-900/60 transition-colors">
                                                               Word
                                                           </button>
+                                                          <button onClick={() => handleEditHistoricalMonth(month)} className="bg-yellow-900/40 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-yellow-900/60 transition-colors">
+                                                              Editar
+                                                          </button>
                                                           <button onClick={() => handleDeleteConsolidatedMonth(month.id)} className="bg-red-900/40 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-red-900/60 transition-colors">
                                                               Eliminar
                                                           </button>
@@ -1710,48 +1987,88 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           <div className="min-h-screen bg-[#2C1B15] text-[#E8DCCF] font-display flex flex-col relative">
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
-                  sectionTitle="Transmisión"
+                  sectionTitle={isEditingHistorical ? `Editando: ${historicalEditData?.month}` : "Transmisión"}
                   onMenuClick={onMenuClick}
-                  onBack={() => setActiveSection(null)}
+                  onBack={isEditingHistorical ? () => {
+                      if (window.confirm('¿Desea salir sin guardar los cambios?')) {
+                          handleCancelHistoricalEdit();
+                      }
+                  } : () => setActiveSection(null)}
               >
-                  <button 
-                      onClick={() => setShowAccumulatedMonths(true)}
-                      className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
-                  >
-                      <Library size={16} />
-                      <span className="hidden sm:inline">Histórico</span>
-                  </button>
+                  {isEditingHistorical ? (
+                      <div className="flex gap-2">
+                          <button 
+                              onClick={handleCancelHistoricalEdit}
+                              className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                          >
+                              Cancelar
+                          </button>
+                          <button 
+                              onClick={handleSaveHistoricalEdit}
+                              className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-green-600 text-white hover:bg-green-700 transition-all"
+                          >
+                              <Save size={16} />
+                              <span className="hidden sm:inline">Guardar</span>
+                          </button>
+                      </div>
+                  ) : (
+                      <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                              <button 
+                                  onClick={() => {
+                                      const [y, m] = selectedMonth.split('-').map(Number);
+                                      const date = new Date(y, m - 2, 1);
+                                      setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                                  }}
+                                  className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
+                              >
+                                  <ChevronLeft size={20} />
+                              </button>
+                              <span className="font-bold text-sm text-[#9E7649] capitalize">
+                                  {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                              </span>
+                              <button 
+                                  onClick={() => {
+                                      const [y, m] = selectedMonth.split('-').map(Number);
+                                      const date = new Date(y, m, 1);
+                                      setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                                  }}
+                                  className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
+                              >
+                                  <ChevronRight size={20} />
+                              </button>
+                          </div>
+                          <button 
+                              onClick={() => setShowAccumulatedMonths(true)}
+                              className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
+                          >
+                              <Library size={16} />
+                              <span className="hidden sm:inline">Histórico</span>
+                          </button>
+                      </div>
+                  )}
               </CMNLHeader>
 
               <div className="p-6 max-w-6xl mx-auto w-full space-y-8">
-                  {isPending && (
-                      <div className="bg-red-900/40 border border-red-500/30 p-4 rounded-xl flex items-start gap-3">
-                          <AlertTriangle className="text-red-400 shrink-0 mt-0.5" size={20} />
-                          <div>
-                              <h4 className="text-red-400 font-bold mb-1">Acción Requerida</h4>
-                              <p className="text-sm text-red-200/80">
-                                  Debe consolidar el mes que acaba de finalizar ({new Date(targetYear, targetMonth).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}) antes de acceder a los datos del mes en curso.
-                              </p>
-                          </div>
-                      </div>
-                  )}
 
                   {/* Summary Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="bg-gradient-to-br from-[#2C1B15] to-[#3E1E16] p-6 rounded-2xl border border-[#9E7649]/20 shadow-xl">
                           <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Acumulado Real del Mes</p>
-                          <h2 className="text-5xl font-bold text-white mb-1">{((accumulated.breakdown.total - interruptionsByCategory.total) / 60).toFixed(2)} <span className="text-xl font-normal text-[#9E7649]">h</span></h2>
+                          <h2 className="text-5xl font-bold text-white mb-1">{((displayAccumulated.total - displayInterruptions.total) / 60).toFixed(2)} <span className="text-xl font-normal text-[#9E7649]">h</span></h2>
                           <p className="text-xs text-[#E8DCCF]/50">
-                              {isPending 
-                                  ? `Total final del mes de ${new Date(targetYear, targetMonth).toLocaleDateString('es-ES', { month: 'long' })}. Interrupciones descontadas.`
-                                  : `Hasta ayer ${new Date(now.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Interrupciones descontadas.`
+                              {isFuture
+                                  ? `El mes aún no transcurre.`
+                                  : isPast
+                                      ? `Total final del mes de ${new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}. Interrupciones descontadas.`
+                                      : `Hasta ayer ${new Date(now.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Interrupciones descontadas.`
                               }
                           </p>
                       </div>
                       <div className="bg-gradient-to-br from-[#1A100C] to-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/10 shadow-xl">
                           <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Proyección Mensual</p>
-                          <h2 className="text-5xl font-bold text-[#9E7649] mb-1">{monthly.hours.toFixed(2)} <span className="text-xl font-normal text-[#E8DCCF]/30">h</span></h2>
-                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {new Date(targetYear, targetMonth).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
+                          <h2 className="text-5xl font-bold text-[#9E7649] mb-1">{displayMonthlyHours.toFixed(2)} <span className="text-xl font-normal text-[#E8DCCF]/30">h</span></h2>
+                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
                       </div>
                   </div>
 
@@ -1775,54 +2092,98 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                   </tr>
                               </thead>
                               <tbody className="divide-y divide-[#9E7649]/10">
-                                  {categories.map(cat => {
-                                      const accMin = accumulated.breakdown[cat];
-                                      const intMin = interruptionsByCategory[cat];
-                                      const realMin = accMin - intMin;
-                                      const totalMin = monthly.breakdown[cat];
-                                      const percentage = totalMin > 0 ? (realMin / totalMin) * 100 : 0;
+                                  {groups.map(group => {
+                                      const groupAccMin = group.categories.reduce((sum, cat) => sum + displayAccumulated[cat], 0);
+                                      const groupIntMin = group.categories.reduce((sum, cat) => sum + displayInterruptions[cat], 0);
+                                      const groupRealMin = groupAccMin - groupIntMin;
+                                      const groupTotalMin = group.categories.reduce((sum, cat) => sum + displayMonthly[cat], 0);
+                                      const groupPercentage = groupTotalMin > 0 ? (groupRealMin / groupTotalMin) * 100 : 0;
 
                                       return (
-                                          <tr key={cat} className="hover:bg-white/5 transition-colors">
-                                              <td className="px-6 py-4 font-medium text-white">
-                                                  {isAdmin ? (
-                                                      <button 
-                                                          onClick={() => {
-                                                              setEditingCategory(cat);
-                                                              setCategoryEditForm({
-                                                                  WEEKDAY: transmissionConfig.WEEKDAY?.[cat] || 0,
-                                                                  SATURDAY: transmissionConfig.SATURDAY?.[cat] || 0,
-                                                                  SUNDAY: transmissionConfig.SUNDAY?.[cat] || 0,
-                                                                  programs: transmissionConfig.categoryPrograms?.[cat] || []
-                                                              });
-                                                          }}
-                                                          className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
-                                                          title="Editar minutos base"
-                                                      >
-                                                          {renderCategoryLabel(cat)}
-                                                          <Edit2 size={12} className="opacity-50" />
-                                                      </button>
-                                                  ) : (
-                                                      <span className="flex items-center gap-2">
-                                                          {renderCategoryLabel(cat)}
-                                                      </span>
-                                                  )}
-                                              </td>
-                                              <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">{accMin}</td>
-                                              <td className="px-6 py-4 text-center font-mono text-red-400">{intMin > 0 ? `-${intMin}` : '0'}</td>
-                                              <td className="px-6 py-4 text-center font-mono text-green-400 font-bold">{realMin}</td>
-                                              <td className="px-6 py-4 text-right">
-                                                  <div className="flex items-center justify-end gap-3">
-                                                      <div className="w-24 h-1.5 bg-black/40 rounded-full overflow-hidden">
-                                                          <div 
-                                                              className="h-full bg-[#9E7649] rounded-full" 
-                                                              style={{ width: `${Math.min(percentage, 100)}%` }}
-                                                          />
+                                          <React.Fragment key={group.name}>
+                                              <tr className="bg-[#3E1E16]/50 font-bold border-t-2 border-[#9E7649]/30">
+                                                  <td className="px-6 py-4 text-[#9E7649] uppercase tracking-wider">{group.name}</td>
+                                                  <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/80">{groupTotalMin}</td>
+                                                  <td className="px-6 py-4 text-center font-mono text-red-400">{groupIntMin > 0 ? `-${groupIntMin}` : '0'}</td>
+                                                  <td className="px-6 py-4 text-center font-mono text-green-400">{groupRealMin}</td>
+                                                  <td className="px-6 py-4 text-right">
+                                                      <div className="flex items-center justify-end gap-3">
+                                                          <div className="w-24 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                                                              <div 
+                                                                  className="h-full bg-[#9E7649] rounded-full" 
+                                                                  style={{ width: `${Math.min(groupPercentage, 100)}%` }}
+                                                              />
+                                                          </div>
+                                                          <span className="text-[10px] font-bold text-[#9E7649] w-8">{Math.round(groupPercentage)}%</span>
                                                       </div>
-                                                      <span className="text-[10px] font-bold text-[#9E7649] w-8">{Math.round(percentage)}%</span>
-                                                  </div>
-                                              </td>
-                                          </tr>
+                                                  </td>
+                                              </tr>
+                                              {group.categories.map(cat => {
+                                                  const accMin = displayAccumulated[cat];
+                                                  const intMin = displayInterruptions[cat];
+                                                  const realMin = accMin - intMin;
+                                                  const totalMin = displayMonthly[cat];
+                                                  const percentage = totalMin > 0 ? (realMin / totalMin) * 100 : 0;
+
+                                                  return (
+                                                      <tr key={cat} className="hover:bg-white/5 transition-colors">
+                                                          <td className="px-6 py-4 pl-10 font-medium text-white">
+                                                              {isAdmin && !isEditingHistorical ? (
+                                                                  <button 
+                                                                      onClick={() => {
+                                                                          setEditingCategory(cat);
+                                                                          setCategoryEditForm({
+                                                                              programs: transmissionConfig.categoryPrograms?.[cat] || []
+                                                                          });
+                                                                      }}
+                                                                      className="hover:text-[#9E7649] transition-colors flex items-center gap-2"
+                                                                      title="Editar minutos base"
+                                                                  >
+                                                                      {renderCategoryLabel(cat)}
+                                                                      <Edit2 size={12} className="opacity-50" />
+                                                                  </button>
+                                                              ) : (
+                                                                  <span className="flex items-center gap-2">
+                                                                      {renderCategoryLabel(cat)}
+                                                                  </span>
+                                                              )}
+                                                          </td>
+                                                          <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">
+                                                              {isEditingHistorical ? (
+                                                                  <input 
+                                                                      type="number" 
+                                                                      value={totalMin} 
+                                                                      onChange={(e) => handleHistoricalEdit('accumulated', cat, Number(e.target.value))}
+                                                                      className="w-16 bg-transparent border-b border-[#9E7649] text-center text-white focus:outline-none"
+                                                                  />
+                                                              ) : totalMin}
+                                                          </td>
+                                                          <td className="px-6 py-4 text-center font-mono text-red-400">
+                                                              {isEditingHistorical ? (
+                                                                  <input 
+                                                                      type="number" 
+                                                                      value={intMin} 
+                                                                      onChange={(e) => handleHistoricalEdit('interruptions', cat, Number(e.target.value))}
+                                                                      className="w-16 bg-transparent border-b border-red-500 text-center text-red-400 focus:outline-none"
+                                                                  />
+                                                              ) : (intMin > 0 ? `-${intMin}` : '0')}
+                                                          </td>
+                                                          <td className="px-6 py-4 text-center font-mono text-green-400 font-bold">{realMin}</td>
+                                                          <td className="px-6 py-4 text-right">
+                                                              <div className="flex items-center justify-end gap-3">
+                                                                  <div className="w-24 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                                                                      <div 
+                                                                          className="h-full bg-[#9E7649] rounded-full" 
+                                                                          style={{ width: `${Math.min(percentage, 100)}%` }}
+                                                                      />
+                                                                  </div>
+                                                                  <span className="text-[10px] font-bold text-[#9E7649] w-8">{Math.round(percentage)}%</span>
+                                                              </div>
+                                                          </td>
+                                                      </tr>
+                                                  );
+                                              })}
+                                          </React.Fragment>
                                       );
                                   })}
                                   <tr className="bg-[#3E1E16]/30 font-medium">
@@ -1834,18 +2195,18 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                   </tr>
                                   <tr className="bg-[#3E1E16]/50 font-bold">
                                       <td className="px-6 py-4 text-[#9E7649]">TOTAL REAL TRANSMISIÓN</td>
-                                      <td className="px-6 py-4 text-center text-[#E8DCCF]/50">{accumulated.breakdown.total}</td>
-                                      <td className="px-6 py-4 text-center text-red-400">-{interruptionsByCategory.total}</td>
-                                      <td className="px-6 py-4 text-center text-green-400">{accumulated.breakdown.total - interruptionsByCategory.total}</td>
+                                      <td className="px-6 py-4 text-center text-[#E8DCCF]/50">{displayMonthly.total}</td>
+                                      <td className="px-6 py-4 text-center text-red-400">-{displayInterruptions.total}</td>
+                                      <td className="px-6 py-4 text-center text-green-400">{displayAccumulated.total - displayInterruptions.total}</td>
                                       <td className="px-6 py-4 text-right">
-                                          <span className="text-[#9E7649]">{monthly.breakdown.total > 0 ? Math.round(((accumulated.breakdown.total - interruptionsByCategory.total) / monthly.breakdown.total) * 100) : 0}%</span>
+                                          <span className="text-[#9E7649]">{displayMonthly.total > 0 ? Math.round(((displayAccumulated.total - displayInterruptions.total) / displayMonthly.total) * 100) : 0}%</span>
                                       </td>
                                   </tr>
                               </tbody>
                           </table>
                       </div>
 
-                        {isAdmin && (
+                        {isAdmin && !isEditingHistorical && (
                             <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
                                 <button 
                                     onClick={() => setShowInterruptionChoiceModal(true)}
@@ -1858,6 +2219,22 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                     className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#8B653D] transition-colors flex items-center gap-2"
                                 >
                                     <Save size={16} /> Consolidar Mes
+                                </button>
+                            </div>
+                        )}
+                        {isAdmin && isEditingHistorical && (
+                            <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
+                                <button 
+                                    onClick={handleCancelHistoricalEdit}
+                                    className="bg-[#1A100C] text-[#9E7649] border border-[#9E7649]/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#9E7649]/10 transition-colors flex items-center gap-2"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={handleSaveHistoricalEdit}
+                                    className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2"
+                                >
+                                    <Save size={16} /> Guardar Cambios
                                 </button>
                             </div>
                         )}
@@ -1959,45 +2336,41 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                       <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
                           <h3 className="text-xl font-bold text-white mb-4">Editar {categoryLabels[editingCategory]}</h3>
-                          <p className="text-sm text-[#9E7649] mb-6">Modifica los minutos base por tipo de día y asigna programas.</p>
-                          
-                          <div className="space-y-4 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                              <div>
-                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Lunes a Viernes (min)</label>
-                                  <input type="number" value={categoryEditForm.WEEKDAY} onChange={e => setCategoryEditForm({...categoryEditForm, WEEKDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
-                              </div>
-                              <div>
-                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Sábados (min)</label>
-                                  <input type="number" value={categoryEditForm.SATURDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SATURDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
-                              </div>
-                              <div>
-                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Domingos (min)</label>
-                                  <input type="number" value={categoryEditForm.SUNDAY} onChange={e => setCategoryEditForm({...categoryEditForm, SUNDAY: parseInt(e.target.value) || 0})} className="w-full bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 text-white" />
-                              </div>
-
-                              <div>
-                                  <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Programas Asignados</label>
-                                  <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
-                                      {fichas.map(ficha => (
-                                          <label key={ficha.name} className="flex items-center gap-2 p-1 hover:bg-[#9E7649]/10 rounded cursor-pointer">
-                                              <input 
-                                                  type="checkbox" 
-                                                  checked={(categoryEditForm.programs || []).includes(ficha.name)}
-                                                  onChange={e => {
-                                                      const current = categoryEditForm.programs || [];
-                                                      const updated = e.target.checked 
-                                                          ? [...current, ficha.name]
-                                                          : current.filter(p => p !== ficha.name);
-                                                      setCategoryEditForm({...categoryEditForm, programs: updated});
-                                                  }}
-                                                  className="accent-[#9E7649]"
-                                              />
-                                              <span className="text-sm text-white/90">{ficha.name}</span>
-                                          </label>
-                                      ))}
+                          {['boletines', 'publicidad', 'cienciaTecnica'].includes(editingCategory) ? (
+                              <p className="text-sm text-[#9E7649] mb-6">El tiempo de esta categoría se calcula automáticamente según las Fichas de programas.</p>
+                          ) : (
+                              <>
+                                  <p className="text-sm text-[#9E7649] mb-6">Selecciona los programas asignados a esta categoría. El tiempo se calculará automáticamente según sus Fichas.</p>
+                                  
+                                  <div className="space-y-4 mb-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                                      <div>
+                                          <label className="text-xs text-[#E8DCCF]/50 uppercase tracking-wider mb-1 block">Programas Asignados</label>
+                                          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
+                                               {[...fichas, 
+                                                 { name: "Noticiero Nacional", duration: "28 min", frequency: "Lunes a Domingo" },
+                                                 { name: "Noticiero Provincial", duration: "28 min", frequency: "Lunes a Sábado" }
+                                               ].map(ficha => (
+                                                  <label key={ficha.name} className="flex items-center gap-2 p-1 hover:bg-[#9E7649]/10 rounded cursor-pointer">
+                                                      <input 
+                                                          type="checkbox" 
+                                                          checked={(categoryEditForm.programs || []).includes(ficha.name)}
+                                                          onChange={e => {
+                                                              const current = categoryEditForm.programs || [];
+                                                              const updated = e.target.checked 
+                                                                  ? [...current, ficha.name]
+                                                                  : current.filter(p => p !== ficha.name);
+                                                              setCategoryEditForm({...categoryEditForm, programs: updated});
+                                                          }}
+                                                          className="accent-[#9E7649]"
+                                                      />
+                                                      <span className="text-sm text-white/90">{ficha.name}</span>
+                                                  </label>
+                                              ))}
+                                          </div>
+                                      </div>
                                   </div>
-                              </div>
-                          </div>
+                              </>
+                          )}
 
                           <div className="flex justify-end gap-3">
                               <button onClick={() => setEditingCategory(null)} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">Cancelar</button>
