@@ -10,7 +10,8 @@ const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/offline.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/icon.svg'
 ];
 
 // Instalación: Precarga de recursos críticos

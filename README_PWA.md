@@ -3,13 +3,12 @@
 Esta aplicación ha sido configurada como una Progressive Web App (PWA). Para completar la instalación, sigue estos pasos:
 
 ## 1. Generación de Iconos
-Debes crear los iconos de la aplicación en formato PNG y colocarlos en una carpeta llamada `icons/` en la raíz (junto a `index.html`).
+La aplicación ahora utiliza el logo oficial en formato SVG (`icons/icon.svg`) para una mejor compatibilidad y escalabilidad en todos los dispositivos.
 
-Necesitas las siguientes imágenes:
-1. `icons/icon-192x192.png` (Tamaño 192x192px)
-2. `icons/icon-512x512.png` (Tamaño 512x512px)
+Se han configurado los siguientes iconos en el `manifest.json`:
+1. `icons/icon.svg` (Formato SVG, escalable a cualquier tamaño)
 
-Puedes usar herramientas como [Favicon Generator](https://realfavicongenerator.net/) o [Maskable.app](https://maskable.app/) para generar estos iconos basándote en el logo de la radio.
+Este icono se utiliza tanto para la instalación en Android (como icono adaptable/maskable) como para el icono de inicio en iOS y Windows.
 
 ## 2. Capturas de Pantalla (Opcional pero recomendado)
 Para mejorar la presentación en tiendas de aplicaciones, crea una carpeta `screenshots/` y añade:

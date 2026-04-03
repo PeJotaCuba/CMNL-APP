@@ -21,9 +21,9 @@ const CMNLHeader: React.FC<CMNLHeaderProps> = ({ user, sectionTitle, onMenuClick
              <span className="material-symbols-outlined text-3xl">menu</span>
           </button>
           <div className="flex items-center gap-3">
-             {/* Logo Placeholder */}
-             <div className="size-10 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-lg">
-                <span className="text-[#3E1E16] font-black text-2xl leading-none pb-1 font-sans">m</span>
+             {/* Logo SVG */}
+             <div className="size-10 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-lg overflow-hidden p-1.5">
+                <img src="/icons/icon.svg" alt="Logo CMNL" className="w-full h-full object-contain" />
              </div>
              <div>
                 <h1 className="text-white font-bold text-lg leading-none tracking-tight">CMNL App</h1>
