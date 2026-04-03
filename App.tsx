@@ -158,6 +158,7 @@ const App: React.FC = () => {
   
   const [news, setNews] = useState<NewsItem[]>(() => {
     const saved = localStorage.getItem('rcm_data_news');
+    console.log('Loaded news from localStorage:', saved ? JSON.parse(saved).length : 0);
     return saved ? JSON.parse(saved) : INITIAL_NEWS;
   });
 
@@ -272,12 +273,14 @@ const App: React.FC = () => {
   }, [history, currentView]);
 
   const handleNavigate = (view: AppView, data?: any) => {
+    console.log('Navigating to:', view, 'Data:', data);
     if (view === currentView) return;
     checkDirty(() => {
         window.history.pushState(null, '', window.location.pathname);
         setHistory((prev) => [...prev, currentView]);
         setCurrentView(view);
         if (view === AppView.SECTION_NEWS_DETAIL && data) {
+          console.log('Setting selectedNews:', data);
           setSelectedNews(data);
         }
     });
@@ -660,6 +663,7 @@ const App: React.FC = () => {
           <AdminDashboard 
             onNavigate={handleNavigate} 
             news={news} 
+            setNews={setNews}
             users={users}
             currentUser={currentUser}
             onLogout={handleLogout}
@@ -724,11 +728,30 @@ const App: React.FC = () => {
 
       // Public Sections
       case AppView.SECTION_HISTORY:
-        return <PlaceholderView title="Nuestra Historia" subtitle="El legado de la radio" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} customContent={historyContent} />;
+        return <PlaceholderView 
+            title="Nuestra Historia" 
+            subtitle="El legado de la radio" 
+            onBack={handleBack} 
+            onMenuClick={() => setIsSidebarOpen(true)} 
+            customContent={historyContent} 
+            onUpload={currentUser?.role === 'admin' ? (e, type) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const text = event.target?.result as string;
+                        setHistoryContent(text);
+                        localStorage.setItem('rcm_data_history', text);
+                        alert('Historia actualizada correctamente.');
+                    };
+                    reader.readAsText(file);
+                }
+            } : undefined}
+        />;
       case AppView.SECTION_HISTORY_EVOLUTION:
         return <HistoryEvolutionView currentUser={currentUser} onBack={handleBack} />;
       case AppView.SECTION_PROGRAMMING_PUBLIC:
-        return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
+        return <PlaceholderView title="Parrilla de Programación" subtitle="Guía para el oyente" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} user={currentUser} />;
       case AppView.SECTION_ABOUT:
         return <QuienesSomos onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_NEWS:

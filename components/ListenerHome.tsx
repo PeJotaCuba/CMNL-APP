@@ -95,16 +95,14 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
             </div>
          </div>
 
-         <div className="flex flex-col gap-2 flex-1">
+          <div className="flex flex-col gap-2 flex-1">
              <button onClick={() => onNavigate(AppView.LANDING)} className="flex items-center gap-3 bg-[#9E7649] text-white p-3 rounded-xl transition-all w-full text-left shadow-lg hover:bg-[#8B653D] hover:scale-[1.02] mb-4">
                  <LogIn size={18} />
                  <span className="font-bold text-sm">Iniciar Sesión</span>
              </button>
-             <SidebarLink icon={<Home size={18} />} label="Inicio" onClick={() => onNavigate(AppView.LISTENER_HOME)} />
              <SidebarLink icon={<ScrollText size={18} />} label="Historia" onClick={() => onNavigate(AppView.SECTION_HISTORY)} />
              <SidebarLink icon={<Users size={18} />} label="Quiénes Somos" onClick={() => onNavigate(AppView.SECTION_ABOUT)} />
              <SidebarLink icon={<Mic size={18} />} label="Programación" onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} />
-             <SidebarLink icon={<Newspaper size={18} />} label="Noticias" onClick={() => onNavigate(AppView.SECTION_NEWS)} />
              
              {onSync && (
                  <div className="mt-8 flex justify-center">

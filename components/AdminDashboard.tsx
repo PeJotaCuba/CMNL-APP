@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { AppView, NewsItem, User, ProgramItem } from '../types';
-import { Settings, ChevronRight, ChevronLeft, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare, Menu, ScrollText, Mic, Users, RefreshCw, Play, Pause } from 'lucide-react';
+import { Settings, ChevronRight, ChevronLeft, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare, Menu, ScrollText, Mic, Users, RefreshCw, Play, Pause, Upload } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
   news: NewsItem[];
+  setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   users: User[]; 
   currentUser: User | null;
   onLogout: () => void;
@@ -33,6 +34,7 @@ const newsColors = [
 const AdminDashboard: React.FC<Props> = ({ 
     onNavigate, 
     news, 
+    setNews,
     users, 
     currentUser, 
     onLogout, 
@@ -71,6 +73,40 @@ const AdminDashboard: React.FC<Props> = ({
   const prevNews = (e: React.MouseEvent) => {
     e.stopPropagation();
     if(news.length > 0) setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
+  };
+
+  const handleNewsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const blocks = text.split(/_{3,}/).filter(b => b.trim());
+        const newNews: NewsItem[] = blocks.map((block, index) => {
+          const titularMatch = block.match(/Titular:\s*([\s\S]*?)(?=\n\n|\nAutor|Autor|$)/i);
+          const autorMatch = block.match(/Autor(?: o fuente)?:\s*([\s\S]*?)(?=\n\n|\nTexto|Texto|$)/i);
+          const textoMatch = block.match(/Texto:\s*([\s\S]*?)$/i);
+          
+          const title = titularMatch ? titularMatch[1].trim() : 'Sin Título';
+          const author = autorMatch ? autorMatch[1].trim() : 'Anónimo';
+          const content = textoMatch ? textoMatch[1].trim() : '';
+          
+          return {
+            id: `news-${Date.now()}-${index}`,
+            title,
+            author,
+            content,
+            category: 'General',
+            date: new Date().toLocaleDateString(),
+            excerpt: content.split('. ')[0] + '.'
+          };
+        });
+        setNews(newNews);
+        localStorage.setItem('rcm_data_news', JSON.stringify(newNews));
+        alert(`${newNews.length} noticias cargadas correctamente.`);
+      };
+      reader.readAsText(file);
+    }
   };
 
   return (
@@ -194,6 +230,13 @@ const AdminDashboard: React.FC<Props> = ({
          <div className="flex-1 flex flex-col">
             <div className="flex justify-between items-center mb-3 px-1">
                  <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
+                 {currentUser?.role === 'admin' && (
+                    <label className="flex items-center gap-2 bg-[#C69C6D] hover:bg-[#b58b5c] text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer">
+                        <Upload size={14} />
+                        <span>Cargar Noticias</span>
+                        <input type="file" accept=".txt" onChange={handleNewsUpload} className="hidden" />
+                    </label>
+                 )}
             </div>
 
             {activeNews ? (

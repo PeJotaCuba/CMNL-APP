@@ -3,7 +3,7 @@
  * Estrategia: Cache-First para estáticos, Network-First para navegación.
  */
 
-const CACHE_NAME = 'cmnl-app-v4'; // Incrementamos versión para forzar actualización
+const CACHE_NAME = 'cmnl-app-v5'; // Incrementamos versión para forzar actualización
 const OFFLINE_URL = '/offline.html';
 
 const ASSETS_TO_CACHE = [
@@ -12,9 +12,9 @@ const ASSETS_TO_CACHE = [
   '/offline.html',
   '/manifest.json',
   '/icons/icon.svg',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/icons/icon-512x512-maskable.png',
+  '/icons/icon-192-192.png',
+  '/icons/icon-512-512.png',
+  '/icons/icon-maskable-512.png',
   '/icons/screenshot-desktop.png',
   '/icons/screenshot-mobile.png'
 ];

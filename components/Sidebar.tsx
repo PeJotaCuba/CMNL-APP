@@ -92,11 +92,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           
           {/* Section 1: Main Info */}
           <div className="px-4 flex flex-col gap-2">
-            <SidebarItem 
-              icon={<Home size={20} />} 
-              label="Inicio" 
-              onClick={handleInicio} 
-            />
+            {currentUser && (
+              <SidebarItem 
+                icon={<Home size={20} />} 
+                label="Inicio" 
+                onClick={handleInicio} 
+              />
+            )}
             <SidebarItem 
               icon={<ScrollText size={20} />} 
               label="Historia" 
@@ -111,11 +113,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon={<Mic size={20} />} 
               label="Programación" 
               onClick={() => handleNavigation(AppView.SECTION_PROGRAMMING_PUBLIC)} 
-            />
-            <SidebarItem 
-              icon={<Newspaper size={20} />} 
-              label="Noticias" 
-              onClick={() => handleNavigation(AppView.SECTION_NEWS)} 
             />
           </div>
 

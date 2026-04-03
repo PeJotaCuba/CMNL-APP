@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X, Edit2, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clock, User, MessageCircle, X, Edit2, Save, Plus, Trash2, Upload } from 'lucide-react';
 import { NewsItem, ProgramFicha } from '../types';
 import CMNLHeader from './CMNLHeader';
 import { generateProgramming, ProgramSchedule } from '../src/services/programmingService';
@@ -14,6 +14,7 @@ interface ViewProps {
   customContent?: string;
   newsItem?: NewsItem | null;
   user?: { name: string; role: string; photo?: string } | null;
+  onUpload?: (e: React.ChangeEvent<HTMLInputElement>, type: 'history') => void;
 }
 
 const newsColors = [
@@ -43,7 +44,9 @@ const formatTo12Hour = (timeStr: string): string => {
     }
 };
 
-export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem }) => {
+import { LOGO_URL } from '../utils/scheduleData';
+
+export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem, onUpload, user }) => {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedProgramming, setEditedProgramming] = useState<ProgramSchedule[] | null>(null);
@@ -169,6 +172,11 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
                  <button onClick={onBack} className="absolute top-4 left-4 p-2 bg-black/40 text-white rounded-full backdrop-blur-md z-10 border border-white/10 hover:bg-white/20 transition-all">
                     <ArrowLeft size={24} />
                  </button>
+                 <div className="absolute top-4 right-4 z-10">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg overflow-hidden p-1.5">
+                       <img src={LOGO_URL} alt="Logo CMNL" className="w-full h-full object-contain" />
+                    </div>
+                 </div>
                  <div className="relative p-6 z-10">
                     <h1 className="text-2xl font-bold text-white leading-tight shadow-sm mb-2">{newsItem.title}</h1>
                  </div>
@@ -195,30 +203,42 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
             <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <ArrowLeft size={24} />
             </button>
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-lg overflow-hidden p-1.5">
+               <img src={LOGO_URL} alt="Logo CMNL" className="w-full h-full object-contain" />
+            </div>
             <div>
             <h2 className="font-serif font-bold text-lg leading-tight">{title}</h2>
             {subtitle && <p className="text-xs text-[#E8DCCF] opacity-80">{subtitle}</p>}
             </div>
         </div>
         
-        {isProgramming && (
-            <div className="flex gap-2">
-                {isEditing ? (
-                    <>
-                        <button onClick={handleSaveEdit} className="p-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
-                            <Save size={18} /> Guardar
+        <div className="flex gap-2">
+            {onUpload && (
+                <label className="flex items-center gap-2 bg-[#C69C6D] hover:bg-[#b58b5c] text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer">
+                    <Upload size={16} />
+                    <span>Cargar (.txt)</span>
+                    <input type="file" accept=".txt" onChange={(e) => onUpload(e, 'history')} className="hidden" />
+                </label>
+            )}
+            {isProgramming && user?.role === 'admin' && (
+                <>
+                    {isEditing ? (
+                        <>
+                            <button onClick={handleSaveEdit} className="p-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
+                                <Save size={18} /> Guardar
+                            </button>
+                            <button onClick={handleCancelEdit} className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
+                                <X size={18} /> Cancelar
+                            </button>
+                        </>
+                    ) : (
+                        <button onClick={handleStartEdit} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
+                            <Edit2 size={18} /> Editar
                         </button>
-                        <button onClick={handleCancelEdit} className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
-                            <X size={18} /> Cancelar
-                        </button>
-                    </>
-                ) : (
-                    <button onClick={handleStartEdit} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
-                        <Edit2 size={18} /> Editar
-                    </button>
-                )}
-            </div>
-        )}
+                    )}
+                </>
+            )}
+        </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 pb-24"> {/* Added pb-24 for player clearance */}

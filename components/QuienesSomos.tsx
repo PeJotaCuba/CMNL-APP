@@ -102,12 +102,7 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
         sectionTitle="Quiénes Somos"
         onMenuClick={onMenuClick}
         onBack={onBack}
-      >
-        <button onClick={updateDatabase} disabled={loading} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2" title="Actualizar Datos">
-          <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
-          <span className="text-sm font-medium">Actualizar</span>
-        </button>
-      </CMNLHeader>
+      />
 
       <div className="p-6 overflow-y-auto pb-20">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
@@ -139,36 +134,6 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
           )}
         </div>
       </div>
-
-      {/* Update Prompt Modal */}
-      {showUpdatePrompt && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full relative text-center">
-            <h2 className="text-xl font-bold text-white mb-2">Actualizar Equipo</h2>
-            <p className="text-[#E8DCCF] mb-6 text-sm">
-              Es recomendable actualizar la información del equipo para ver los últimos cambios.
-            </p>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => {
-                  setShowUpdatePrompt(false);
-                  localStorage.setItem('rcm_equipo_last_update', Date.now().toString());
-                }}
-                className="flex-1 py-2 rounded-lg font-bold text-[#9E7649] bg-black/20 border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-colors"
-              >
-                Más tarde
-              </button>
-              <button 
-                onClick={updateDatabase}
-                disabled={loading}
-                className="flex-1 py-2 rounded-lg font-bold text-white bg-[#9E7649] hover:bg-[#8B653D] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? <RefreshCw size={16} className="animate-spin" /> : 'Actualizar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

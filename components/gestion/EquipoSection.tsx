@@ -407,7 +407,6 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
         {/* Content Management integrated below team list for admins */}
         {isAdmin && (
           <div className="mt-12 pt-12 border-t border-[#9E7649]/20">
-            <h2 className="text-xl font-bold text-white mb-6 uppercase tracking-widest">Gestión de Contenido</h2>
             <ContentManagementSection 
                 historyContent={historyContent}
                 setHistoryContent={setHistoryContent}
