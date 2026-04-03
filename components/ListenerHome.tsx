@@ -84,7 +84,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
       </header>
 
       {/* Desktop Left Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-[#2C1B15]/80 backdrop-blur-md border-r border-white/5 p-6 z-20 relative h-screen sticky top-0">
+      <aside className="hidden md:flex flex-col w-64 bg-[#2C1B15]/80 backdrop-blur-md border-r border-white/5 p-6 z-20 relative h-screen sticky top-0 pb-28">
          <div className="flex items-center gap-3 mb-10">
             <div className="w-10 h-10 rounded-xl bg-white p-0.5 overflow-hidden shrink-0">
                 <img src={LOGO_URL} alt="Logo" className="w-full h-full object-cover" />
@@ -105,15 +105,23 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
              <SidebarLink icon={<Users size={18} />} label="Quiénes Somos" onClick={() => onNavigate(AppView.SECTION_ABOUT)} />
              <SidebarLink icon={<Mic size={18} />} label="Programación" onClick={() => onNavigate(AppView.SECTION_PROGRAMMING_PUBLIC)} />
              <SidebarLink icon={<Newspaper size={18} />} label="Noticias" onClick={() => onNavigate(AppView.SECTION_NEWS)} />
+             
+             {onSync && (
+                 <div className="mt-8 flex justify-center">
+                     <button 
+                         onClick={onSync} 
+                         disabled={isSyncing} 
+                         title="Actualizar Datos"
+                         className="flex items-center justify-center bg-[#C69C6D] text-[#3E1E16] hover:bg-[#b58b5c] hover:scale-105 active:scale-95 transition-all w-14 h-14 rounded-full shadow-lg"
+                     >
+                         <RefreshCw size={24} className={isSyncing ? 'animate-spin' : ''} />
+                     </button>
+                 </div>
+             )}
          </div>
 
          <div className="mt-auto pt-6 border-t border-white/5">
-            {onSync && (
-                <button onClick={onSync} disabled={isSyncing} className="flex items-center gap-3 text-stone-400 hover:text-[#CD853F] transition-colors w-full p-2 rounded-lg hover:bg-white/5 mb-2">
-                    <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-                    <span className="text-sm font-medium">Actualizar</span>
-                </button>
-            )}
+            {/* Actualizar button moved to floating action button */}
          </div>
       </aside>
 
