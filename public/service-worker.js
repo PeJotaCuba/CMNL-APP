@@ -3,8 +3,8 @@
  * Estrategia: Cache-First para estáticos, Network-First para navegación.
  */
 
-const CACHE_NAME = 'cmnl-app-v2'; // Incrementamos versión para forzar actualización
-const OFFLINE_URL = 'offline.html';
+const CACHE_NAME = 'cmnl-app-v3'; // Incrementamos versión para forzar actualización
+const OFFLINE_URL = '/offline.html';
 
 const ASSETS_TO_CACHE = [
   '/',

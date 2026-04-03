@@ -1,0 +1,28 @@
+{
+  "id": "/",
+  "name": "Radio Ciudad Monumento",
+  "short_name": "CMNL App",
+  "description": "La voz de la segunda villa cubana. Noticias, programación y radio en vivo.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#2C1B15",
+  "theme_color": "#3E1E16",
+  "orientation": "any",
+  "categories": ["entertainment", "music", "news", "radio"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "prefer_related_applications": false
+}

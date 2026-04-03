@@ -1,4 +1,5 @@
 import React from 'react';
+import { LOGO_URL } from '../utils/scheduleData';
 
 interface CMNLHeaderProps {
   user: { name: string; role: string; photo?: string } | null;
@@ -23,7 +24,7 @@ const CMNLHeader: React.FC<CMNLHeaderProps> = ({ user, sectionTitle, onMenuClick
           <div className="flex items-center gap-3">
              {/* Logo SVG */}
              <div className="size-10 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-lg overflow-hidden p-1.5">
-                <img src="/icons/icon.svg" alt="Logo CMNL" className="w-full h-full object-contain" />
+                <img src={LOGO_URL} alt="Logo CMNL" className="w-full h-full object-contain" />
              </div>
              <div>
                 <h1 className="text-white font-bold text-lg leading-none tracking-tight">CMNL App</h1>
