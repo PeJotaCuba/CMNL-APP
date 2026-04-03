@@ -350,6 +350,7 @@ const App: React.FC = () => {
   };
 
   const handleAdminBackup = () => {
+      const username = currentUser?.username || 'default';
       const dataToExport: Record<string, any> = {};
       
       const getLocal = (key: string) => {
@@ -365,10 +366,12 @@ const App: React.FC = () => {
       dataToExport.news = getLocal('rcm_data_news');
       dataToExport.fichas = getLocal('rcm_data_fichas');
       dataToExport.catalogo = getLocal('rcm_data_catalogo');
-      dataToExport.worklogs = getLocal('rcm_data_worklogs');
-      dataToExport.consolidated = getLocal('rcm_data_consolidated');
-      dataToExport.interruptions = getLocal('rcm_interruptions');
-      dataToExport.consolidatedMonths = getLocal('rcm_consolidated_months');
+      
+      dataToExport.worklogs = getLocal(`user_${username}_rcm_data_worklogs`);
+      dataToExport.consolidated = getLocal(`user_${username}_rcm_data_consolidated`);
+      dataToExport.interruptions = getLocal(`user_${username}_rcm_interruptions`);
+      dataToExport.consolidatedMonths = getLocal(`user_${username}_rcm_consolidated_months`);
+      
       dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
       
       // Payment configs
