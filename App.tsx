@@ -350,7 +350,6 @@ const App: React.FC = () => {
   };
 
   const handleAdminBackup = () => {
-      const username = currentUser?.username || 'default';
       const dataToExport: Record<string, any> = {};
       
       const getLocal = (key: string) => {
@@ -367,10 +366,29 @@ const App: React.FC = () => {
       dataToExport.fichas = getLocal('rcm_data_fichas');
       dataToExport.catalogo = getLocal('rcm_data_catalogo');
       
-      dataToExport.worklogs = getLocal(`user_${username}_rcm_data_worklogs`);
-      dataToExport.consolidated = getLocal(`user_${username}_rcm_data_consolidated`);
-      dataToExport.interruptions = getLocal(`user_${username}_rcm_interruptions`);
-      dataToExport.consolidatedMonths = getLocal(`user_${username}_rcm_consolidated_months`);
+      // Collect all data for all users
+      const allInterruptions: any[] = [];
+      const allWorklogs: any[] = [];
+      const allConsolidated: any[] = [];
+      const allConsolidatedMonths: any[] = [];
+      
+      users.forEach(user => {
+          const u = user.username;
+          const userWorklogs = getLocal(`user_${u}_rcm_data_worklogs`);
+          const userConsolidated = getLocal(`user_${u}_rcm_data_consolidated`);
+          const userInterruptions = getLocal(`user_${u}_rcm_interruptions`);
+          const userConsolidatedMonths = getLocal(`user_${u}_rcm_consolidated_months`);
+          
+          if (Array.isArray(userWorklogs)) allWorklogs.push(...userWorklogs);
+          if (Array.isArray(userConsolidated)) allConsolidated.push(...userConsolidated);
+          if (Array.isArray(userInterruptions)) allInterruptions.push(...userInterruptions);
+          if (Array.isArray(userConsolidatedMonths)) allConsolidatedMonths.push(...userConsolidatedMonths);
+      });
+      
+      dataToExport.worklogs = allWorklogs;
+      dataToExport.consolidated = allConsolidated;
+      dataToExport.interruptions = allInterruptions;
+      dataToExport.consolidatedMonths = allConsolidatedMonths;
       
       dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
       
@@ -445,6 +463,7 @@ const App: React.FC = () => {
       if(!confirmSync) return;
 
       setIsSyncing(true);
+      const username = currentUser?.username || 'default';
       const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
       try {
@@ -468,8 +487,11 @@ const App: React.FC = () => {
               // Protected Keys: NO BORRAR, MODIFICAR O RESETEAR
               const protectedKeys = ['rcm_data_worklogs', 'rcm_data_consolidated', 'rcm_interruptions', 'rcm_consolidated_months', 'rcm_users'];
               
-              if (protectedKeys.includes(localKey)) {
-                  if (localKey === 'rcm_users') {
+              // Check if the key is a user-specific version of a protected key
+              const isProtected = protectedKeys.some(key => localKey.includes(key));
+              
+              if (isProtected) {
+                  if (localKey.includes('rcm_users')) {
                       // Preserve interests for agenda users
                       const merged = jsonData.map(newUser => {
                           const localItem = localData.find((u: any) => u.id === newUser.id);
@@ -530,10 +552,11 @@ const App: React.FC = () => {
           
           if (json.fichas) mergeData('rcm_data_fichas', json.fichas, 'name');
           if (json.catalogo) mergeData('rcm_data_catalogo', json.catalogo, 'name');
-          if (json.worklogs) mergeData('rcm_data_worklogs', json.worklogs, 'id');
-          if (json.consolidated) mergeData('rcm_data_consolidated', json.consolidated, 'id');
-          if (json.interruptions) mergeData('rcm_interruptions', json.interruptions, 'id');
-          if (json.consolidatedMonths) mergeData('rcm_consolidated_months', json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
+          
+          if (json.worklogs) mergeData(`user_${username}_rcm_data_worklogs`, json.worklogs, 'id');
+          if (json.consolidated) mergeData(`user_${username}_rcm_data_consolidated`, json.consolidated, 'id');
+          if (json.interruptions) mergeData(`user_${username}_rcm_interruptions`, json.interruptions, 'id');
+          if (json.consolidatedMonths) mergeData(`user_${username}_rcm_consolidated_months`, json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
           
           if (json.transmissionConfig) setLocal('rcm_transmission_config', json.transmissionConfig);
           if (json.paymentConfigs) {
