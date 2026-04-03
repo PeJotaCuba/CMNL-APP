@@ -3,6 +3,7 @@ import { ArrowLeft, Construction, Radio, Calendar, Music, FileText, Podcast, Clo
 import { NewsItem, ProgramFicha } from '../types';
 import CMNLHeader from './CMNLHeader';
 import { generateProgramming, ProgramSchedule } from '../src/services/programmingService';
+import { INITIAL_FICHAS } from '../utils/fichasData';
 
 interface ViewProps {
   title: string;
@@ -55,7 +56,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
     if (!isProgramming) return null;
     
     const savedFichas = localStorage.getItem('rcm_data_fichas');
-    const fichas: ProgramFicha[] = savedFichas ? JSON.parse(savedFichas) : [];
+    const fichas: ProgramFicha[] = savedFichas ? JSON.parse(savedFichas) : INITIAL_FICHAS;
     
     // Fichas change detection
     const fichasHash = JSON.stringify(fichas.map(f => ({ n: f.name, f: f.frequency, s: f.schedule })));

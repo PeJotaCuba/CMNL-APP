@@ -49,8 +49,20 @@ export const generateProgramming = (fichas: ProgramFicha[]) => {
             if (freq.includes('domingo')) days.push(0);
         }
         
-        // Parse schedule (e.g., "07:00-08:00")
+        // Parse schedule (e.g., "07:00-08:00" or "7:02 AM - 8:58 AM")
         let scheduleStr = ficha.schedule;
+        
+        const convertTo24H = (timeStr: string) => {
+            if (!timeStr) return "00:00";
+            const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?$/);
+            if (!match) return timeStr.trim();
+            let h = parseInt(match[1], 10);
+            const m = match[2];
+            const ampm = match[3] ? match[3].toUpperCase() : null;
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            return `${h.toString().padStart(2, '0')}:${m}`;
+        };
         
         // Special case for nested programs
         const isNested = ficha.name.toLowerCase().includes('alba y crisol') || ficha.name.toLowerCase().includes('coloreando melodías');
@@ -87,8 +99,8 @@ export const generateProgramming = (fichas: ProgramFicha[]) => {
         }
 
         const [startRaw, endRaw] = scheduleStr.split('-');
-        const start = (startRaw || '00:00').trim();
-        const end = (endRaw || '00:00').trim();
+        const start = convertTo24H(startRaw);
+        const end = convertTo24H(endRaw);
         
         let parent: string | undefined;
         if (isNested) {

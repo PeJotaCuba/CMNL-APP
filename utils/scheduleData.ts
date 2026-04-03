@@ -1,6 +1,7 @@
 import { User, NewsItem } from '../types';
 import { appData } from './initialData';
 import { generateProgramming } from '../src/services/programmingService';
+import { INITIAL_FICHAS } from './fichasData';
 
 // Simulacion de archivo en carpeta Iconos - Logo sin el punto central
 export const LOGO_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 500 500'%3E%3Crect width='500' height='500' fill='white' rx='80' ry='80'/%3E%3Cpath d='M140,380 V200 A60,60 0 0,1 260,200 V380' fill='none' stroke='%233E1E16' stroke-width='65' stroke-linecap='round' /%3E%3Cpath d='M260,380 V160 A100,100 0 0,1 460,160 V380' fill='none' stroke='%238B5E3C' stroke-width='65' stroke-linecap='round' /%3E%3C/svg%3E";
@@ -114,7 +115,7 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
 
   const savedFichas = localStorage.getItem('rcm_data_fichas');
   const manualData = localStorage.getItem('rcm_manual_programming');
-  const fichas = savedFichas ? JSON.parse(savedFichas) : [];
+  const fichas = savedFichas ? JSON.parse(savedFichas) : INITIAL_FICHAS;
   
   let programming: any[] = [];
   if (manualData) {
@@ -127,11 +128,22 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
   const current = programming.find(p => {
     if (!p.days.includes(day)) return false;
     
-    const [startH, startM] = p.start.split(':').map(Number);
-    const [endH, endM] = p.end.split(':').map(Number);
-    
-    const startTotal = startH * 60 + startM;
-    const endTotal = endH * 60 + endM;
+    const parseTime = (timeStr: string) => {
+        const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?$/);
+        if (!match) {
+            const parts = timeStr.split(':').map(Number);
+            return parts[0] * 60 + (parts[1] || 0);
+        }
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const ampm = match[3] ? match[3].toUpperCase() : null;
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+    };
+
+    const startTotal = parseTime(p.start);
+    const endTotal = parseTime(p.end);
     
     if (endTotal < startTotal) {
       return totalMinutes >= startTotal || totalMinutes < endTotal;

@@ -183,7 +183,11 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [impersonatedUser, setImpersonatedUser] = useState<any | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [currentProgram, setCurrentProgram] = useState(getCurrentProgram());
+  const [currentProgram, setCurrentProgram] = useState({ name: "Cargando...", time: "", image: "" });
+
+  useEffect(() => {
+    setCurrentProgram(getCurrentProgram());
+  }, []);
 
   // 24-Hour Backup Reminder Effect
   useEffect(() => {

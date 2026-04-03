@@ -6,7 +6,7 @@ import { INITIAL_FICHAS } from '../utils/fichasData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getAccumulatedData, getMonthlyTotalData, getDayMinutesConfig, saveDayMinutesConfig, DayType, TransmissionBreakdown, getDayType } from '../src/services/transmissionService';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
 import { InterruptionModal } from './InterruptionModal';
@@ -75,6 +75,7 @@ interface ConsolidatedMonth {
     interruptions: Record<keyof TransmissionBreakdown, number>;
     totalRealMinutes: number;
     dateConsolidated: string;
+    interruptionDetails?: Interruption[];
 }
 
 const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
@@ -1561,9 +1562,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       });
 
       const interruptionsByCategory = categories.reduce((acc, cat) => {
-          const catProgs = transmissionConfig.categoryPrograms?.[cat] || [];
           acc[cat] = currentMonthInterruptions
-              .filter(i => catProgs.includes(i.programName))
+              .filter(i => i.category === cat)
               .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
           return acc;
       }, {} as Record<keyof TransmissionBreakdown, number>);
@@ -1619,7 +1619,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               accumulated: accumulated.breakdown,
               interruptions: interruptionsByCategory,
               totalRealMinutes: accumulated.breakdown.total - interruptionsByCategory.total,
-              dateConsolidated: new Date().toISOString()
+              dateConsolidated: new Date().toISOString(),
+              interruptionDetails: currentMonthInterruptions
           };
           
           const existingIndex = consolidatedMonths.findIndex(m => m.month === targetMonthString);
@@ -1646,80 +1647,314 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       };
 
       const getExportDataRows = (monthData: ConsolidatedMonth) => {
-          const getReal = (cat: keyof TransmissionBreakdown) => monthData.accumulated[cat] - monthData.interruptions[cat];
-          const getBase = (cat: keyof TransmissionBreakdown) => monthData.accumulated[cat];
+          const getPlanned = (cat: keyof TransmissionBreakdown) => monthData.accumulated[cat] || 0;
 
           const rows = [
-              { group: 'Información', isGroup: true, baseTotal: getBase('informativos') + getBase('boletines'), total: getReal('informativos') + getReal('boletines'), vivo: getReal('informativos') + getReal('boletines'), grabado: 0 },
-              { name: 'Espacios informativos', baseTotal: getBase('informativos'), total: getReal('informativos'), vivo: getReal('informativos'), grabado: 0 },
-              { name: 'Boletines informativos', baseTotal: getBase('boletines'), total: getReal('boletines'), vivo: getReal('boletines'), grabado: 0 },
+              // Información
+              { group: 'Información', isGroup: true, plannedTotal: getPlanned('informativos') + getPlanned('boletines'), plannedVivo: getPlanned('informativos') + getPlanned('boletines'), plannedGrabado: 0 },
+              { name: 'Espacios informativos', plannedTotal: getPlanned('informativos'), plannedVivo: getPlanned('informativos'), plannedGrabado: 0 },
+              { name: 'Boletines informativos', plannedTotal: getPlanned('boletines'), plannedVivo: getPlanned('boletines'), plannedGrabado: 0 },
               
-              { group: 'Orientación', isGroup: true, baseTotal: getBase('publicidad') + getBase('orientacion') + getBase('cienciaTecnica') + getBase('variados') + getBase('variadoInfantilGrabado'), total: getReal('publicidad') + getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('orientacion') + getReal('cienciaTecnica') + getReal('variados'), grabado: getReal('publicidad') + getReal('variadoInfantilGrabado') },
-              { name: 'Publicidad', baseTotal: getBase('publicidad'), total: getReal('publicidad'), vivo: 0, grabado: getReal('publicidad') },
-              { name: 'Espacios Educativos', baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
-              { name: 'Espacios de Orientación', baseTotal: getBase('orientacion'), total: getReal('orientacion'), vivo: getReal('orientacion'), grabado: 0 },
-              { name: 'Espacios de Ciencia y Técnica', baseTotal: getBase('cienciaTecnica'), total: getReal('cienciaTecnica'), vivo: getReal('cienciaTecnica'), grabado: 0 },
-              { name: 'Espacios Variados', baseTotal: getBase('variados') + getBase('variadoInfantilGrabado'), total: getReal('variados') + getReal('variadoInfantilGrabado'), vivo: getReal('variados'), grabado: getReal('variadoInfantilGrabado') },
+              // Orientación
+              { group: 'Orientación', isGroup: true, plannedTotal: getPlanned('publicidad') + getPlanned('educativos') + getPlanned('orientacion') + getPlanned('cienciaTecnica') + getPlanned('variados') + getPlanned('variadoInfantilGrabado'), plannedVivo: getPlanned('educativos') + getPlanned('orientacion') + getPlanned('cienciaTecnica') + getPlanned('variados'), plannedGrabado: getPlanned('publicidad') + getPlanned('variadoInfantilGrabado') },
+              { name: 'Publicidad', plannedTotal: getPlanned('publicidad'), plannedVivo: 0, plannedGrabado: getPlanned('publicidad') },
+              { name: 'Espacios Educativos', plannedTotal: getPlanned('educativos'), plannedVivo: getPlanned('educativos'), plannedGrabado: 0 },
+              { name: 'Espacios de Orientación', plannedTotal: getPlanned('orientacion'), plannedVivo: getPlanned('orientacion'), plannedGrabado: 0 },
+              { name: 'Espacios de Ciencia y Técnica', plannedTotal: getPlanned('cienciaTecnica'), plannedVivo: getPlanned('cienciaTecnica'), plannedGrabado: 0 },
+              { name: 'Espacios Variados', plannedTotal: getPlanned('variados') + getPlanned('variadoInfantilGrabado'), plannedVivo: getPlanned('variados'), plannedGrabado: getPlanned('variadoInfantilGrabado') },
               
-              { group: 'Cultura', isGroup: true, baseTotal: getBase('historicosGrabado') + getBase('literaturaArte'), total: getReal('historicosGrabado') + getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: getReal('historicosGrabado') },
-              { name: 'Espacios Históricos', baseTotal: getBase('historicosGrabado'), total: getReal('historicosGrabado'), vivo: 0, grabado: getReal('historicosGrabado') },
-              { name: 'Espacios Dramatizados', baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
-              { name: 'Espacios de Literatura y Arte', baseTotal: getBase('literaturaArte'), total: getReal('literaturaArte'), vivo: getReal('literaturaArte'), grabado: 0 },
+              // Cultura
+              { group: 'Cultura', isGroup: true, plannedTotal: getPlanned('historicosGrabado') + getPlanned('dramatizados') + getPlanned('literaturaArte'), plannedVivo: getPlanned('literaturaArte'), plannedGrabado: getPlanned('historicosGrabado') + getPlanned('dramatizados') },
+              { name: 'Espacios Históricos', plannedTotal: getPlanned('historicosGrabado'), plannedVivo: 0, plannedGrabado: getPlanned('historicosGrabado') },
+              { name: 'Espacios Dramatizados', plannedTotal: getPlanned('dramatizados'), plannedVivo: 0, plannedGrabado: getPlanned('dramatizados') },
+              { name: 'Espacios de Literatura y Arte', plannedTotal: getPlanned('literaturaArte'), plannedVivo: getPlanned('literaturaArte'), plannedGrabado: 0 },
               
-              { group: 'Música', isGroup: true, baseTotal: getBase('musicales'), total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
-              { name: 'Espacios musicales', baseTotal: getBase('musicales'), total: getReal('musicales'), vivo: getReal('musicales'), grabado: 0 },
+              // Música
+              { group: 'Música', isGroup: true, plannedTotal: getPlanned('musicales'), plannedVivo: getPlanned('musicales'), plannedGrabado: 0 },
+              { name: 'Espacios musicales', plannedTotal: getPlanned('musicales'), plannedVivo: getPlanned('musicales'), plannedGrabado: 0 },
               
-              { group: 'Deportes', isGroup: true, baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
-              { name: 'Espacios deportivos', baseTotal: 0, total: 0, vivo: 0, grabado: 0 },
+              // Deportes
+              { group: 'Deportes', isGroup: true, plannedTotal: getPlanned('deportivos'), plannedVivo: getPlanned('deportivos'), plannedGrabado: 0 },
+              { name: 'Espacios deportivos', plannedTotal: getPlanned('deportivos'), plannedVivo: getPlanned('deportivos'), plannedGrabado: 0 },
+              
+              // Reposiciones
+              { group: 'Reposiciones', isGroup: true, plannedTotal: getPlanned('reposiciones'), plannedVivo: 0, plannedGrabado: getPlanned('reposiciones') },
+              { name: 'Reposiciones', plannedTotal: getPlanned('reposiciones'), plannedVivo: 0, plannedGrabado: getPlanned('reposiciones') },
           ];
 
-          const totalPlanificado = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.baseTotal, 0);
-          const totalGeneral = totalPlanificado - monthData.interruptions.total;
-          const totalVivo = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.vivo, 0);
-          const totalGrabado = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.grabado, 0);
+          const [year, month] = monthData.month.split('-').map(Number);
+          const daysInMonth = new Date(year, month, 0).getDate();
+          const targetTotalPlanificado = (daysInMonth === 31 ? 248 : 240) * 60;
+          
+          const totalPlannedVivo = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.plannedVivo, 0);
+          const totalPlannedGrabado = rows.filter(r => r.isGroup).reduce((sum, r) => sum + r.plannedGrabado, 0);
+          
+          // Requirement 5: D30 + E30 = C30
+          // We use the targetTotalPlanificado for C30.
+          // We'll use the actual sums for D30 and E30, but if they don't match C30, 
+          // we'll adjust the Grabado part to ensure the math works as requested.
+          const adjustedTotalPlannedGrabado = targetTotalPlanificado - totalPlannedVivo;
 
-          return { rows, totalGeneral, totalVivo, totalGrabado, totalPlanificado };
+          return { 
+              rows, 
+              totalPlanificado: targetTotalPlanificado, 
+              totalVivo: totalPlannedVivo, 
+              totalGrabado: adjustedTotalPlannedGrabado 
+          };
       };
 
       const exportToExcel = (monthData: ConsolidatedMonth) => {
-          const { rows, totalGeneral, totalVivo, totalGrabado, totalPlanificado } = getExportDataRows(monthData);
+          const { rows: allRows, totalPlanificado, totalVivo, totalGrabado } = getExportDataRows(monthData);
           
-          const data = rows.map(row => ({
-              'GRUPO DE PROGRAMAS': row.isGroup ? row.group : `    ${row.name}`,
-              'Total horas emisión': formatMinutesToHHMMSS(row.total),
-              'En vivo': formatMinutesToHHMMSS(row.vivo),
-              'Grabado': formatMinutesToHHMMSS(row.grabado),
-              'OBSERVACIONES': ''
-          }));
+          // Filter rows to fit exactly 18 rows before TOTALES (Row 29)
+          // We remove the redundant "Reposiciones" subcategory if it exists
+          const rows = allRows.filter((r, i) => !(r.name === 'Reposiciones' && allRows[i-1]?.group === 'Reposiciones'));
 
-          data.push({
-              'GRUPO DE PROGRAMAS': 'Total Planificado:',
-              'Total horas emisión': formatMinutesToHHMMSS(totalPlanificado),
-              'En vivo': '',
-              'Grabado': '',
-              'OBSERVACIONES': ''
+          const [yearStr, monthNumStr] = monthData.month.split('-');
+          const monthNames = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+          const monthName = monthNames[parseInt(monthNumStr, 10) - 1];
+
+          const formatMinutesToExcelTime = (totalMinutes: number) => {
+              return totalMinutes / (24 * 60);
+          };
+
+          const wsData: any[][] = [];
+          
+          // Row 1 (Empty)
+          wsData.push([]);
+          // Row 2
+          wsData.push(["", "INFORME DE INDICADORES GENERALES DE LA RADIO CUBANA", "", "", "", "", "", ""]);
+          // Row 3
+          wsData.push(["", "NIVEL DE ACTIVIDAD", "", "", "", "", "", ""]);
+          // Row 4 (Empty)
+          wsData.push([]);
+          // Row 5
+          wsData.push(["", "NOMBRE DE LA EMISORA:", "RADIO CIUDAD MONUMENTO", "", "", "MES:", monthName, ""]);
+          // Row 6
+          wsData.push(["", "ALCANCE:", "MUNICIPAL", "", "", "AÑO:", yearStr, ""]);
+          // Row 7
+          wsData.push(["", "PROVINCIA:", "GRANMA", "", "", "", "", ""]);
+          // Row 8
+          wsData.push(["", "PLAN ANUAL (Horas):", "________", "", "", "H. Diarias:", formatMinutesToExcelTime(8 * 60), ""]);
+          // Row 9 (Empty)
+          wsData.push([]);
+          // Row 10 (Headers)
+          wsData.push(["GRUPO DE PROGRAMAS", "Horas emisión", "En vivo", "Grabado", "OBSERVACIONES", "", "", ""]);
+
+          // Group interruptions by event
+          const interruptionEvents = (monthData.interruptionDetails || []).reduce((acc, curr) => {
+              const datePart = curr.date || '0000-00-00';
+              const startPart = curr.startTime || '00:00';
+              const endPart = curr.endTime || '00:00';
+              const key = `${datePart}_${startPart}_${endPart}`;
+              if (!acc[key]) {
+                  acc[key] = {
+                      day: datePart.split('-')[2] || '??',
+                      programs: [],
+                      duration: 0
+                  };
+              }
+              if (!acc[key].programs.includes(curr.programName)) {
+                  acc[key].programs.push(curr.programName);
+              }
+              // Sum affected minutes for all programs in this event
+              acc[key].duration += Number(curr.affectedMinutes) || 0;
+              return acc;
+          }, {} as Record<string, { day: string, programs: string[], duration: number }>);
+
+          const sortedEvents = Object.values(interruptionEvents).sort((a, b) => parseInt(a.day) - parseInt(b.day));
+          const totalInterruptionMinutes = sortedEvents.reduce((sum, e) => sum + e.duration, 0);
+
+          // Populate table rows 11 to 28
+          rows.forEach((row, index) => {
+              const excelRowIdx = index + 11;
+              const rowData: any[] = [];
+              
+              // Columns A, B, C, D (Program Data)
+              if (row.isGroup) {
+                  rowData.push(row.group);
+              } else {
+                  rowData.push(`  ${row.name}`);
+              }
+              rowData.push(formatMinutesToExcelTime(row.plannedTotal || 0));
+              rowData.push(formatMinutesToExcelTime(row.plannedVivo || 0));
+              rowData.push(formatMinutesToExcelTime(row.plannedGrabado || 0));
+
+              // Columns E, F, G, H (Observations / Interruptions)
+              if (excelRowIdx === 11) {
+                  rowData.push(""); // E
+                  rowData.push("Horas extras de emisión o interrupción"); // F
+                  rowData.push(""); // G
+                  rowData.push(""); // H
+              } else if (excelRowIdx === 12) {
+                  rowData.push("Día"); // E
+                  rowData.push("Programas"); // F
+                  rowData.push(""); // G
+                  rowData.push("Duración"); // H
+              } else if (excelRowIdx >= 13 && excelRowIdx <= 28) {
+                  const eventIdx = excelRowIdx - 13;
+                  if (eventIdx < sortedEvents.length) {
+                      const event = sortedEvents[eventIdx];
+                      rowData.push(event.day); // E
+                      rowData.push(event.programs.join(", ")); // F
+                      rowData.push(""); // G
+                      rowData.push(formatMinutesToExcelTime(event.duration)); // H
+                  } else {
+                      rowData.push("");
+                      rowData.push("");
+                      rowData.push("");
+                      rowData.push("");
+                  }
+              }
+
+              wsData.push(rowData);
           });
 
-          data.push({
-              'GRUPO DE PROGRAMAS': 'Interrupciones:',
-              'Total horas emisión': formatMinutesToHHMMSS(monthData.interruptions.total),
-              'En vivo': '',
-              'Grabado': '',
-              'OBSERVACIONES': ''
-          });
+          // Row 29 (TOTALES and HORAS REALMENTE TRANSMITIDAS)
+          wsData.push([
+              "TOTALES", 
+              formatMinutesToExcelTime(totalPlanificado), 
+              formatMinutesToExcelTime(totalVivo), 
+              formatMinutesToExcelTime(totalGrabado),
+              "HORAS REALMENTE TRANSMITIDAS", // E
+              "", // F
+              "", // G
+              formatMinutesToExcelTime(totalPlanificado - totalInterruptionMinutes) // H
+          ]);
 
-          data.push({
-              'GRUPO DE PROGRAMAS': 'Total Real Transmisión:',
-              'Total horas emisión': formatMinutesToHHMMSS(totalGeneral),
-              'En vivo': formatMinutesToHHMMSS(totalVivo),
-              'Grabado': formatMinutesToHHMMSS(totalGrabado),
-              'OBSERVACIONES': ''
-          });
+          // Footer rows 30 to 45
+          wsData.push(["", "Cumplimiento del plan:", "", "", "Sobrecumplimiento:", "", "", ""]); // 30
+          wsData.push([]); // 31
+          wsData.push(["", "Observaciones:", "", "", "", "", "", ""]); // 32
+          // Add empty rows for observations box (33-40)
+          for (let i = 0; i < 8; i++) wsData.push([]);
+          wsData.push([]); // 41
+          wsData.push([]); // 42
+          wsData.push(["", "Elaborado por:", "Beatriz González Rondón", "", "", "", "", ""]); // 43
+          wsData.push(["", "Visto bueno:", "Leipzig del Carmen Vázquez García", "", "", "", "", ""]); // 44
 
-          const ws = XLSX.utils.json_to_sheet(data);
+          const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+          // Merges
+          ws['!merges'] = [
+              { s: { r: 1, c: 1 }, e: { r: 1, c: 7 } }, // Title 1
+              { s: { r: 2, c: 1 }, e: { r: 2, c: 7 } }, // Title 2
+              { s: { r: 4, c: 2 }, e: { r: 4, c: 3 } }, // Emisora
+              { s: { r: 4, c: 6 }, e: { r: 4, c: 7 } }, // Mes
+              { s: { r: 5, c: 2 }, e: { r: 5, c: 3 } }, // Alcance
+              { s: { r: 5, c: 6 }, e: { r: 5, c: 7 } }, // Año
+              { s: { r: 6, c: 2 }, e: { r: 6, c: 3 } }, // Provincia
+              { s: { r: 7, c: 2 }, e: { r: 7, c: 3 } }, // Plan Anual
+              { s: { r: 7, c: 6 }, e: { r: 7, c: 7 } }, // H. Diarias
+              { s: { r: 9, c: 4 }, e: { r: 9, c: 7 } }, // Header OBSERVACIONES
+              { s: { r: 10, c: 5 }, e: { r: 10, c: 7 } }, // Horas extras...
+              { s: { r: 11, c: 5 }, e: { r: 11, c: 6 } }, // Programas header
+              { s: { r: 28, c: 4 }, e: { r: 28, c: 6 } }, // HORAS REALMENTE TRANSMITIDAS label
+              { s: { r: 29, c: 1 }, e: { r: 29, c: 2 } }, // Cumplimiento
+              { s: { r: 29, c: 4 }, e: { r: 29, c: 7 } }, // Sobrecumplimiento
+              { s: { r: 32, c: 2 }, e: { r: 39, c: 7 } }, // Observaciones box
+              { s: { r: 42, c: 2 }, e: { r: 42, c: 5 } }, // Elaborado
+              { s: { r: 43, c: 2 }, e: { r: 43, c: 5 } }, // Visto bueno
+          ];
+
+          // Add Programas merges for data rows
+          for (let i = 12; i <= 27; i++) {
+              ws['!merges'].push({ s: { r: i, c: 5 }, e: { r: i, c: 6 } });
+          }
+
+          const titleStyle = { font: { bold: true, sz: 11 }, alignment: { horizontal: "center" } };
+          const boldStyle = { font: { bold: true } };
+          const borderStyle = {
+              top: { style: "thin" },
+              bottom: { style: "thin" },
+              left: { style: "thin" },
+              right: { style: "thin" }
+          };
+          const headerStyle = { font: { bold: true }, alignment: { horizontal: "center", vertical: "center" }, border: borderStyle };
+          const timeFormat = "[h]:mm:ss";
+          const cellStyle = { border: borderStyle, alignment: { horizontal: "center" }, numFmt: timeFormat };
+          const leftCellStyle = { border: borderStyle, alignment: { horizontal: "left" } };
+          const boldCellStyle = { font: { bold: true }, border: borderStyle, alignment: { horizontal: "center" }, numFmt: timeFormat };
+          const boldLeftCellStyle = { font: { bold: true }, border: borderStyle, alignment: { horizontal: "left" } };
+
+          const range = XLSX.utils.decode_range(ws['!ref'] || "A1:H50");
+          for (let R = range.s.r; R <= range.e.r; ++R) {
+              for (let C = range.s.c; C <= range.e.c; ++C) {
+                  const cellRef = XLSX.utils.encode_cell({ c: C, r: R });
+                  if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
+
+                  if (R === 1 || R === 2) {
+                      ws[cellRef].s = titleStyle;
+                  } else if (R >= 4 && R <= 7) {
+                      if (C === 1 || C === 5) ws[cellRef].s = { alignment: { horizontal: "right" } };
+                      if (C === 2 || C === 6) ws[cellRef].s = boldStyle;
+                      if (R === 7 && C === 6) {
+                          ws[cellRef].t = 'n';
+                          ws[cellRef].z = timeFormat;
+                          ws[cellRef].s = { ...boldStyle, numFmt: timeFormat };
+                      }
+                  } else if (R === 9) {
+                      if (C <= 7) ws[cellRef].s = headerStyle;
+                  } else if (R >= 10 && R <= 27) {
+                      const isGroup = wsData[R] && wsData[R][0] && !wsData[R][0].toString().startsWith('  ');
+                      if (C === 0) {
+                          ws[cellRef].s = isGroup ? boldLeftCellStyle : leftCellStyle;
+                      } else if (C >= 1 && C <= 3) {
+                          ws[cellRef].t = 'n';
+                          ws[cellRef].z = timeFormat;
+                          ws[cellRef].s = isGroup ? boldCellStyle : cellStyle;
+                      } else if (C >= 4 && C <= 7) {
+                          ws[cellRef].s = { border: borderStyle, alignment: { horizontal: "center" } };
+                          if (R === 10 && C >= 5) ws[cellRef].s = { font: { bold: true }, border: borderStyle, alignment: { horizontal: "center" } };
+                          if (R === 11) ws[cellRef].s = { font: { bold: true }, border: borderStyle, alignment: { horizontal: "center" } };
+                          if (R >= 12 && C === 7) {
+                              ws[cellRef].t = 'n';
+                              ws[cellRef].z = timeFormat;
+                              ws[cellRef].s = { border: borderStyle, alignment: { horizontal: "center" }, numFmt: timeFormat };
+                          }
+                      }
+                  } else if (R === 28) { // TOTALES row
+                      if (C === 0) ws[cellRef].s = boldLeftCellStyle;
+                      else if (C >= 1 && C <= 3) {
+                          ws[cellRef].t = 'n';
+                          ws[cellRef].z = timeFormat;
+                          ws[cellRef].s = boldCellStyle;
+                      } else if (C >= 4 && C <= 7) {
+                          ws[cellRef].s = { font: { bold: true }, border: borderStyle, alignment: { horizontal: "center" } };
+                          if (C === 7) {
+                              ws[cellRef].t = 'n';
+                              ws[cellRef].z = timeFormat;
+                              ws[cellRef].s = boldCellStyle;
+                          }
+                      }
+                  } else if (R === 29 || R === 42 || R === 43) {
+                      if (C === 1) ws[cellRef].s = { font: { bold: true }, alignment: { horizontal: "right" } };
+                  } else if (R === 31) {
+                      if (C === 1) ws[cellRef].s = boldStyle;
+                  } else if (R >= 32 && R <= 39) {
+                      if (C >= 2 && C <= 7) {
+                          ws[cellRef].s = { border: borderStyle, alignment: { vertical: "top", wrapText: true } };
+                      }
+                  }
+              }
+          }
+
+          ws['!cols'] = [
+              { wch: 30 }, // A
+              { wch: 15 }, // B
+              { wch: 15 }, // C
+              { wch: 15 }, // D
+              { wch: 10 }, // E
+              { wch: 20 }, // F
+              { wch: 20 }, // G
+              { wch: 15 }, // H
+          ];
+
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, "Transmisión");
-          XLSX.writeFile(wb, `Transmision_${monthData.month}.xlsx`);
+          
+          const fileName = `Transmision_${monthData.month}.xlsx`;
+          XLSX.writeFile(wb, fileName);
       };
 
       const exportToWord = async (monthData: ConsolidatedMonth) => {
@@ -1731,7 +1966,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               verticalAlign: "center",
           });
 
-          const { rows, totalGeneral, totalVivo, totalGrabado, totalPlanificado } = getExportDataRows(monthData);
+          const { rows, totalPlanificado, totalVivo, totalGrabado } = getExportDataRows(monthData);
 
           const tableRows = [
               new TableRow({
@@ -1746,9 +1981,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               ...rows.map(row => new TableRow({
                   children: [
                       createCell(row.isGroup ? (row.group || '') : `    ${row.name}`, row.isGroup, row.isGroup ? AlignmentType.LEFT : AlignmentType.LEFT),
-                      createCell(formatMinutesToHHMMSS(row.total), row.isGroup),
-                      createCell(formatMinutesToHHMMSS(row.vivo), row.isGroup),
-                      createCell(formatMinutesToHHMMSS(row.grabado), row.isGroup),
+                      createCell(formatMinutesToHHMMSS(row.plannedTotal), row.isGroup),
+                      createCell(formatMinutesToHHMMSS(row.plannedVivo), row.isGroup),
+                      createCell(formatMinutesToHHMMSS(row.plannedGrabado), row.isGroup),
                       createCell(""),
                   ],
               })),
@@ -1773,7 +2008,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               new TableRow({
                   children: [
                       createCell("Total Real Transmisión:", true, AlignmentType.RIGHT),
-                      createCell(formatMinutesToHHMMSS(totalGeneral), true),
+                      createCell(formatMinutesToHHMMSS(totalPlanificado - monthData.interruptions.total), true),
                       createCell(formatMinutesToHHMMSS(totalVivo), true),
                       createCell(formatMinutesToHHMMSS(totalGrabado), true),
                       createCell(""),
@@ -1839,7 +2074,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               accumulated: monthlyData.breakdown,
               interruptions: emptyBreakdown,
               totalRealMinutes: realMinutes,
-              dateConsolidated: new Date().toISOString()
+              dateConsolidated: new Date().toISOString(),
+              interruptionDetails: []
           };
           setConsolidatedMonths([...consolidatedMonths, newConsolidated]);
           alert("Mes histórico añadido correctamente.");

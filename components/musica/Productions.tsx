@@ -1257,18 +1257,6 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                 <div className="flex items-end gap-2">
                                     <button 
                                         onClick={() => {
-                                            const idx = balancePrograms.indexOf(selectedBalanceProgram);
-                                            setEditingProgramIndex(idx);
-                                            setNewProgramName(selectedBalanceProgram);
-                                            setShowAddProgramModal(true);
-                                        }}
-                                        className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                                        title="Editar Programa"
-                                    >
-                                        <Edit2 size={20} />
-                                    </button>
-                                    <button 
-                                        onClick={() => {
                                             if (confirm(`¿Eliminar "${selectedBalanceProgram}" del balance?`)) {
                                                 setBalancePrograms(prev => prev.filter(p => p !== selectedBalanceProgram));
                                                 setSelectedBalanceProgram(null);
