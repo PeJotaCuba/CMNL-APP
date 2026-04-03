@@ -420,7 +420,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
-  const [showPrematureAlert, setShowPrematureAlert] = useState(false);
   const [showRestrictionModal, setShowRestrictionModal] = useState(false);
   const [showAccumulatedMonths, setShowAccumulatedMonths] = useState(false);
   const [editingHistoricalMonthId, setEditingHistoricalMonthId] = useState<string | null>(null);
@@ -1494,7 +1493,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       const isFuture = selectedMonth > currentMonthStr;
 
       const targetMonthString = selectedMonth;
-      const isPending = pendingConsolidationMonth === targetMonthString;
 
       const emptyBreakdownObj: TransmissionBreakdown = { informativos: 0, boletines: 0, publicidad: 0, educativos: 0, orientacion: 0, cienciaTecnica: 0, variados: 0, historicosGrabado: 0, variadoInfantilGrabado: 0, dramatizados: 0, literaturaArte: 0, musicales: 0, deportivos: 0, reposiciones: 0, total: 0 };
 
@@ -1611,10 +1609,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       };
 
       const handleOpenConsolidateModal = () => {
-          if (!isPending) {
-              setShowPrematureAlert(true);
-              return;
-          }
           setShowConsolidateModal(true);
       };
 
@@ -1627,7 +1621,16 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               totalRealMinutes: accumulated.breakdown.total - interruptionsByCategory.total,
               dateConsolidated: new Date().toISOString()
           };
-          setConsolidatedMonths([...consolidatedMonths, newConsolidated]);
+          
+          const existingIndex = consolidatedMonths.findIndex(m => m.month === targetMonthString);
+          if (existingIndex >= 0) {
+              const updated = [...consolidatedMonths];
+              updated[existingIndex] = { ...newConsolidated, id: updated[existingIndex].id };
+              setConsolidatedMonths(updated);
+          } else {
+              setConsolidatedMonths([...consolidatedMonths, newConsolidated]);
+          }
+          
           setShowConsolidateModal(false);
           // Clear current month interruptions
           setInterruptions(interruptions.filter(i => {
@@ -2450,25 +2453,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                           <div className="flex justify-end gap-3">
                               <button onClick={() => setShowConsolidateModal(false)} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">Cancelar</button>
                               <button onClick={handleConsolidate} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">Aceptar y Consolidar</button>
-                          </div>
-                      </div>
-                  </div>
-              )}
-
-              {showPrematureAlert && (
-                  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                      <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl">
-                          <div className="flex items-center gap-3 mb-4">
-                              <AlertTriangle className="text-yellow-500" size={24} />
-                              <h3 className="text-xl font-bold text-white">Acción no permitida</h3>
-                          </div>
-                          <p className="text-sm text-[#E8DCCF] mb-6">
-                              El mes aún no ha finalizado. Por favor, espere al día 1 del mes próximo para consolidar los datos.
-                          </p>
-                          <div className="flex justify-end">
-                              <button onClick={() => setShowPrematureAlert(false)} className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]">
-                                  Entendido
-                              </button>
                           </div>
                       </div>
                   </div>

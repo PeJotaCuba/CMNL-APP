@@ -171,16 +171,27 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
     const handleSave = () => {
         if (affectedPrograms.length === 0) return;
 
-        const newInterruptions: Interruption[] = affectedPrograms.map(p => ({
-            id: `${Date.now()}-${p.name}`,
-            date,
-            programName: p.name,
-            category: p.category,
-            affectedMinutes: p.minutes,
-            percentage: 100,
-            startTime: formatMinutesToTime(iInicio),
-            endTime: formatMinutesToTime(iFin)
-        }));
+        const hasComplices = affectedPrograms.some(p => p.name.toLowerCase() === 'cómplices' || p.name.toLowerCase() === 'complices');
+        const timestamp = Date.now();
+
+        const newInterruptions: Interruption[] = affectedPrograms.map(p => {
+            let finalMinutes = p.minutes;
+            const pNameLower = p.name.toLowerCase();
+            if (hasComplices && (pNameLower === 'alba y crisol' || pNameLower === 'coloreando melodías' || pNameLower === 'coloreando melodias')) {
+                finalMinutes = 0;
+            }
+
+            return {
+                id: `${timestamp}-${p.name}`,
+                date,
+                programName: p.name,
+                category: p.category,
+                affectedMinutes: finalMinutes,
+                percentage: 100,
+                startTime: formatMinutesToTime(iInicio),
+                endTime: formatMinutesToTime(iFin)
+            };
+        });
 
         onSave(newInterruptions);
     };
