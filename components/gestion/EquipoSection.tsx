@@ -147,7 +147,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               name,
               mobile,
               password,
-              role: (role.toLowerCase().includes('director') || role.toLowerCase().includes('coordinador')) ? 'admin' : 'worker',
+              role: (role.toLowerCase().includes('administrador') || role.toLowerCase().includes('coordinador')) ? 'admin' : 'worker',
               classification: (role || (userIdx >= 0 ? updatedUsers[userIdx].classification : 'Usuario')) as UserClassification
             };
 
@@ -584,7 +584,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
                   >
                     <option value="">Seleccionar Rol</option>
-                    {['Usuario', 'Coordinador', 'Director'].map(role => (
+                    {['Usuario', 'Trabajador', 'Director', 'Coordinador', 'Administrador'].map(role => (
                       <option key={role} value={role}>{role}</option>
                     ))}
                   </select>
@@ -673,7 +673,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     mobile: editingMember.mobile,
                     password: editingMember.password,
                     classification: editingMember.role || u.classification || 'Usuario',
-                    role: (editingMember.role === 'Director' || editingMember.role === 'Coordinador' || u.role === 'admin') ? 'admin' : 'worker'
+                    role: (editingMember.role === 'Administrador' || editingMember.role === 'Coordinador' || (u.role === 'admin' && editingMember.role !== 'Director' && editingMember.role !== 'Usuario' && editingMember.role !== 'Trabajador')) ? 'admin' : 'worker'
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -685,7 +685,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       mobile: editingMember.mobile || '',
                       password: editingMember.password || '1234',
                       classification: editingMember.role || 'Usuario',
-                      role: (editingMember.role === 'Director' || editingMember.role === 'Coordinador') ? 'admin' : 'worker'
+                      role: (editingMember.role === 'Administrador' || editingMember.role === 'Coordinador') ? 'admin' : 'worker'
                     });
                   }
                   

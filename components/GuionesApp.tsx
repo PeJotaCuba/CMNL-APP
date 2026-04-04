@@ -150,8 +150,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
     const canModify = useMemo(() => {
         if (!currentUser) return false;
-        const isAdmin = ['Administrador', 'admin'].includes(currentUser.classification || currentUser.role);
-        const isCoordinator = ['Coordinador', 'coordinator'].includes(currentUser.classification || currentUser.role);
+        const isAdmin = currentUser.role === 'admin';
+        const isCoordinator = currentUser.role === 'coordinator';
         return isAdmin || isCoordinator;
     }, [currentUser]);
 
@@ -213,7 +213,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
     useEffect(() => {
         const handleSelection = () => {
-            if (!selectedProgram || showPulir || showNewScript || !currentUser || !['Administrador', 'admin'].includes(currentUser.classification || currentUser.role)) {
+            if (!selectedProgram || showPulir || showNewScript || !currentUser || currentUser.role !== 'admin') {
                 setFloatingPulir(prev => prev.visible ? { ...prev, visible: false } : prev);
                 return;
             }

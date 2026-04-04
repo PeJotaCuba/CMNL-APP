@@ -153,7 +153,23 @@ const App: React.FC = () => {
   // Global Data State - Initialized from LocalStorage or JSON via utils
   const [users, setUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('rcm_data_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
+    let parsedUsers: User[] = saved ? JSON.parse(saved) : INITIAL_USERS;
+    
+    // Security Patch: Ensure only Administrador and Coordinador have admin role
+    let modified = false;
+    parsedUsers = parsedUsers.map(u => {
+      if (u.role === 'admin' && u.classification !== 'Administrador' && u.classification !== 'Coordinador') {
+        modified = true;
+        return { ...u, role: 'worker' };
+      }
+      return u;
+    });
+    
+    if (modified) {
+      localStorage.setItem('rcm_data_users', JSON.stringify(parsedUsers));
+    }
+    
+    return parsedUsers;
   });
   
   const [news, setNews] = useState<NewsItem[]>(() => {

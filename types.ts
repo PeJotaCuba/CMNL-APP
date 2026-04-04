@@ -31,7 +31,7 @@ export interface HistoricalMonthData {
   consolidated: boolean;
 }
 
-export type UserClassification = 'director' | 'asesor' | 'realizador' | 'locutor' | 'guionista' | 'periodista' | 'coordinador' | 'director de emisora' | 'jefe de programación' | 'especialista' | 'auxiliar general' | 'asistente de dirección' | 'recepcionista' | 'Administrador' | 'Trabajador' | 'Usuario';
+export type UserClassification = 'director' | 'Director' | 'asesor' | 'Asesor' | 'realizador' | 'Realizador de sonido' | 'locutor' | 'Locutor' | 'guionista' | 'Guionista' | 'periodista' | 'Periodista' | 'coordinador' | 'Coordinador' | 'director de emisora' | 'Director de la emisora' | 'jefe de programación' | 'Jefe de Programación' | 'especialista' | 'Especialista' | 'auxiliar general' | 'asistente de dirección' | 'recepcionista' | 'Administrador' | 'Trabajador' | 'Usuario' | 'Directora';
 
 export interface NewsItem {
   id: string;
