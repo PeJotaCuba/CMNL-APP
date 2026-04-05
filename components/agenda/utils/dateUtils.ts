@@ -33,6 +33,8 @@ export const getAgendaFilenameCode = (): string => {
 export interface DayInfo {
   name: string;
   date: number;
+  month?: number;
+  year?: number;
 }
 
 export interface WeekInfo {
@@ -47,51 +49,62 @@ export interface WeekInfo {
 export const getWeeksInMonth = (targetDate: Date = new Date()): WeekInfo[] => {
   const year = targetDate.getFullYear();
   const month = targetDate.getMonth();
-  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+  
+  const firstDayOfMonth = new Date(year, month, 1);
+  let dayOfWeek = firstDayOfMonth.getDay();
+  dayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0=Mon, 6=Sun
+  
+  let currentWeekStart = new Date(year, month, 1 - dayOfWeek);
+  
+  if (dayOfWeek > 3) {
+    // 1st is Fri, Sat, Sun. First week starts next Monday.
+    currentWeekStart = new Date(year, month, 1 + (7 - dayOfWeek));
+  }
   
   const weeks: WeekInfo[] = [];
-  let currentDate = 1;
   let weekCount = 1;
-
   const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-
-  while (currentDate <= lastDayOfMonth) {
-    const days: (DayInfo | null)[] = [null, null, null, null, null, null, null];
-    let weekStarted = false;
-    let firstDateInWeek = currentDate;
-
-    // Llenar la semana actual
+  
+  while (true) {
+    // Check if this week belongs to the current month
+    // The Thursday of this week is currentWeekStart + 3 days
+    const thursday = new Date(currentWeekStart);
+    thursday.setDate(thursday.getDate() + 3);
+    
+    if (thursday.getMonth() !== month) {
+      // If Thursday is in the next month, this week belongs to the next month
+      break;
+    }
+    
+    const days: (DayInfo | null)[] = [];
+    let startDay = 0;
+    let endDay = 0;
+    
     for (let i = 0; i < 7; i++) {
-      if (currentDate > lastDayOfMonth) break;
-      
-      const dateObj = new Date(year, month, currentDate);
-      let dayOfWeekIdx = dateObj.getDay(); // 0=Dom, 1=Lun
-      dayOfWeekIdx = dayOfWeekIdx === 0 ? 6 : dayOfWeekIdx - 1; // Ajustar a 0=Lun...6=Dom
-
-      // Si el día del mes corresponde a la posición de la columna (Lunes, Martes...)
-      if (dayOfWeekIdx === i) {
-        days[i] = {
-          name: dayNames[i],
-          date: currentDate
-        };
-        currentDate++;
-        weekStarted = true;
-      }
-    }
-
-    if (weekStarted) {
-      const realDays = days.filter(d => d !== null) as DayInfo[];
-      weeks.push({
-        id: `semana-${weekCount}`,
-        label: `Semana ${weekCount}`,
-        range: `${realDays[0].date} - ${realDays[realDays.length - 1].date}`,
-        days,
-        start: realDays[0].date,
-        end: realDays[realDays.length - 1].date
+      const d = new Date(currentWeekStart);
+      d.setDate(d.getDate() + i);
+      days.push({
+        name: dayNames[i],
+        date: d.getDate(),
+        month: d.getMonth(),
+        year: d.getFullYear()
       });
-      weekCount++;
+      if (i === 0) startDay = d.getDate();
+      if (i === 6) endDay = d.getDate();
     }
+    
+    weeks.push({
+      id: `semana-${weekCount}`,
+      label: `Semana ${weekCount}`,
+      range: `${startDay} - ${endDay}`,
+      days,
+      start: startDay,
+      end: endDay
+    });
+    
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    weekCount++;
   }
-
+  
   return weeks;
 };

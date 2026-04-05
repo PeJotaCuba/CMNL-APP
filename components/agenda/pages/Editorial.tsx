@@ -413,9 +413,15 @@ const Editorial: React.FC<EditorialProps> = ({
       for (const day of visibleDays) {
           if (!day) continue;
           
+          const monthNames = [
+            "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+          ];
+          const dayMonthLabel = day.month !== undefined ? monthNames[day.month] : currentMonthLabel;
+          
           const dayTheme = getEffectiveTheme(selectedWeekId!, day.name);
-          const dayEfemerides = efemerides[currentMonthLabel]?.filter(e => e.day === day.date) || [];
-          const dayConmemoraciones = conmemoraciones[currentMonthLabel]?.filter(c => c.day === day.date) || [];
+          const dayEfemerides = efemerides[dayMonthLabel]?.filter(e => e.day === day.date) || [];
+          const dayConmemoraciones = conmemoraciones[dayMonthLabel]?.filter(c => c.day === day.date) || [];
 
           const efemeridesParagraphs: Paragraph[] = [];
           if (dayEfemerides.length > 0) {

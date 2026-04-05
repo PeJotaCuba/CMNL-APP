@@ -41,9 +41,6 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, onMenuClick, programs, filt
               <span className="text-primary">{user.name.split(' ')[0]}</span>
             </h2>
           </div>
-          <div className="flex items-center justify-center size-10 bg-primary/10 rounded-full">
-            <span className="material-symbols-outlined text-primary text-xl">radio_button_checked</span>
-          </div>
         </section>
 
         <div className="flex items-center gap-3">
