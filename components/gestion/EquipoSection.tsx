@@ -318,7 +318,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                           e.stopPropagation(); 
                           const user = users.find(u => u.id === member.id);
                           if (user) {
-                            const message = `Hola ${member.name}, aquí tienes tus credenciales para CMNL App:\n\nUsuario: ${user.username}\nMóvil: ${user.mobile}\nContraseña: ${user.password}\nPIN: 0326\n\nAccede aquí: https://cmnl-app.vercel.app/`;
+                            const message = `Hola ${member.name}, aquí tienes tus credenciales para CMNL App:\n\nUsuario: ${user.username}\nMóvil: ${user.mobile}\nContraseña: ${user.password}\nPIN: ${user.password.slice(-4)}\n\nAccede aquí: https://cmnl-app.vercel.app/`;
                             window.open(`https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
                           } else {
                             alert('No se encontró información de usuario para este miembro.');
