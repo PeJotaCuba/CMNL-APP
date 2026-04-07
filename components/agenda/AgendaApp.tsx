@@ -20,6 +20,7 @@ interface Props {
 
 const InnerAgendaApp: React.FC<{
   user: UserProfile | null;
+  users: UserProfile[];
   onBack: () => void;
   onMenuClick?: () => void;
   handleLogout: () => void;
@@ -37,7 +38,7 @@ const InnerAgendaApp: React.FC<{
   setFilterEnabled: (v: boolean) => void;
   handleUpdateCurrentUser: (u: UserProfile) => void;
 }> = ({ 
-  user, onBack, onMenuClick, handleLogout, programs, setPrograms, 
+  user, users, onBack, onMenuClick, handleLogout, programs, setPrograms, 
   efemerides, setEfemerides, conmemoraciones, setConmemoraciones, 
   dayThemes, setDayThemes, propaganda, setPropaganda, 
   filterEnabled, setFilterEnabled, handleUpdateCurrentUser 
@@ -78,6 +79,7 @@ const InnerAgendaApp: React.FC<{
           <Route path="/assistant" element={<ChatAssistant user={user} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
           <Route path="/editorial" element={<Editorial 
             user={user} 
+            users={users}
             programs={programs} 
             dayThemes={dayThemes}
             efemerides={efemerides}
@@ -269,6 +271,7 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
     <Router>
       <InnerAgendaApp 
         user={user}
+        users={users}
         onBack={onBack}
         onMenuClick={onMenuClick}
         handleLogout={handleLogout}

@@ -8,6 +8,7 @@ import AgendaHeader from '../components/AgendaHeader';
 
 interface EditorialProps {
   user: UserProfile;
+  users: UserProfile[];
   programs: Program[];
   dayThemes: DayThemeData;
   efemerides: EfemeridesData;
@@ -86,7 +87,7 @@ const ContentModal: React.FC<{ title: string; content: string; onClose: () => vo
 };
 
 const Editorial: React.FC<EditorialProps> = ({ 
-  user, programs, dayThemes, efemerides, conmemoraciones, onUpdateProgram, onUpdateMany, onUpdateDayThemes, onClearAll, filterEnabled, onMenuClick, onBack
+  user, users, programs, dayThemes, efemerides, conmemoraciones, onUpdateProgram, onUpdateMany, onUpdateDayThemes, onClearAll, filterEnabled, onMenuClick, onBack
 }) => {
   const navigate = useNavigate();
   const dateInfo = getCurrentDateInfo(); 
@@ -111,7 +112,34 @@ const Editorial: React.FC<EditorialProps> = ({
   
   const [progSearch, setProgSearch] = useState(''); 
   const [viewModal, setViewModal] = useState<{ title: string, content: string } | null>(null);
+  const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, data: DailyContent} | null>(null);
+  const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSendComment = () => {
+      if (!commentModal || !commentText.trim()) return;
+      
+      const adminUser = users.find(u => u.role === UserRole.ADMIN);
+      if (!adminUser || !adminUser.phone) {
+          alert('No se encontró el número de teléfono del administrador.');
+          return;
+      }
+
+      const { program, dayName, data } = commentModal;
+      
+      const message = `Hola, tengo un comentario sobre el programa *${program.name}* del día *${dayName}*.\n\n*Temática:* ${data.theme || 'N/A'}\n\n*Mi comentario:*\n${commentText}`;
+      
+      let phone = adminUser.phone;
+      if (!phone.startsWith('53')) {
+          phone = '53' + phone;
+      }
+      
+      const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      
+      setCommentModal(null);
+      setCommentText('');
+  };
 
   const activeWeek = weeks.find(w => w.id === selectedWeekId);
   
@@ -565,8 +593,10 @@ const Editorial: React.FC<EditorialProps> = ({
                 <div key={p.id} className="bg-card-dark border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
                   <div className="flex justify-between items-start mb-3">
                      <span className="text-primary font-bold text-[9px] uppercase tracking-widest bg-primary/5 px-3 py-1 rounded-full">{p.time} — {p.name}</span>
-                     {user.role === UserRole.ADMIN && (
+                     {user.role === UserRole.ADMIN ? (
                         <button onClick={() => openEditor(p, selectedWeekId, selectedDay.name)} className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:text-white z-10"><span className="material-symbols-outlined text-sm">edit</span></button>
+                     ) : (
+                        <button onClick={() => setCommentModal({ program: p, dayName: selectedDay.name, data })} className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:text-white z-10" title="Comentar"><span className="material-symbols-outlined text-sm">chat_bubble</span></button>
                      )}
                   </div>
                   <h3 className="text-white font-bold text-base mb-4">{data.theme}</h3>
@@ -584,6 +614,34 @@ const Editorial: React.FC<EditorialProps> = ({
             })
           )}
         </main>
+
+        {commentModal && (
+          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+             <div className="bg-card-dark w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 space-y-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+                <div className="shrink-0">
+                    <h3 className="text-primary font-bold text-[10px] uppercase tracking-widest mb-1">Comentar a Dirección</h3>
+                    <p className="text-white font-bold text-lg">{commentModal.program.name}</p>
+                </div>
+                <div className="overflow-y-auto no-scrollbar space-y-4 pr-1">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-bold text-text-secondary uppercase tracking-widest ml-2">Tu Comentario</label>
+                    <textarea 
+                        value={commentText} 
+                        onChange={e => setCommentText(e.target.value)} 
+                        placeholder="Escribe tu comentario sobre la temática o ideas de este programa..."
+                        className="w-full bg-background-dark border-none rounded-2xl p-4 text-sm text-white min-h-[150px] focus:ring-1 focus:ring-primary font-serif leading-relaxed" 
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 shrink-0">
+                    <button onClick={handleSendComment} disabled={!commentText.trim()} className="flex-1 bg-[#25D366] text-white py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">
+                        <span className="material-symbols-outlined text-sm">send</span> Enviar
+                    </button>
+                    <button onClick={() => { setCommentModal(null); setCommentText(''); }} className="flex-1 bg-white/5 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
+                </div>
+             </div>
+          </div>
+        )}
 
         {editingProg && (
           <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
