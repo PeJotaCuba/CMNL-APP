@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem } from '../types';
-import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, ChevronRight, ChevronLeft, LogIn, MessageCircle, X, RefreshCw, Menu, LogOut } from 'lucide-react';
+import { ScrollText, Mic, Users, Home, Newspaper, Podcast, User as UserIcon, ChevronRight, ChevronLeft, LogIn, MessageCircle, X, RefreshCw, Menu, LogOut, Play, Pause } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 
@@ -24,6 +24,23 @@ const newsColors = [
 const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, onMenuClick }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  const toggleAudio = () => {
+      if (!audioRef.current) {
+          audioRef.current = new Audio('https://github.com/PeJotaCuba/Bases-de-datos-CMNL/raw/7a633b8a95e5f14f18242aa5913739dfce491c68/AudioNoticias.mp3');
+          audioRef.current.onended = () => setIsPlaying(false);
+      }
+      
+      if (isPlaying) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+      } else {
+          audioRef.current.play();
+          setIsPlaying(true);
+      }
+  };
 
   useEffect(() => {
     if (news.length > 1) {
