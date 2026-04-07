@@ -18,6 +18,18 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              pdfjs: ['pdfjs-dist'],
+              docx: ['docx'],
+              xlsx: ['xlsx', 'xlsx-js-style'],
+              jspdf: ['jspdf', 'jspdf-autotable']
+            }
+          }
+        }
       }
     };
 });

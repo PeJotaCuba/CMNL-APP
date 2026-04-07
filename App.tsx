@@ -6,7 +6,7 @@ import WorkerHome from './components/WorkerHome';
 import AdminDashboard from './components/AdminDashboard';
 import EquipoSection from './components/gestion/EquipoSection';
 import GestionApp from './components/GestionApp';
-import GuionesApp from './components/GuionesApp';
+import GuionesApp, { PROGRAMS } from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
 import MusicaApp from './components/MusicaApp';
 import { Reports } from './src/pages/Reports';
@@ -429,11 +429,19 @@ const App: React.FC = () => {
           rcm_scripts_programs: getLocal('rcm_scripts_programs'),
           rcm_scripts_history: getLocal('rcm_scripts_history')
       };
+      
+      PROGRAMS.forEach(prog => {
+          dataToExport.scripts[`guionbd_data_${prog.file}`] = getLocal(`guionbd_data_${prog.file}`);
+      });
 
       // Program Sections
       dataToExport.programSections = {
           rcm_program_sections: getLocal('rcm_program_sections')
       };
+      
+      PROGRAMS.forEach(prog => {
+          dataToExport.programSections[`program_sections_${prog.name}`] = getLocal(`program_sections_${prog.name}`);
+      });
 
       // Agenda
       dataToExport.agendaPrograms = getLocal('rcm_programs');

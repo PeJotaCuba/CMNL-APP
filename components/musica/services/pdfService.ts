@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import * as pdfjsLib from 'pdfjs-dist';
 
-const pdfjs = (pdfjsLib as any).default || pdfjsLib;
+const pdfjs = pdfjsLib;
 
 if (pdfjs.GlobalWorkerOptions) {
     pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
