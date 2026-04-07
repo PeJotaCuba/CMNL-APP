@@ -137,6 +137,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                     {reports.map((report) => (
                         <div key={report.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm flex flex-col gap-3 group hover:border-[#9E7649]/50 transition-colors relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-2 flex gap-1">
+                                {report.status?.sent && <span title="Enviado por WhatsApp" className="size-2 rounded-full bg-[#25D366]"></span>}
                                 {report.status?.downloaded && <span title="Descargado" className="size-2 rounded-full bg-blue-500"></span>}
                             </div>
 
@@ -163,6 +164,62 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                     className="flex-1 bg-[#1A100C] text-[#E8DCCF]/80 text-[10px] font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-[#3E1E16] transition-colors"
                                 >
                                     <span className="material-symbols-outlined text-sm">edit_document</span> Editar
+                                </button>
+
+                                <button 
+                                    onClick={async () => {
+                                        const adminUser = users.find(u => u.role === 'admin');
+                                        if (!adminUser || !adminUser.phone) {
+                                            alert('No se encontró el número de teléfono del administrador.');
+                                            return;
+                                        }
+
+                                        const datePart = report.date.split('T')[0];
+                                        const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
+                                        const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
+
+                                        const file = new File([report.pdfBlob], downloadName, { type: 'application/pdf' });
+
+                                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                            try {
+                                                await navigator.share({
+                                                    files: [file],
+                                                    title: 'Reporte Musical',
+                                                    text: `Hola, adjunto el reporte musical del programa *${report.program}* del día *${datePart}*.`
+                                                });
+                                                await updateReportStatus(report.id, { sent: true });
+                                                setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
+                                                return;
+                                            } catch (error) {
+                                                console.error('Error sharing:', error);
+                                            }
+                                        }
+
+                                        // Fallback text
+                                        let text = `Hola, este es el reporte musical del programa *${report.program}* del día *${datePart}*:\n\n`;
+                                        if (report.items && report.items.length > 0) {
+                                            report.items.forEach((item, index) => {
+                                                text += `${index + 1}. ${item.title} - ${item.performer} (${item.author})\n`;
+                                            });
+                                        } else {
+                                            text += `(El reporte en PDF ha sido generado, por favor solicítalo si necesitas el archivo adjunto.)`;
+                                        }
+                                        
+                                        let phone = adminUser.phone;
+                                        if (!phone.startsWith('53')) {
+                                            phone = '53' + phone;
+                                        }
+                                        
+                                        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+                                        window.open(whatsappUrl, '_blank');
+                                        
+                                        await updateReportStatus(report.id, { sent: true });
+                                        setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
+                                    }}
+                                    className="size-8 rounded-full bg-[#1A100C] text-[#25D366] hover:bg-[#25D366] hover:text-white transition-colors flex items-center justify-center"
+                                    title="Enviar por WhatsApp"
+                                >
+                                    <span className="material-symbols-outlined text-sm">send</span>
                                 </button>
 
                                 <button 

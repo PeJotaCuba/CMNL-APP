@@ -112,7 +112,7 @@ const Editorial: React.FC<EditorialProps> = ({
   
   const [progSearch, setProgSearch] = useState(''); 
   const [viewModal, setViewModal] = useState<{ title: string, content: string } | null>(null);
-  const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, data: DailyContent} | null>(null);
+  const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,9 +125,9 @@ const Editorial: React.FC<EditorialProps> = ({
           return;
       }
 
-      const { program, dayName, data } = commentModal;
+      const { program, fullDate, data } = commentModal;
       
-      const message = `Hola, tengo un comentario sobre el programa *${program.name}* del día *${dayName}*.\n\n*Temática:* ${data.theme || 'N/A'}\n\n*Mi comentario:*\n${commentText}`;
+      const message = `Hola, tengo un comentario sobre el programa *${program.name}* del día *${fullDate}*.\n\n*Temática:* ${data.theme || 'N/A'}\n\n*Mi comentario:*\n${commentText}`;
       
       let phone = adminUser.phone;
       if (!phone.startsWith('53')) {
@@ -596,7 +596,7 @@ const Editorial: React.FC<EditorialProps> = ({
                      {user.role === UserRole.ADMIN ? (
                         <button onClick={() => openEditor(p, selectedWeekId, selectedDay.name)} className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:text-white z-10"><span className="material-symbols-outlined text-sm">edit</span></button>
                      ) : (
-                        <button onClick={() => setCommentModal({ program: p, dayName: selectedDay.name, data })} className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:text-white z-10" title="Comentar"><span className="material-symbols-outlined text-sm">chat_bubble</span></button>
+                        <button onClick={() => setCommentModal({ program: p, dayName: selectedDay.name, fullDate: `${selectedDay.name} ${selectedDay.date} de ${currentMonthLabel.toLowerCase()} de ${targetDate.getFullYear()}`, data })} className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:text-white z-10" title="Comentar"><span className="material-symbols-outlined text-sm">chat_bubble</span></button>
                      )}
                   </div>
                   <h3 className="text-white font-bold text-base mb-4">{data.theme}</h3>
