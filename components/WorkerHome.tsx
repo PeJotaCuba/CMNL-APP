@@ -46,39 +46,6 @@ const WorkerHome: React.FC<Props> = ({
     onBackup
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-
-  const toggleAudio = async () => {
-      const url = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/main/AudioNoticias.mp3';
-      
-      if (isAudioPlaying) {
-          audioRef.current?.pause();
-          setIsAudioPlaying(false);
-          return;
-      }
-
-      setIsUpdating(true);
-      
-      if (!audioRef.current) {
-          audioRef.current = new Audio();
-          audioRef.current.onended = () => setIsAudioPlaying(false);
-      }
-      
-      // Force fetch latest
-      audioRef.current.src = `${url}?t=${Date.now()}`;
-      
-      // Wait for load
-      audioRef.current.oncanplaythrough = () => {
-          setIsUpdating(false);
-          audioRef.current?.play();
-          setIsAudioPlaying(true);
-          if (audioRef.current) audioRef.current.oncanplaythrough = null; // Clean up
-      };
-      
-      audioRef.current.load();
-  };
 
   // Carousel logic
   useEffect(() => {
@@ -336,13 +303,6 @@ const WorkerHome: React.FC<Props> = ({
             <div className="w-full flex-1 flex flex-col">
                 <div className="flex justify-between items-center mb-3 px-1">
                      <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
-                     <button 
-                        onClick={toggleAudio}
-                        className="flex items-center gap-2 bg-[#C69C6D]/20 hover:bg-[#C69C6D]/40 text-[#C69C6D] px-3 py-1.5 rounded-full text-xs font-bold transition-all"
-                     >
-                        {isAudioPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                        {isAudioPlaying ? 'Pausar RCM Noticias' : 'Escuchar RCM Noticias'}
-                     </button>
                 </div>
                 <div 
                     onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
