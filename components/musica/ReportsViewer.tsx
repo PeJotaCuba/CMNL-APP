@@ -169,7 +169,9 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 <button 
                                     onClick={async () => {
                                         const adminUser = users.find(u => u.role === 'admin');
-                                        if (!adminUser || !adminUser.phone) {
+                                        let phone = adminUser?.phone || '54413935';
+                                        
+                                        if (!phone) {
                                             alert('No se encontró el número de teléfono del administrador.');
                                             return;
                                         }
@@ -205,7 +207,6 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                             text += `(El reporte en PDF ha sido generado, por favor solicítalo si necesitas el archivo adjunto.)`;
                                         }
                                         
-                                        let phone = adminUser.phone;
                                         if (!phone.startsWith('53')) {
                                             phone = '53' + phone;
                                         }

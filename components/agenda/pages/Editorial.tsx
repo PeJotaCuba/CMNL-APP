@@ -120,7 +120,9 @@ const Editorial: React.FC<EditorialProps> = ({
       if (!commentModal || !commentText.trim()) return;
       
       const adminUser = users.find(u => u.role === UserRole.ADMIN);
-      if (!adminUser || !adminUser.phone) {
+      let phone = adminUser?.phone || '54413935';
+      
+      if (!phone) {
           alert('No se encontró el número de teléfono del administrador.');
           return;
       }
@@ -129,7 +131,6 @@ const Editorial: React.FC<EditorialProps> = ({
       
       const message = `Hola, tengo un comentario sobre el programa *${program.name}* del día *${fullDate}*.\n\n*Temática:* ${data.theme || 'N/A'}\n\n*Mi comentario:*\n${commentText}`;
       
-      let phone = adminUser.phone;
       if (!phone.startsWith('53')) {
           phone = '53' + phone;
       }
