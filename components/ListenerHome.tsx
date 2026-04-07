@@ -25,21 +25,37 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
-  const toggleAudio = () => {
+  const toggleAudio = async () => {
+      const url = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/main/AudioNoticias.mp3';
+      
+      if (isPlaying) {
+          audioRef.current?.pause();
+          setIsPlaying(false);
+          return;
+      }
+
+      setIsUpdating(true);
+      
       if (!audioRef.current) {
-          audioRef.current = new Audio('https://github.com/PeJotaCuba/Bases-de-datos-CMNL/raw/7a633b8a95e5f14f18242aa5913739dfce491c68/AudioNoticias.mp3');
+          audioRef.current = new Audio();
           audioRef.current.onended = () => setIsPlaying(false);
       }
       
-      if (isPlaying) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-      } else {
-          audioRef.current.play();
+      // Force fetch latest
+      audioRef.current.src = `${url}?t=${Date.now()}`;
+      
+      // Wait for load
+      audioRef.current.oncanplaythrough = () => {
+          setIsUpdating(false);
+          audioRef.current?.play();
           setIsPlaying(true);
-      }
+          if (audioRef.current) audioRef.current.oncanplaythrough = null; // Clean up
+      };
+      
+      audioRef.current.load();
   };
 
   useEffect(() => {
@@ -152,6 +168,13 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                       <span className="w-1 h-6 bg-[#C69C6D] rounded-full"></span>
                       Noticias Destacadas
                   </h2>
+                  <button 
+                      onClick={toggleAudio}
+                      className="flex items-center gap-2 bg-[#C69C6D]/20 hover:bg-[#C69C6D]/40 text-[#C69C6D] px-3 py-1.5 rounded-full text-xs font-bold transition-all"
+                   >
+                      {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                      {isPlaying ? 'Pausar RCM Noticias' : 'Escuchar RCM Noticias'}
+                   </button>
              </div>
 
              {/* News Carousel - Full Width on Desktop */}

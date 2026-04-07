@@ -53,8 +53,10 @@ const AdminDashboard: React.FC<Props> = ({
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
   const toggleAudio = () => {
+      const url = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/main/AudioNoticias.mp3';
+      
       if (!audioRef.current) {
-          audioRef.current = new Audio('https://github.com/PeJotaCuba/Bases-de-datos-CMNL/raw/7a633b8a95e5f14f18242aa5913739dfce491c68/AudioNoticias.mp3');
+          audioRef.current = new Audio(`${url}?t=${Date.now()}`);
           audioRef.current.onended = () => setIsAudioPlaying(false);
       }
       
@@ -62,6 +64,9 @@ const AdminDashboard: React.FC<Props> = ({
           audioRef.current.pause();
           setIsAudioPlaying(false);
       } else {
+          // Always fetch latest version when playing
+          audioRef.current.src = `${url}?t=${Date.now()}`;
+          audioRef.current.load();
           audioRef.current.play();
           setIsAudioPlaying(true);
       }
@@ -258,7 +263,7 @@ const AdminDashboard: React.FC<Props> = ({
                         className="flex items-center gap-2 bg-[#C69C6D]/20 hover:bg-[#C69C6D]/40 text-[#C69C6D] px-3 py-1.5 rounded-full text-xs font-bold transition-all"
                      >
                         {isAudioPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                        {isAudioPlaying ? 'Pausar' : 'Escuchar'}
+                        {isAudioPlaying ? 'Pausar RCM Noticias' : 'Escuchar RCM Noticias'}
                      </button>
                      {currentUser?.role === 'admin' && (
                         <label className="flex items-center gap-2 bg-[#C69C6D] hover:bg-[#b58b5c] text-white px-3 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer">

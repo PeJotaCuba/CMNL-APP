@@ -47,21 +47,37 @@ const WorkerHome: React.FC<Props> = ({
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
 
-  const toggleAudio = () => {
+  const toggleAudio = async () => {
+      const url = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/main/AudioNoticias.mp3';
+      
+      if (isAudioPlaying) {
+          audioRef.current?.pause();
+          setIsAudioPlaying(false);
+          return;
+      }
+
+      setIsUpdating(true);
+      
       if (!audioRef.current) {
-          audioRef.current = new Audio('https://github.com/PeJotaCuba/Bases-de-datos-CMNL/raw/7a633b8a95e5f14f18242aa5913739dfce491c68/AudioNoticias.mp3');
+          audioRef.current = new Audio();
           audioRef.current.onended = () => setIsAudioPlaying(false);
       }
       
-      if (isAudioPlaying) {
-          audioRef.current.pause();
-          setIsAudioPlaying(false);
-      } else {
-          audioRef.current.play();
+      // Force fetch latest
+      audioRef.current.src = `${url}?t=${Date.now()}`;
+      
+      // Wait for load
+      audioRef.current.oncanplaythrough = () => {
+          setIsUpdating(false);
+          audioRef.current?.play();
           setIsAudioPlaying(true);
-      }
+          if (audioRef.current) audioRef.current.oncanplaythrough = null; // Clean up
+      };
+      
+      audioRef.current.load();
   };
 
   // Carousel logic
@@ -325,7 +341,7 @@ const WorkerHome: React.FC<Props> = ({
                         className="flex items-center gap-2 bg-[#C69C6D]/20 hover:bg-[#C69C6D]/40 text-[#C69C6D] px-3 py-1.5 rounded-full text-xs font-bold transition-all"
                      >
                         {isAudioPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                        {isAudioPlaying ? 'Pausar' : 'Escuchar'}
+                        {isAudioPlaying ? 'Pausar RCM Noticias' : 'Escuchar RCM Noticias'}
                      </button>
                 </div>
                 <div 
