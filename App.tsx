@@ -781,7 +781,12 @@ const App: React.FC = () => {
       case AppView.SECTION_NEWS:
         return <ListenerHome onNavigate={handleNavigate} news={news} onSync={handleCloudSync} isSyncing={isSyncing} onMenuClick={() => setIsSidebarOpen(true)} />; 
       case AppView.SECTION_NEWS_DETAIL:
-        return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} newsItem={selectedNews} />;
+        return <PlaceholderView title="Noticias" subtitle={selectedNews?.category || "Actualidad"} onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} newsItem={selectedNews} user={currentUser} onNewsUpdate={(updatedNews) => {
+            const updatedNewsList = news.map(n => n.id === updatedNews.id ? updatedNews : n);
+            setNews(updatedNewsList);
+            localStorage.setItem('rcm_data_news', JSON.stringify(updatedNewsList));
+            setSelectedNews(updatedNews);
+        }} />;
       case AppView.SECTION_PODCAST:
         return <PlaceholderView title="Podcasts" subtitle="Escucha a tu ritmo" onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} />;
       case AppView.SECTION_PROFILE:

@@ -15,6 +15,7 @@ interface ViewProps {
   newsItem?: NewsItem | null;
   user?: { name: string; role: string; photo?: string } | null;
   onUpload?: (e: React.ChangeEvent<HTMLInputElement>, type: 'history') => void;
+  onNewsUpdate?: (updatedNews: NewsItem) => void;
 }
 
 const newsColors = [
@@ -46,14 +47,30 @@ const formatTo12Hour = (timeStr: string): string => {
 
 import { LOGO_URL } from '../utils/scheduleData';
 
-export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem, onUpload, user }) => {
+export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, customContent, newsItem, onUpload, user, onNewsUpdate }) => {
   const [showFabMenu, setShowFabMenu] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingNews, setIsEditingNews] = useState(false);
+  const [isEditingProgramming, setIsEditingProgramming] = useState(false);
+  const [editForm, setEditForm] = useState<NewsItem | null>(null);
   const [editedProgramming, setEditedProgramming] = useState<ProgramSchedule[] | null>(null);
   
   const isProgramming = title.includes('Programación');
   // Logic to show FAB on specific public views (History, About, Programming)
   const showListenerFab = title.includes('Historia') || title.includes('Quiénes Somos') || title.includes('Programación');
+
+  const handleEditNewsClick = () => {
+    if (newsItem) {
+      setEditForm({ ...newsItem });
+      setIsEditingNews(true);
+    }
+  };
+
+  const handleSaveNewsEdit = () => {
+    if (editForm && onNewsUpdate) {
+      onNewsUpdate(editForm);
+      setIsEditingNews(false);
+    }
+  };
 
   const programmingData = useMemo(() => {
     if (!isProgramming) return null;
@@ -109,22 +126,22 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
     const sunday = allPrograms.filter(p => p.days.includes(0));
 
     return { monFri, saturday, sunday, all: allPrograms };
-  }, [isProgramming, isEditing]); // Re-run when isEditing changes (after save)
+  }, [isProgramming, isEditingProgramming]); // Re-run when isEditingProgramming changes (after save)
 
   const handleStartEdit = () => {
       setEditedProgramming(programmingData?.all || []);
-      setIsEditing(true);
+      setIsEditingProgramming(true);
   };
 
   const handleSaveEdit = () => {
       if (editedProgramming) {
           localStorage.setItem('rcm_manual_programming', JSON.stringify(editedProgramming));
-          setIsEditing(false);
+          setIsEditingProgramming(false);
       }
   };
 
   const handleCancelEdit = () => {
-      setIsEditing(false);
+      setIsEditingProgramming(false);
       setEditedProgramming(null);
   };
 
@@ -179,6 +196,11 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
                  </div>
                  <div className="relative p-6 z-10">
                     <h1 className="text-2xl font-bold text-white leading-tight shadow-sm mb-2">{newsItem.title}</h1>
+                    {user?.role === 'admin' && (
+                        <button onClick={handleEditNewsClick} className="mt-2 text-xs bg-white/20 hover:bg-white/40 text-white px-3 py-1 rounded-full backdrop-blur-md transition-all">
+                            Editar Noticia
+                        </button>
+                    )}
                  </div>
              </div>
              <div className="flex-1 p-6 overflow-y-auto">
@@ -192,6 +214,21 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
                      ))}
                  </div>
              </div>
+             {isEditingNews && editForm && (
+                 <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                     <div className="bg-[#2C1B15] border border-[#9E7649]/30 p-6 rounded-xl w-full max-w-lg text-[#E8DCCF]">
+                         <h2 className="text-lg font-bold mb-4">Editar Noticia</h2>
+                         <input className="w-full p-2 mb-2 bg-[#1A100C] border border-[#9E7649]/30 rounded" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} placeholder="Titular" />
+                         <input className="w-full p-2 mb-2 bg-[#1A100C] border border-[#9E7649]/30 rounded" value={editForm.author} onChange={e => setEditForm({...editForm, author: e.target.value})} placeholder="Fuente" />
+                         <input className="w-full p-2 mb-2 bg-[#1A100C] border border-[#9E7649]/30 rounded" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} placeholder="Fecha" />
+                         <textarea className="w-full p-2 mb-4 bg-[#1A100C] border border-[#9E7649]/30 rounded h-40" value={editForm.content} onChange={e => setEditForm({...editForm, content: e.target.value})} placeholder="Texto" />
+                         <div className="flex justify-end gap-2">
+                             <button onClick={() => setIsEditingNews(false)} className="px-4 py-2 bg-black/40 rounded">Cancelar</button>
+                             <button onClick={handleSaveNewsEdit} className="px-4 py-2 bg-[#9E7649] text-white rounded">Guardar</button>
+                         </div>
+                     </div>
+                 </div>
+             )}
         </div>
       );
   }
@@ -222,7 +259,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
             )}
             {isProgramming && user?.role === 'admin' && (
                 <>
-                    {isEditing ? (
+                    {isEditingProgramming ? (
                         <>
                             <button onClick={handleSaveEdit} className="p-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold">
                                 <Save size={18} /> Guardar
@@ -243,7 +280,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
       
       <div className="flex-1 overflow-y-auto p-4 pb-24"> {/* Added pb-24 for player clearance */}
         {isProgramming ? (
-          isEditing ? (
+          isEditingProgramming ? (
               <div className="max-w-4xl mx-auto space-y-4">
                   <div className="flex justify-between items-center mb-4">
                       <h3 className="font-bold text-[#5D3A24]">Editor de Programación</h3>
