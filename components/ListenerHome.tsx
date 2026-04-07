@@ -170,7 +170,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                         <div className="mt-6 text-xs md:text-sm text-stone-400 font-medium flex items-center gap-2">
                              <span>{activeNews.date}</span>
                              <span className="w-1 h-1 bg-stone-500 rounded-full"></span>
-                             <span>{activeNews.author}</span>
+                             <span>Fuente: {activeNews.author}</span>
                         </div>
                     </div>
                 </div>

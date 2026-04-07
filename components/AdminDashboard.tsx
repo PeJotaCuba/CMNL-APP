@@ -81,14 +81,19 @@ const AdminDashboard: React.FC<Props> = ({
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
-        const blocks = text.split(/_{3,}/).filter(b => b.trim());
+        const lines = text.split('\n');
+        const date = lines[0].trim();
+        const content = lines.slice(1).join('\n');
+        const blocks = content.split(/Titular:/i).filter(b => b.trim());
+
         const newNews: NewsItem[] = blocks.map((block, index) => {
-          const titularMatch = block.match(/Titular:\s*([\s\S]*?)(?=\n\n|\nAutor|Autor|$)/i);
-          const autorMatch = block.match(/Autor(?: o fuente)?:\s*([\s\S]*?)(?=\n\n|\nTexto|Texto|$)/i);
+          const fuenteMatch = block.match(/Fuente:\s*([\s\S]*?)(?=\n\n|\nTexto|Texto|$)/i);
           const textoMatch = block.match(/Texto:\s*([\s\S]*?)$/i);
           
-          const title = titularMatch ? titularMatch[1].trim() : 'Sin Título';
-          const author = autorMatch ? autorMatch[1].trim() : 'Anónimo';
+          // Extract title: it's the text from start of block until the first double newline or Fuente
+          const titleMatch = block.trim().match(/^([\s\S]*?)(?=\n\n|\nFuente|Fuente|$)/i);
+          const title = titleMatch ? titleMatch[1].trim() : 'Sin Título';
+          const author = fuenteMatch ? fuenteMatch[1].trim() : 'Redacción RCM';
           const content = textoMatch ? textoMatch[1].trim() : '';
           
           return {
@@ -97,7 +102,7 @@ const AdminDashboard: React.FC<Props> = ({
             author,
             content,
             category: 'General',
-            date: new Date().toLocaleDateString(),
+            date: date,
             excerpt: content.split('. ')[0] + '.'
           };
         });

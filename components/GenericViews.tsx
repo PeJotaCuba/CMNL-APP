@@ -183,7 +183,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
              </div>
              <div className="flex-1 p-6 overflow-y-auto">
                  <div className="flex items-center gap-4 text-xs text-[#9E7649] mb-6 border-b border-[#9E7649]/20 pb-4">
-                     <span className="flex items-center gap-1"><User size={14}/> {newsItem.author}</span>
+                     <span className="flex items-center gap-1"><User size={14}/> Fuente: {newsItem.author}</span>
                      <span className="flex items-center gap-1"><Clock size={14}/> {newsItem.date}</span>
                  </div>
                  <div className="prose prose-invert prose-p:text-[#E8DCCF]/80 prose-headings:text-white max-w-none">

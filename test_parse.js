@@ -1,42 +1,42 @@
+const text = `Martes 7 de abril de 2026
 
-const text = `Titular:
-Una lectura más allá de una Matanza
-
-Autor:
-CMKX Radio Bayamo
-
-Texto:
-El béisbol cubano atraviesa un proceso de profunda reflexión tras los resultados adversos en la Liga de Campeones, donde el equipo de Matanzas sufrió derrotas históricas. El análisis deportivo publicado este lunes profundiza en la necesidad de cambios estructurales y el impacto de los nuevos patrocinios. Se busca entender la crisis del deporte nacional hoy.
-
-________________________________________________________
 Titular:
-Miguel Díaz-Canel ratifica solidaridad de Cuba con el pueblo palestino
+Recuerdan en Bayamo a Vilma Espín en el 96 aniversario de su nacimiento
 
-Autor:
-Cubadebate
+Fuente:
+Redacción RCM
 
 Texto:
-El mandatario cubano reafirmó este lunes el compromiso histórico de la Revolución con la causa palestina en el marco del Día de la Tierra. A través de sus canales oficiales, denunció el genocidio que sufre ese pueblo y la ocupación ilegal de sus territorios. Cuba mantiene su postura firme en foros internacionales defendiendo su autodeterminación.`;
+La combatiente Vilma Espín Guillois fue recordada este martes en la histórica Plaza de la Revolución de Bayamo, en el aniversario 96 de su nacimiento.
 
-const blocks = text.split(/_{3,}/).filter(b => b.trim());
-const newNews = blocks.map((block, index) => {
-  const titularMatch = block.match(/Titular:\s*([\s\S]*?)(?=\n\n|\nAutor|Autor|$)/i);
-  const autorMatch = block.match(/Autor(?: o fuente)?:\s*([\s\S]*?)(?=\n\n|\nTexto|Texto|$)/i);
-  const textoMatch = block.match(/Texto:\s*([\s\S]*?)$/i);
-  
-  const title = titularMatch ? titularMatch[1].trim() : 'Sin Título';
-  const author = autorMatch ? autorMatch[1].trim() : 'Anónimo';
-  const content = textoMatch ? textoMatch[1].trim() : '';
-  
-  return {
-    id: `news-${Date.now()}-${index}`,
-    title,
-    author,
-    content,
-    category: 'General',
-    date: new Date().toLocaleDateString(),
-    excerpt: content.split('. ')[0] + '.'
-  };
+Titular:
+Convoca Central de Trabajadores en Granma a jornada de trabajo voluntario por el Primero de Mayo
+
+Fuente:
+Redacción RCM
+
+Texto:
+Un trabajo voluntario convocado por la Central de Trabajadores de Cuba en Granma se realizó en la finca "La Reyna".`;
+
+const lines = text.split('\n');
+const date = lines[0].trim();
+const content = lines.slice(1).join('\n');
+const blocks = content.split(/Titular:/i).filter(b => b.trim());
+
+const parsedNews = blocks.map((block, index) => {
+    const sourceMatch = block.match(/Fuente:\s*([\s\S]*?)(?=\n\n|\nTexto|Texto|$)/i);
+    const textoMatch = block.match(/Texto:\s*([\s\S]*?)$/i);
+    
+    const title = block.split('\n')[0].trim();
+    const source = sourceMatch ? sourceMatch[1].trim() : 'Anónimo';
+    const content = textoMatch ? textoMatch[1].trim() : '';
+    
+    return {
+        title,
+        source,
+        content,
+        date
+    };
 });
 
-console.log(newNews);
+console.log(parsedNews);
