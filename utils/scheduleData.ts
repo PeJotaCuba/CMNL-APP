@@ -181,5 +181,5 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
     return { name: "Noticiero Nacional", time: "1:00 PM - 1:30 PM", image: getCategoryVector("Noticias", "Nacional") };
   }
 
-  return { name: "Música RCM", time: "Transmisión Continua", image: getCategoryVector("Musica", "General") };
+  return { name: "Promociones y mensajes", time: "Transmisión Continua", image: getCategoryVector("Propaganda", "General") };
 };

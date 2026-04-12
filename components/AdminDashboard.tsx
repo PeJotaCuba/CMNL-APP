@@ -191,11 +191,11 @@ const AdminDashboard: React.FC<Props> = ({
                   {/* Vector Visualization (Left) */}
                   <div className="relative shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-black/20 flex items-center justify-center border border-white/5">
                       <div className="flex gap-0.5 h-6 items-end">
-                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.8s_ease-in-out_infinite]' : 'h-2'}`}></div>
-                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_1.2s_ease-in-out_infinite]' : 'h-4'}`}></div>
-                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.5s_ease-in-out_infinite]' : 'h-1'}`}></div>
-                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_1.0s_ease-in-out_infinite]' : 'h-3'}`}></div>
-                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-[soundbar_0.7s_ease-in-out_infinite]' : 'h-2'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-soundbar-1' : 'h-2'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-soundbar-2' : 'h-4'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-soundbar-3' : 'h-1'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-soundbar-4' : 'h-3'}`}></div>
+                          <div className={`w-1 bg-[#9E7649] ${isPlaying ? 'animate-soundbar-5' : 'h-2'}`}></div>
                       </div>
                   </div>
 
@@ -295,10 +295,6 @@ const AdminDashboard: React.FC<Props> = ({
       </a>
       
       <style>{`
-        @keyframes soundbar {
-            0%, 100% { height: 10%; }
-            50% { height: 100%; }
-        }
         @keyframes fade-in-up {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }

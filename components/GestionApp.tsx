@@ -12,6 +12,21 @@ import { saveAs } from 'file-saver';
 import { InterruptionModal } from './InterruptionModal';
 import EquipoSection from './gestion/EquipoSection';
 
+const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+
+const isMatch = (name1: string, name2: string) => {
+    const norm1 = normalize(name1);
+    const norm2 = normalize(name2);
+    if (norm1 === norm2) return true;
+    if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
+    const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 2);
+    const words1 = getWords(name1);
+    const words2 = getWords(name2);
+    if (words1.length === 0 || words2.length === 0) return false;
+    const [shorter, longer] = words1.length < words2.length ? [words1, words2] : [words2, words1];
+    return shorter.every(w => longer.some(lw => lw === w || lw.includes(w) || w.includes(lw)));
+};
+
 interface Props {
   onBack: () => void;
   onMenuClick?: () => void;
@@ -323,6 +338,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<ProgramCatalog | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<ProgramFicha | null>(null);
+  const [isEditingCatalogo, setIsEditingCatalogo] = useState(false);
+  const [editCatalogoForm, setEditCatalogoForm] = useState<string>('');
 
   // Work Log State
   const [workLogDate, setWorkLogDate] = useState(() => {
@@ -525,7 +542,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           6: ['sabado', 'sabatina']
       };
 
-      return daysMap[day].some(d => freq.includes(d));
+      const freqWords = freq.split(/[\s,y-]+/);
+      return daysMap[day].some(d => freqWords.some(w => w.includes(d) || (d.includes(w) && w.length >= 3)));
   };
 
   const DEFAULT_PROGRAMS = [
@@ -700,7 +718,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const getProgramRate = (programName: string, role: string, level: string) => {
       if (!programName || !role || !level) return 0;
       // Normalize names for better matching (remove accents, lowercase, trim)
-      const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
       
       const program = catalogo.find(p => normalize(p.name) === normalize(programName) || normalize(p.name).includes(normalize(programName)) || normalize(programName).includes(normalize(p.name)));
       
@@ -1036,6 +1053,34 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       setEditForm(null);
   };
 
+  const handleEditCatalogo = () => {
+      if (selectedCatalogItem) {
+          setEditCatalogoForm(JSON.stringify(selectedCatalogItem, null, 2));
+          setIsEditingCatalogo(true);
+      }
+  };
+
+  const handleSaveEditCatalogo = () => {
+      if (editCatalogoForm && selectedCatalogItem) {
+          try {
+              const parsed = JSON.parse(editCatalogoForm);
+              const updatedCatalogo = catalogo.map(c => c.name === selectedCatalogItem.name ? parsed : c);
+              setCatalogo(updatedCatalogo);
+              localStorage.setItem('rcm_data_catalogo', JSON.stringify(updatedCatalogo));
+              setSelectedCatalogItem(parsed);
+              setIsEditingCatalogo(false);
+              setEditCatalogoForm('');
+          } catch (e) {
+              alert('Error en el formato JSON. Por favor, revisa la sintaxis.');
+          }
+      }
+  };
+
+  const handleCancelEditCatalogo = () => {
+      setIsEditingCatalogo(false);
+      setEditCatalogoForm('');
+  };
+
   const handleInputChange = (field: keyof ProgramFicha, value: string) => {
       if (editForm) {
           setEditForm({ ...editForm, [field]: value });
@@ -1078,7 +1123,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       if (date.getDay() !== 0) return { isHabitual: false, isAutoMarked: false, isExcluded: false };
     }
 
-    const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
     const normalizeName = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '');
     const getWords = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(w => w.length > 1);
     
@@ -1097,11 +1141,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
     const roleNorm = normalize(role);
     const roleKey = Object.keys(habitualProgramsByRole).find(k => normalize(k) === roleNorm || roleNorm.includes(normalize(k)) || normalize(k).includes(roleNorm));
     
+    const progNorm = normalize(programName);
+    
     let isHabitual = false;
     if (roleKey) {
-      isHabitual = (habitualProgramsByRole[roleKey] || []).includes(programName);
+      isHabitual = (habitualProgramsByRole[roleKey] || []).some(p => isMatch(p, programName));
     } else {
-      isHabitual = (legacyHabitualPrograms || []).includes(programName);
+      isHabitual = (legacyHabitualPrograms || []).some(p => isMatch(p, programName));
     }
 
     if (!isHabitual) return { isHabitual: false, isAutoMarked: false, isExcluded: false };
@@ -1208,8 +1254,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           const { isHabitual } = getHabitualStatus(prog.name, role.role, ""); // Check if habitual for this role
           if (!isHabitual) return;
 
-          const ficha = fichas.find(f => f.name === prog.name);
-          if (!ficha) return;
+          const ficha = fichas.find(f => normalize(f.name) === normalize(prog.name) || normalize(f.name).includes(normalize(prog.name)) || normalize(prog.name).includes(normalize(f.name)));
 
           const amount = getProgramRate(prog.name, role.role, role.level);
 
@@ -1218,7 +1263,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
             const d = new Date(today.getFullYear(), today.getMonth(), i, 12, 0, 0);
             const dateStr = formatDateToISO(d);
             
-            if (isProgramOnDay(ficha, dateStr)) {
+            if (ficha ? isProgramOnDay(ficha, dateStr) : true) {
               const { isAutoMarked } = getHabitualStatus(prog.name, role.role, dateStr);
               
               if (isAutoMarked && !logsSet.has(`${dateStr}|${prog.name}|${role.role}`)) {
@@ -2712,13 +2757,40 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   }
 
   if (activeSection === 'pagos') {
-      // Main Pagos View (Work Log)
-      const programsList = fichas.map(f => f.name).sort();
-      if (programsList.length === 0 && catalogo.length > 0) {
-          catalogo.forEach(c => {
-              if (!programsList.includes(c.name)) programsList.push(c.name);
-          });
-      }
+    const getProgramStartTime = (progName: string) => {
+        let bestFicha = null;
+        let bestDiff = Infinity;
+        for (const f of fichas) {
+            if (isMatch(f.name, progName)) {
+                const diff = Math.abs(f.name.length - progName.length);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestFicha = f;
+                }
+            }
+        }
+
+        if (bestFicha && bestFicha.schedule) {
+            const match = bestFicha.schedule.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            if (match) {
+                let hours = parseInt(match[1]);
+                const minutes = parseInt(match[2]);
+                const ampm = match[3] ? match[3].toUpperCase() : null;
+                if (ampm === 'PM' && hours < 12) hours += 12;
+                if (ampm === 'AM' && hours === 12) hours = 0;
+                return hours * 60 + minutes;
+            }
+        }
+        return 9999;
+    };
+
+    const programsList = Array.from(new Set(catalogo.map(c => c.name))) as string[];
+    programsList.sort((a, b) => {
+        const timeA = getProgramStartTime(a);
+        const timeB = getProgramStartTime(b);
+        if (timeA !== timeB) return timeA - timeB;
+        return a.localeCompare(b);
+    });
       
       const currentDate = parseLocalDate(workLogDate);
       
@@ -3042,10 +3114,20 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                               </thead>
                                               <tbody>
                                                   {programsList.map(prog => {
+                                                      let bestFicha = null;
+                                                      let bestDiff = Infinity;
+                                                      for (const f of fichas) {
+                                                          if (isMatch(f.name, prog)) {
+                                                              const diff = Math.abs(f.name.length - prog.length);
+                                                              if (diff < bestDiff) {
+                                                                  bestDiff = diff;
+                                                                  bestFicha = f;
+                                                              }
+                                                          }
+                                                      }
+
                                                       const isAired = dates.some(date => {
-                                                          const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-                                                          const ficha = fichas.find(f => normalize(f.name) === normalize(prog));
-                                                          return (ficha ? isProgramOnDay(ficha, date) : false) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
+                                                          return (bestFicha ? isProgramOnDay(bestFicha, date) : true) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
                                                       });
 
                                                       if (!isAired) return null;
@@ -3063,9 +3145,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                                       l.date === date
                                                                   ) || isAutoMarked;
                                                                   
-                                                                  const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-                                                                  const ficha = fichas.find(f => normalize(f.name) === normalize(prog));
-                                                                  const canWork = (ficha ? isProgramOnDay(ficha, date) : false) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
+                                                                  const canWork = (bestFicha ? isProgramOnDay(bestFicha, date) : true) || workLogs.some(l => l.userId === currentUser?.username && l.role === role.role && l.programName === prog && l.date === date);
 
                                                                   return (
                                                                       <td key={date} className="px-6 py-4 text-center">
@@ -3115,19 +3195,42 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       if (selectedCatalogItem) {
           return (
               <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
-                  <div className="bg-[#3E1E16] px-4 py-4 flex items-center gap-4 border-b border-[#9E7649]/20 sticky top-0 z-20">
-                      <button onClick={() => setSelectedCatalogItem(null)} className="p-2 hover:bg-[#9E7649]/20 rounded-full transition-colors">
-                          <ArrowLeft size={20} className="text-[#F5EFE6]" />
-                      </button>
-                      <div className="flex-1">
-                          <h1 className="text-lg font-bold text-white leading-none">{selectedCatalogItem.name}</h1>
-                          <p className="text-[10px] text-[#9E7649]">Catálogo de Pagos</p>
-                      </div>
-                  </div>
+                  <CMNLHeader 
+                      user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
+                      sectionTitle={selectedCatalogItem.name}
+                      onMenuClick={onMenuClick}
+                      onBack={() => { setSelectedCatalogItem(null); setIsEditingCatalogo(false); }}
+                  >
+                      {isAdmin && !isEditingCatalogo && (
+                          <button onClick={handleEditCatalogo} className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm" title="Editar Catálogo">
+                              <Edit2 size={20} />
+                          </button>
+                      )}
+                      {isEditingCatalogo && (
+                          <div className="flex gap-2">
+                              <button onClick={handleSaveEditCatalogo} className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm" title="Guardar Cambios">
+                                  <Check size={20} />
+                              </button>
+                              <button onClick={handleCancelEditCatalogo} className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm" title="Cancelar">
+                                  <X size={20} />
+                              </button>
+                          </div>
+                      )}
+                  </CMNLHeader>
 
                   <div className="p-6 max-w-5xl mx-auto w-full overflow-y-auto pb-20">
-                      <div className="grid gap-6">
-                          {selectedCatalogItem.roles.map((role, idx) => (
+                      {isEditingCatalogo ? (
+                          <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 p-4">
+                              <p className="text-sm text-[#9E7649] mb-4">Edita el JSON del programa. Asegúrate de mantener el formato correcto.</p>
+                              <textarea 
+                                  value={editCatalogoForm}
+                                  onChange={(e) => setEditCatalogoForm(e.target.value)}
+                                  className="w-full h-[600px] bg-black/50 text-white font-mono text-sm p-4 rounded border border-[#9E7649]/30 focus:border-[#9E7649] focus:outline-none custom-scrollbar"
+                              />
+                          </div>
+                      ) : (
+                          <div className="grid gap-6">
+                              {selectedCatalogItem.roles.map((role, idx) => (
                               <div key={idx} className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/10 overflow-hidden">
                                   <div className="bg-[#3E1E16]/50 p-4 border-b border-[#9E7649]/10 flex justify-between items-center">
                                       <h3 className="text-white font-bold text-lg">{role.role}</h3>
@@ -3166,7 +3269,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                   </div>
                               </div>
                           ))}
-                      </div>
+                          </div>
+                      )}
                   </div>
               </div>
           );
@@ -3223,13 +3327,27 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                       </div>
                                   </button>
                                   {isAdmin && (
-                                      <button 
-                                          onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar item del catálogo?')) setCatalogo(prev => prev.filter((_, i) => i !== idx)); }}
-                                          className="absolute top-2 right-2 p-2 bg-red-900/80 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10"
-                                          title="Eliminar"
-                                      >
-                                          <Trash2 size={16} />
-                                      </button>
+                                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                          <button 
+                                              onClick={(e) => { 
+                                                  e.stopPropagation(); 
+                                                  setSelectedCatalogItem(item); 
+                                                  setEditCatalogoForm(JSON.stringify(item, null, 2));
+                                                  setIsEditingCatalogo(true);
+                                              }}
+                                              className="p-2 bg-[#9E7649] text-white rounded-lg hover:bg-[#8B653D] transition-colors"
+                                              title="Editar"
+                                          >
+                                              <Edit2 size={16} />
+                                          </button>
+                                          <button 
+                                              onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar item del catálogo?')) setCatalogo(prev => prev.filter((_, i) => i !== idx)); }}
+                                              className="p-2 bg-red-900/80 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                              title="Eliminar"
+                                          >
+                                              <Trash2 size={16} />
+                                          </button>
+                                      </div>
                                   )}
                               </div>
                           ))}

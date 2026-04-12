@@ -18,6 +18,7 @@ import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrent
 import BackupDialog from './components/BackupDialog';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
@@ -889,9 +890,25 @@ const App: React.FC = () => {
                             <button className="text-[#E8DCCF]/60 hover:text-[#9E7649] transition-colors"><SkipForward size={20} fill="currentColor" className="opacity-50" /></button>
                          </div>
                      </div>
-                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#6B442A] overflow-hidden">
-                        {isPlaying && (
-                            <div className="absolute top-0 bottom-0 bg-[#9E7649] animate-progress-indeterminate"></div>
+                     <div className="absolute top-0 left-0 right-0 h-4 flex items-end justify-center gap-[1px] px-1 overflow-hidden pointer-events-none">
+                        {isPlaying ? (
+                            Array.from({ length: 100 }).map((_, i) => (
+                                <motion.div
+                                    key={i}
+                                    className="w-[2px] bg-[#9E7649]/40"
+                                    animate={{
+                                        height: [2, Math.random() * 16 + 2, 2],
+                                    }}
+                                    transition={{
+                                        duration: 0.4 + Math.random() * 0.6,
+                                        repeat: Infinity,
+                                        ease: "easeInOut",
+                                        delay: i * 0.01
+                                    }}
+                                />
+                            ))
+                        ) : (
+                            <div className="w-full h-[1px] bg-[#9E7649]/10" />
                         )}
                      </div>
                  </div>
