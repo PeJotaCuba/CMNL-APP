@@ -1,4 +1,4 @@
-import { Program, UserProfile, UserRole, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData } from './types.ts';
+import { Program, UserProfile, UserRole, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData, CulturalOptionsData } from './types.ts';
 
 export const INITIAL_USERS: UserProfile[] = [
   { 
@@ -64,3 +64,6 @@ export const INITIAL_PROPAGANDA: PropagandaData = {
   "Fidel": [],
   "Martí": []
 };
+
+export const INITIAL_CULTURAL_OPTIONS: CulturalOptionsData = {};
+

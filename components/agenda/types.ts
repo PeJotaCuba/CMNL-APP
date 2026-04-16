@@ -66,3 +66,17 @@ export interface Conmemoracion {
 export type EfemeridesData = Record<string, Efemeride[]>; 
 export type ConmemoracionesData = Record<string, Conmemoracion[]>;
 export type PropagandaData = Record<string, string[]>;
+
+export interface CulturalOption {
+  actividad: string;
+  hora: string;
+  lugar: string;
+}
+
+export interface CulturalDay {
+  day: number;
+  activities: CulturalOption[];
+}
+
+export type CulturalOptionsData = Record<string, CulturalDay[]>;
+

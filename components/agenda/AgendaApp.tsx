@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Program, UserProfile, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData } from './types.ts';
-import { INITIAL_USERS, INITIAL_PROGRAMS, INITIAL_EFEMERIDES, INITIAL_CONMEMORACIONES, INITIAL_DAY_THEMES, INITIAL_PROPAGANDA } from './database.ts';
+import { Program, UserProfile, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData, CulturalOptionsData } from './types.ts';
+import { INITIAL_USERS, INITIAL_PROGRAMS, INITIAL_EFEMERIDES, INITIAL_CONMEMORACIONES, INITIAL_DAY_THEMES, INITIAL_PROPAGANDA, INITIAL_CULTURAL_OPTIONS } from './database.ts';
 import Dashboard from './pages/Dashboard.tsx';
 import Efemerides from './pages/Efemerides.tsx';
 import Conmemoraciones from './pages/Conmemoraciones.tsx';
 import Propaganda from './pages/Propaganda.tsx';
+import CulturalOptions from './pages/CulturalOptions.tsx';
 import Editorial from './pages/Editorial.tsx';
 import Interests from './pages/Interests.tsx';
 import ThemeDetails from './pages/ThemeDetails.tsx';
@@ -30,6 +31,8 @@ const InnerAgendaApp: React.FC<{
   setEfemerides: React.Dispatch<React.SetStateAction<EfemeridesData>>;
   conmemoraciones: ConmemoracionesData;
   setConmemoraciones: React.Dispatch<React.SetStateAction<ConmemoracionesData>>;
+  culturalOptions: any;
+  setCulturalOptions: React.Dispatch<React.SetStateAction<any>>;
   dayThemes: DayThemeData;
   setDayThemes: React.Dispatch<React.SetStateAction<DayThemeData>>;
   propaganda: PropagandaData;
@@ -40,6 +43,7 @@ const InnerAgendaApp: React.FC<{
 }> = ({ 
   user, users, onBack, onMenuClick, handleLogout, programs, setPrograms, 
   efemerides, setEfemerides, conmemoraciones, setConmemoraciones, 
+  culturalOptions, setCulturalOptions,
   dayThemes, setDayThemes, propaganda, setPropaganda, 
   filterEnabled, setFilterEnabled, handleUpdateCurrentUser 
 }) => {
@@ -73,6 +77,7 @@ const InnerAgendaApp: React.FC<{
           } />
           <Route path="/efemerides" element={<Efemerides user={user} data={efemerides} onUpdate={setEfemerides} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
           <Route path="/conmemoraciones" element={<Conmemoraciones user={user} data={conmemoraciones} onUpdate={setConmemoraciones} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
+          <Route path="/culturales" element={<CulturalOptions user={user} data={culturalOptions} onUpdate={setCulturalOptions} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
           <Route path="/propaganda" element={<Propaganda user={user} data={propaganda} onUpdate={setPropaganda} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
           <Route path="/interests" element={<Interests user={user} programs={programs} onUpdateUser={handleUpdateCurrentUser} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
           <Route path="/details" element={<ThemeDetails user={user} onMenuClick={onMenuClick} onBack={() => navigate('/home')} />} />
@@ -218,6 +223,13 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
     } catch (e) { return INITIAL_PROPAGANDA; }
   });
 
+  const [culturalOptions, setCulturalOptions] = useState<CulturalOptionsData>(() => {
+    try {
+      const saved = localStorage.getItem('rcm_cultural_options');
+      return saved ? JSON.parse(saved) : INITIAL_CULTURAL_OPTIONS;
+    } catch (e) { return INITIAL_CULTURAL_OPTIONS; }
+  });
+
   // Estado global para controlar si el filtro de intereses está activo
   const [filterEnabled, setFilterEnabled] = useState(true);
 
@@ -227,11 +239,12 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
     localStorage.setItem('rcm_conmemoraciones', JSON.stringify(conmemoraciones));
     localStorage.setItem('rcm_day_themes', JSON.stringify(dayThemes));
     localStorage.setItem('rcm_propaganda', JSON.stringify(propaganda));
+    localStorage.setItem('rcm_cultural_options', JSON.stringify(culturalOptions));
     localStorage.setItem('rcm_users', JSON.stringify(users));
     
     // Check if any data is different from initial to avoid marking dirty on first load
     // Actually, a simpler way is to just call it if any of these change after mount
-  }, [programs, efemerides, conmemoraciones, dayThemes, propaganda, users]);
+  }, [programs, efemerides, conmemoraciones, dayThemes, propaganda, culturalOptions, users]);
 
   const isFirstRender = useRef(true);
   useEffect(() => {
@@ -240,7 +253,7 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
       return;
     }
     if (onDirtyChange) onDirtyChange(true);
-  }, [programs, efemerides, conmemoraciones, dayThemes, propaganda, users]);
+  }, [programs, efemerides, conmemoraciones, dayThemes, propaganda, culturalOptions, users]);
 
   const handleLogout = () => {
     if (adminSession) {
@@ -281,6 +294,8 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
         setEfemerides={setEfemerides}
         conmemoraciones={conmemoraciones}
         setConmemoraciones={setConmemoraciones}
+        culturalOptions={culturalOptions}
+        setCulturalOptions={setCulturalOptions}
         dayThemes={dayThemes}
         setDayThemes={setDayThemes}
         propaganda={propaganda}
