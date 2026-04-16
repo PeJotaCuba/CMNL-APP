@@ -1012,24 +1012,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
     }
   };
 
-  const handleSaveGestionData = () => {
-      const data = {
-          fichas,
-          catalogo,
-          transmissionConfig
-      };
-      const jsonString = JSON.stringify(data, null, 2);
-      const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'actualcmnl.json';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-  };
-
   const handleEdit = () => {
       if (selectedFicha) {
           setEditForm({ ...selectedFicha });

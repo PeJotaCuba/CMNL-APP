@@ -384,12 +384,12 @@ const App: React.FC = () => {
       };
 
       // Map local keys to the structure expected by handleCloudSync
-      dataToExport.users = getLocal('rcm_data_users');
-      dataToExport.historyContent = getLocal('rcm_data_history');
-      dataToExport.aboutContent = getLocal('rcm_data_about');
-      dataToExport.news = getLocal('rcm_data_news');
-      dataToExport.fichas = getLocal('rcm_data_fichas');
-      dataToExport.catalogo = getLocal('rcm_data_catalogo');
+      dataToExport.users = getLocal('rcm_data_users') || [];
+      dataToExport.historyContent = getLocal('rcm_data_history') || "";
+      dataToExport.aboutContent = getLocal('rcm_data_about') || "";
+      dataToExport.news = getLocal('rcm_data_news') || [];
+      dataToExport.fichas = getLocal('rcm_data_fichas') || [];
+      dataToExport.catalogo = getLocal('rcm_data_catalogo') || [];
       
       // Collect all data for all users
       const allInterruptions: any[] = [];
@@ -454,18 +454,18 @@ const App: React.FC = () => {
       });
 
       // Agenda
-      dataToExport.agendaPrograms = getLocal('rcm_programs');
-      dataToExport.agendaEfemerides = getLocal('rcm_efemerides');
-      dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones');
-      dataToExport.agendaDayThemes = getLocal('rcm_day_themes');
-      dataToExport.agendaUsers = getLocal('rcm_users');
-      dataToExport.agendaPropaganda = getLocal('rcm_propaganda');
-      dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options');
+      dataToExport.agendaPrograms = getLocal('rcm_programs') || [];
+      dataToExport.agendaEfemerides = getLocal('rcm_efemerides') || {};
+      dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones') || {};
+      dataToExport.agendaDayThemes = getLocal('rcm_day_themes') || {};
+      dataToExport.agendaUsers = getLocal('rcm_users') || [];
+      dataToExport.agendaPropaganda = getLocal('rcm_propaganda') || {};
+      dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options') || {};
 
-      dataToExport.programsList = getLocal('rcm_programs_list');
-      dataToExport.customRoots = getLocal('rcm_custom_roots');
-      dataToExport.equipo = getLocal('rcm_equipo_cmnl');
-      dataToExport.manualProgramming = getLocal('rcm_manual_programming');
+      dataToExport.programsList = getLocal('rcm_programs_list') || [];
+      dataToExport.customRoots = getLocal('rcm_custom_roots') || [];
+      dataToExport.equipo = getLocal('rcm_equipo_cmnl') || [];
+      dataToExport.manualProgramming = getLocal('rcm_manual_programming') || [];
 
       // User Data
       dataToExport.userData = {
@@ -483,9 +483,7 @@ const App: React.FC = () => {
                       delete dataToExport[key][subKey];
                   }
               });
-              if (Object.keys(dataToExport[key]).length === 0) {
-                  delete dataToExport[key];
-              }
+              // We do not delete the main object if it's empty, so properties like agendaCulturalOptions remain in the backup
           }
       });
 
