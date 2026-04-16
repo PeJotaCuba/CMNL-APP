@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Program, UserProfile, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData, CulturalOptionsData } from './types.ts';
 import { INITIAL_USERS, INITIAL_PROGRAMS, INITIAL_EFEMERIDES, INITIAL_CONMEMORACIONES, INITIAL_DAY_THEMES, INITIAL_PROPAGANDA, INITIAL_CULTURAL_OPTIONS } from './database.ts';
+import { getCurrentDateInfo } from './utils/dateUtils.ts';
+import { MONTHS_DATA } from './constants.ts';
 import Dashboard from './pages/Dashboard.tsx';
 import Efemerides from './pages/Efemerides.tsx';
 import Conmemoraciones from './pages/Conmemoraciones.tsx';
@@ -232,6 +234,30 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
 
   // Estado global para controlar si el filtro de intereses está activo
   const [filterEnabled, setFilterEnabled] = useState(true);
+
+  // Cleanup logic for cultural options - Keep only current and next month
+  useEffect(() => {
+    const dateInfo = getCurrentDateInfo();
+    const currentMonth = dateInfo.monthName.charAt(0).toUpperCase() + dateInfo.monthName.slice(1).toLowerCase();
+    
+    // Find next month name
+    const currentMonthIndex = MONTHS_DATA.findIndex(m => m.name.toLowerCase() === currentMonth.toLowerCase());
+    const nextMonthIndex = (currentMonthIndex + 1) % 12;
+    const nextMonthName = MONTHS_DATA[nextMonthIndex].name;
+    
+    const allowedMonths = [currentMonth, nextMonthName];
+    
+    const keys = Object.keys(culturalOptions);
+    const expiredKeys = keys.filter(key => !allowedMonths.includes(key));
+    
+    if (expiredKeys.length > 0) {
+      setCulturalOptions(prev => {
+        const cleaned = { ...prev };
+        expiredKeys.forEach(key => delete cleaned[key]);
+        return cleaned;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('rcm_programs', JSON.stringify(programs));

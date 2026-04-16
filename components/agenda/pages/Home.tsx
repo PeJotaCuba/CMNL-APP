@@ -87,6 +87,21 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, onMenuClick, programs, filt
             <span className="material-symbols-outlined text-white/60 group-hover:text-white transition-colors">chevron_right</span>
           </button>
 
+          {/* OPCIONES CULTURALES */}
+          <button 
+            onClick={() => navigate('/culturales')}
+            className="group relative h-24 overflow-hidden rounded-[2rem] bg-card-dark border border-white/5 hover:border-primary/50 transition-all shadow-md active:scale-[0.98] w-full flex items-center p-6 gap-5 text-left"
+          >
+            <div className="size-12 rounded-2xl bg-admin-red/10 flex items-center justify-center group-hover:bg-admin-red transition-colors shrink-0">
+              <span className="material-symbols-outlined text-admin-red group-hover:text-white text-2xl">theater_comedy</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-bold text-white truncate">Opciones Culturales</h3>
+              <p className="text-text-secondary text-xs uppercase font-bold tracking-widest opacity-60 truncate">Eventos y Actividades</p>
+            </div>
+            <span className="material-symbols-outlined text-text-secondary group-hover:text-white opacity-20">chevron_right</span>
+          </button>
+
           {/* EFEMÉRIDES */}
           <button 
             onClick={() => navigate('/efemerides')}
@@ -128,21 +143,6 @@ const Home: React.FC<HomeProps> = ({ user, onLogout, onMenuClick, programs, filt
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-bold text-white truncate">Propaganda</h3>
               <p className="text-text-secondary text-xs uppercase font-bold tracking-widest opacity-60 truncate">Base de Datos</p>
-            </div>
-            <span className="material-symbols-outlined text-text-secondary group-hover:text-white opacity-20">chevron_right</span>
-          </button>
-
-          {/* OPCIONES CULTURALES */}
-          <button 
-            onClick={() => navigate('/culturales')}
-            className="group relative h-24 overflow-hidden rounded-[2rem] bg-card-dark border border-white/5 hover:border-primary/50 transition-all shadow-md active:scale-[0.98] w-full flex items-center p-6 gap-5 text-left"
-          >
-            <div className="size-12 rounded-2xl bg-admin-red/10 flex items-center justify-center group-hover:bg-admin-red transition-colors shrink-0">
-              <span className="material-symbols-outlined text-admin-red group-hover:text-white text-2xl">theater_comedy</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-bold text-white truncate">Opciones Culturales</h3>
-              <p className="text-text-secondary text-xs uppercase font-bold tracking-widest opacity-60 truncate">Eventos y Actividades</p>
             </div>
             <span className="material-symbols-outlined text-text-secondary group-hover:text-white opacity-20">chevron_right</span>
           </button>

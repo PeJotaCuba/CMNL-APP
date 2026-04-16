@@ -102,6 +102,7 @@ const App: React.FC = () => {
               conmemoraciones: JSON.parse(localStorage.getItem('rcm_conmemoraciones') || '{}'),
               dayThemes: JSON.parse(localStorage.getItem('rcm_day_themes') || '{}'),
               propaganda: JSON.parse(localStorage.getItem('rcm_propaganda') || '{}'),
+              culturalOptions: JSON.parse(localStorage.getItem('rcm_cultural_options') || '{}'),
               users: JSON.parse(localStorage.getItem('rcm_users') || '[]'),
           };
 
@@ -395,6 +396,8 @@ const App: React.FC = () => {
       const allWorklogs: any[] = [];
       const allConsolidated: any[] = [];
       const allConsolidatedMonths: any[] = [];
+      const allHabitualExclusions: any[] = [];
+      const allHabitualModes: any[] = [];
       
       users.forEach(user => {
           const u = user.username;
@@ -402,17 +405,23 @@ const App: React.FC = () => {
           const userConsolidated = getLocal(`user_${u}_rcm_data_consolidated`);
           const userInterruptions = getLocal(`user_${u}_rcm_interruptions`);
           const userConsolidatedMonths = getLocal(`user_${u}_rcm_consolidated_months`);
+          const userHabitualExclusions = getLocal(`user_${u}_habitual_exclusions`);
+          const userHabitualMode = getLocal(`user_${u}_habitual_mode`);
           
           if (Array.isArray(userWorklogs)) allWorklogs.push(...userWorklogs);
           if (Array.isArray(userConsolidated)) allConsolidated.push(...userConsolidated);
           if (Array.isArray(userInterruptions)) allInterruptions.push(...userInterruptions);
           if (Array.isArray(userConsolidatedMonths)) allConsolidatedMonths.push(...userConsolidatedMonths);
+          if (Array.isArray(userHabitualExclusions)) allHabitualExclusions.push({ username: u, exclusions: userHabitualExclusions });
+          if (userHabitualMode !== undefined) allHabitualModes.push({ username: u, mode: userHabitualMode });
       });
       
       dataToExport.worklogs = allWorklogs;
       dataToExport.consolidated = allConsolidated;
       dataToExport.interruptions = allInterruptions;
       dataToExport.consolidatedMonths = allConsolidatedMonths;
+      dataToExport.habitualExclusions = allHabitualExclusions;
+      dataToExport.habitualModes = allHabitualModes;
       
       dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
       
@@ -451,10 +460,12 @@ const App: React.FC = () => {
       dataToExport.agendaDayThemes = getLocal('rcm_day_themes');
       dataToExport.agendaUsers = getLocal('rcm_users');
       dataToExport.agendaPropaganda = getLocal('rcm_propaganda');
+      dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options');
 
       dataToExport.programsList = getLocal('rcm_programs_list');
       dataToExport.customRoots = getLocal('rcm_custom_roots');
       dataToExport.equipo = getLocal('rcm_equipo_cmnl');
+      dataToExport.manualProgramming = getLocal('rcm_manual_programming');
 
       // User Data
       dataToExport.userData = {
@@ -590,6 +601,15 @@ const App: React.FC = () => {
           if (json.interruptions) mergeData(`user_${username}_rcm_interruptions`, json.interruptions, 'id');
           if (json.consolidatedMonths) mergeData(`user_${username}_rcm_consolidated_months`, json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
           
+          if (json.habitualExclusions && Array.isArray(json.habitualExclusions)) {
+              const userExclusions = json.habitualExclusions.find((e: any) => e.username === username);
+              if (userExclusions) setLocal(`user_${username}_habitual_exclusions`, userExclusions.exclusions);
+          }
+          if (json.habitualModes && Array.isArray(json.habitualModes)) {
+              const userMode = json.habitualModes.find((m: any) => m.username === username);
+              if (userMode) setLocal(`user_${username}_habitual_mode`, userMode.mode);
+          }
+          
           if (json.transmissionConfig) setLocal('rcm_transmission_config', json.transmissionConfig);
           if (json.paymentConfigs) {
               Object.entries(json.paymentConfigs).forEach(([key, value]) => setLocal(key, value));
@@ -606,8 +626,10 @@ const App: React.FC = () => {
           if (json.agendaDayThemes) mergeSimpleRecord('rcm_day_themes', json.agendaDayThemes);
           if (json.agendaUsers) mergeData('rcm_users', json.agendaUsers, 'id');
           if (json.agendaPropaganda) mergeRecordData('rcm_propaganda', json.agendaPropaganda);
+          if (json.agendaCulturalOptions) mergeRecordData('rcm_cultural_options', json.agendaCulturalOptions);
           if (json.programsList && Array.isArray(json.programsList)) setLocal('rcm_programs_list', json.programsList);
           if (json.customRoots && Array.isArray(json.customRoots)) setLocal('rcm_custom_roots', json.customRoots);
+          if (json.manualProgramming) setLocal('rcm_manual_programming', json.manualProgramming);
           if (json.userData) {
               Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
           }
