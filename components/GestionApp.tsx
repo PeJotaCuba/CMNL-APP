@@ -507,7 +507,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       
       // Check for manual override first
       const manualData = localStorage.getItem('rcm_manual_programming');
-      if (manualData) {
+      if (manualData && manualData !== '[]') {
           try {
               const manualPrograms: any[] = JSON.parse(manualData);
               const onDay = manualPrograms.find(p => p.name.toLowerCase() === program.name.toLowerCase() && p.days.includes(day));

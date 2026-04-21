@@ -82,20 +82,22 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
     const fichasHash = JSON.stringify(fichas.map(f => ({ n: f.name, f: f.frequency, s: f.schedule })));
     const lastHash = localStorage.getItem('rcm_fichas_hash');
     
-    if (lastHash && lastHash !== fichasHash) {
-        // Fichas changed, clear manual override
-        localStorage.removeItem('rcm_manual_programming');
-    }
-    localStorage.setItem('rcm_fichas_hash', fichasHash);
-
     // Check for manual override
     const manualData = localStorage.getItem('rcm_manual_programming');
     
     let allPrograms: ProgramSchedule[] = [];
     
-    if (manualData) {
-        allPrograms = JSON.parse(manualData);
+    if (manualData && manualData !== '[]') {
+        try {
+            allPrograms = JSON.parse(manualData);
+        } catch(e) {
+            allPrograms = generateProgramming(fichas);
+        }
     } else {
+        allPrograms = generateProgramming(fichas);
+    }
+    
+    if (allPrograms.length === 0) {
         allPrograms = generateProgramming(fichas);
     }
 

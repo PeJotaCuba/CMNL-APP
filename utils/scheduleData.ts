@@ -118,9 +118,17 @@ export const getCurrentProgram = (): { name: string; time: string; image: string
   const fichas = savedFichas ? JSON.parse(savedFichas) : INITIAL_FICHAS;
   
   let programming: any[] = [];
-  if (manualData) {
-      programming = JSON.parse(manualData);
+  if (manualData && manualData !== '[]') {
+      try {
+          programming = JSON.parse(manualData);
+      } catch (e) {
+          programming = generateProgramming(fichas);
+      }
   } else {
+      programming = generateProgramming(fichas);
+  }
+  
+  if (programming.length === 0) {
       programming = generateProgramming(fichas);
   }
 
