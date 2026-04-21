@@ -16,6 +16,7 @@ import QuienesSomos from './components/QuienesSomos';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
+import { UpdateDetailsModal, UpdateReminderModal } from './components/UpdateDialogs';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -204,8 +205,24 @@ const App: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState({ name: "Cargando...", time: "", image: "" });
 
+  const [updateDetails, setUpdateDetails] = useState<{ show: boolean; content: string } | null>(null);
+  const [showUpdateReminder, setShowUpdateReminder] = useState(false);
+
   useEffect(() => {
     setCurrentProgram(getCurrentProgram());
+  }, []);
+
+  // Update Reminder Check
+  useEffect(() => {
+    const lastSyncStr = localStorage.getItem('last_sync_time');
+    if (lastSyncStr) {
+      const lastSync = parseInt(lastSyncStr, 10);
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      if (now - lastSync > twentyFourHours) {
+        setShowUpdateReminder(true);
+      }
+    }
   }, []);
 
   // 24-Hour Backup Reminder Effect
@@ -500,7 +517,7 @@ const App: React.FC = () => {
   const handleCloudSync = async () => {
       if(isSyncing) return;
       
-      const confirmSync = window.confirm('¿Desea actualizar los datos (Noticias, Parrilla, Usuarios) desde la nube?');
+      const confirmSync = window.confirm('¿Desea optener los últimos datos actualizados?');
       if(!confirmSync) return;
 
       setIsSyncing(true);
@@ -653,9 +670,29 @@ const App: React.FC = () => {
           Object.entries(pendingUpdates).forEach(([key, value]) => {
               localStorage.setItem(key, value);
           });
+          
+          localStorage.setItem('last_sync_time', Date.now().toString());
 
-          alert('¡Sincronización completada! Los datos están actualizados.');
-          window.location.reload();
+          // Build Report
+          const reportParts: string[] = [];
+          if (json.news) reportParts.push(`📰 NOTICIAS:\n - ${json.news.length} boletines descargados e insertados en el carrusel principal.`);
+          if (json.users) reportParts.push(`👤 USUARIOS:\n - Base de datos de roles actualizada (${json.users.length} cuentas procesadas).`);
+          if (json.fichas || json.manualProgramming) reportParts.push(`📻 PARRILLA:\n - Fichas técnicas de la tira de programación aplicadas.`);
+          if (json.agendaPrograms || json.agendaEfemerides || json.agendaConmemoraciones || json.agendaPropaganda || json.agendaCulturalOptions) {
+              const agendaItems = [];
+              if (json.agendaEfemerides) agendaItems.push('Efemérides');
+              if (json.agendaConmemoraciones) agendaItems.push('Conmemoraciones');
+              if (json.agendaPropaganda) agendaItems.push('Propaganda');
+              if (json.agendaCulturalOptions) agendaItems.push('Opciones Culturales');
+              reportParts.push(`📅 AGENDA EDITORIAL:\n - Descargados pautas y datos: ${agendaItems.join(', ')}.`);
+          }
+          if (json.catalogo) reportParts.push(`🎵 CATÁLOGO MUSICAL:\n - Biblioteca verificada (${json.catalogo.length} matrices analizadas).`);
+          if (json.equipo) reportParts.push(`📱 DIRECTORIO:\n - Actualización del equipo de trabajo CMNL.`);
+
+          const detailsContent = reportParts.length > 0 ? reportParts.join('\n\n') : "Se verificaron las bases de datos (sin datos pendientes).";
+
+          // Only set the modal state, the component will handle the acceptance and reload
+          setUpdateDetails({ show: true, content: detailsContent });
       } catch (error) {
           console.error("Sync Error:", error);
           alert('Error de conexión. No se pudieron obtener los datos más recientes.');
@@ -865,6 +902,25 @@ const App: React.FC = () => {
           }}
           onBackup={handleBackup}
           isLogoutTrigger={isLogoutTrigger}
+        />
+
+        <UpdateDetailsModal 
+            isOpen={updateDetails?.show || false}
+            details={updateDetails?.content || ""}
+            isAdmin={currentUser?.role === 'admin'}
+            onClose={() => {
+                setUpdateDetails(null);
+                window.location.reload();
+            }}
+        />
+
+        <UpdateReminderModal 
+            isOpen={showUpdateReminder}
+            onClose={() => setShowUpdateReminder(false)}
+            onUpdate={() => {
+                setShowUpdateReminder(false);
+                handleCloudSync();
+            }}
         />
 
         {showPlayer && (
