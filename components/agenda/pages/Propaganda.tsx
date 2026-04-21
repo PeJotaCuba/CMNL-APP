@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile, PropagandaData } from '../types';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
+import AgendaHeader from '../components/AgendaHeader';
 
 interface Props {
   user: UserProfile;
@@ -15,12 +16,13 @@ const THEMES = [
   "Naturaleza", "Radio", "Bayamo", "Fidel", "Martí"
 ];
 
-import AgendaHeader from '../components/AgendaHeader';
-
 const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack }) => {
   const [selectedTheme, setSelectedTheme] = useState<string>(THEMES[0]);
   const [searchQuery, setSearchQuery] = useState('');
-  // ... (rest of state remains same)
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
+
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('rcm_propaganda_search_history');
@@ -67,12 +69,30 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
       const text = event.target?.result as string;
       if (!text) return;
       
+      processTxtData(text, true);
+      alert('Propaganda cargada exitosamente.');
+      if (e.target) e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const processTxtData = (text: string, isUpload: boolean = false) => {
       const lines = text.split('\n');
-      const newData = { ...data };
+      
+      // Si estamos editando y estamos en "Todas", reseteamos toda la info.
+      // Si estamos editando un tema específico, solo limpiamos ese tema.
+      let newData = { ...data };
+      if (!isUpload) {
+          if (selectedTheme === "Todas") {
+              newData = {};
+          } else {
+              newData[selectedTheme] = [];
+          }
+      }
+
       let currentTheme = selectedTheme !== "Todas" ? selectedTheme : "Historia"; 
       let pendingTitle: string | null = null;
 
-      // More flexible regex
       const titleRegex = /^\(?(\d+)\)?\s*(.*?)(?:\.mp3)?\s*$/i;
       const pathRegex = /^(?:Ruta|Path):\s*(.*)$/i;
 
@@ -116,10 +136,35 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
       });
 
       onUpdate(newData);
-      alert('Propaganda cargada exitosamente.');
-      if (e.target) e.target.value = '';
-    };
-    reader.readAsText(file);
+  };
+
+  const startEditing = () => {
+      let txt = '';
+      const themesToEdit = selectedTheme === "Todas" ? THEMES.filter(t => t !== "Todas") : [selectedTheme];
+      
+      themesToEdit.forEach(theme => {
+          const items = data[theme] || [];
+          if (items.length > 0) {
+              txt += `# ${theme}\n\n`;
+              items.forEach(item => {
+                  const parts = item.split('|');
+                  const title = parts[0];
+                  const path = parts.length > 1 ? parts[1] : "";
+                  txt += `${title}\n`;
+                  if (path) txt += `Ruta: ${path}\n`;
+                  txt += `\n`;
+              });
+          }
+      });
+      
+      setEditText(txt);
+      setIsEditing(true);
+  };
+
+  const saveEdit = () => {
+      processTxtData(editText, false);
+      setIsEditing(false);
+      alert("Información editada con éxito.");
   };
 
   const handleClear = () => {
@@ -127,6 +172,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
     if (selectedTheme === "Todas") {
         if (confirm(`¿Estás seguro de borrar TODA la propaganda de TODAS las categorías?`)) {
             onUpdate({});
+            alert("Toda la propaganda ha sido borrada.");
         }
         return;
     }
@@ -135,6 +181,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
       const newData = { ...data };
       newData[selectedTheme] = [];
       onUpdate(newData);
+      alert(`Propaganda de ${selectedTheme} borrada.`);
     }
   };
 
@@ -235,108 +282,137 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
 
       {/* Controls & Search */}
       <div className="bg-card-dark border-b border-white/5 px-6 py-4 flex flex-col gap-4 shrink-0">
-        {canEdit && (
-            <div className="flex justify-end gap-2">
-               <label className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-white/10">
-                  <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                  <span className="hidden sm:inline">Cargar TXT</span>
-                  <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
-               </label>
-               <button 
-                  onClick={handleDownloadDocx}
-                  className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-primary/20"
-               >
-                  <span className="material-symbols-outlined text-[18px]">download</span>
-                  <span className="hidden sm:inline">Descargar DOCX</span>
-               </button>
-            </div>
-        )}
+        <div className="flex items-center justify-between">
+           <div className="text-xs text-text-secondary">
+              {isEditing && "Modo de edición TXT"}
+           </div>
+           {canEdit && (
+               <div className="flex justify-end gap-2">
+                  {!isEditing && (
+                      <>
+                         <label className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer border border-white/10">
+                            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                            <span className="hidden sm:inline">Cargar TXT</span>
+                            <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+                         </label>
+                         <button 
+                            onClick={handleDownloadDocx}
+                            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-primary/20"
+                         >
+                            <span className="material-symbols-outlined text-[18px]">download</span>
+                            <span className="hidden sm:inline">Descargar DOCX</span>
+                         </button>
+                         <button 
+                            onClick={startEditing}
+                            className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                         >
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                            <span className="hidden sm:inline">Editar</span>
+                         </button>
+                         <button 
+                            onClick={handleClear}
+                            className="flex items-center gap-2 bg-admin-red/20 hover:bg-admin-red/30 text-admin-red px-3 py-2 rounded-lg text-xs font-bold transition-colors"
+                         >
+                            <span className="material-symbols-outlined text-[18px]">delete_sweep</span>
+                            <span className="hidden sm:inline">Limpiar todo</span>
+                         </button>
+                      </>
+                  )}
+                  {isEditing && (
+                     <button onClick={saveEdit} className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">
+                        Guardar
+                     </button>
+                  )}
+               </div>
+           )}
+        </div>
 
         {/* Search Bar */}
-        <div className="relative w-full">
-            <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary">search</span>
-                <input 
-                    type="text" 
-                    placeholder="Buscar propaganda..." 
-                    value={searchQuery}
-                    onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setShowSuggestions(true);
-                    }}
-                    onFocus={() => setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            handleSearch(searchQuery);
-                        }
-                    }}
-                    className="w-full bg-background-dark border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white text-sm focus:border-primary outline-none transition-colors"
-                />
-                {searchQuery && (
-                    <button 
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">close</span>
-                    </button>
+        {!isEditing && (
+            <div className="relative w-full">
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary">search</span>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar propaganda..." 
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setShowSuggestions(true);
+                        }}
+                        onFocus={() => setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSearch(searchQuery);
+                            }
+                        }}
+                        className="w-full bg-background-dark border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white text-sm focus:border-primary outline-none transition-colors"
+                    />
+                    {searchQuery && (
+                        <button 
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-white"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* Search Suggestions / History */}
+                {showSuggestions && searchHistory.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-card-dark border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <div className="px-3 py-2 text-[10px] uppercase font-bold text-text-secondary tracking-widest border-b border-white/5 bg-white/5">
+                            Búsquedas Recientes
+                        </div>
+                        {searchHistory.map((term, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => handleSearch(term)}
+                                className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 flex items-center gap-2 transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[16px] text-text-secondary">history</span>
+                                {term}
+                            </button>
+                        ))}
+                    </div>
                 )}
             </div>
-
-            {/* Search Suggestions / History */}
-            {showSuggestions && searchHistory.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-card-dark border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
-                    <div className="px-3 py-2 text-[10px] uppercase font-bold text-text-secondary tracking-widest border-b border-white/5 bg-white/5">
-                        Búsquedas Recientes
-                    </div>
-                    {searchHistory.map((term, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => handleSearch(term)}
-                            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 flex items-center gap-2 transition-colors"
-                        >
-                            <span className="material-symbols-outlined text-[16px] text-text-secondary">history</span>
-                            {term}
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
+        )}
       </div>
 
       {/* Controls */}
-      <div className="p-4 border-b border-white/5 bg-background-dark flex flex-wrap items-center gap-4 shrink-0">
-        <div className="relative min-w-[200px]">
-           <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary z-10">category</span>
-           <select 
-             value={selectedTheme} 
-             onChange={(e) => setSelectedTheme(e.target.value)}
-             className="w-full bg-card-dark border border-white/10 rounded-xl py-2 pl-10 pr-8 text-white text-sm focus:border-primary outline-none appearance-none relative z-0 cursor-pointer"
-           >
-             {THEMES.map(t => <option key={t} value={t}>{t}</option>)}
-           </select>
-           {/* Custom Arrow */}
-           <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary pointer-events-none text-sm">keyboard_arrow_down</span>
-        </div>
-        
-        <div className="flex-1 text-right text-xs text-text-secondary">
-           {currentItems.length} elementos visibles
-        </div>
-
-        {canEdit && currentItems.length > 0 && (
-            <button 
-                onClick={handleClear}
-                className="text-admin-red hover:bg-admin-red/10 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
-            >
-                <span className="material-symbols-outlined text-[16px]">delete</span>
-                Limpiar Categoría
-            </button>
-        )}
-      </div>
+      {!isEditing && (
+          <div className="p-4 border-b border-white/5 bg-background-dark flex flex-wrap items-center gap-4 shrink-0">
+            <div className="relative min-w-[200px]">
+               <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary z-10">category</span>
+               <select 
+                 value={selectedTheme} 
+                 onChange={(e) => setSelectedTheme(e.target.value)}
+                 className="w-full bg-card-dark border border-white/10 rounded-xl py-2 pl-10 pr-8 text-white text-sm focus:border-primary outline-none appearance-none relative z-0 cursor-pointer"
+               >
+                 {THEMES.map(t => <option key={t} value={t}>{t}</option>)}
+               </select>
+               {/* Custom Arrow */}
+               <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-text-secondary pointer-events-none text-sm">keyboard_arrow_down</span>
+            </div>
+            
+            <div className="flex-1 text-right text-xs text-text-secondary">
+               {currentItems.length} elementos visibles
+            </div>
+          </div>
+      )}
 
       {/* Content List */}
-      <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-max">
-        {currentItems.length > 0 ? (
+      <div className={`flex-1 overflow-y-auto p-4 ${isEditing ? '' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-max'}`}>
+        {isEditing ? (
+             <textarea
+               value={editText}
+               onChange={(e) => setEditText(e.target.value)}
+               className="w-full h-full min-h-[60vh] bg-background-dark/50 border border-white/10 rounded-2xl p-4 text-xs font-mono text-white/90 focus:ring-2 focus:ring-primary focus:outline-none resize-none"
+               placeholder="Pega o edita el texto aquí..."
+             />
+        ) : currentItems.length > 0 ? (
           currentItems.map((item, idx) => {
             const parts = item.split('|');
             const title = parts[0];

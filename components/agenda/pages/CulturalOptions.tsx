@@ -21,6 +21,9 @@ const CulturalOptions: React.FC<CulturalOptionsProps> = ({ user, data, onUpdate,
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInfo = getCurrentDateInfo();
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
+
   // Calculate current and next month names
   const currentMonthName = dateInfo.monthName.charAt(0).toUpperCase() + dateInfo.monthName.slice(1).toLowerCase();
   const currentMonthIndex = MONTHS_DATA.findIndex(m => m.name.toLowerCase() === currentMonthName.toLowerCase());
@@ -36,8 +39,16 @@ const CulturalOptions: React.FC<CulturalOptionsProps> = ({ user, data, onUpdate,
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
+      processTxtData(text, true);
+      alert(`Opciones Culturales para ${activeMonthName} cargadas con éxito.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const processTxtData = (text: string, isUpload: boolean = false) => {
       const lines = text.split('\n');
-      const newData: CulturalOptionsData = { ...data };
+      const newData: CulturalOptionsData = isUpload ? { ...data } : { ...data, [activeMonthName]: [] };
       
       let currentDay = 0;
       let currentActivity: Partial<CulturalOption> = {};
@@ -93,12 +104,38 @@ const CulturalOptions: React.FC<CulturalOptionsProps> = ({ user, data, onUpdate,
       });
 
       newData[activeMonthName] = monthData;
-
       onUpdate(newData);
-      alert(`Opciones Culturales para ${activeMonthName} cargadas con éxito.`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
+  };
+
+  const handleClearMonth = () => {
+      if (confirm(`¿Estás seguro de BORRAR todas las opciones culturales de ${activeMonthName}?`)) {
+          const newData = { ...data };
+          delete newData[activeMonthName];
+          onUpdate(newData);
+          alert(`Opciones culturales de ${activeMonthName} limpiadas correctamente.`);
+      }
+  };
+
+  const startEditing = () => {
+      let txt = '';
+      const monthData = (data[activeMonthName] || []).sort((a, b) => a.day - b.day);
+      monthData.forEach(dayData => {
+          txt += `DÍA ${dayData.day}\n`;
+          dayData.activities.forEach(act => {
+              txt += `Actividad: ${act.actividad}\n`;
+              if (act.hora) txt += `Hora: ${act.hora}\n`;
+              if (act.lugar) txt += `Lugar: ${act.lugar}\n`;
+          });
+          txt += `\n`;
+      });
+      setEditText(txt);
+      setIsEditing(true);
+  };
+
+  const saveEdit = () => {
+      processTxtData(editText, false);
+      setIsEditing(false);
+      alert("Información editada con éxito.");
   };
 
   const handleDownloadDocx = async () => {
@@ -211,32 +248,66 @@ const CulturalOptions: React.FC<CulturalOptionsProps> = ({ user, data, onUpdate,
           </div>
           
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setShowNextMonth(!showNextMonth)}
-              className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 border ${showNextMonth ? 'bg-background-dark border-white/10 text-text-secondary' : 'bg-primary/10 border-primary/20 text-primary'}`}
-            >
-              {showNextMonth ? 'Ver Actual' : nextMonthName}
-            </button>
-            <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-white/5 text-text-secondary hover:bg-primary hover:text-white transition-all border border-white/5" title="Exportar DOCX">
-                <span className="material-symbols-outlined text-sm">description</span>
-            </button>
+            {!isEditing && (
+               <button 
+                 onClick={() => setShowNextMonth(!showNextMonth)}
+                 className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 border ${showNextMonth ? 'bg-background-dark border-white/10 text-text-secondary' : 'bg-primary/10 border-primary/20 text-primary'}`}
+               >
+                 {showNextMonth ? 'Ver Actual' : nextMonthName}
+               </button>
+            )}
+            
+            {!isEditing && user.role === UserRole.ADMIN && (
+                <>
+                   <button onClick={startEditing} className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all border border-white/5" title="Editar información TXT">
+                       <span className="material-symbols-outlined text-sm">edit</span>
+                   </button>
+                   <button onClick={handleClearMonth} className="flex size-10 items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-white/5" title="Limpiar todo">
+                       <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                   </button>
+                </>
+            )}
+            {!isEditing && (
+               <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-white/5 text-text-secondary hover:bg-primary hover:text-white transition-all border border-white/5" title="Exportar DOCX">
+                   <span className="material-symbols-outlined text-sm">description</span>
+               </button>
+            )}
+            {isEditing && (
+               <button onClick={saveEdit} className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">
+                  Guardar
+               </button>
+            )}
+            {isEditing && (
+                <button onClick={() => setIsEditing(false)} className="bg-white/10 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">
+                  Cancelar
+               </button>
+            )}
           </div>
         </div>
 
-        <div className="relative">
-           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[16px] text-text-secondary">search</span>
-           <input 
-            type="number" 
-            placeholder="Filtrar por número de día (ej: 15)..."
-            value={daySearch}
-            onChange={(e) => setDaySearch(e.target.value)}
-            className="w-full bg-background-dark border-none rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:ring-1 focus:ring-primary shadow-inner"
-           />
-        </div>
+        {!isEditing && (
+            <div className="relative">
+               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[16px] text-text-secondary">search</span>
+               <input 
+                type="number" 
+                placeholder="Filtrar por número de día (ej: 15)..."
+                value={daySearch}
+                onChange={(e) => setDaySearch(e.target.value)}
+                className="w-full bg-background-dark border-none rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:ring-1 focus:ring-primary shadow-inner"
+               />
+            </div>
+        )}
       </div>
 
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-6 pb-32">
-        {monthDataDisplay.length === 0 ? (
+        {isEditing ? (
+             <textarea
+               value={editText}
+               onChange={(e) => setEditText(e.target.value)}
+               className="w-full h-full min-h-[60vh] bg-background-dark/50 border border-white/10 rounded-2xl p-4 text-xs font-mono text-white/90 focus:ring-2 focus:ring-primary focus:outline-none resize-none"
+               placeholder="Pega o edita el texto aquí..."
+             />
+        ) : monthDataDisplay.length === 0 ? (
           <div className="text-center py-20">
             <div className="size-16 mx-auto bg-white/5 rounded-2xl flex items-center justify-center mb-4">
               <span className="material-symbols-outlined text-white/20 text-3xl">theater_comedy</span>

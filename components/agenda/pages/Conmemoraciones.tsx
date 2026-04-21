@@ -4,6 +4,7 @@ import { MONTHS_DATA } from '../constants';
 import { getCurrentDateInfo } from '../utils/dateUtils';
 import { UserProfile, UserRole, ConmemoracionesData, Conmemoracion } from '../types';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType } from "docx";
+import AgendaHeader from '../components/AgendaHeader';
 
 interface ConmemoracionesProps {
   user: UserProfile;
@@ -12,14 +13,15 @@ interface ConmemoracionesProps {
   onMenuClick?: () => void;
 }
 
-import AgendaHeader from '../components/AgendaHeader';
-
 const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate, onMenuClick }) => {
   const navigate = useNavigate();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [daySearch, setDaySearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInfo = getCurrentDateInfo();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -28,10 +30,18 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
+      processTxtData(text, true);
+      alert("Conmemoraciones cargadas con éxito.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const processTxtData = (text: string, isUpload: boolean = false) => {
       const lines = text.split('\n');
-      const newData: ConmemoracionesData = { ...data };
+      const newData: ConmemoracionesData = isUpload ? { ...data } : { ...data, [selectedMonth as string]: [] };
       
-      let currentMonth = "";
+      let currentMonth = isUpload ? "" : (selectedMonth as string);
       let currentDay = 0;
       let currentNational = "";
       let currentInternational = "";
@@ -42,17 +52,17 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
           
           const existsIdx = newData[currentMonth].findIndex(c => c.day === currentDay);
           if (existsIdx >= 0) {
-            newData[currentMonth][existsIdx] = {
+             newData[currentMonth][existsIdx] = {
               day: currentDay,
               national: currentNational || newData[currentMonth][existsIdx].national,
               international: currentInternational || newData[currentMonth][existsIdx].international
-            };
+             };
           } else {
-            newData[currentMonth].push({
+             newData[currentMonth].push({
               day: currentDay,
               national: currentNational,
               international: currentInternational
-            });
+             });
           }
         }
       };
@@ -61,7 +71,6 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
         const trimmed = line.trim();
         if (!trimmed) return;
 
-        // Match "Día 10 de Octubre"
         const dayMonthMatch = trimmed.match(/Día\s+(\d+)\s+de\s+([a-zA-ZáéíóúÁÉÍÓÚ]+)/i);
         if (dayMonthMatch) {
           saveCurrent(); // Save previous if any
@@ -72,7 +81,6 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
           return;
         }
 
-        // Match "Conmemoraciones Nacionales: ..."
         if (trimmed.toLowerCase().startsWith("conmemoraciones nacionales:")) {
           currentNational = trimmed.split(":")[1].trim();
         } else if (trimmed.toLowerCase().startsWith("conmemoraciones internacionales:")) {
@@ -81,12 +89,40 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
       });
 
       saveCurrent(); // Save last one
-
       onUpdate(newData);
-      alert("Conmemoraciones cargadas con éxito.");
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
+  };
+
+  const handleClearMonth = () => {
+      if (!selectedMonth) return;
+      if (confirm(`¿Estás seguro de BORRAR todas las conmemoraciones de ${selectedMonth}?`)) {
+          const newData = { ...data };
+          delete newData[selectedMonth];
+          onUpdate(newData);
+          alert(`Conmemoraciones de ${selectedMonth} limpiadas correctamente.`);
+      }
+  };
+
+  const startEditing = () => {
+      if (!selectedMonth) return;
+      let txt = '';
+      const monthEvents = data[selectedMonth] || [];
+      const days = Array.from(new Set(monthEvents.map(e => e.day))).sort((a: number, b: number) => a - b);
+      days.forEach(day => {
+          txt += `Día ${day} de ${selectedMonth}\n`;
+          monthEvents.filter(e => e.day === day).forEach(ev => {
+              if (ev.national) txt += `Conmemoraciones Nacionales: ${ev.national}\n`;
+              if (ev.international) txt += `Conmemoraciones Internacionales: ${ev.international}\n`;
+          });
+          txt += `\n`;
+      });
+      setEditText(txt);
+      setIsEditing(true);
+  };
+
+  const saveEdit = () => {
+      processTxtData(editText, false);
+      setIsEditing(false);
+      alert("Información editada con éxito.");
   };
 
   const handleDownloadDocx = () => {
@@ -131,30 +167,60 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
           title={`Conmemoraciones - ${selectedMonth}`} 
           user={user} 
           onMenuClick={onMenuClick} 
-          onBack={() => { setSelectedMonth(null); setDaySearch(''); }}
+          onBack={() => { setSelectedMonth(null); setDaySearch(''); setIsEditing(false); }}
         />
         
         <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex-1"></div>
-            <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-admin-red/20 text-admin-red hover:bg-admin-red hover:text-white transition-all">
-                <span className="material-symbols-outlined text-sm">description</span>
-            </button>
+            <div className="flex-1 text-xs text-text-secondary">
+               {isEditing && "Modo de edición TXT"}
+            </div>
+            <div className="flex items-center gap-2">
+              {!isEditing && user.role === UserRole.ADMIN && (
+                 <>
+                    <button onClick={startEditing} className="flex size-10 items-center justify-center rounded-full bg-primary/20 text-primary hover:bg-primary hover:text-white transition-all" title="Editar información TXT">
+                       <span className="material-symbols-outlined text-sm">edit</span>
+                    </button>
+                    <button onClick={handleClearMonth} className="flex size-10 items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white transition-all" title="Limpiar todo">
+                       <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                    </button>
+                 </>
+              )}
+              {!isEditing && (
+                <button onClick={handleDownloadDocx} className="flex size-10 items-center justify-center rounded-full bg-admin-red/20 text-admin-red hover:bg-admin-red hover:text-white transition-all">
+                    <span className="material-symbols-outlined text-sm">description</span>
+                </button>
+              )}
+              {isEditing && (
+                 <button onClick={saveEdit} className="bg-admin-red text-white px-4 py-2 rounded-xl text-xs font-bold transition-all">
+                    Guardar
+                 </button>
+              )}
+            </div>
           </div>
-          <div className="relative">
-             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[16px] text-text-secondary">search</span>
-             <input 
-              type="number" 
-              placeholder="Día específico..."
-              value={daySearch}
-              onChange={(e) => setDaySearch(e.target.value)}
-              className="w-full bg-background-dark border-none rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:ring-1 focus:ring-primary shadow-inner"
-             />
-          </div>
+          {!isEditing && (
+            <div className="relative">
+               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[16px] text-text-secondary">search</span>
+               <input 
+                type="number" 
+                placeholder="Día específico..."
+                value={daySearch}
+                onChange={(e) => setDaySearch(e.target.value)}
+                className="w-full bg-background-dark border-none rounded-xl pl-10 pr-4 py-3 text-xs text-white focus:ring-1 focus:ring-primary shadow-inner"
+               />
+            </div>
+          )}
         </div>
 
         <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-6 pb-32">
-          {monthEvents.length === 0 ? (
+          {isEditing ? (
+             <textarea
+               value={editText}
+               onChange={(e) => setEditText(e.target.value)}
+               className="w-full h-full min-h-[60vh] bg-background-dark/50 border border-white/10 rounded-2xl p-4 text-xs font-mono text-white/90 focus:ring-2 focus:ring-admin-red focus:outline-none resize-none"
+               placeholder="Pega o edita el texto aquí..."
+             />
+          ) : monthEvents.length === 0 ? (
             <div className="text-center py-20">
               <span className="material-symbols-outlined text-5xl text-white/10 mb-2">festival</span>
               <p className="text-text-secondary text-sm">No hay conmemoraciones cargadas para esta selección.</p>
@@ -184,7 +250,7 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
             ))
           )}
         </main>
-        {renderUploadBtn()}
+        {!isEditing && renderUploadBtn()}
       </div>
     );
   }
