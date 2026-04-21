@@ -666,30 +666,80 @@ const App: React.FC = () => {
               }
           }
 
+          const getCount = (dataStr: string | null) => {
+              if (!dataStr) return 0;
+              try {
+                  const p = JSON.parse(dataStr);
+                  return Array.isArray(p) ? p.length : (typeof p === 'object' && p !== null ? Object.keys(p).length : 0);
+              } catch(e) { return 0; }
+          };
+
+          // Build Report with detailed comparison before overwriting
+          const reportParts: string[] = [];
+          
+          if (json.news) {
+              const old = getCount(localStorage.getItem('rcm_data_news'));
+              const current = json.news.length;
+              const diff = current - old;
+              reportParts.push(`📰 NOTICIAS:\n - Total actual: ${current} boletín(es).\n - ${diff > 0 ? `Se agregaron ${diff}` : (diff < 0 ? `Se eliminaron ${Math.abs(diff)}` : 'Sin variaciones en la cantidad')}.`);
+          }
+          if (json.users) {
+              const old = getCount(localStorage.getItem('rcm_data_users'));
+              const current = json.users.length;
+              const diff = current - old;
+              reportParts.push(`👤 USUARIOS:\n - Total procesado: ${current} cuenta(s).\n - ${diff > 0 ? `Nuevos registros: ${diff}` : (diff < 0 ? `Cuentas dadas de baja: ${Math.abs(diff)}` : 'Roles sincronizados (sin altas/bajas)')}.`);
+          }
+          
+          if (json.fichas || json.manualProgramming) {
+              const oldFichas = getCount(localStorage.getItem('rcm_data_fichas'));
+              const currentFichas = json.fichas ? json.fichas.length : oldFichas;
+              const oldManual = getCount(localStorage.getItem('rcm_manual_programming'));
+              const currentManual = json.manualProgramming ? json.manualProgramming.length : oldManual;
+              reportParts.push(`📻 PARRILLA DE PROGRAMACIÓN:\n - Esquema aplicado con ${currentFichas} ficha(s) técnica(s) y ${currentManual} espacio(s) manuales reprogramados.`);
+          }
+          
+          if (json.agendaPrograms || json.agendaEfemerides || json.agendaConmemoraciones || json.agendaPropaganda || json.agendaCulturalOptions) {
+              const agendaItems = [];
+              if (json.agendaEfemerides) {
+                 const diff = Object.keys(json.agendaEfemerides).length - getCount(localStorage.getItem('rcm_efemerides'));
+                 agendaItems.push(`Efemérides (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Actualizadas'})`);
+              }
+              if (json.agendaConmemoraciones) {
+                 const diff = Object.keys(json.agendaConmemoraciones).length - getCount(localStorage.getItem('rcm_conmemoraciones'));
+                 agendaItems.push(`Conmemoraciones (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Actualizadas'})`);
+              }
+              if (json.agendaPropaganda) {
+                 const diff = Object.keys(json.agendaPropaganda).length - getCount(localStorage.getItem('rcm_propaganda'));
+                 agendaItems.push(`Propaganda (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Analizadas'})`);
+              }
+              if (json.agendaCulturalOptions) {
+                 const diff = Object.keys(json.agendaCulturalOptions).length - getCount(localStorage.getItem('rcm_cultural_options'));
+                 agendaItems.push(`Opciones Culturales (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Analizadas'})`);
+              }
+              reportParts.push(`📅 AGENDA EDITORIAL:\n - Descargados pautas y datos de semana:\n   • ${agendaItems.join('\n   • ')}.`);
+          }
+          if (json.catalogo) {
+              const old = getCount(localStorage.getItem('rcm_data_catalogo'));
+              const current = json.catalogo.length;
+              const diff = current - old;
+              reportParts.push(`🎵 CATÁLOGO MUSICAL:\n - Biblioteca verificada con ${current} matrice(s).\n - ${diff !== 0 ? `Variación registrada: ${diff > 0 ? `+${diff}` : diff} fonogramas` : 'Sin adiciones nuevas'}.`);
+          }
+          
+          if (pendingUpdates['rcm_equipo_cmnl']) {
+              const old = getCount(localStorage.getItem('rcm_equipo_cmnl'));
+              const current = getCount(pendingUpdates['rcm_equipo_cmnl']);
+              const diff = current - old;
+              reportParts.push(`📱 DIRECTORIO (EQUIPO):\n - Directorio estructurado con ${current} miembro(s).\n - ${diff > 0 ? `Nuevas incorporaciones: ${diff}` : (diff < 0 ? `Personal saliente: ${Math.abs(diff)}` : 'Perfil sin variaciones')}.`);
+          }
+
+          const detailsContent = reportParts.length > 0 ? reportParts.join('\n\n') : "Se verificaron las bases de datos en la bóveda, pero no se hallaron paquetes de datos pendientes de impacto.";
+
           // Atomic application of all updates
           Object.entries(pendingUpdates).forEach(([key, value]) => {
               localStorage.setItem(key, value);
           });
           
           localStorage.setItem('last_sync_time', Date.now().toString());
-
-          // Build Report
-          const reportParts: string[] = [];
-          if (json.news) reportParts.push(`📰 NOTICIAS:\n - ${json.news.length} boletines descargados e insertados en el carrusel principal.`);
-          if (json.users) reportParts.push(`👤 USUARIOS:\n - Base de datos de roles actualizada (${json.users.length} cuentas procesadas).`);
-          if (json.fichas || json.manualProgramming) reportParts.push(`📻 PARRILLA:\n - Fichas técnicas de la tira de programación aplicadas.`);
-          if (json.agendaPrograms || json.agendaEfemerides || json.agendaConmemoraciones || json.agendaPropaganda || json.agendaCulturalOptions) {
-              const agendaItems = [];
-              if (json.agendaEfemerides) agendaItems.push('Efemérides');
-              if (json.agendaConmemoraciones) agendaItems.push('Conmemoraciones');
-              if (json.agendaPropaganda) agendaItems.push('Propaganda');
-              if (json.agendaCulturalOptions) agendaItems.push('Opciones Culturales');
-              reportParts.push(`📅 AGENDA EDITORIAL:\n - Descargados pautas y datos: ${agendaItems.join(', ')}.`);
-          }
-          if (json.catalogo) reportParts.push(`🎵 CATÁLOGO MUSICAL:\n - Biblioteca verificada (${json.catalogo.length} matrices analizadas).`);
-          if (json.equipo) reportParts.push(`📱 DIRECTORIO:\n - Actualización del equipo de trabajo CMNL.`);
-
-          const detailsContent = reportParts.length > 0 ? reportParts.join('\n\n') : "Se verificaron las bases de datos (sin datos pendientes).";
 
           // Only set the modal state, the component will handle the acceptance and reload
           setUpdateDetails({ show: true, content: detailsContent });
