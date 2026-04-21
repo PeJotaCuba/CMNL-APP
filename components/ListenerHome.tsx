@@ -156,18 +156,18 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                         </>
                     )}
 
-                    <div className="absolute inset-0 p-8 md:p-12 flex flex-col justify-end items-start text-left">
-                        <div className="flex items-center gap-1 mb-4">
+                    <div className="absolute inset-0 p-8 md:p-12 flex flex-col justify-end items-start text-left overflow-hidden">
+                        <div className="flex items-center gap-1 mb-4 shrink-0">
                             {news.slice(0, 6).map((_, idx) => (
                                 <div key={idx} className={`w-2 h-2 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
                             ))}
                         </div>
-                        <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-md text-xs font-bold uppercase tracking-wider mb-3 text-white border border-white/10">
+                        <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-md text-xs font-bold uppercase tracking-wider mb-3 text-white border border-white/10 shrink-0">
                             {activeNews.category || 'Actualidad'}
                         </span>
-                        <h3 className="text-2xl md:text-4xl font-bold text-white leading-tight mb-4 line-clamp-3">{activeNews.title}</h3>
-                        <p className="text-sm md:text-base text-stone-200 line-clamp-4 md:line-clamp-6 opacity-90 leading-relaxed max-w-3xl">{activeNews.content}</p>
-                        <div className="mt-6 text-xs md:text-sm text-stone-400 font-medium flex items-center gap-2">
+                        <h3 className="text-2xl md:text-4xl font-bold text-white leading-tight mb-4 shrink-0">{activeNews.title}</h3>
+                        <p className="text-sm md:text-base text-stone-200 line-clamp-6 md:line-clamp-[10] opacity-90 leading-relaxed max-w-3xl">{activeNews.content}</p>
+                        <div className="mt-6 text-xs md:text-sm text-stone-400 font-medium flex items-center gap-2 shrink-0">
                              <span>{activeNews.date}</span>
                              <span className="w-1 h-1 bg-stone-500 rounded-full"></span>
                              <span>Fuente: {activeNews.author}</span>
