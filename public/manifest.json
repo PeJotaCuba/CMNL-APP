@@ -6,6 +6,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#2C1B15",
   "theme_color": "#3E1E16",
   "categories": ["entertainment", "music", "news", "radio"],
