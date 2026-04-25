@@ -38,7 +38,8 @@ const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-
 const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || currentUser?.classification === 'Coordinador';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || (currentUser?.classification === 'Coordinador' && (currentUser?.coordinatorSections || []).includes('Gestión'));
+  const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
 
@@ -141,13 +142,18 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
             // Overwrite logic - User
             const userIdx = updatedUsers.findIndex(u => u.id === id || u.username.toLowerCase() === username.toLowerCase());
+            
+            let finalRole: 'admin' | 'worker' | 'coordinator' = 'worker';
+            if (role.toLowerCase().includes('administrador')) finalRole = 'admin';
+            else if (role.toLowerCase().includes('coordinador')) finalRole = 'coordinator';
+
             const newUser: User = {
               id,
               username,
               name,
               mobile,
               password,
-              role: (role.toLowerCase().includes('administrador') || role.toLowerCase().includes('coordinador')) ? 'admin' : 'worker',
+              role: finalRole,
               classification: (role || (userIdx >= 0 ? updatedUsers[userIdx].classification : 'Usuario')) as UserClassification
             };
 
@@ -339,7 +345,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                             username: user?.username || '',
                             mobile: user?.mobile || '',
                             password: user?.password || '',
-                            role: user?.classification || ''
+                            role: user?.classification || '',
+                            coordinatorSections: user?.coordinatorSections || []
                           }); 
                         }}
                         className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
@@ -545,51 +552,81 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </div>
 
               {/* Section: User Access */}
-              <div className="space-y-4 pt-4">
-                <h3 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Acceso de Usuario</h3>
-                <div className="grid grid-cols-2 gap-4">
+              {isGlobalAdmin && (
+                <div className="space-y-4 pt-4">
+                  <h3 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Acceso de Usuario</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-[#9E7649] mb-1 uppercase">Usuario</label>
+                      <input 
+                        type="text" 
+                        value={editingMember.username || ''}
+                        onChange={e => setEditingMember({...editingMember, username: e.target.value})}
+                        className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#9E7649] mb-1 uppercase">Móvil</label>
+                      <input 
+                        type="text" 
+                        value={editingMember.mobile || ''}
+                        onChange={e => setEditingMember({...editingMember, mobile: e.target.value})}
+                        className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                      />
+                    </div>
+                  </div>
                   <div>
-                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Usuario</label>
+                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Contraseña</label>
                     <input 
                       type="text" 
-                      value={editingMember.username || ''}
-                      onChange={e => setEditingMember({...editingMember, username: e.target.value})}
+                      value={editingMember.password || ''}
+                      onChange={e => setEditingMember({...editingMember, password: e.target.value})}
                       className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Móvil</label>
-                    <input 
-                      type="text" 
-                      value={editingMember.mobile || ''}
-                      onChange={e => setEditingMember({...editingMember, mobile: e.target.value})}
-                      className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
-                    />
+                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Rol Principal (Calificador)</label>
+                    <select 
+                      value={editingMember.role || ''}
+                      onChange={e => setEditingMember({...editingMember, role: e.target.value})}
+                      className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
+                    >
+                      <option value="">Seleccionar Rol</option>
+                      {['Usuario', 'Trabajador', 'Director', 'Coordinador', 'Administrador'].map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
                   </div>
+
+                  {editingMember.role === 'Coordinador' && (
+                    <div>
+                      <label className="block text-xs text-orange-400 mb-2 uppercase font-bold">Permisos de Coordinador (Secciones autorizadas)</label>
+                      <div className="grid grid-cols-2 gap-2 bg-black/20 p-3 rounded-lg border border-orange-500/20">
+                        {['Agenda', 'Música', 'Gestión', 'Guiones', 'Programación', 'Noticias'].map(sec => {
+                           const currentSections = editingMember.coordinatorSections || [];
+                           return (
+                             <label key={sec} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-black/20 rounded">
+                               <input 
+                                 type="checkbox"
+                                 checked={currentSections.includes(sec)}
+                                 onChange={(e) => {
+                                   if(e.target.checked) {
+                                     setEditingMember({...editingMember, coordinatorSections: [...currentSections, sec]});
+                                   } else {
+                                     setEditingMember({...editingMember, coordinatorSections: currentSections.filter((s: string) => s !== sec)});
+                                   }
+                                 }}
+                                 className="accent-orange-500 w-4 h-4"
+                               />
+                               <span className="text-white text-sm">{sec}</span>
+                             </label>
+                           );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Contraseña</label>
-                  <input 
-                    type="text" 
-                    value={editingMember.password || ''}
-                    onChange={e => setEditingMember({...editingMember, password: e.target.value})}
-                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[#9E7649] mb-1 uppercase">Rol Principal (Calificador)</label>
-                  <select 
-                    value={editingMember.role || ''}
-                    onChange={e => setEditingMember({...editingMember, role: e.target.value})}
-                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
-                  >
-                    <option value="">Seleccionar Rol</option>
-                    {['Usuario', 'Trabajador', 'Director', 'Coordinador', 'Administrador'].map(role => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              )}
 
               {/* Section: Programs */}
               <div>
@@ -673,7 +710,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     mobile: editingMember.mobile,
                     password: editingMember.password,
                     classification: editingMember.role || u.classification || 'Usuario',
-                    role: (editingMember.role === 'Administrador' || editingMember.role === 'Coordinador' || (u.role === 'admin' && editingMember.role !== 'Director' && editingMember.role !== 'Usuario' && editingMember.role !== 'Trabajador')) ? 'admin' : 'worker'
+                    role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
+                    coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -685,7 +723,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       mobile: editingMember.mobile || '',
                       password: editingMember.password || '1234',
                       classification: editingMember.role || 'Usuario',
-                      role: (editingMember.role === 'Administrador' || editingMember.role === 'Coordinador') ? 'admin' : 'worker'
+                      role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
+                      coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined
                     });
                   }
                   

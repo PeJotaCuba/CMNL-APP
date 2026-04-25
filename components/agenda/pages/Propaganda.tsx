@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, PropagandaData } from '../types';
+import { UserProfile, PropagandaData, UserRole } from '../types';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx';
 import AgendaHeader from '../components/AgendaHeader';
 
@@ -37,7 +37,7 @@ const Propaganda: React.FC<Props> = ({ user, data, onUpdate, onMenuClick, onBack
   });
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const canEdit = user.role === 'admin'; 
+  const canEdit = user.role === UserRole.ADMIN; 
   
   const handleSearch = (term: string) => {
     setSearchQuery(term);

@@ -63,6 +63,23 @@ export interface UserPermissions {
   canEditTeam: boolean;
 }
 
+export interface FP02Especialidad {
+  rol: string;
+  nombre: string;
+}
+
+export interface FP02Report {
+  id: string;
+  fecha: string;
+  emisora: string;
+  programa: string;
+  grupo?: string;
+  tipo?: string;
+  hora?: string;
+  especialidades: FP02Especialidad[];
+  mes: string; // for grouping by month
+}
+
 export interface User {
   id: string;
   username: string;
@@ -73,6 +90,7 @@ export interface User {
   mobile?: string;
   password?: string;
   permissions?: UserPermissions;
+  coordinatorSections?: string[];
 }
 
 export interface ProgramSchedule {

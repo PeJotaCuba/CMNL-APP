@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem, User, ProgramItem } from '../types';
-import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight, RefreshCw, Menu, Play, Pause, Download, Upload } from 'lucide-react';
+import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight, RefreshCw, Menu, Play, Pause, Download, Upload, Save } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 import Sidebar from './Sidebar';
 import { loadSelectionsFromDB, loadSavedSelectionsListFromDB, loadReportsFromDB, loadProductionsFromDB, saveSelectionsToDB, saveSavedSelectionsListToDB, saveReportToDB, saveProductionToDB, clearReportsDB, clearProductionsDB } from './musica/services/db';
+import { saveAs } from 'file-saver';
 
 interface Props {
   onNavigate: (view: AppView, data?: any) => void;
@@ -19,6 +20,7 @@ interface Props {
   currentProgram: ProgramItem;
   onMenuClick?: () => void;
   onBackup?: () => void;
+  setNews?: React.Dispatch<React.SetStateAction<NewsItem[]>>;
 }
 
 const newsColors = [
@@ -43,7 +45,8 @@ const WorkerHome: React.FC<Props> = ({
     onRefreshLive,
     currentProgram,
     onMenuClick,
-    onBackup
+    onBackup,
+    setNews
 }) => {
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
 
@@ -75,6 +78,44 @@ const WorkerHome: React.FC<Props> = ({
   const handleDownloadBackup = async () => {
     if (onBackup) {
       onBackup();
+    }
+  };
+
+  const handleNewsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && setNews) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const lines = text.split('\n');
+        const date = lines[0].trim();
+        const content = lines.slice(1).join('\n');
+        const blocks = content.split(/Titular:/i).filter(b => b.trim());
+
+        const newNews: NewsItem[] = blocks.map((block, index) => {
+          const fuenteMatch = block.match(/Fuente:\s*([\s\S]*?)(?=\n\n|\nTexto|Texto|$)/i);
+          const textoMatch = block.match(/Texto:\s*([\s\S]*?)$/i);
+          
+          const titleMatch = block.trim().match(/^([\s\S]*?)(?=\n\n|\nFuente|Fuente|$)/i);
+          const title = titleMatch ? titleMatch[1].trim() : 'Sin Título';
+          const author = fuenteMatch ? fuenteMatch[1].trim() : 'Redacción RCM';
+          const content = textoMatch ? textoMatch[1].trim() : '';
+          
+          return {
+            id: `news-${Date.now()}-${index}`,
+            title,
+            author,
+            content,
+            category: 'General',
+            date: date,
+            excerpt: content.split('. ')[0] + '.'
+          };
+        });
+        setNews(newNews);
+        localStorage.setItem('rcm_data_news', JSON.stringify(newNews));
+        alert('Noticias cargadas satisfactoriamente.');
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -202,6 +243,47 @@ const WorkerHome: React.FC<Props> = ({
     reader.readAsText(file);
     e.target.value = '';
   };
+
+  const handleCoordinatorBackup = () => {
+    if (!currentUser || currentUser.classification !== 'Coordinador') return;
+    const sections = currentUser.coordinatorSections || [];
+    const data: any = {
+        isCoordinatorBackup: true,
+        timestamp: new Date().toISOString(),
+        by: currentUser.username,
+        data: {}
+    };
+
+    // Export allowed sections
+    if (sections.includes('Agenda')) {
+        data.data.agendaPrograms = JSON.parse(localStorage.getItem('rcm_programs') || 'null');
+        data.data.agendaEfemerides = JSON.parse(localStorage.getItem('rcm_efemerides') || 'null');
+        data.data.agendaConmemoraciones = JSON.parse(localStorage.getItem('rcm_conmemoraciones') || 'null');
+        data.data.agendaPropaganda = JSON.parse(localStorage.getItem('rcm_propaganda') || 'null');
+        data.data.agendaCulturalOptions = JSON.parse(localStorage.getItem('rcm_cultural_options') || 'null');
+    }
+    if (sections.includes('Programación')) {
+        data.data.fichas = JSON.parse(localStorage.getItem('rcm_data_fichas') || 'null');
+        data.data.manualProgramming = JSON.parse(localStorage.getItem('rcm_manual_programming') || 'null');
+    }
+    if (sections.includes('Gestión')) {
+        data.data.reportes = JSON.parse(localStorage.getItem('rcm_gestion_reportes') || 'null');
+    }
+    if (sections.includes('Noticias')) {
+        data.data.news = JSON.parse(localStorage.getItem('rcm_data_news') || 'null');
+    }
+    if (sections.includes('Música')) {
+        data.data.catalogo = JSON.parse(localStorage.getItem('rcm_data_catalogo') || 'null');
+    }
+    // Users are always useful for coordinations
+    data.data.users = JSON.parse(localStorage.getItem('rcm_users') || 'null');
+
+    // Remove null keys
+    Object.keys(data.data).forEach(k => data.data[k] === null && delete data.data[k]);
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    saveAs(blob, `coord.json`);
+  };
   
   return (
     <div className="relative flex min-h-screen h-full w-full flex-col overflow-x-hidden bg-[#2a1b12] font-display text-white overflow-y-auto no-scrollbar pb-10">
@@ -303,6 +385,15 @@ const WorkerHome: React.FC<Props> = ({
             <div className="w-full flex-1 flex flex-col">
                 <div className="flex justify-between items-center mb-3 px-1">
                      <h2 className="text-lg font-bold text-white">Noticias Recientes</h2>
+                     <div className="flex items-center gap-2">
+                         {(currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador') || (currentUser?.classification === 'Coordinador' && (currentUser.coordinatorSections || []).includes('Noticias'))) && (
+                            <label className="flex items-center gap-2 bg-[#9E7649] hover:bg-[#8B653D] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-sm">
+                                <Upload size={14} />
+                                <span>Cargar Noticias</span>
+                                <input type="file" accept=".txt" onChange={handleNewsUpload} className="hidden" />
+                            </label>
+                         )}
+                     </div>
                 </div>
                 <div 
                     onClick={() => onNavigate(AppView.SECTION_NEWS_DETAIL, activeNews)} 
@@ -321,23 +412,25 @@ const WorkerHome: React.FC<Props> = ({
                         </>
                     )}
 
-                  <div className="absolute inset-0 pt-8 pb-6 flex flex-col justify-start px-14 sm:px-16 items-start text-justify overflow-hidden">
-                      <div className="flex items-center gap-1 mb-3 shrink-0">
+                  <div className="absolute inset-0 p-6 px-12 sm:px-14 flex flex-col justify-center items-center text-center overflow-hidden">
+                      <div className="flex items-center gap-1 mb-4 shrink-0">
                           {news.slice(0, 6).map((_, idx) => (
                               <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
                           ))}
                       </div>
-                      <h4 className="text-xl sm:text-2xl font-bold leading-tight text-white mb-2 shrink-0">{activeNews.title}</h4>
-                      <p className="text-sm sm:text-base text-stone-300 opacity-90 leading-relaxed overflow-hidden">
-                        {activeNews.content.substring(0, Math.ceil(activeNews.content.length / 2))}...
-                      </p>
+                      <div className="overflow-y-auto no-scrollbar w-full flex-1 pt-2">
+                          <h4 className="text-lg sm:text-2xl font-bold leading-tight text-white mb-3 text-center">{activeNews.title}</h4>
+                          <p className="text-sm sm:text-base text-stone-300 opacity-90 leading-relaxed text-justify w-full pb-2">
+                            {activeNews.content}
+                          </p>
+                      </div>
                   </div>
                 </div>
             </div>
         )}
 
-        {/* Backup and Sync Controls for Non-Admins/Coordinators */}
-        {currentUser?.classification !== 'Coordinador' && currentUser?.classification !== 'Administrador' && currentUser?.role !== 'admin' && (
+        {/* Backup and Sync Controls for Workers */}
+        {currentUser?.classification !== 'Administrador' && !(currentUser?.classification === 'Coordinador' && (currentUser.coordinatorSections || []).length > 0) && (
             <div className="w-full bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-4 shadow-lg flex flex-col gap-3">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <FileText size={16} className="text-[#9E7649]" />
@@ -357,6 +450,23 @@ const WorkerHome: React.FC<Props> = ({
                         <input type="file" accept=".txt,.json" onChange={handleLoadBackup} className="hidden" />
                     </label>
                 </div>
+            </div>
+        )}
+
+        {currentUser?.classification === 'Coordinador' && (currentUser.coordinatorSections || []).length > 0 && (
+            <div className="w-full bg-[#3E1E16] rounded-xl border border-orange-500/30 p-4 shadow-lg flex flex-col gap-3">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Save size={16} className="text-orange-400" />
+                    Control de Coordinador
+                </h3>
+                <p className="text-[10px] text-white/50">Guarda los cambios de tus áreas autorizadas en coord.json</p>
+                <button 
+                    onClick={handleCoordinatorBackup}
+                    className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white py-2 px-4 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                >
+                    <Download size={16} />
+                    Guardar Cambios (coord.json)
+                </button>
             </div>
         )}
 

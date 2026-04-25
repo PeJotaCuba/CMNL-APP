@@ -72,7 +72,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const currentUser: User | null = globalUser ? {
       username: globalUser.username,
       password: globalUser.password || '',
-      role: globalUser.role === 'admin' ? 'admin' : (globalUser.classification === 'Director' ? 'director' : 'user'),
+      role: (globalUser.classification === 'Administrador' || (globalUser.role === 'admin' && globalUser.classification !== 'Coordinador') || (globalUser.classification === 'Coordinador' && (globalUser.coordinatorSections || []).includes('Música'))) ? 'admin' : (globalUser.classification === 'Director' ? 'director' : 'user'),
       fullName: globalUser.name,
       phone: globalUser.mobile || '',
       uniqueId: getUniqueId(globalUser)

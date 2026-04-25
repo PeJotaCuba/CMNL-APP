@@ -11,6 +11,7 @@ import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, Align
 import { saveAs } from 'file-saver';
 import { InterruptionModal } from './InterruptionModal';
 import EquipoSection from './gestion/EquipoSection';
+import ReportesSection from './gestion/ReportesSection';
 
 const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 
@@ -490,7 +491,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
     { id: 'reportes', icon: <FileBarChart size={32} />, label: 'Reportes', color: 'bg-blue-900/40 text-blue-400 border-blue-500/30' },
   ];
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
+  const canManageGestion = isGlobalAdmin || (currentUser?.classification === 'Coordinador' && (currentUser?.coordinatorSections || []).includes('Gestión'));
+  const canManageProgramacion = isGlobalAdmin || (currentUser?.classification === 'Coordinador' && (currentUser?.coordinatorSections || []).includes('Programación'));
+  const isAdmin = canManageGestion || canManageProgramacion;
 
   const formatPercentage = (value: string) => {
       if (!value) return '';
@@ -2187,7 +2191,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       </div>
                   )}
                   <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
-                      {isAdmin && (
+                      {canManageGestion && (
                           <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 p-6 shadow-xl mb-8">
                               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                                   <CalendarCheck size={20} className="text-[#9E7649]" />
@@ -2320,7 +2324,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   ) : (
                       <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
-                              {isAdmin && (
+                              {canManageGestion && (
                                   <button 
                                       onClick={() => {
                                           const [y, m] = selectedMonth.split('-').map(Number);
@@ -2335,7 +2339,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               <span className="font-bold text-sm text-[#9E7649] capitalize">
                                   {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
                               </span>
-                              {isAdmin && (
+                              {canManageGestion && (
                                   <button 
                                       onClick={() => {
                                           const [y, m] = selectedMonth.split('-').map(Number);
@@ -2348,7 +2352,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                   </button>
                               )}
                           </div>
-                          {isAdmin && (
+                          {canManageGestion && (
                               <button 
                                   onClick={() => setShowAccumulatedMonths(true)}
                                   className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all"
@@ -2440,7 +2444,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                   return (
                                                       <tr key={cat} className="hover:bg-white/5 transition-colors">
                                                           <td className="px-6 py-4 pl-10 font-medium text-white">
-                                                              {isAdmin && !isEditingHistorical ? (
+                                                              {canManageGestion && !isEditingHistorical ? (
                                                                   <button 
                                                                       onClick={() => {
                                                                           setEditingCategory(cat);
@@ -3266,7 +3270,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   onMenuClick={onMenuClick}
                   onBack={() => setActiveSection(null)}
               >
-                  {isAdmin && (
+                  {canManageProgramacion && (
                       <div className="flex items-center gap-2">
                           <button 
                               onClick={() => { if(confirm('¿Eliminar todo el catálogo?')) setCatalogo([]); }}
@@ -3288,7 +3292,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       <div className="text-center py-20 text-[#E8DCCF]/30">
                           <Library size={48} className="mx-auto mb-4 opacity-50" />
                           <p>No hay datos en el catálogo.</p>
-                          {isAdmin && <p className="text-sm mt-2">Importa un archivo TXT para comenzar.</p>}
+                          {canManageProgramacion && <p className="text-sm mt-2">Importa un archivo TXT para comenzar.</p>}
                       </div>
                   ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
@@ -3308,7 +3312,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                           <h3 className="font-bold text-white text-lg leading-tight group-hover:text-[#F5EFE6]">{item.name}</h3>
                                       </div>
                                   </button>
-                                  {isAdmin && (
+                                  {canManageProgramacion && (
                                       <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                           <button 
                                               onClick={(e) => { 
@@ -3352,7 +3356,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       onMenuClick={onMenuClick}
                       onBack={() => { setSelectedFicha(null); setIsEditing(false); }}
                   >
-                      {isAdmin && !isEditing && (
+                      {canManageProgramacion && !isEditing && (
                           <button onClick={handleEdit} className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm" title="Editar Ficha">
                               <Edit2 size={20} />
                           </button>
@@ -3761,7 +3765,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   onMenuClick={onMenuClick}
                   onBack={handleBackNavigation}
               >
-                  {isAdmin && (
+                  {canManageProgramacion && (
                       <div className="flex items-center gap-2">
                           <button 
                               onClick={() => { if(confirm('¿Eliminar todas las fichas?')) setFichas([]); }}
@@ -3797,7 +3801,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                       <p className="text-xs text-[#9E7649] mt-1">{ficha.schedule}</p>
                                   </div>
                               </button>
-                              {isAdmin && (
+                              {canManageProgramacion && (
                                   <button 
                                       onClick={(e) => { e.stopPropagation(); if(confirm('¿Eliminar ficha?')) setFichas(prev => prev.filter((_, i) => i !== idx)); }}
                                       className="absolute top-2 right-2 p-2 bg-red-900/80 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700 z-10"
@@ -3833,6 +3837,23 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               news={news}
               setNews={setNews}
               setImpersonatedUser={setImpersonatedUser}
+          />
+      );
+  }
+
+   // Render Reportes Section
+  if (activeSection === 'reportes') {
+      const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
+      const isCoordinatorWithAccess = currentUser?.classification === 'Coordinador' && (currentUser.coordinatorSections || []).includes('Gestión');
+      return (
+          <ReportesSection 
+              currentUser={currentUser}
+              onBack={() => setActiveSection(null)}
+              onMenuClick={onMenuClick || (() => {})}
+              fichas={fichas}
+              equipoData={teamData}
+              isCoordinatorWithAccess={isCoordinatorWithAccess}
+              isGlobalAdmin={isGlobalAdmin}
           />
       );
   }

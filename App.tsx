@@ -158,12 +158,16 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('rcm_data_users');
     let parsedUsers: User[] = saved ? JSON.parse(saved) : INITIAL_USERS;
     
-    // Security Patch: Ensure only Administrador and Coordinador have admin role
+    // Security Patch: Ensure only Administrador and Coordinador have elevated roles
     let modified = false;
     parsedUsers = parsedUsers.map(u => {
-      if (u.role === 'admin' && u.classification !== 'Administrador' && u.classification !== 'Coordinador') {
+      if (u.role === 'admin' && u.classification !== 'Administrador') {
         modified = true;
         return { ...u, role: 'worker' };
+      }
+      if (u.classification === 'Coordinador' && u.role !== 'coordinator') {
+          modified = true;
+          return { ...u, role: 'coordinator' };
       }
       return u;
     });
@@ -261,7 +265,7 @@ const App: React.FC = () => {
         setCurrentUser(user);
         if (sessionRole === 'admin') {
           setCurrentView(AppView.ADMIN_DASHBOARD);
-        } else if (sessionRole === 'worker') {
+        } else if (sessionRole === 'worker' || sessionRole === 'coordinator') {
           setCurrentView(AppView.WORKER_HOME);
         }
       } else {
@@ -764,7 +768,7 @@ const App: React.FC = () => {
         return <PublicLanding onNavigate={setCurrentView} users={users} onLoginSuccess={(user) => {
             setCurrentUser(user);
             localStorage.setItem('rcm_user_username', user.username);
-            if(user.role === 'admin') {
+            if(user.classification === 'Administrador' || (user.role === 'admin' && user.classification !== 'Coordinador')) {
                 handleNavigate(AppView.ADMIN_DASHBOARD);
             } else {
                 handleNavigate(AppView.WORKER_HOME);
@@ -788,6 +792,7 @@ const App: React.FC = () => {
                 currentProgram={currentProgram}
                 onMenuClick={() => setIsSidebarOpen(true)}
                 onBackup={handleBackup}
+                setNews={setNews}
             />
         );
       case AppView.ADMIN_DASHBOARD:

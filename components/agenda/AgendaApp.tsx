@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Program, UserProfile, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData, CulturalOptionsData } from './types.ts';
+import { Program, UserProfile, UserRole, EfemeridesData, ConmemoracionesData, DayThemeData, PropagandaData, CulturalOptionsData } from './types.ts';
 import { INITIAL_USERS, INITIAL_PROGRAMS, INITIAL_EFEMERIDES, INITIAL_CONMEMORACIONES, INITIAL_DAY_THEMES, INITIAL_PROPAGANDA, INITIAL_CULTURAL_OPTIONS } from './database.ts';
 import { getCurrentDateInfo } from './utils/dateUtils.ts';
 import { MONTHS_DATA } from './constants.ts';
@@ -147,14 +147,20 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
   // Map main app user to Agenda user profile
   const [user, setUser] = useState<UserProfile | null>(() => {
     if (currentUser) {
-      const userId = currentUser.username;
+      const userId = currentUser.username || currentUser.id;
       const savedUser = users.find(u => u.username === userId);
+      let agendaRole = UserRole.ESCRITOR;
+      if (currentUser.classification === 'Administrador' || (currentUser.role === 'admin' && currentUser.classification !== 'Coordinador')) {
+         agendaRole = UserRole.ADMIN;
+      } else if (currentUser.classification === 'Coordinador' && (currentUser.coordinatorSections || []).includes('Agenda')) {
+         agendaRole = UserRole.ADMIN;
+      }
       return {
         id: userId,
         name: currentUser.name,
         username: currentUser.username,
         pin: currentUser.password || '',
-        role: currentUser.role as any,
+        role: agendaRole,
         phone: currentUser.phone || '',
         photo: currentUser.photo || '',
         interests: savedUser?.interests || { days: [], programIds: [] }
@@ -165,14 +171,20 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
 
   useEffect(() => {
     if (currentUser) {
-      const userId = currentUser.username;
+      const userId = currentUser.username || currentUser.id;
       const savedUser = users.find(u => u.username === userId);
+      let agendaRole = UserRole.ESCRITOR;
+      if (currentUser.classification === 'Administrador' || (currentUser.role === 'admin' && currentUser.classification !== 'Coordinador')) {
+         agendaRole = UserRole.ADMIN;
+      } else if (currentUser.classification === 'Coordinador' && (currentUser.coordinatorSections || []).includes('Agenda')) {
+         agendaRole = UserRole.ADMIN;
+      }
       setUser({
         id: userId,
         name: currentUser.name,
         username: currentUser.username,
         pin: currentUser.password || '',
-        role: currentUser.role as any,
+        role: agendaRole,
         phone: currentUser.phone || '',
         photo: currentUser.photo || '',
         interests: savedUser?.interests || { days: [], programIds: [] }

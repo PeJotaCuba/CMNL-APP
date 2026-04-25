@@ -156,7 +156,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                         </>
                     )}
 
-                    <div className="absolute inset-0 pt-10 pb-8 flex flex-col justify-end px-14 sm:px-20 md:px-24 items-start text-justify overflow-hidden">
+                    <div className="absolute inset-0 p-8 sm:p-14 md:p-20 flex flex-col justify-center items-center text-center overflow-hidden">
                         <div className="flex items-center gap-1 mb-4 shrink-0">
                             {news.slice(0, 6).map((_, idx) => (
                                 <div key={idx} className={`w-2 h-2 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
@@ -165,14 +165,16 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                         <span className="inline-block px-3 py-1 bg-white/20 backdrop-blur-md rounded-md text-xs font-bold uppercase tracking-wider mb-3 text-white border border-white/10 shrink-0">
                             {activeNews.category || 'Actualidad'}
                         </span>
-                        <h3 className="text-2xl md:text-5xl font-bold text-white leading-tight mb-4 shrink-0">{activeNews.title}</h3>
-                        <p className="text-base md:text-xl text-stone-200 opacity-90 leading-relaxed max-w-4xl overflow-hidden">
-                            {activeNews.content.substring(0, Math.ceil(activeNews.content.length / 2))}...
-                        </p>
-                        <div className="mt-6 text-xs md:text-sm text-stone-400 font-medium flex items-center gap-2 shrink-0">
-                             <span>{activeNews.date}</span>
-                             <span className="w-1 h-1 bg-stone-500 rounded-full"></span>
-                             <span>Fuente: {activeNews.author}</span>
+                        <div className="overflow-y-auto no-scrollbar w-full max-w-4xl flex-1 pt-2 px-2">
+                            <h3 className="text-xl md:text-4xl font-bold text-white leading-tight mb-4 text-center w-full">{activeNews.title}</h3>
+                            <p className="text-sm md:text-xl text-stone-200 opacity-90 leading-relaxed text-justify w-full mb-6">
+                                {activeNews.content}
+                            </p>
+                            <div className="text-xs md:text-sm text-stone-400 font-medium flex items-center justify-center gap-2 w-full pb-4">
+                                 <span>{activeNews.date}</span>
+                                 <span className="w-1 h-1 bg-stone-500 rounded-full"></span>
+                                 <span>Fuente: {activeNews.author}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

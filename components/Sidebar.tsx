@@ -44,9 +44,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     onClose();
   };
 
-  const handleInicio = () => {
+    const handleInicio = () => {
     if (currentUser) {
-      if (currentUser.role === 'admin') {
+      if (currentUser.classification === 'Administrador' || (currentUser.role === 'admin' && currentUser.classification !== 'Coordinador')) {
         handleNavigation(AppView.ADMIN_DASHBOARD);
       } else {
         handleNavigation(AppView.WORKER_HOME);
