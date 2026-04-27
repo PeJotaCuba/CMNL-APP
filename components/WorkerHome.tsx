@@ -419,7 +419,7 @@ const WorkerHome: React.FC<Props> = ({
                           ))}
                       </div>
                       <div className="overflow-y-auto no-scrollbar w-full flex-1 pt-2">
-                          <h4 className="text-lg sm:text-2xl font-bold leading-tight text-white mb-3 text-center">{activeNews.title}</h4>
+                          <h4 className="text-lg sm:text-2xl font-bold leading-tight text-white mb-3 text-left">{activeNews.title}</h4>
                           <p className="text-sm sm:text-base text-stone-300 opacity-90 leading-relaxed text-justify w-full pb-2">
                             {activeNews.content}
                           </p>

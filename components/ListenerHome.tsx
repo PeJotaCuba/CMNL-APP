@@ -166,7 +166,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                             {activeNews.category || 'Actualidad'}
                         </span>
                         <div className="overflow-y-auto no-scrollbar w-full max-w-4xl flex-1 pt-2 px-2">
-                            <h3 className="text-xl md:text-4xl font-bold text-white leading-tight mb-4 text-center w-full">{activeNews.title}</h3>
+                            <h3 className="text-xl md:text-4xl font-bold text-white leading-tight mb-4 text-left w-full">{activeNews.title}</h3>
                             <p className="text-sm md:text-xl text-stone-200 opacity-90 leading-relaxed text-justify w-full mb-6">
                                 {activeNews.content}
                             </p>

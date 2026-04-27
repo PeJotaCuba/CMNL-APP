@@ -80,6 +80,18 @@ export interface FP02Report {
   mes: string; // for grouping by month
 }
 
+export interface ConsolidatedPayment {
+    id: string;
+    userId: string;
+    month: string;
+    amount: number;
+    grossAmount?: number;
+    taxAmount?: number;
+    dateConsolidated: string;
+    calculationMode?: string;
+    reportCount?: number;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -155,4 +167,15 @@ export interface ProgramFicha {
   objective: string;
   profile: string;
   sections: ProgramSection[];
+}
+export interface WorkLog {
+    id: string;
+    userId: string;
+    role: string;
+    programName: string;
+    date: string;
+    amount?: number;
+    hours?: number;
+    type?: string;
+    syncStatus?: string;
 }
