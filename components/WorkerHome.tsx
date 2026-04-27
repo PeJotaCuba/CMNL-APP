@@ -412,7 +412,7 @@ const WorkerHome: React.FC<Props> = ({
                         </>
                     )}
 
-                  <div className="absolute inset-0 p-6 px-12 sm:px-14 flex flex-col justify-center items-center text-center overflow-hidden">
+                  <div className="absolute inset-0 p-6 px-12 sm:px-14 flex flex-col justify-center items-start text-left overflow-hidden">
                       <div className="flex items-center gap-1 mb-4 shrink-0">
                           {news.slice(0, 6).map((_, idx) => (
                               <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>

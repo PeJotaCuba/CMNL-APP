@@ -264,14 +264,14 @@ const AdminDashboard: React.FC<Props> = ({
                     </>
                   )}
 
-                  <div className="absolute inset-0 p-6 px-12 sm:px-14 flex flex-col justify-center items-center text-center overflow-hidden">
+                  <div className="absolute inset-0 p-6 px-12 sm:px-14 flex flex-col justify-center items-start text-left overflow-hidden">
                       <div className="flex items-center gap-1 mb-4 shrink-0">
                         {news.slice(0, 6).map((_, idx) => (
                             <div key={idx} className={`w-1.5 h-1.5 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
                         ))}
                       </div>
                       <div className="overflow-y-auto no-scrollbar w-full flex-1 pt-2">
-                          <h3 className="text-lg sm:text-2xl font-bold text-white leading-tight mb-3 text-center">{activeNews.title}</h3>
+                          <h3 className="text-lg sm:text-2xl font-bold text-white leading-tight mb-3 text-left">{activeNews.title}</h3>
                           <p className="text-sm sm:text-base text-[#E8DCCF]/90 leading-relaxed text-justify w-full pb-2">
                             {activeNews.content}
                           </p>

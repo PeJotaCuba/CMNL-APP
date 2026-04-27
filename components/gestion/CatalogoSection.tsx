@@ -59,7 +59,14 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
       });
 
       const blob = await Packer.toBlob(doc);
-      saveAs(blob, `Catalogo_${prog.name.replace(/\s+/g, '_')}.docx`);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Catalogo_${prog.name.replace(/\s+/g, '_')}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
   };
 
   const handleEditCatalogo = (prog: ProgramCatalog) => {

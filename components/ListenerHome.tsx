@@ -156,7 +156,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                         </>
                     )}
 
-                    <div className="absolute inset-0 p-8 sm:p-14 md:p-20 flex flex-col justify-center items-center text-center overflow-hidden">
+                    <div className="absolute inset-0 p-8 sm:p-14 md:p-20 flex flex-col justify-center items-start text-left overflow-hidden">
                         <div className="flex items-center gap-1 mb-4 shrink-0">
                             {news.slice(0, 6).map((_, idx) => (
                                 <div key={idx} className={`w-2 h-2 rounded-full ${idx === (currentNewsIndex % 6) ? 'bg-white' : 'bg-white/30'}`}></div>
@@ -170,7 +170,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
                             <p className="text-sm md:text-xl text-stone-200 opacity-90 leading-relaxed text-justify w-full mb-6">
                                 {activeNews.content}
                             </p>
-                            <div className="text-xs md:text-sm text-stone-400 font-medium flex items-center justify-center gap-2 w-full pb-4">
+                            <div className="text-xs md:text-sm text-stone-400 font-medium flex items-center justify-start gap-2 w-full pb-4">
                                  <span>{activeNews.date}</span>
                                  <span className="w-1 h-1 bg-stone-500 rounded-full"></span>
                                  <span>Fuente: {activeNews.author}</span>

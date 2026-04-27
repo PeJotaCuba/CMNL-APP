@@ -31,8 +31,16 @@ export const ReportesAdmin: React.FC<Props> = ({
   const [activeTab, setActiveTab] = useState<'registro' | 'reportes' | 'pagosRealizados'>('registro');
   const [inputMethod, setInputMethod] = useState<'manual' | 'archivo' | 'pegar'>('manual');
   
+  const getLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [formData, setFormData] = useState<Partial<FP02Report>>({
-    fecha: new Date().toLocaleDateString('sv'),
+    fecha: getLocalDateString(),
     emisora: 'CMNL',
     programa: '',
     especialidades: [
@@ -46,6 +54,88 @@ export const ReportesAdmin: React.FC<Props> = ({
   const [textareaData, setTextareaData] = useState('');
   
   const [filterProgram, setFilterProgram] = useState('Todos');
+  const [duplicateConflicts, setDuplicateConflicts] = useState<{ existing: FP02Report, newReport: FP02Report }[]>([]);
+  const [safeReportsToAdd, setSafeReportsToAdd] = useState<FP02Report[]>([]);
+  const [reportsToRemove, setReportsToRemove] = useState<string[]>([]);
+  const [loadResult, setLoadResult] = useState<{ message: string, success: boolean } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ message: string, onConfirm: () => void } | null>(null);
+  const [isManualProcessing, setIsManualProcessing] = useState(false);
+
+  const clearManualForm = () => {
+    setFormData({
+      fecha: getLocalDateString(),
+      emisora: 'CMNL',
+      programa: '',
+      especialidades: [
+        { rol: 'Director', nombre: '' },
+        { rol: 'Asesor', nombre: '' },
+        { rol: 'Locutor', nombre: '' },
+        { rol: 'Realizador de Sonido', nombre: '' },
+      ]
+    });
+  };
+
+  const processNewReports = (newReports: FP02Report[], manual = false) => {
+    const conflicts: { existing: FP02Report, newReport: FP02Report }[] = [];
+    const okReports: FP02Report[] = [];
+
+    newReports.forEach(nR => {
+       const existing = reports.find(r => r.fecha === nR.fecha && r.programa === nR.programa);
+       if (existing) {
+          conflicts.push({ existing, newReport: nR });
+       } else {
+          okReports.push(nR);
+       }
+    });
+
+    if (conflicts.length > 0) {
+       setDuplicateConflicts(conflicts);
+       setSafeReportsToAdd(okReports);
+       setReportsToRemove([]);
+       setIsManualProcessing(manual);
+    } else {
+       if (okReports.length > 0) {
+          setReports(prev => [...prev, ...okReports]);
+          setLoadResult({ message: manual ? "Reporte guardado exitosamente." : `Se cargaron ${okReports.length} reportes exitosamente.`, success: true });
+          if (!manual) setTextareaData('');
+          if (manual) clearManualForm();
+       } else {
+          setLoadResult({ message: "No se extrajeron reportes válidos del texto.", success: false });
+       }
+    }
+  };
+
+  const resolveConflict = (action: 'keep_existing' | 'replace_new') => {
+      const conflict = duplicateConflicts[0];
+      const remaining = duplicateConflicts.slice(1);
+      
+      let newOk = [...safeReportsToAdd];
+      let newToRemove = [...reportsToRemove];
+
+      if (action === 'replace_new') {
+          newOk.push(conflict.newReport);
+          newToRemove.push(conflict.existing.id);
+      }
+
+      setSafeReportsToAdd(newOk);
+      setReportsToRemove(newToRemove);
+
+      if (remaining.length === 0) {
+          if (newOk.length > 0 || newToRemove.length > 0) {
+              setReports(prev => {
+                  const filtered = prev.filter(r => !newToRemove.includes(r.id));
+                  return [...filtered, ...newOk];
+              });
+          }
+          setDuplicateConflicts([]);
+          const stored = newOk.length;
+          setLoadResult({ message: isManualProcessing ? "Reporte procesado exitosamente." : `Proceso finalizado. Se guardaron/actualizaron ${stored} reportes en total.`, success: true });
+          if (!isManualProcessing) setTextareaData('');
+          if (isManualProcessing && stored > 0) clearManualForm();
+      } else {
+          setDuplicateConflicts(remaining);
+      }
+  };
   const [filterDate, setFilterDate] = useState('Todos');
   const [filterMember, setFilterMember] = useState('Todos');
   const [filterMonth, setFilterMonth] = useState(new Date().toLocaleDateString('sv').substring(0, 7));
@@ -96,23 +186,27 @@ export const ReportesAdmin: React.FC<Props> = ({
   const handleConsolidate = () => {
     if (!metrics || filterMember === 'Todos') return;
     
-    if (window.confirm(`¿Consolidar el pago de ${filterMember} para el mes ${filterMonth}?`)) {
-        const user = equipoData.find(m => m.name === filterMember);
-        const newConsolidated: ConsolidatedPayment = {
-            id: Math.random().toString(36).substr(2, 9),
-            userId: user?.username || filterMember,
-            month: filterMonth,
-            amount: metrics.neto,
-            grossAmount: metrics.bruto,
-            taxAmount: metrics.tax,
-            reportCount: metrics.count,
-            dateConsolidated: new Date().toISOString(),
-            calculationMode: 'oficial_from_reports'
-        };
-        
-        setConsolidatedPayments(prev => [...prev.filter(c => !(c.userId === newConsolidated.userId && c.month === filterMonth)), newConsolidated]);
-        alert("Pago consolidado exitosamente. Puede verlo en la pestaña Pagos Realizados.");
-    }
+    setConfirmAction({
+        message: `¿Consolidar el pago de ${filterMember} para el mes ${filterMonth}?`,
+        onConfirm: () => {
+            const user = equipoData.find(m => m.name === filterMember);
+            const newConsolidated: ConsolidatedPayment = {
+                id: Math.random().toString(36).substr(2, 9),
+                userId: user?.username || filterMember,
+                month: filterMonth,
+                amount: metrics.neto,
+                grossAmount: metrics.bruto,
+                taxAmount: metrics.tax,
+                reportCount: metrics.count,
+                dateConsolidated: new Date().toISOString(),
+                calculationMode: 'oficial_from_reports'
+            };
+            
+            setConsolidatedPayments(prev => [...prev.filter(c => !(c.userId === newConsolidated.userId && c.month === filterMonth)), newConsolidated]);
+            setLoadResult({ message: "Pago consolidado exitosamente. Puede verlo en la pestaña Pagos.", success: true });
+            setConfirmAction(null);
+        }
+    });
   };
 
   const exportPaymentsTable = (format: 'docx' | 'pdf' | 'xlsx') => {
@@ -173,7 +267,16 @@ export const ReportesAdmin: React.FC<Props> = ({
             }]
         });
 
-        Packer.toBlob(doc).then(blob => saveAs(blob, `Pagos_CMNL_${filterMonth}.docx`));
+        Packer.toBlob(doc).then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Pagos_CMNL_${filterMonth}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        });
     }
   };
 
@@ -220,32 +323,67 @@ export const ReportesAdmin: React.FC<Props> = ({
   };
 
   const handleParseText = (text: string) => {
-    const lines = text.split('\n');
-    let prog = '';
-    let dir = '', as = '', loc = '', rds = '';
+    let parsedReports: FP02Report[] = [];
     
-    lines.forEach(line => {
-      const lower = line.toLowerCase();
-      if (lower.startsWith('programa:')) prog = line.substring(9).trim();
-      if (lower.startsWith('director:')) dir = line.substring(9).trim();
-      if (lower.startsWith('asesor:')) as = line.substring(7).trim();
-      if (lower.startsWith('locutor:')) loc = line.substring(8).trim();
-      if (lower.startsWith('realizador de sonido:') || lower.startsWith('sonido:')) 
-        rds = line.split(':')[1].trim();
+    // Detect multiple blocks using '_____' or 'Fecha:' as delimiter
+    let blocks: string[][] = [];
+    if (text.includes('____')) {
+      const parts = text.split(/_{4,}/);
+      blocks = parts.map(p => p.split('\n'));
+    } else {
+      const parts = text.split(/(?=Fecha:\s*|fecha:\s*)/i);
+      blocks = parts.map(p => p.split('\n'));
+    }
+
+    blocks.forEach(lines => {
+      let fecha = getLocalDateString();
+      let prog = '';
+      let especialidades: { rol: string, nombre: string, isFixed?: boolean }[] = [];
+      
+      lines.forEach(line => {
+        const lower = line.toLowerCase().trim();
+        if (lower.startsWith('fecha:')) {
+           const dateStr = line.substring(6).trim();
+           // Intenta parsear "27 de abril de 2026"
+           const match = dateStr.match(/(\d+)\s+de\s+([a-z]+)\s+de\s+(\d+)/i);
+           if (match) {
+             const [_, d, mName, y] = match;
+             const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+             const mIdx = months.indexOf(mName.toLowerCase()) + 1;
+             if (mIdx > 0) {
+               fecha = `${y}-${mIdx.toString().padStart(2, '0')}-${d.padStart(2, '0')}`;
+             }
+           } else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+               fecha = dateStr;
+           }
+        }
+        else if (lower.startsWith('programa:')) prog = line.substring(9).trim();
+        else if (lower.startsWith('director:')) especialidades.push({ rol: 'Director', nombre: line.substring(9).trim(), isFixed: true });
+        else if (lower.startsWith('asesor:')) especialidades.push({ rol: 'Asesor', nombre: line.substring(7).trim(), isFixed: true });
+        else if (lower.startsWith('locutor:')) especialidades.push({ rol: 'Locutor', nombre: line.substring(8).trim(), isFixed: true });
+        else if (lower.startsWith('realizador:') || lower.startsWith('realizador de sonido:') || lower.startsWith('sonido:')) {
+           const idx = lower.indexOf(':');
+           especialidades.push({ rol: 'Realizador de Sonido', nombre: line.substring(idx + 1).trim(), isFixed: true });
+        }
+      });
+
+      if (prog) {
+         parsedReports.push({
+           id: Date.now().toString() + Math.random().toString(),
+           fecha,
+           emisora: 'CMNL',
+           programa: prog,
+           especialidades,
+           mes: fecha.substring(0, 7)
+         });
+      }
     });
 
-    if (prog) handleProgramSelect(prog);
-    
-    setTimeout(() => {
-      setFormData(prev => {
-        const esp = [...(prev.especialidades || [])];
-        if(dir) esp[0].nombre = dir;
-        if(as) esp[1].nombre = as;
-        if(loc) esp[2].nombre = loc;
-        if(rds) esp[3].nombre = rds;
-        return { ...prev, especialidades: esp };
-      });
-    }, 100); 
+    if (parsedReports.length > 0) {
+       processNewReports(parsedReports, false);
+    } else {
+       setLoadResult({ message: "No se pudieron extraer reportes válidos del texto.", success: false });
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,20 +416,7 @@ export const ReportesAdmin: React.FC<Props> = ({
       mes: mes
     };
 
-    setReports([...reports, newReport]);
-    alert("Reporte guardado exitosamente");
-    setFormData({
-      fecha: new Date().toLocaleDateString('sv'),
-      emisora: 'CMNL',
-      programa: '',
-      especialidades: [
-        { rol: 'Director', nombre: '' },
-        { rol: 'Asesor', nombre: '' },
-        { rol: 'Locutor', nombre: '' },
-        { rol: 'Realizador de Sonido', nombre: '' },
-      ]
-    });
-    setActiveTab('reportes');
+    processNewReports([newReport], true);
   };
 
   const exportDoc = async (report: FP02Report) => {
@@ -419,6 +544,26 @@ export const ReportesAdmin: React.FC<Props> = ({
                 )}
             </div>
 
+            <div className="flex justify-between items-center bg-[#1A100C] p-2 rounded-lg">
+               <span className="text-sm text-[#9E7649]">
+                 Mostrando {filteredForInforme.filter(r => r.mes === filterMonth).length} reportes
+               </span>
+               <button 
+                 onClick={() => {
+                   setConfirmAction({
+                     message: '¿Está seguro que desea eliminar TODOS los reportes en el sistema? Esta acción no se puede deshacer.',
+                     onConfirm: () => {
+                        setReports([]);
+                        setConfirmAction(null);
+                     }
+                   });
+                 }}
+                 className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-500 rounded-lg md:text-sm text-xs font-bold hover:bg-red-500/40 transition-colors border border-red-500/20"
+               >
+                 <Trash2 size={16}/> Limpiar todo
+               </button>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2">
                {filteredForInforme.filter(r => r.mes === filterMonth).map(rep => (
                  <div key={rep.id} className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/20 relative group hover:border-[#9E7649]/40 transition-all">
@@ -431,7 +576,15 @@ export const ReportesAdmin: React.FC<Props> = ({
                        </div>
                      </div>
                      <button 
-                         onClick={() => { if(confirm('¿Eliminar reporte?')) setReports(reports.filter(r => r.id !== rep.id)) }} 
+                         onClick={() => { 
+                           setConfirmAction({
+                             message: '¿Eliminar reporte?',
+                             onConfirm: () => {
+                               setReports(reports.filter(r => r.id !== rep.id));
+                               setConfirmAction(null);
+                             }
+                           });
+                         }} 
                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-full transition-all"
                          title="Eliminar Reporte"
                       >
@@ -511,7 +664,15 @@ export const ReportesAdmin: React.FC<Props> = ({
                                                     {new Date(p.dateConsolidated).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                 </td>
                                                 <td className="px-6 py-4 text-center space-x-2">
-                                                    <button onClick={() => { if(confirm('¿Eliminar registro?')) setConsolidatedPayments(prev => prev.filter(x => x.id !== p.id)) }} className="text-red-500/50 hover:text-red-500 p-2"><Trash2 size={16}/></button>
+                                                    <button onClick={() => { 
+                                                        setConfirmAction({
+                                                            message: '¿Eliminar registro consolidado?',
+                                                            onConfirm: () => {
+                                                                setConsolidatedPayments(prev => prev.filter(x => x.id !== p.id));
+                                                                setConfirmAction(null);
+                                                            }
+                                                        });
+                                                    }} className="text-red-500/50 hover:text-red-500 p-2"><Trash2 size={16}/></button>
                                                 </td>
                                             </tr>
                                         );
@@ -565,7 +726,7 @@ export const ReportesAdmin: React.FC<Props> = ({
              )}
 
              <div className="bg-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/20 space-y-6 mt-6">
-                <h3 className="font-bold text-lg md:text-xl text-white border-b border-[#9E7649]/20 pb-3">Registro (Modelo FP-02)</h3>
+                <h3 className="font-bold text-lg md:text-xl text-white border-b border-[#9E7649]/20 pb-3">Registro</h3>
                 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
@@ -624,6 +785,89 @@ export const ReportesAdmin: React.FC<Props> = ({
              </div>
           </div>
           )}
+
+      {loadResult && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60] animate-in fade-in">
+          <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2">{loadResult.success ? '¡Proceso completado!' : 'Aviso'}</h3>
+            <p className="text-[#E8DCCF]/80 mb-6">{loadResult.message}</p>
+            <button 
+              onClick={() => { setLoadResult(null); if (activeTab === 'registro' && isManualProcessing) setActiveTab('reportes'); }}
+              className="bg-[#9E7649] text-white px-6 py-2 rounded-lg font-bold hover:bg-[#8B653D] transition-colors"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {duplicateConflicts.length > 0 && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60] animate-in fade-in">
+          <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-red-400 mb-4 flex items-center justify-center gap-2">
+              Reporte Duplicado ({duplicateConflicts.length} pendientes)
+            </h3>
+            <p className="text-[#E8DCCF]/80 mb-4 text-center text-sm">
+              Ya existe un reporte para <strong>{duplicateConflicts[0].newReport.programa}</strong> el día <strong>{duplicateConflicts[0].newReport.fecha}</strong>.
+            </p>
+            <div className="flex flex-col gap-4">
+              <div className="bg-black/40 p-4 rounded-lg border border-[#9E7649]/20">
+                <h4 className="font-bold text-[#9E7649] mb-2 text-sm">Reporte Existente:</h4>
+                <ul className="text-xs text-stone-300 space-y-1">
+                  {duplicateConflicts[0].existing.especialidades.filter((e:any) => e.nombre).map((e:any, i:number) => (
+                    <li key={i}>{e.rol}: {e.nombre}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-black/40 p-4 rounded-lg border border-red-500/30">
+                <h4 className="font-bold text-red-400 mb-2 text-sm">Nuevo Reporte:</h4>
+                <ul className="text-xs text-stone-300 space-y-1">
+                  {duplicateConflicts[0].newReport.especialidades.filter((e:any) => e.nombre).map((e:any, i:number) => (
+                    <li key={i}>{e.rol}: {e.nombre}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex justify-between gap-4 mt-6">
+              <button 
+                onClick={() => resolveConflict('keep_existing')}
+                className="flex-1 bg-[#2C1B15] border border-stone-500 text-stone-300 py-2 rounded-lg font-bold hover:bg-stone-800 transition-colors mr-2"
+              >
+                Mantener
+              </button>
+              <button 
+                onClick={() => resolveConflict('replace_new')}
+                className="flex-1 bg-[#9E7649] text-white py-2 rounded-lg font-bold hover:bg-[#8B653D] transition-colors ml-2"
+              >
+                Reemplazar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[60] animate-in fade-in">
+          <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2">Confirmación</h3>
+            <p className="text-[#E8DCCF]/80 mb-6">{confirmAction.message}</p>
+            <div className="flex justify-center gap-4">
+              <button 
+                onClick={() => setConfirmAction(null)}
+                className="bg-[#2C1B15] border border-stone-500 text-stone-300 px-4 py-2 rounded-lg font-bold hover:bg-stone-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmAction.onConfirm}
+                className="bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-2 rounded-lg font-bold hover:bg-red-500/40 transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
   );
 };

@@ -77,7 +77,14 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
     });
 
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Ficha_${ficha.name.replace(/\s+/g, '_')}.docx`);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Ficha_${ficha.name.replace(/\s+/g, '_')}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   const handleEdit = () => {
