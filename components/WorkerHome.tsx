@@ -295,7 +295,7 @@ const WorkerHome: React.FC<Props> = ({
       <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#2a1b12]/90 via-[#2a1b12]/80 to-[#2a1b12] pointer-events-none fixed"></div>
 
       {/* Mobile Sticky Header */}
-      <header className="sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#2a1b12]/90 backdrop-blur-md border-b border-white/5">
+      <header className="sticky top-0 z-30 w-full px-4 pt-safe-top-extra pb-3 flex items-center justify-between bg-[#2a1b12]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <button 
               onClick={onMenuClick}
@@ -312,6 +312,14 @@ const WorkerHome: React.FC<Props> = ({
               <p className="text-[8px] text-[#CD853F] uppercase tracking-tighter mt-0.5">Gestión Interna</p>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {isSyncing && (
+               <div className="flex items-center gap-2 text-[#CD853F] text-[10px] font-bold mr-2">
+                   <RefreshCw size={12} className="animate-spin" />
+               </div>
+          )}
         </div>
       </header>
 
@@ -501,7 +509,8 @@ const WorkerHome: React.FC<Props> = ({
          href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
          target="_blank" 
          rel="noopener noreferrer"
-         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         className="fixed right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         style={{ bottom: 'calc(6rem + var(--sab))' }}
          title="Grupo de Trabajo WhatsApp"
       >
          <MessageSquare size={28} fill="white" />

@@ -14,6 +14,7 @@ import HistoryEvolutionView from './src/components/HistoryEvolutionView';
 import Sidebar from './components/Sidebar';
 import QuienesSomos from './components/QuienesSomos';
 import { PlaceholderView, CMNLAppView } from './components/GenericViews';
+import InstallPWA from './components/InstallPWA';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
 import { UpdateDetailsModal, UpdateReminderModal } from './components/UpdateDialogs';
@@ -205,6 +206,7 @@ const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
   const [impersonatedUser, setImpersonatedUser] = useState<any | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentProgram, setCurrentProgram] = useState({ name: "Cargando...", time: "", image: "" });
@@ -378,20 +380,30 @@ const App: React.FC = () => {
   const handleRefreshLive = () => {
       if (audioRef.current) {
           setIsRefreshing(true);
-          const currentSrc = audioRef.current.src;
-          audioRef.current.src = '';
+          const baseSrc = "https://icecast.teveo.cu/KR43FF7C";
+          // Add a cache buster param to force a fresh connection to the stream
+          const freshSrc = `${baseSrc}?t=${Date.now()}`;
+          
+          audioRef.current.pause();
+          audioRef.current.src = "";
           audioRef.current.load();
           
-          setTimeout(() => {
+          // Re-assign and play
+          audioRef.current.src = freshSrc;
+          audioRef.current.load();
+          audioRef.current.play().then(() => {
+              setIsPlaying(true);
+              setIsRefreshing(false);
+          }).catch(err => {
+              console.error("Playback error during refresh:", err);
+              // Fallback to original src if cache buster fails
               if (audioRef.current) {
-                audioRef.current.src = currentSrc;
-                audioRef.current.load();
-                audioRef.current.play().then(() => {
-                    setIsPlaying(true);
-                    setIsRefreshing(false);
-                }).catch(() => setIsRefreshing(false));
+                  audioRef.current.src = baseSrc;
+                  audioRef.current.load();
+                  audioRef.current.play().catch(() => {});
               }
-          }, 500);
+              setIsRefreshing(false);
+          });
       }
   };
 
@@ -487,6 +499,10 @@ const App: React.FC = () => {
       dataToExport.customRoots = getLocal('rcm_custom_roots') || [];
       dataToExport.equipo = getLocal('rcm_equipo_cmnl') || [];
       dataToExport.manualProgramming = getLocal('rcm_manual_programming') || [];
+      
+      // Management Reports and Consolidated Payments
+      dataToExport.managementReports = getLocal('rcm_gestion_reportes') || [];
+      dataToExport.allConsolidatedPayments = getLocal('rcm_all_consolidated_payments') || [];
 
       // User Data
       dataToExport.userData = {
@@ -521,238 +537,248 @@ const App: React.FC = () => {
   const handleCloudSync = async () => {
       if(isSyncing) return;
       
-      const confirmSync = window.confirm('¿Desea optener los últimos datos actualizados?');
-      if(!confirmSync) return;
+      setConfirmAction({
+          title: "Sincronización",
+          message: "¿Desea obtener los últimos datos actualizados desde la nube?",
+          onConfirm: async () => {
+              setConfirmAction(null);
+              setIsSyncing(true);
+              const username = currentUser?.username || 'default';
+              const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
-      setIsSyncing(true);
-      const username = currentUser?.username || 'default';
-      const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
-
-      try {
-          const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
-          if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
-          
-          const json = await response.json();
-          const pendingUpdates: Record<string, string> = {};
-          
-          const setLocal = (key: string, value: any) => {
-              pendingUpdates[key] = JSON.stringify(value);
-          };
-
-          // Helper to merge data while protecting user-generated content
-          const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
-              if (!jsonData || !Array.isArray(jsonData)) return;
-              
-              const saved = localStorage.getItem(localKey);
-              const localData = saved ? JSON.parse(saved) : [];
-
-              // Protected Keys: NO BORRAR, MODIFICAR O RESETEAR
-              const protectedKeys = ['rcm_data_worklogs', 'rcm_data_consolidated', 'rcm_interruptions', 'rcm_consolidated_months', 'rcm_users'];
-              
-              // Check if the key is a user-specific version of a protected key
-              const isProtected = protectedKeys.some(key => localKey.includes(key));
-              
-              if (isProtected) {
-                  if (localKey.includes('rcm_users')) {
-                      // Preserve interests for agenda users
-                      const merged = jsonData.map(newUser => {
-                          const localItem = localData.find((u: any) => u.id === newUser.id);
-                          return localItem && localItem.interests ? { ...newUser, interests: localItem.interests } : newUser;
-                      });
-                      setLocal(localKey, merged);
-                  } else {
-                      // For other protected data (worklogs, reports), keep local and add new ones from JSON if they don't exist
-                      const getId = (item: any) => (typeof idKey === 'function' ? idKey(item) : item[idKey]);
-                      const merged = [...localData];
-                      jsonData.forEach(newItem => {
-                          if (!merged.some(oldItem => getId(oldItem) === getId(newItem))) {
-                              merged.push(newItem);
-                          }
-                      });
-                      setLocal(localKey, merged);
-                  }
-                  return;
-              }
-
-              // Administrative data: Overwrite local with remote
-              setLocal(localKey, jsonData);
-          };
-
-          const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>) => {
-              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              setLocal(localKey, jsonData);
-          };
-
-          const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
-              if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
-              setLocal(localKey, jsonData);
-          };
-
-          // Apply updates to state (will be persisted via useEffects, but we also setLocal for consistency)
-          if (json.users && Array.isArray(json.users)) {
-            setUsers(json.users);
-            setLocal('rcm_data_users', json.users);
-          }
-          if (typeof json.historyContent === 'string') {
-            setHistoryContent(json.historyContent);
-            setLocal('rcm_data_history', json.historyContent);
-          }
-          if (typeof json.aboutContent === 'string') {
-            setAboutContent(json.aboutContent);
-            setLocal('rcm_data_about', json.aboutContent);
-          }
-          if (json.news && Array.isArray(json.news)) {
-            const processedNews = json.news.map((n: NewsItem) => ({
-                ...n,
-                image: (!n.image || n.image === '') 
-                    ? getCategoryVector(n.category || 'Boletín', n.title) 
-                    : n.image
-            }));
-            setNews(processedNews);
-            setLocal('rcm_data_news', processedNews);
-          }
-          
-          if (json.fichas) mergeData('rcm_data_fichas', json.fichas, 'name');
-          if (json.catalogo) mergeData('rcm_data_catalogo', json.catalogo, 'name');
-          
-          if (json.worklogs) mergeData(`user_${username}_rcm_data_worklogs`, json.worklogs, 'id');
-          if (json.consolidated) mergeData(`user_${username}_rcm_data_consolidated`, json.consolidated, 'id');
-          if (json.interruptions) mergeData(`user_${username}_rcm_interruptions`, json.interruptions, 'id');
-          if (json.consolidatedMonths) mergeData(`user_${username}_rcm_consolidated_months`, json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
-          
-          if (json.habitualExclusions && Array.isArray(json.habitualExclusions)) {
-              const userExclusions = json.habitualExclusions.find((e: any) => e.username === username);
-              if (userExclusions) setLocal(`user_${username}_habitual_exclusions`, userExclusions.exclusions);
-          }
-          if (json.habitualModes && Array.isArray(json.habitualModes)) {
-              const userMode = json.habitualModes.find((m: any) => m.username === username);
-              if (userMode) setLocal(`user_${username}_habitual_mode`, userMode.mode);
-          }
-          
-          if (json.transmissionConfig) setLocal('rcm_transmission_config', json.transmissionConfig);
-          if (json.paymentConfigs) {
-              Object.entries(json.paymentConfigs).forEach(([key, value]) => setLocal(key, value));
-          }
-          if (json.scripts) {
-              Object.entries(json.scripts).forEach(([key, value]) => mergeData(key, value as any[], 'id'));
-          }
-          if (json.programSections) {
-              Object.entries(json.programSections).forEach(([key, value]) => mergeData(key, value as any[], 'name'));
-          }
-          if (json.agendaPrograms) setLocal('rcm_programs', json.agendaPrograms);
-          if (json.agendaEfemerides) mergeRecordData('rcm_efemerides', json.agendaEfemerides);
-          if (json.agendaConmemoraciones) mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones);
-          if (json.agendaDayThemes) mergeSimpleRecord('rcm_day_themes', json.agendaDayThemes);
-          if (json.agendaUsers) mergeData('rcm_users', json.agendaUsers, 'id');
-          if (json.agendaPropaganda) mergeRecordData('rcm_propaganda', json.agendaPropaganda);
-          if (json.agendaCulturalOptions) mergeRecordData('rcm_cultural_options', json.agendaCulturalOptions);
-          if (json.programsList && Array.isArray(json.programsList)) setLocal('rcm_programs_list', json.programsList);
-          if (json.customRoots && Array.isArray(json.customRoots)) setLocal('rcm_custom_roots', json.customRoots);
-          if (json.manualProgramming) setLocal('rcm_manual_programming', json.manualProgramming);
-          if (json.userData) {
-              Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
-          }
-
-          if (json.equipo && Array.isArray(json.equipo)) {
-              setLocal('rcm_equipo_cmnl', json.equipo);
-          } else {
               try {
-                  const equipoResponse = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
-                  if (equipoResponse.ok) {
-                      const equipoData = await equipoResponse.json();
-                      if (Array.isArray(equipoData)) {
-                          setLocal('rcm_equipo_cmnl', equipoData);
-                          setLocal('rcm_equipo_last_update', Date.now().toString());
+                  const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
+                  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+                  
+                  const json = await response.json();
+                  const pendingUpdates: Record<string, string> = {};
+                  
+                  const setLocal = (key: string, value: any) => {
+                      pendingUpdates[key] = JSON.stringify(value);
+                  };
+
+                  // Helper to merge data while protecting user-generated content
+                  const mergeData = (localKey: string, jsonData: any[], idKey: string | ((item: any) => string)) => {
+                      if (!jsonData || !Array.isArray(jsonData)) return;
+                      
+                      const saved = localStorage.getItem(localKey);
+                      const localData = saved ? JSON.parse(saved) : [];
+
+                      // Protected Keys: NO BORRAR, MODIFICAR O RESETEAR
+                      const protectedKeys = ['rcm_data_worklogs', 'rcm_data_consolidated', 'rcm_interruptions', 'rcm_consolidated_months', 'rcm_users'];
+                      
+                      // Check if the key is a user-specific version of a protected key
+                      const isProtected = protectedKeys.some(key => localKey.includes(key));
+                      
+                      if (isProtected) {
+                          if (localKey.includes('rcm_users')) {
+                              // Preserve interests for agenda users
+                              const merged = jsonData.map(newUser => {
+                                  const localItem = localData.find((u: any) => u.id === newUser.id);
+                                  return localItem && localItem.interests ? { ...newUser, interests: localItem.interests } : newUser;
+                              });
+                              setLocal(localKey, merged);
+                          } else {
+                              // For other protected data (worklogs, reports), keep local and add new ones from JSON if they don't exist
+                              const getId = (item: any) => (typeof idKey === 'function' ? idKey(item) : item[idKey]);
+                              const merged = [...localData];
+                              jsonData.forEach(newItem => {
+                                  if (!merged.some(oldItem => getId(oldItem) === getId(newItem))) {
+                                      merged.push(newItem);
+                                  }
+                              });
+                              setLocal(localKey, merged);
+                          }
+                          return;
+                      }
+
+                      // Administrative data: Overwrite local with remote
+                      setLocal(localKey, jsonData);
+                  };
+
+                  const mergeRecordData = (localKey: string, jsonData: Record<string, any[]>) => {
+                      if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+                      setLocal(localKey, jsonData);
+                  };
+
+                  const mergeSimpleRecord = (localKey: string, jsonData: Record<string, string>) => {
+                      if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return;
+                      setLocal(localKey, jsonData);
+                  };
+
+                  // Apply updates to state (will be persisted via useEffects, but we also setLocal for consistency)
+                  if (json.users && Array.isArray(json.users)) {
+                    setUsers(json.users);
+                    setLocal('rcm_data_users', json.users);
+                  }
+                  if (typeof json.historyContent === 'string') {
+                    setHistoryContent(json.historyContent);
+                    setLocal('rcm_data_history', json.historyContent);
+                  }
+                  if (typeof json.aboutContent === 'string') {
+                    setAboutContent(json.aboutContent);
+                    setLocal('rcm_data_about', json.aboutContent);
+                  }
+                  if (json.news && Array.isArray(json.news)) {
+                    const processedNews = json.news.map((n: NewsItem) => ({
+                        ...n,
+                        image: (!n.image || n.image === '') 
+                            ? getCategoryVector(n.category || 'Boletín', n.title) 
+                            : n.image
+                    }));
+                    setNews(processedNews);
+                    setLocal('rcm_data_news', processedNews);
+                  }
+                  
+                  if (json.fichas) mergeData('rcm_data_fichas', json.fichas, 'name');
+                  if (json.catalogo) mergeData('rcm_data_catalogo', json.catalogo, 'name');
+                  
+                  if (json.worklogs) mergeData(`user_${username}_rcm_data_worklogs`, json.worklogs, 'id');
+                  if (json.consolidated) mergeData(`user_${username}_rcm_data_consolidated`, json.consolidated, 'id');
+                  if (json.interruptions) mergeData(`user_${username}_rcm_interruptions`, json.interruptions, 'id');
+                  if (json.consolidatedMonths) mergeData(`user_${username}_rcm_consolidated_months`, json.consolidatedMonths, (item: any) => `${item.month}-${item.year}`);
+                  
+                  if (json.habitualExclusions && Array.isArray(json.habitualExclusions)) {
+                      const userExclusions = json.habitualExclusions.find((e: any) => e.username === username);
+                      if (userExclusions) setLocal(`user_${username}_habitual_exclusions`, userExclusions.exclusions);
+                  }
+                  if (json.habitualModes && Array.isArray(json.habitualModes)) {
+                      const userMode = json.habitualModes.find((m: any) => m.username === username);
+                      if (userMode) setLocal(`user_${username}_habitual_mode`, userMode.mode);
+                  }
+                  
+                  if (json.transmissionConfig) setLocal('rcm_transmission_config', json.transmissionConfig);
+                  if (json.paymentConfigs) {
+                      Object.entries(json.paymentConfigs).forEach(([key, value]) => setLocal(key, value));
+                  }
+                  if (json.scripts) {
+                      Object.entries(json.scripts).forEach(([key, value]) => mergeData(key, value as any[], 'id'));
+                  }
+                  if (json.programSections) {
+                      Object.entries(json.programSections).forEach(([key, value]) => mergeData(key, value as any[], 'name'));
+                  }
+                  if (json.agendaPrograms) setLocal('rcm_programs', json.agendaPrograms);
+                  if (json.agendaEfemerides) mergeRecordData('rcm_efemerides', json.agendaEfemerides);
+                  if (json.agendaConmemoraciones) mergeRecordData('rcm_conmemoraciones', json.agendaConmemoraciones);
+                  if (json.agendaDayThemes) mergeSimpleRecord('rcm_day_themes', json.agendaDayThemes);
+                  if (json.agendaUsers) mergeData('rcm_users', json.agendaUsers, 'id');
+                  if (json.agendaPropaganda) mergeRecordData('rcm_propaganda', json.agendaPropaganda);
+                  if (json.agendaCulturalOptions) mergeRecordData('rcm_cultural_options', json.agendaCulturalOptions);
+                  if (json.programsList && Array.isArray(json.programsList)) setLocal('rcm_programs_list', json.programsList);
+                  if (json.customRoots && Array.isArray(json.customRoots)) setLocal('rcm_custom_roots', json.customRoots);
+                  if (json.manualProgramming) setLocal('rcm_manual_programming', json.manualProgramming);
+                  if (json.managementReports) setLocal('rcm_gestion_reportes', json.managementReports);
+                  if (json.allConsolidatedPayments) setLocal('rcm_all_consolidated_payments', json.allConsolidatedPayments);
+                  if (json.userData) {
+                      Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
+                  }
+
+                  if (json.equipo && Array.isArray(json.equipo)) {
+                      setLocal('rcm_equipo_cmnl', json.equipo);
+                  } else {
+                      try {
+                          const equipoResponse = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
+                          if (equipoResponse.ok) {
+                              const equipoData = await equipoResponse.json();
+                              if (Array.isArray(equipoData)) {
+                                  setLocal('rcm_equipo_cmnl', equipoData);
+                                  setLocal('rcm_equipo_last_update', Date.now().toString());
+                              }
+                          }
+                      } catch (equipoError) {
+                          console.error("Error fetching equipo data during sync:", equipoError);
                       }
                   }
-              } catch (equipoError) {
-                  console.error("Error fetching equipo data during sync:", equipoError);
+
+                  const getCount = (dataStr: string | null) => {
+                      if (!dataStr) return 0;
+                      try {
+                          const p = JSON.parse(dataStr);
+                          return Array.isArray(p) ? p.length : (typeof p === 'object' && p !== null ? Object.keys(p).length : 0);
+                      } catch(e) { return 0; }
+                  };
+
+                  // Build Report with detailed comparison before overwriting
+                  const reportParts: string[] = [];
+                  
+                  if (json.news) {
+                      const old = getCount(localStorage.getItem('rcm_data_news'));
+                      const current = json.news.length;
+                      const diff = current - old;
+                      reportParts.push(`📰 NOTICIAS:\n - Total actual: ${current} boletín(es).\n - ${diff > 0 ? `Se agregaron ${diff}` : (diff < 0 ? `Se eliminaron ${Math.abs(diff)}` : 'Sin variaciones en la cantidad')}.`);
+                  }
+                  if (json.users) {
+                      const old = getCount(localStorage.getItem('rcm_data_users'));
+                      const current = json.users.length;
+                      const diff = current - old;
+                      reportParts.push(`👤 USUARIOS:\n - Total procesado: ${current} cuenta(s).\n - ${diff > 0 ? `Nuevos registros: ${diff}` : (diff < 0 ? `Cuentas dadas de baja: ${Math.abs(diff)}` : 'Roles sincronizados (sin altas/bajas)')}.`);
+                  }
+                  
+                  if (json.fichas || json.manualProgramming) {
+                      const oldFichas = getCount(localStorage.getItem('rcm_data_fichas'));
+                      const currentFichas = json.fichas ? json.fichas.length : oldFichas;
+                      const oldManual = getCount(localStorage.getItem('rcm_manual_programming'));
+                      const currentManual = json.manualProgramming ? json.manualProgramming.length : oldManual;
+                      reportParts.push(`📻 PARRILLA DE PROGRAMACIÓN:\n - Esquema aplicado con ${currentFichas} ficha(s) técnica(s) y ${currentManual} espacio(s) manuales reprogramados.`);
+                  }
+                  
+                  if (json.agendaPrograms || json.agendaEfemerides || json.agendaConmemoraciones || json.agendaPropaganda || json.agendaCulturalOptions) {
+                      const agendaItems = [];
+                      if (json.agendaEfemerides) {
+                         const diff = Object.keys(json.agendaEfemerides).length - getCount(localStorage.getItem('rcm_efemerides'));
+                         agendaItems.push(`Efemérides (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Actualizadas'})`);
+                      }
+                      if (json.agendaConmemoraciones) {
+                         const diff = Object.keys(json.agendaConmemoraciones).length - getCount(localStorage.getItem('rcm_conmemoraciones'));
+                         agendaItems.push(`Conmemoraciones (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Actualizadas'})`);
+                      }
+                      if (json.agendaPropaganda) {
+                         const diff = Object.keys(json.agendaPropaganda).length - getCount(localStorage.getItem('rcm_propaganda'));
+                         agendaItems.push(`Propaganda (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Analizadas'})`);
+                      }
+                      if (json.agendaCulturalOptions) {
+                         const diff = Object.keys(json.agendaCulturalOptions).length - getCount(localStorage.getItem('rcm_cultural_options'));
+                         agendaItems.push(`Opciones Culturales (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Analizadas'})`);
+                      }
+                      reportParts.push(`📅 AGENDA EDITORIAL:\n - Descargados pautas y datos de semana:\n   • ${agendaItems.join('\n   • ')}.`);
+                  }
+                  
+                  if (json.managementReports || json.allConsolidatedPayments) {
+                      const reportsCount = Array.isArray(json.managementReports) ? json.managementReports.length : 0;
+                      const paymentsCount = Array.isArray(json.allConsolidatedPayments) ? json.allConsolidatedPayments.length : 0;
+                      reportParts.push(`💼 GESTIÓN (PAGOS Y REPORTES):\n - Base de datos sincronizada con ${reportsCount} informe(s) FP-02 y ${paymentsCount} consolidación(es) de pago.`);
+                  }
+
+                  if (pendingUpdates['rcm_equipo_cmnl']) {
+                      const old = getCount(localStorage.getItem('rcm_equipo_cmnl'));
+                      const current = getCount(pendingUpdates['rcm_equipo_cmnl']);
+                      const diff = current - old;
+                      reportParts.push(`📱 DIRECTORIO (EQUIPO):\n - Directorio estructurado con ${current} miembro(s).\n - ${diff > 0 ? `Nuevas incorporaciones: ${diff}` : (diff < 0 ? `Personal saliente: ${Math.abs(diff)}` : 'Perfil sin variaciones')}.`);
+                  }
+
+                  const detailsContent = reportParts.length > 0 ? reportParts.join('\n\n') : "Se verificaron las bases de datos en la bóveda, pero no se hallaron paquetes de datos pendientes de impacto.";
+
+                  // Atomic application of all updates
+                  Object.entries(pendingUpdates).forEach(([key, value]) => {
+                      localStorage.setItem(key, value);
+                  });
+                  
+                  localStorage.setItem('last_sync_time', Date.now().toString());
+
+                  // Only set the modal state, the component will handle the acceptance and reload
+                  setUpdateDetails({ show: true, content: detailsContent });
+              } catch (error) {
+                  console.error("Sync Error:", error);
+                  setConfirmAction({
+                      title: "Error",
+                      message: "Error de conexión. No se pudieron obtener los datos más recientes.",
+                      onConfirm: () => setConfirmAction(null)
+                  });
+              } finally {
+                  setIsSyncing(false);
               }
           }
-
-          const getCount = (dataStr: string | null) => {
-              if (!dataStr) return 0;
-              try {
-                  const p = JSON.parse(dataStr);
-                  return Array.isArray(p) ? p.length : (typeof p === 'object' && p !== null ? Object.keys(p).length : 0);
-              } catch(e) { return 0; }
-          };
-
-          // Build Report with detailed comparison before overwriting
-          const reportParts: string[] = [];
-          
-          if (json.news) {
-              const old = getCount(localStorage.getItem('rcm_data_news'));
-              const current = json.news.length;
-              const diff = current - old;
-              reportParts.push(`📰 NOTICIAS:\n - Total actual: ${current} boletín(es).\n - ${diff > 0 ? `Se agregaron ${diff}` : (diff < 0 ? `Se eliminaron ${Math.abs(diff)}` : 'Sin variaciones en la cantidad')}.`);
-          }
-          if (json.users) {
-              const old = getCount(localStorage.getItem('rcm_data_users'));
-              const current = json.users.length;
-              const diff = current - old;
-              reportParts.push(`👤 USUARIOS:\n - Total procesado: ${current} cuenta(s).\n - ${diff > 0 ? `Nuevos registros: ${diff}` : (diff < 0 ? `Cuentas dadas de baja: ${Math.abs(diff)}` : 'Roles sincronizados (sin altas/bajas)')}.`);
-          }
-          
-          if (json.fichas || json.manualProgramming) {
-              const oldFichas = getCount(localStorage.getItem('rcm_data_fichas'));
-              const currentFichas = json.fichas ? json.fichas.length : oldFichas;
-              const oldManual = getCount(localStorage.getItem('rcm_manual_programming'));
-              const currentManual = json.manualProgramming ? json.manualProgramming.length : oldManual;
-              reportParts.push(`📻 PARRILLA DE PROGRAMACIÓN:\n - Esquema aplicado con ${currentFichas} ficha(s) técnica(s) y ${currentManual} espacio(s) manuales reprogramados.`);
-          }
-          
-          if (json.agendaPrograms || json.agendaEfemerides || json.agendaConmemoraciones || json.agendaPropaganda || json.agendaCulturalOptions) {
-              const agendaItems = [];
-              if (json.agendaEfemerides) {
-                 const diff = Object.keys(json.agendaEfemerides).length - getCount(localStorage.getItem('rcm_efemerides'));
-                 agendaItems.push(`Efemérides (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Actualizadas'})`);
-              }
-              if (json.agendaConmemoraciones) {
-                 const diff = Object.keys(json.agendaConmemoraciones).length - getCount(localStorage.getItem('rcm_conmemoraciones'));
-                 agendaItems.push(`Conmemoraciones (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Actualizadas'})`);
-              }
-              if (json.agendaPropaganda) {
-                 const diff = Object.keys(json.agendaPropaganda).length - getCount(localStorage.getItem('rcm_propaganda'));
-                 agendaItems.push(`Propaganda (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Analizadas'})`);
-              }
-              if (json.agendaCulturalOptions) {
-                 const diff = Object.keys(json.agendaCulturalOptions).length - getCount(localStorage.getItem('rcm_cultural_options'));
-                 agendaItems.push(`Opciones Culturales (${diff !== 0 ? (diff > 0 ? `+${diff}` : diff) : 'Analizadas'})`);
-              }
-              reportParts.push(`📅 AGENDA EDITORIAL:\n - Descargados pautas y datos de semana:\n   • ${agendaItems.join('\n   • ')}.`);
-          }
-          if (json.catalogo) {
-              const old = getCount(localStorage.getItem('rcm_data_catalogo'));
-              const current = json.catalogo.length;
-              const diff = current - old;
-              reportParts.push(`🎵 CATÁLOGO MUSICAL:\n - Biblioteca verificada con ${current} matrice(s).\n - ${diff !== 0 ? `Variación registrada: ${diff > 0 ? `+${diff}` : diff} fonogramas` : 'Sin adiciones nuevas'}.`);
-          }
-          
-          if (pendingUpdates['rcm_equipo_cmnl']) {
-              const old = getCount(localStorage.getItem('rcm_equipo_cmnl'));
-              const current = getCount(pendingUpdates['rcm_equipo_cmnl']);
-              const diff = current - old;
-              reportParts.push(`📱 DIRECTORIO (EQUIPO):\n - Directorio estructurado con ${current} miembro(s).\n - ${diff > 0 ? `Nuevas incorporaciones: ${diff}` : (diff < 0 ? `Personal saliente: ${Math.abs(diff)}` : 'Perfil sin variaciones')}.`);
-          }
-
-          const detailsContent = reportParts.length > 0 ? reportParts.join('\n\n') : "Se verificaron las bases de datos en la bóveda, pero no se hallaron paquetes de datos pendientes de impacto.";
-
-          // Atomic application of all updates
-          Object.entries(pendingUpdates).forEach(([key, value]) => {
-              localStorage.setItem(key, value);
-          });
-          
-          localStorage.setItem('last_sync_time', Date.now().toString());
-
-          // Only set the modal state, the component will handle the acceptance and reload
-          setUpdateDetails({ show: true, content: detailsContent });
-      } catch (error) {
-          console.error("Sync Error:", error);
-          alert('Error de conexión. No se pudieron obtener los datos más recientes.');
-      } finally {
-          setIsSyncing(false);
-      }
+      });
   };
 
   // Determine if Player should be visible
@@ -911,7 +937,7 @@ const App: React.FC = () => {
   };
 
   return (
-      <div className="w-full min-h-screen bg-[#2C1B15] font-display">
+      <div className="w-full min-h-screen bg-[#1A100C] font-display">
         <audio 
           ref={audioRef} 
           src="https://icecast.teveo.cu/KR43FF7C" 
@@ -930,7 +956,9 @@ const App: React.FC = () => {
           onLogout={handleLogout}
           onLogin={() => setCurrentView(AppView.LANDING)}
         />
-
+        
+        <InstallPWA />
+        
         {renderView()}
 
         {isSyncing && (
@@ -958,6 +986,29 @@ const App: React.FC = () => {
           onBackup={handleBackup}
           isLogoutTrigger={isLogoutTrigger}
         />
+
+        {confirmAction && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[500] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+                    <h3 className="text-[#C69C6D] font-serif font-bold text-xl mb-2">{confirmAction.title}</h3>
+                    <p className="text-stone-300 text-sm mb-6 leading-relaxed">{confirmAction.message}</p>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setConfirmAction(null)}
+                            className="flex-1 px-4 py-2 rounded-xl border border-white/10 text-stone-400 font-bold text-sm hover:bg-white/5 transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <button 
+                            onClick={confirmAction.onConfirm}
+                            className="flex-1 px-4 py-2 rounded-xl bg-[#9E7649] text-white font-bold text-sm hover:bg-[#8B653D] shadow-lg shadow-[#9E7649]/20 transition-all active:scale-95"
+                        >
+                            Confirmar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
 
         <UpdateDetailsModal 
             isOpen={updateDetails?.show || false}
@@ -992,7 +1043,7 @@ const App: React.FC = () => {
                  )}
 
                  {/* Live Player Content */}
-                 <div className="flex-1 px-4 py-3 pb-safe-bottom relative">
+                 <div className="flex-1 px-4 py-3 relative" style={{ paddingBottom: 'calc(0.75rem + var(--sab))' }}>
                      <div className="max-w-md mx-auto flex items-center gap-3">
                          {/* Refresh Button replacing previous Image */}
                          <button 

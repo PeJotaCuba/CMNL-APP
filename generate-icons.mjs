@@ -23,6 +23,16 @@ async function generate() {
       .toFile(path.join(outDir, 'icon-512-512.png'));
     console.log('Generated icon-512-512.png');
 
+    // Apple Icons
+    const appleSizes = [152, 167, 180];
+    for (const size of appleSizes) {
+      await sharp(svgPath)
+        .resize(size, size)
+        .png()
+        .toFile(path.join(outDir, `icon-${size}-${size}.png`));
+      console.log(`Generated icon-${size}-${size}.png`);
+    }
+
     // Maskable icon (with padding)
     await sharp(svgPath)
       .resize(512, 512, {

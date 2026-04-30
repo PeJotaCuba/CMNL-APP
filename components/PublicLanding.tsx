@@ -57,10 +57,10 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#F5F0EB] to-transparent pointer-events-none"></div>
 
-      {/* Back Button */}
       <button 
         onClick={() => onNavigate(AppView.LISTENER_HOME)}
-        className="absolute top-4 left-4 z-20 flex items-center gap-2 text-[#5D3A24] font-medium hover:opacity-70 transition-opacity"
+        className="absolute z-20 flex items-center gap-2 text-[#5D3A24] font-medium hover:opacity-70 transition-opacity"
+        style={{ top: 'calc(1rem + var(--sat))', left: '1rem' }}
       >
         <ArrowLeft size={20} />
         Volver a la Radio

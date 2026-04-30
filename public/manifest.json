@@ -6,6 +6,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "window-controls-overlay"],
+  "orientation": "portrait",
   "background_color": "#2C1B15",
   "theme_color": "#3E1E16",
   "categories": ["entertainment", "music", "news", "radio"],

@@ -2,8 +2,8 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>CMNL App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Radio Ciudad Monumento</title>
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#3E1E16" />
@@ -11,9 +11,19 @@
     
     <!-- iOS Support -->
     <link rel="apple-touch-icon" href="/icons/icon-192-192.png">
-    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152-152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180-180.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167-167.png">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CMNL App">
+    
+    <!-- Splash Screens for iOS -->
+    <link rel="apple-touch-startup-image" href="/icons/screenshot-mobile.png">
+    
+    <!-- Android Support -->
+    <meta name="mobile-web-app-capable" content="yes">
     
     <!-- Windows Support -->
     <meta name="msapplication-TileColor" content="#3E1E16">
@@ -76,11 +86,38 @@
       };
     </script>
     <style>
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+      }
       body {
         /* Prevent bounce on iOS */
         overscroll-behavior-y: none;
         background-color: #1A100C;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
       }
+      
+      /* Re-enable selection for inputs and textareas */
+      input, textarea {
+        -webkit-user-select: auto;
+        user-select: auto;
+      }
+
+      .pb-safe-bottom {
+        padding-bottom: calc(env(safe-area-inset-bottom, 0) + 1.5rem);
+      }
+      .pt-safe-top {
+        padding-top: env(safe-area-inset-top, 0);
+      }
+      .pt-safe-top-extra {
+        padding-top: calc(env(safe-area-inset-top, 0) + 0.75rem);
+      }
+      
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }

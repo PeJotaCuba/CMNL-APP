@@ -117,7 +117,7 @@ const AdminDashboard: React.FC<Props> = ({
   return (
     <div className="relative min-h-screen h-full bg-[#1A100C] font-display text-[#E8DCCF] flex flex-col pb-10 overflow-y-auto no-scrollbar">
       {/* Mobile Sticky Header */}
-      <header className="sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#3E1E16] border-b border-[#9E7649]/20 shadow-md">
+      <header className="sticky top-0 z-30 w-full px-4 pt-safe-top-extra pb-3 flex items-center justify-between bg-[#3E1E16] border-b border-[#9E7649]/20 shadow-md">
         <div className="flex items-center gap-3">
           <button 
               onClick={onMenuClick}
@@ -137,7 +137,12 @@ const AdminDashboard: React.FC<Props> = ({
         </div>
         
         <div className="flex items-center gap-3">
-            <div className="text-right">
+            {isSyncing && (
+               <div className="flex items-center gap-2 text-[#9E7649] text-[10px] font-bold mr-2">
+                   <RefreshCw size={12} className="animate-spin" />
+               </div>
+            )}
+            <div className="text-right ml-1">
                <p className="text-[10px] font-bold text-white leading-none">{currentUser?.name || 'Admin'}</p>
                <p className="text-[8px] text-[#9E7649] flex items-center justify-end gap-1 mt-0.5">
                    <span className="w-1 h-1 bg-green-500 rounded-full"></span>
@@ -162,11 +167,12 @@ const AdminDashboard: React.FC<Props> = ({
                   Respaldar sistema
                 </button>
                 <button 
-                 onClick={() => {}}
-                 className="text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold opacity-50 cursor-not-allowed transition-all"
-                 title="Utilice el botón Actualizar del menú lateral"
+                 onClick={onSync}
+                 disabled={isSyncing}
+                 className={`text-xs bg-[#9E7649] text-[#3E1E16] px-3 py-1.5 rounded-lg font-bold transition-all ${isSyncing ? 'opacity-50' : 'hover:scale-105 active:scale-95'}`}
+                 title="Actualizar Datos del Sistema"
                 >
-                  Actualizar Sistema
+                  {isSyncing ? 'Sincronizando...' : 'Actualizar Sistema'}
                 </button>
               </div>
             )}
@@ -292,7 +298,8 @@ const AdminDashboard: React.FC<Props> = ({
          href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
          target="_blank" 
          rel="noopener noreferrer"
-         className="fixed bottom-24 right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         className="fixed right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
+         style={{ bottom: 'calc(6rem + var(--sab))' }}
          title="Grupo de Trabajo WhatsApp"
       >
          <MessageSquare size={28} fill="white" />

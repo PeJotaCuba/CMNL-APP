@@ -55,7 +55,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none fixed"></div>
 
       {/* Mobile Sticky Header */}
-      <header className="md:hidden sticky top-0 z-30 w-full px-4 py-3 flex items-center justify-between bg-[#2C1B15]/90 backdrop-blur-md border-b border-white/5">
+      <header className="md:hidden sticky top-0 z-30 w-full px-4 pt-safe-top-extra pb-3 flex items-center justify-between bg-[#2C1B15]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <button 
               onClick={onMenuClick}
@@ -195,7 +195,7 @@ const ListenerHome: React.FC<Props> = ({ onNavigate, news, onSync, isSyncing, on
       </main>
       
       {/* Floating WhatsApp Menu for Listeners */}
-      <div className="fixed bottom-28 right-5 z-40 flex flex-col items-end gap-3">
+      <div className="fixed right-5 z-40 flex flex-col items-end gap-3" style={{ bottom: 'calc(7rem + var(--sab))' }}>
          {showFabMenu && (
              <div className="flex flex-col gap-3 animate-fade-in-up">
                  <a 

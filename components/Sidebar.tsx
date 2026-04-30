@@ -77,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* Drawer */}
-      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-[200] transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`fixed top-0 left-0 h-full w-72 bg-[#2C1B15] border-r border-[#9E7649]/20 shadow-2xl z-[200] transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{ paddingTop: 'var(--sat)' }}>
         
         {/* Header */}
         <div className="p-6 flex items-center justify-between border-b border-white/5 shrink-0">
