@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AppView, User } from '../types';
 import { 
   X, 
@@ -14,7 +14,10 @@ import {
   FileText, 
   Podcast, 
   Newspaper,
-  Home
+  Home,
+  Share2,
+  MessageCircle,
+  Send
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -38,6 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onLogin
 }) => {
+  const [showShare, setShowShare] = useState(false);
   
   const handleNavigation = (view: AppView) => {
     onNavigate(view);
@@ -66,13 +70,26 @@ const Sidebar: React.FC<SidebarProps> = ({
     onClose();
   };
 
+  const shareText = "¡Instala la nueva Aplicación de Radio Ciudad Monumento! Noticas, programación y música directo en tu móvil.";
+  const shareUrl = "https://cmnl-app.vercel.app/";
+
+  const handleShareWhatsApp = () => {
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank');
+      setShowShare(false);
+  };
+
+  const handleShareTelegram = () => {
+      window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank');
+      setShowShare(false);
+  };
+
   return (
     <>
       {/* Overlay */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] transition-opacity"
-          onClick={onClose}
+          onClick={() => { setShowShare(false); onClose(); }}
         />
       )}
 
@@ -82,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Header */}
         <div className="p-6 flex items-center justify-between border-b border-white/5 shrink-0">
           <h2 className="text-[#C69C6D] font-serif font-bold text-xl">Menú</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-white transition-colors">
+          <button onClick={() => { setShowShare(false); onClose(); }} className="text-stone-400 hover:text-white transition-colors">
             <X size={24} />
           </button>
         </div>
@@ -167,6 +184,33 @@ const Sidebar: React.FC<SidebarProps> = ({
               />
             )}
             
+            <div className="w-full">
+              <SidebarItem 
+                icon={<Share2 size={20} />} 
+                label="Compartir APP" 
+                onClick={() => setShowShare(!showShare)} 
+              />
+              
+              {showShare && (
+                <div className="flex flex-col gap-1 mt-1 ml-6 pl-4 border-l border-white/10 overflow-hidden animate-in slide-in-from-top-2 fade-in">
+                  <button 
+                    onClick={handleShareWhatsApp}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium hover:bg-green-500/10 active:scale-[0.98] text-stone-300 hover:text-green-400"
+                  >
+                    <MessageCircle size={16} />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button 
+                    onClick={handleShareTelegram}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-medium hover:bg-blue-500/10 active:scale-[0.98] text-stone-300 hover:text-blue-400"
+                  >
+                    <Send size={16} />
+                    <span>Telegram</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Removed Configuración and Equipo direct access as per requirements */}
 
             {currentUser ? (
@@ -174,13 +218,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                 icon={<LogOut size={20} />} 
                 label="Cerrar Sesión" 
                 onClick={() => { if(onLogout) onLogout(); onClose(); }} 
-                className="text-red-400 hover:bg-red-900/20 hover:text-red-300"
+                className="text-red-400 hover:bg-red-900/20 hover:text-red-300 mt-2"
               />
             ) : (
               <SidebarItem 
                 icon={<LogIn size={20} />} 
                 label="Iniciar Sesión" 
                 onClick={() => { if(onLogin) onLogin(); onClose(); }} 
+                className="mt-2"
               />
             )}
           </div>
