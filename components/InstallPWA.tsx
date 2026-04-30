@@ -21,23 +21,19 @@ const InstallPWA: React.FC = () => {
         const handleBeforeInstallPrompt = (e: Event) => {
             e.preventDefault();
             setDeferredPrompt(e);
-            
-            // Show prompt after a short delay if not already installed
-            if (!standalone) {
-                const hasDismissed = localStorage.getItem('pwa_install_dismissed');
-                if (!hasDismissed) {
-                    setTimeout(() => setIsVisible(true), 3000);
-                }
-            }
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-        // For iOS, we check manually if we should show the manual instructions
-        if (ios && !standalone) {
-            const hasDismissed = localStorage.getItem('pwa_install_dismissed');
+        // Always show if not standalone and hasn't been dismissed recently
+        if (!standalone) {
+            const hasDismissed = localStorage.getItem('pwa_install_dismissed_v2');
             if (!hasDismissed) {
-                setTimeout(() => setIsVisible(true), 4000);
+                const timer = setTimeout(() => setIsVisible(true), 3500);
+                return () => {
+                    clearTimeout(timer);
+                    window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+                };
             }
         }
 
@@ -61,7 +57,7 @@ const InstallPWA: React.FC = () => {
     const dismissPrompt = () => {
         setIsVisible(false);
         // Persist dismissal so we don't annoy the user
-        localStorage.setItem('pwa_install_dismissed', 'true');
+        localStorage.setItem('pwa_install_dismissed_v2', 'true');
     };
 
     if (isStandalone || !isVisible) return null;
@@ -93,7 +89,7 @@ const InstallPWA: React.FC = () => {
                         <div className="flex-1">
                             <h3 className="text-white font-bold text-sm">Instalar CMNL App</h3>
                             <p className="text-[#E8DCCF]/60 text-xs mt-0.5 leading-tight">
-                                Disfruta de la mejor experiencia sin usar el navegador.
+                                Disfruta de la experiencia moderna completa sin usar el navegador.
                             </p>
                         </div>
                     </div>
@@ -110,14 +106,25 @@ const InstallPWA: React.FC = () => {
                                     Selecciona <span className="font-bold flex items-center gap-1 text-[#9E7649]">"Añadir a pantalla de inicio" <PlusSquare size={14} /></span>
                                 </p>
                             </div>
-                        ) : (
+                        ) : deferredPrompt ? (
                             <button 
                                 onClick={handleInstallClick}
                                 className="w-full bg-[#9E7649] text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-[#8B653D] active:scale-95 transition-all shadow-lg"
                             >
                                 <Download size={18} />
-                                Instalar Aplicación
+                                Instalar Aplicación Nativa
                             </button>
+                        ) : (
+                            <div className="bg-black/20 rounded-xl p-3 border border-[#9E7649]/10">
+                                <p className="text-[#E8DCCF]/80 text-xs flex items-center gap-2">
+                                    <span className="flex items-center justify-center w-5 h-5 bg-white/10 rounded shrink-0">1</span>
+                                    Abre el menú del navegador (tres puntos)
+                                </p>
+                                <p className="text-[#E8DCCF]/80 text-xs flex items-center gap-2 mt-2">
+                                    <span className="flex items-center justify-center w-5 h-5 bg-white/10 rounded shrink-0">2</span>
+                                    Selecciona <span className="font-bold text-[#9E7649]">"Instalar aplicación"</span> o <span className="font-bold text-[#9E7649]">"Añadir a inicio"</span>
+                                </p>
+                            </div>
                         )}
                     </div>
                 </div>
