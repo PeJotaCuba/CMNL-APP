@@ -472,6 +472,10 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       const newItems = [...exportItems]; newItems[index] = { ...newItems[index], [field]: value }; setExportItems(newItems);
   };
 
+  const handleRemoveExportItem = (indexToRemove: number) => {
+      setExportItems(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   const handleShareWhatsApp = () => {
       let message = `*CRÉDITOS RCM*\n*Programa:* ${programName}\n*Fecha:* ${reportDate}\n\n`;
       exportItems.forEach(item => { message += `🎵 *${item.title}* - ${item.author} - ${item.performer}\n📂 _${item.path || 'Manual'}_\n\n`; });
@@ -728,7 +732,14 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
                         <div className="flex-1 overflow-y-auto p-4 space-y-4">
                             {exportItems.map((item, idx) => (
-                                <div key={item.id} className="p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
+                                <div key={item.id} className="relative p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
+                                    <button 
+                                        onClick={() => handleRemoveExportItem(idx)}
+                                        className="absolute top-2 right-2 text-red-500 hover:text-red-400 p-1 rounded-full hover:bg-red-500/10 transition-colors"
+                                        title="Eliminar tema"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                    </button>
                                     <div className="mb-2">
                                         <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Título</label>
                                         <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-sm font-bold outline-none focus:border-[#9E7649]" value={item.title} onChange={e => handleUpdateExportItem(idx, 'title', e.target.value)} />
@@ -855,7 +866,14 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
                         {exportItems.map((item, idx) => (
-                            <div key={item.id} className="p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
+                            <div key={item.id} className="relative p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
+                                <button 
+                                    onClick={() => handleRemoveExportItem(idx)}
+                                    className="absolute top-2 right-2 text-red-500 hover:text-red-400 p-1 rounded-full hover:bg-red-500/10 transition-colors"
+                                    title="Eliminar tema"
+                                >
+                                    <span className="material-symbols-outlined text-sm">delete</span>
+                                </button>
                                 <div className="mb-2">
                                     <label className="text-[10px] font-bold text-[#E8DCCF]/60 uppercase">Título</label>
                                     <input className="w-full p-1 border-b border-[#9E7649]/30 bg-transparent text-white text-sm font-bold outline-none focus:border-[#9E7649]" value={item.title} onChange={e => handleUpdateExportItem(idx, 'title', e.target.value)} />
