@@ -225,7 +225,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 icon={<LogIn size={20} />} 
                 label="Iniciar Sesión" 
                 onClick={() => { if(onLogin) onLogin(); onClose(); }} 
-                className="mt-2"
+                className="text-stone-300 hover:text-[#C69C6D] mt-2"
               />
             )}
           </div>
