@@ -4,6 +4,7 @@ export enum AppView {
   WORKER_HOME = 'WORKER_HOME',
   ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
   APP_EQUIPO = 'APP_EQUIPO',
+  APP_TOOLS = 'APP_TOOLS',
   
   // CMNL Apps
   APP_AGENDA = 'APP_AGENDA',
@@ -103,6 +104,7 @@ export interface User {
   password?: string;
   permissions?: UserPermissions;
   coordinatorSections?: string[];
+  tools?: string[];
 }
 
 export interface ProgramSchedule {

@@ -347,7 +347,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                             mobile: user?.mobile || '',
                             password: user?.password || '',
                             role: user?.classification || '',
-                            coordinatorSections: user?.coordinatorSections || []
+                            coordinatorSections: user?.coordinatorSections || [],
+                            tools: user?.tools || []
                           }); 
                         }}
                         className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
@@ -677,6 +678,38 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   })}
                 </div>
               </div>
+
+              {/* Section: Tools */}
+              <div>
+                <label className="block text-xs text-amber-500 mb-2 uppercase font-bold tracking-wider">Herramientas Autorizadas</label>
+                <div className="grid grid-cols-2 gap-2 bg-black/20 p-3 rounded-lg border border-amber-500/20">
+                  {[
+                    { id: 'script-format', label: 'Formato de Guion' },
+                    { id: 'inst-docs', label: 'Documentos Institucionales' },
+                    { id: 'inst-comm', label: 'Comunicación Institucional' },
+                    { id: 'maintenance', label: 'Mantenimiento' }
+                  ].map(tool => {
+                     const currentTools = editingMember.tools || [];
+                     return (
+                       <label key={tool.id} className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-black/20 rounded">
+                         <input 
+                           type="checkbox"
+                           checked={currentTools.includes(tool.id)}
+                           onChange={(e) => {
+                             if(e.target.checked) {
+                               setEditingMember({...editingMember, tools: [...currentTools, tool.id]});
+                             } else {
+                               setEditingMember({...editingMember, tools: currentTools.filter((t: string) => t !== tool.id)});
+                             }
+                           }}
+                           className="accent-amber-500 w-4 h-4"
+                         />
+                         <span className="text-white text-xs">{tool.label}</span>
+                       </label>
+                     );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -712,7 +745,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     password: editingMember.password,
                     classification: editingMember.role || u.classification || 'Usuario',
                     role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
-                    coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined
+                    coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
+                    tools: editingMember.tools
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -725,7 +759,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       password: editingMember.password || '1234',
                       classification: editingMember.role || 'Usuario',
                       role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
-                      coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined
+                      coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
+                      tools: editingMember.tools
                     });
                   }
                   

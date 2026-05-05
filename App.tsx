@@ -9,6 +9,7 @@ import GestionApp from './components/GestionApp';
 import GuionesApp, { PROGRAMS } from './components/GuionesApp';
 import AgendaApp from './components/agenda/AgendaApp';
 import MusicaApp from './components/MusicaApp';
+import ToolsSection from './components/ToolsSection';
 import { Reports } from './src/pages/Reports';
 import HistoryEvolutionView from './src/components/HistoryEvolutionView';
 import Sidebar from './components/Sidebar';
@@ -872,6 +873,8 @@ const App: React.FC = () => {
         return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_REPORTES:
         return <Reports />;
+      case AppView.APP_TOOLS:
+        return <ToolsSection onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_PROGRAMACION:

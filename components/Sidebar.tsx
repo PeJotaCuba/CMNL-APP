@@ -18,7 +18,8 @@ import {
   Home,
   Share2,
   MessageCircle,
-  Send
+  Send,
+  Wrench
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -142,6 +143,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             {currentUser ? (
               // Worker/Admin Apps
               <>
+                <SidebarItem 
+                  icon={<Wrench size={20} />} 
+                  label="Mis Herramientas" 
+                  onClick={() => handleNavigation(AppView.APP_TOOLS)} 
+                  className="bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 mb-1"
+                />
                 <SidebarItem 
                   icon={<CalendarDays size={20} />} 
                   label="Agenda" 
