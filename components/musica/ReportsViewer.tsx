@@ -180,9 +180,9 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                         const datePart = report.date.split('T')[0];
                                         const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
                                         const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
-
                                         const file = new File([report.pdfBlob], downloadName, { type: 'application/pdf' });
 
+                                        // Priorizar el envío del archivo PDF completo si el navegador lo permite
                                         if (navigator.canShare && navigator.canShare({ files: [file] })) {
                                             try {
                                                 await navigator.share({
@@ -194,21 +194,20 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                                 setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
                                                 return;
                                             } catch (error: any) {
-                                                // Ignore cancellation errors
-                                                if (error.name !== 'AbortError' && error.message !== 'Share canceled') {
-                                                    console.error('Error sharing:', error);
+                                                // Si el error no es cancelación del usuario, lo registramos
+                                                if (error.name !== 'AbortError') {
+                                                    console.error('Error sharing PDF file:', error);
                                                 }
+                                                // Si falla el share del archivo, caemos al respaldo de texto directo
                                             }
                                         }
-
-                                        // Fallback text
+                                        
+                                        // Texto de respaldo si no se puede enviar el archivo PDF
                                         let text = `Hola, este es el reporte musical del programa *${report.program}* del día *${datePart}*:\n\n`;
                                         if (report.items && report.items.length > 0) {
                                             report.items.forEach((item, index) => {
                                                 text += `${index + 1}. ${item.title} - ${item.performer} (${item.author})\n`;
                                             });
-                                        } else {
-                                            text += `(El reporte en PDF ha sido generado, por favor solicítalo si necesitas el archivo adjunto.)`;
                                         }
                                         
                                         if (!phone.startsWith('53')) {
