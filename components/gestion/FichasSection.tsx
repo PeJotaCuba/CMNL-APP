@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import CMNLHeader from '../CMNLHeader';
 import { ProgramFicha } from '../../types';
+import { openWhatsApp } from '../../utils/whatsappUtils';
 import { Edit2, Upload, Save, X, Trash2, Plus, Share2, Download, Eraser } from 'lucide-react';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -305,7 +306,7 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                                   <button 
                                       onClick={() => {
                                           const text = `Ficha Técnica: ${selectedFicha.name}\nFrecuencia: ${selectedFicha.frequency}\nHorario: ${selectedFicha.schedule}\nPerfil: ${selectedFicha.profile}`;
-                                          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                          openWhatsApp(text);
                                       }}
                                       className="p-2 bg-green-900/40 text-green-400 rounded-lg hover:bg-green-900/60 transition-colors shadow-lg" title="Compartir WhatsApp"
                                   >
@@ -333,7 +334,7 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                                   <button 
                                       onClick={() => {
                                           const text = `Ficha Técnica: ${selectedFicha.name}\nFrecuencia: ${selectedFicha.frequency}\nHorario: ${selectedFicha.schedule}\nPerfil: ${selectedFicha.profile}`;
-                                          window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                          openWhatsApp(text);
                                       }}
                                       className="p-2 bg-green-900/40 text-green-400 rounded-lg hover:bg-green-900/60 transition-colors shadow-lg" title="Compartir WhatsApp"
                                   >

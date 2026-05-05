@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import CMNLHeader from '../CMNLHeader';
 import { ProgramCatalog, RolePaymentInfo } from '../../types';
+import { openWhatsApp } from '../../utils/whatsappUtils';
 import { Edit2, Upload, Save, X, Share2, Download, Eraser, Trash2 } from 'lucide-react';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
@@ -244,7 +245,7 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
                                     <button 
                                         onClick={() => {
                                             const text = `Catálogo de Pago: ${prog.name}\nRoles: ${prog.roles.map(r => r.role).join(', ')}`;
-                                            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                            openWhatsApp(text);
                                         }}
                                         className="p-1.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60 transition-all" title="Compartir WhatsApp"
                                     >
@@ -269,7 +270,7 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
                                     <button 
                                         onClick={() => {
                                             const text = `Catálogo de Pago: ${prog.name}\nRoles: ${prog.roles.map(r => r.role).join(', ')}`;
-                                            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                            openWhatsApp(text);
                                         }}
                                         className="p-1.5 bg-green-900/40 text-green-400 rounded hover:bg-green-900/60 transition-all" title="Compartir WhatsApp"
                                     >

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Track, User, DEFAULT_PROGRAMS_LIST } from './types';
+import { openWhatsApp } from '../../utils/whatsappUtils';
 import * as XLSX from 'xlsx';
 
 const PROGRAMS_KEY = 'rcm_programs_list';
@@ -174,8 +175,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
   const handleShareWhatsApp = (u: User) => {
       if (!u.phone) { return alert("Este usuario no tiene número de móvil registrado."); }
       const message = `Saludos. Tus credenciales APP-RCM son\nUsuario: ${u.username}\nPIN: ${u.password}\n\nDisfruta de nuestras apps en los siguientes enlaces:\nAgenda https://rcmagenda.vercel.app/#/home\nMúsica https://rcm-musica.vercel.app/`;
-      const url = `https://wa.me/${u.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
-      window.open(url, '_blank');
+      openWhatsApp(message, u.phone);
   };
 
   const getRoleLabel = (role: string) => {

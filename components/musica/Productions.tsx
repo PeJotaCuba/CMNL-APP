@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
+import { openWhatsApp } from '../../utils/whatsappUtils';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import { ProgramFicha } from '../../types';
 import * as XLSX from 'xlsx';
@@ -1299,7 +1300,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                     <button onClick={() => handleExportAuditDOCX(data)} className="bg-[#9E7649] text-white px-4 py-2 rounded-lg text-sm font-bold">Generar DOCX</button>
                                     <button onClick={() => {
                                         let message = `*BALANCE ${data.program} - ${selectedMonthStr}*\n\n*Plan:* ${data.required}\n*Real:* ${data.completed}\n*Resto:* ${data.missing}\n\n*Días faltantes:*\n${data.missingDates.join('\n')}`;
-                                        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+                                        openWhatsApp(message);
                                     }} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Compartir WhatsApp</button>
                                 </div>
                             </div>

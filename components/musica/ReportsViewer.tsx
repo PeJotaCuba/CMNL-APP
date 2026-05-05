@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Report, User } from './types';
 import { loadReportsFromDB, deleteReportFromDB, updateReportStatus, clearReportsDB } from './services/db';
+import { openWhatsApp } from '../../utils/whatsappUtils';
 
 interface ReportsViewerProps {
     users?: User[]; 
@@ -192,8 +193,11 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                                 await updateReportStatus(report.id, { sent: true });
                                                 setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
                                                 return;
-                                            } catch (error) {
-                                                console.error('Error sharing:', error);
+                                            } catch (error: any) {
+                                                // Ignore cancellation errors
+                                                if (error.name !== 'AbortError' && error.message !== 'Share canceled') {
+                                                    console.error('Error sharing:', error);
+                                                }
                                             }
                                         }
 
@@ -211,8 +215,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                             phone = '53' + phone;
                                         }
                                         
-                                        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
-                                        window.open(whatsappUrl, '_blank');
+                                        openWhatsApp(text, phone);
                                         
                                         await updateReportStatus(report.id, { sent: true });
                                         setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));

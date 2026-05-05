@@ -1,4 +1,5 @@
 import React from 'react';
+import { openWhatsApp } from '../utils/whatsappUtils';
 import { Share2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -19,7 +20,7 @@ export const UpdateDetailsModal: React.FC<UpdateDetailsModalProps> = ({
 
     const handleShare = () => {
         const text = `Actualización de Datos CMNL completada exitosamente.\n\nDetalles:\n${details}\n\nIngresa a la app para ver los cambios.`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        openWhatsApp(text);
     };
 
     return (

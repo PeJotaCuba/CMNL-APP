@@ -3,6 +3,7 @@ import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2 } fro
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
 import { User, UserClassification } from '../../types';
+import { openWhatsApp } from '../../utils/whatsappUtils';
 
 interface TeamMember {
   id: string;
@@ -325,7 +326,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                           const user = users.find(u => u.id === member.id);
                           if (user) {
                             const message = `Hola ${member.name}, aquí tienes tus credenciales para CMNL App:\n\nUsuario: ${user.username}\nMóvil: ${user.mobile}\nContraseña: ${user.password}\nPIN: ${user.password.slice(-4)}\n\nAccede aquí: https://cmnl-app.vercel.app/`;
-                            window.open(`https://wa.me/${user.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+                            openWhatsApp(message, user.mobile);
                           } else {
                             alert('No se encontró información de usuario para este miembro.');
                           }

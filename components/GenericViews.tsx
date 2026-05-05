@@ -459,7 +459,7 @@ export const PlaceholderView: React.FC<ViewProps> = ({ title, subtitle, onBack, 
                         Unirse a Comunidad CMNL
                      </a>
                      <a 
-                        href="https://wa.me/5354413935"
+                        href="https://api.whatsapp.com/send?phone=5354413935"
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="bg-white text-[#3E1E16] px-4 py-2 rounded-xl shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#E8DCCF] transition-colors"

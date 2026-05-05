@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppView, User } from '../types';
+import { openWhatsApp } from '../utils/whatsappUtils';
 import { 
   X, 
   ScrollText, 
@@ -74,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const shareUrl = "https://cmnl-app.vercel.app/";
 
   const handleShareWhatsApp = () => {
-      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank');
+      openWhatsApp(shareText + ' ' + shareUrl);
       setShowShare(false);
   };
 

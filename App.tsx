@@ -457,6 +457,8 @@ const App: React.FC = () => {
       dataToExport.habitualModes = allHabitualModes;
       
       dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
+      dataToExport.transmissionInterruptions = getLocal('rcm_transmission_interruptions') || [];
+      dataToExport.transmissionHistorical = getLocal('rcm_transmission_historical') || [];
       
       // Payment configs
       dataToExport.paymentConfigs = {
@@ -648,6 +650,8 @@ const App: React.FC = () => {
                   }
                   
                   if (json.transmissionConfig) setLocal('rcm_transmission_config', json.transmissionConfig);
+                  if (json.transmissionInterruptions) mergeData('rcm_transmission_interruptions', json.transmissionInterruptions, 'id');
+                  if (json.transmissionHistorical) mergeData('rcm_transmission_historical', json.transmissionHistorical, 'month');
                   if (json.paymentConfigs) {
                       Object.entries(json.paymentConfigs).forEach(([key, value]) => setLocal(key, value));
                   }

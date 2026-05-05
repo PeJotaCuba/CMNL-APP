@@ -12,6 +12,7 @@ import ReportsViewer from './musica/ReportsViewer';
 import Guide from './musica/Guide';
 import { loadTracksFromDB, saveTracksToDB, saveReportToDB, loadReportsFromDB, loadProductionsFromDB, saveProductionToDB, saveSelectionsToDB, loadSelectionsFromDB, saveSavedSelectionsListToDB, loadSavedSelectionsListFromDB } from './musica/services/db'; 
 import { generateReportPDF } from './musica/services/pdfService';
+import { openWhatsApp } from '../utils/whatsappUtils';
 
 const USERS_KEY = 'rcm_users_db';
 const PROGRAMS_KEY = 'rcm_programs_list';
@@ -479,7 +480,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const handleShareWhatsApp = () => {
       let message = `*CRÉDITOS RCM*\n*Programa:* ${programName}\n*Fecha:* ${reportDate}\n\n`;
       exportItems.forEach(item => { message += `🎵 *${item.title}* - ${item.author} - ${item.performer}\n📂 _${item.path || 'Manual'}_\n\n`; });
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      openWhatsApp(message);
   };
 
   const handleDownloadReport = async () => {

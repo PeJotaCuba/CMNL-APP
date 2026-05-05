@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { openWhatsApp } from '../../../utils/whatsappUtils';
 import { useNavigate } from 'react-router-dom';
 import { UserRole, Program, DailyContent, UserProfile, DayThemeData, EfemeridesData, ConmemoracionesData } from '../types.ts';
 import { getWeeksInMonth, DayInfo, getCurrentDateInfo } from '../utils/dateUtils.ts';
@@ -135,8 +136,7 @@ const Editorial: React.FC<EditorialProps> = ({
           phone = '53' + phone;
       }
       
-      const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
+      openWhatsApp(message, phone);
       
       setCommentModal(null);
       setCommentText('');
