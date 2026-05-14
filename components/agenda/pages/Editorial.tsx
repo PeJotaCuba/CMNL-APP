@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { UserRole, Program, DailyContent, UserProfile, DayThemeData, EfemeridesData, ConmemoracionesData } from '../types.ts';
 import { getWeeksInMonth, DayInfo, getCurrentDateInfo } from '../utils/dateUtils.ts';
 import { MONTHS_DATA } from '../constants.ts';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType } from "docx";
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, TableLayoutType, VerticalAlign } from "docx";
 import AgendaHeader from '../components/AgendaHeader';
 
 interface EditorialProps {
@@ -113,6 +113,7 @@ const Editorial: React.FC<EditorialProps> = ({
   
   const [progSearch, setProgSearch] = useState(''); 
   const [viewModal, setViewModal] = useState<{ title: string, content: string } | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -416,28 +417,69 @@ const Editorial: React.FC<EditorialProps> = ({
 
       // TÍTULO DE LA EMISORA
       docChildren.push(new Paragraph({
-          children: [new TextRun({ text: "RADIO CIUDAD MONUMENTO", bold: true, size: 28 })],
+          children: [new TextRun({ text: "RADIO CIUDAD MONUMENTO", bold: true, size: 36 })],
           alignment: AlignmentType.CENTER,
-          spacing: { after: 100 }
+          spacing: { after: 120 }
       }));
 
       // SUBTÍTULO
       docChildren.push(new Paragraph({
-          children: [new TextRun({ text: "AGENDA EDITORIAL", bold: true, size: 24 })],
+          children: [new TextRun({ text: "AGENDA EDITORIAL", bold: true, size: 32 })],
           alignment: AlignmentType.CENTER,
-          spacing: { after: 200 }
+          spacing: { after: 240 }
       }));
 
       const headerTable = new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          borders: { top: { style: BorderStyle.SINGLE, size: 1 }, bottom: { style: BorderStyle.SINGLE, size: 1 }, left: { style: BorderStyle.SINGLE, size: 1 }, right: { style: BorderStyle.SINGLE, size: 1 }, insideHorizontal: { style: BorderStyle.SINGLE, size: 1 }, insideVertical: { style: BorderStyle.SINGLE, size: 1 } },
+          width: { size: 5000, type: WidthType.PERCENTAGE },
+          alignment: AlignmentType.LEFT,
+          borders: { 
+            top: { style: BorderStyle.SINGLE, size: 4 }, 
+            bottom: { style: BorderStyle.SINGLE, size: 4 }, 
+            left: { style: BorderStyle.SINGLE, size: 4 }, 
+            right: { style: BorderStyle.SINGLE, size: 4 }, 
+            insideHorizontal: { style: BorderStyle.SINGLE, size: 2 }, 
+            insideVertical: { style: BorderStyle.SINGLE, size: 2 } 
+          },
           rows: [
-              new TableRow({ children: [ new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "MES", bold: true })] })] }), new TableCell({ children: [new Paragraph({ text: currentMonthLabel })] }), new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Semana", bold: true })] })] }), new TableCell({ children: [new Paragraph({ text: weekNumber })] }) ] }),
-              new TableRow({ children: [ new TableCell({ children: [new Paragraph({ text: dateRange, alignment: AlignmentType.CENTER })], columnSpan: 4 }) ] })
+              new TableRow({ 
+                children: [ 
+                  new TableCell({ 
+                    children: [new Paragraph({ children: [new TextRun({ text: "MES", bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
+                    verticalAlign: VerticalAlign.CENTER,
+                    width: { size: 1000, type: WidthType.PERCENTAGE },
+                    shading: { fill: "F2F2F2" }
+                  }), 
+                  new TableCell({ 
+                    children: [new Paragraph({ children: [new TextRun({ text: currentMonthLabel, bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
+                    verticalAlign: VerticalAlign.CENTER,
+                    width: { size: 1500, type: WidthType.PERCENTAGE }
+                  }), 
+                  new TableCell({ 
+                    children: [new Paragraph({ children: [new TextRun({ text: "Semana", bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
+                    verticalAlign: VerticalAlign.CENTER,
+                    width: { size: 1000, type: WidthType.PERCENTAGE },
+                    shading: { fill: "F2F2F2" }
+                  }), 
+                  new TableCell({ 
+                    children: [new Paragraph({ children: [new TextRun({ text: weekNumber, bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
+                    verticalAlign: VerticalAlign.CENTER,
+                    width: { size: 1500, type: WidthType.PERCENTAGE }
+                  }) 
+                ] 
+              }),
+              new TableRow({ 
+                children: [ 
+                  new TableCell({ 
+                    children: [new Paragraph({ children: [new TextRun({ text: dateRange, bold: true, size: 28 })], alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 } })], 
+                    columnSpan: 4,
+                    width: { size: 5000, type: WidthType.PERCENTAGE }
+                  }) 
+                ] 
+              })
           ]
       });
       docChildren.push(headerTable);
-      docChildren.push(new Paragraph({ text: "" }));
+      docChildren.push(new Paragraph({ text: "", spacing: { after: 200 } }));
 
       for (const day of visibleDays) {
           if (!day) continue;
@@ -455,31 +497,50 @@ const Editorial: React.FC<EditorialProps> = ({
           const efemeridesParagraphs: Paragraph[] = [];
           if (dayEfemerides.length > 0) {
               dayEfemerides.forEach(e => {
-                  efemeridesParagraphs.push(new Paragraph({ children: [ new TextRun({ text: `${e.event}: `, bold: true }), new TextRun({ text: e.description }) ], spacing: { after: 100 } }));
+                  efemeridesParagraphs.push(new Paragraph({ 
+                      children: [ 
+                        new TextRun({ text: `${e.event}: `, bold: true, size: 24 }), 
+                        new TextRun({ text: e.description, size: 24 }) 
+                      ], 
+                      spacing: { after: 80, before: 80 } 
+                  }));
               });
           } else {
-              efemeridesParagraphs.push(new Paragraph(" "));
+              efemeridesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "No se reportan efemérides", size: 20, italics: true })], alignment: AlignmentType.CENTER }));
           }
 
           const conmemoracionesParagraphs: Paragraph[] = [];
           if (dayConmemoraciones.length > 0) {
               dayConmemoraciones.forEach(c => {
-                  if (c.national) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "Nacional: ", bold: true }), new TextRun(c.national)], spacing: { after: 100 } }));
-                  if (c.international) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "Internacional: ", bold: true }), new TextRun(c.international)], spacing: { after: 100 } }));
+                  if (c.national) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "Nacional: ", bold: true, size: 24 }), new TextRun({ text: c.national, size: 24 })], spacing: { after: 80, before: 80 } }));
+                  if (c.international) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "Internacional: ", bold: true, size: 24 }), new TextRun({ text: c.international, size: 24 })], spacing: { after: 80, before: 80 } }));
               });
           }
-          if (conmemoracionesParagraphs.length === 0) conmemoracionesParagraphs.push(new Paragraph(" "));
+          if (conmemoracionesParagraphs.length === 0) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "No se reportan conmemoraciones", size: 20, italics: true })], alignment: AlignmentType.CENTER }));
 
           const dayRows: TableRow[] = [];
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${day.name} ${day.date}`, bold: true })], alignment: AlignmentType.CENTER })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ text: "EFEMÉRIDES", alignment: AlignmentType.CENTER })], columnSpan: 2 })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: efemeridesParagraphs, columnSpan: 2 })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ text: "CONMEMORACIONES", alignment: AlignmentType.CENTER })], columnSpan: 2 })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: conmemoracionesParagraphs, columnSpan: 2 })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ text: "TEMÁTICA CENTRAL", alignment: AlignmentType.CENTER })], columnSpan: 2 })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ text: dayTheme || " ", alignment: AlignmentType.LEFT })], columnSpan: 2 })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${day.name} ${day.date}`, bold: true, size: 32 })], alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 } })], columnSpan: 2, shading: { fill: "D9D9D9" } })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "EFEMÉRIDES", bold: true, size: 24 })], alignment: AlignmentType.CENTER, spacing: { before: 60, after: 60 } })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: efemeridesParagraphs, columnSpan: 2, margins: { left: 200, right: 200, top: 100, bottom: 100 } })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "CONMEMORACIONES", bold: true, size: 24 })], alignment: AlignmentType.CENTER, spacing: { before: 60, after: 60 } })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: conmemoracionesParagraphs, columnSpan: 2, margins: { left: 200, right: 200, top: 100, bottom: 100 } })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "TEMÁTICA CENTRAL", bold: true, size: 24 })], alignment: AlignmentType.CENTER, spacing: { before: 60, after: 60 } })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
+          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: dayTheme || "Por definir", size: 30, italics: !dayTheme })], alignment: AlignmentType.LEFT, spacing: { before: 120, after: 120 } })], columnSpan: 2, margins: { left: 200, right: 200 } })] }));
 
-          dayRows.push(new TableRow({ children: [ new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "PROGRAMA", bold: true })] })], width: { size: 40, type: WidthType.PERCENTAGE } }), new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Temática", bold: true })], alignment: AlignmentType.CENTER })], width: { size: 60, type: WidthType.PERCENTAGE } }) ] }));
+          dayRows.push(new TableRow({ 
+            children: [ 
+              new TableCell({ 
+                children: [new Paragraph({ children: [new TextRun({ text: "PROGRAMA", bold: true, size: 24 })], alignment: AlignmentType.CENTER })], 
+                width: { size: 1750, type: WidthType.PERCENTAGE },
+                shading: { fill: "F2F2F2" }
+              }), 
+              new TableCell({ 
+                children: [new Paragraph({ children: [new TextRun({ text: "TEMÁTICA", bold: true, size: 24 })], alignment: AlignmentType.CENTER })], 
+                width: { size: 3250, type: WidthType.PERCENTAGE },
+                shading: { fill: "F2F2F2" }
+              }) 
+            ] 
+          }));
 
           // Filtro de programas también aquí para la exportación
           const dayProgs = searchablePrograms.filter(p => p.days.includes(day.name));
@@ -488,16 +549,55 @@ const Editorial: React.FC<EditorialProps> = ({
           if (dayProgs.length > 0) {
               dayProgs.forEach(p => {
                   const data = getEffectiveData(p, selectedWeekId!, day.name);
-                  dayRows.push(new TableRow({ children: [ new TableCell({ children: [new Paragraph(p.name)] }), new TableCell({ children: [new Paragraph(data.theme || "-")] }) ] }));
+                  dayRows.push(new TableRow({ 
+                    children: [ 
+                      new TableCell({ 
+                        children: [new Paragraph({ children: [new TextRun({ text: p.name, bold: true, size: 28 })], spacing: { before: 120, after: 120 } })], 
+                        width: { size: 1750, type: WidthType.PERCENTAGE },
+                        margins: { left: 100 }
+                      }), 
+                      new TableCell({ 
+                        children: [new Paragraph({ children: [new TextRun({ text: data.theme || "-", size: 28 })], spacing: { before: 120, after: 120 } })], 
+                        width: { size: 3250, type: WidthType.PERCENTAGE },
+                        margins: { left: 100, right: 100 }
+                      }) 
+                    ] 
+                  }));
               });
           } else {
-              dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph("Sin programas asignados")] }), new TableCell({ children: [new Paragraph("-")] })] }));
+              dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Sin programas asignados", italics: true, size: 20 })], alignment: AlignmentType.CENTER })], columnSpan: 2 })] }));
           }
-          docChildren.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: dayRows, borders: { top: { style: BorderStyle.SINGLE, size: 1 }, bottom: { style: BorderStyle.SINGLE, size: 1 }, left: { style: BorderStyle.SINGLE, size: 1 }, right: { style: BorderStyle.SINGLE, size: 1 }, insideHorizontal: { style: BorderStyle.SINGLE, size: 1 }, insideVertical: { style: BorderStyle.SINGLE, size: 1 } } }));
-          docChildren.push(new Paragraph({ text: "" }));
+          docChildren.push(new Table({ 
+              width: { size: 5000, type: WidthType.PERCENTAGE }, 
+              alignment: AlignmentType.LEFT,
+              rows: dayRows, 
+              borders: { 
+                  top: { style: BorderStyle.SINGLE, size: 6 }, 
+                  bottom: { style: BorderStyle.SINGLE, size: 6 }, 
+                  left: { style: BorderStyle.SINGLE, size: 6 }, 
+                  right: { style: BorderStyle.SINGLE, size: 6 }, 
+                  insideHorizontal: { style: BorderStyle.SINGLE, size: 2 }, 
+                  insideVertical: { style: BorderStyle.SINGLE, size: 2 } 
+              } 
+          }));
+          docChildren.push(new Paragraph({ text: "", spacing: { after: 300 } }));
       }
 
-      const doc = new Document({ sections: [{ children: docChildren }] });
+      const doc = new Document({ 
+        sections: [{ 
+          properties: {
+            page: {
+              margin: {
+                top: 720,
+                right: 720,
+                bottom: 720,
+                left: 720,
+              },
+            },
+          },
+          children: docChildren 
+        }] 
+      });
       const blob = await Packer.toBlob(doc);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -762,6 +862,16 @@ const Editorial: React.FC<EditorialProps> = ({
                         <span className="material-symbols-outlined text-sm">description</span> Exportar Word
                     </button>
                     
+                    {/* Botón Compartir (WhatsApp/Email) */}
+                    {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
+                        <button 
+                            onClick={() => setShowShareModal(true)} 
+                            className="bg-primary/20 hover:bg-primary/30 border border-primary/30 text-white py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                        >
+                            <span className="material-symbols-outlined text-sm">share</span> Compartir
+                        </button>
+                    )}
+                    
                     {/* Botón Cargar TXT (Solo Admin) */}
                     {user.role === UserRole.ADMIN && (
                         <>
@@ -793,6 +903,17 @@ const Editorial: React.FC<EditorialProps> = ({
                     </button>
                 )}
             </div>
+            {showShareModal && activeWeek && (
+                <ShareAgendaModal 
+                    activeWeek={activeWeek}
+                    programs={programs}
+                    users={users}
+                    onClose={() => setShowShareModal(false)}
+                    monthName={currentMonthLabel}
+                    getEffectiveData={getEffectiveData}
+                    selectedWeekId={selectedWeekId}
+                />
+            )}
         </div>
       );
   }
@@ -855,3 +976,181 @@ const Editorial: React.FC<EditorialProps> = ({
 };
 
 export default Editorial;
+
+const ShareAgendaModal: React.FC<{
+  activeWeek: any;
+  programs: Program[];
+  users: UserProfile[];
+  onClose: () => void;
+  monthName: string;
+  getEffectiveData: (p: Program, weekId: string, dayName: string) => DailyContent;
+  selectedWeekId: string;
+}> = ({ activeWeek, programs, users, onClose, monthName, getEffectiveData, selectedWeekId }) => {
+    const [channel, setChannel] = useState<'whatsapp' | 'email' | null>(null);
+    const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+    const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
+    
+    const targetUsers = useMemo(() => {
+        return users.filter(u => {
+            const classification = (u as any).classification?.toLowerCase() || '';
+            const specialty = (u as any).specialty?.toLowerCase() || '';
+            return classification.includes('guionista') || classification.includes('asesor') || classification.includes('especialista') ||
+                   specialty.includes('guionista') || specialty.includes('asesor') || specialty.includes('especialista');
+        });
+    }, [users]);
+
+    const handleToggleAllRecipients = () => {
+        if (selectedRecipients.length === targetUsers.length) setSelectedRecipients([]);
+        else setSelectedRecipients(targetUsers.map(u => u.id));
+    };
+
+    const handleToggleAllPrograms = () => {
+        if (selectedPrograms.length === programs.length) setSelectedPrograms([]);
+        else setSelectedPrograms(programs.map(p => p.id));
+    };
+
+    const handleShare = () => {
+        if (selectedRecipients.length === 0 || selectedPrograms.length === 0 || !channel) return;
+
+        const recipientUsers = targetUsers.filter(u => selectedRecipients.includes(u.id));
+        const filteredProgs = programs.filter(p => selectedPrograms.includes(p.id));
+
+        let content = `*AGENDA EDITORIAL - CMNL*\n`;
+        content += `*MES:* ${monthName}\n`;
+        content += `*${activeWeek.label}* (${activeWeek.start} al ${activeWeek.end})\n\n`;
+
+        activeWeek.days.forEach((day: any) => {
+            if (!day) return;
+            const dayProgs = filteredProgs.filter(p => p.days.includes(day.name));
+            if (dayProgs.length === 0) return;
+
+            content += `*${day.name} ${day.date}:*\n`;
+            dayProgs.forEach(p => {
+                const data = getEffectiveData(p, selectedWeekId, day.name);
+                if (data.theme) {
+                    content += `- ${p.name}: ${data.theme}\n`;
+                }
+            });
+            content += `\n`;
+        });
+
+        if (channel === 'whatsapp') {
+            recipientUsers.forEach(u => {
+                const phone = (u as any).mobile || u.phone;
+                if (phone) openWhatsApp(content, phone);
+            });
+        } else {
+            const emails = recipientUsers.map(u => (u as any).email).filter(e => e);
+            if (emails.length > 0) {
+                const subject = encodeURIComponent(`Agenda Editorial CMNL - ${monthName} ${activeWeek.label}`);
+                const body = encodeURIComponent(content.replace(/\*/g, ''));
+                window.open(`mailto:${emails.join(',')}?subject=${subject}&body=${body}`);
+            } else {
+                alert("No se encontraron correos seleccionados.");
+            }
+        }
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
+            <div className="bg-card-dark w-full max-w-md rounded-[2.5rem] border border-white/10 shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="p-6 border-b border-white/5 bg-card-dark">
+                    <h3 className="text-white font-bold text-lg">Compartir Agenda</h3>
+                    <p className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1">Selecciona canal, destinatarios y programas</p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+                    {/* Canal selection */}
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest ml-1">1. Seleccionar Canal</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button 
+                                onClick={() => setChannel('whatsapp')}
+                                className={`py-4 rounded-2xl border flex flex-col items-center gap-2 transition-all ${channel === 'whatsapp' ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                            >
+                                <span className="material-symbols-outlined text-2xl">chat</span>
+                                <span className="font-bold text-[10px] uppercase">WhatsApp</span>
+                            </button>
+                            <button 
+                                onClick={() => setChannel('email')}
+                                className={`py-4 rounded-2xl border flex flex-col items-center gap-2 transition-all ${channel === 'email' ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'}`}
+                            >
+                                <span className="material-symbols-outlined text-2xl">mail</span>
+                                <span className="font-bold text-[10px] uppercase">Gmail</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Recipients selection */}
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-end px-1">
+                            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">2. Destinatarios ({targetUsers.length})</label>
+                            <button onClick={handleToggleAllRecipients} className="text-[9px] font-bold text-primary uppercase">
+                                {selectedRecipients.length === targetUsers.length ? "Deseleccionar" : "Seleccionar Todos"}
+                            </button>
+                        </div>
+                        <div className="bg-black/20 rounded-2xl border border-white/5 p-2 max-h-40 overflow-y-auto no-scrollbar">
+                            {targetUsers.length > 0 ? targetUsers.map(u => (
+                                <label key={u.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedRecipients.includes(u.id)}
+                                        onChange={() => {
+                                            if (selectedRecipients.includes(u.id)) setSelectedRecipients(selectedRecipients.filter(id => id !== u.id));
+                                            else setSelectedRecipients([...selectedRecipients, u.id]);
+                                        }}
+                                        className="accent-primary size-4"
+                                    />
+                                    <div className="flex-1">
+                                        <p className="text-white text-xs font-bold">{u.name}</p>
+                                        <p className="text-[9px] text-text-secondary uppercase">{(u as any).classification || "Usuario"}</p>
+                                    </div>
+                                </label>
+                            )) : (
+                                <p className="text-center py-4 text-[10px] text-white/30 uppercase italic">No se encontraron guionistas o asesores</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Programs selection */}
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-end px-1">
+                            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">3. Programas ({programs.length})</label>
+                            <button onClick={handleToggleAllPrograms} className="text-[9px] font-bold text-primary uppercase">
+                                {selectedPrograms.length === programs.length ? "Deseleccionar" : "Seleccionar Todos"}
+                            </button>
+                        </div>
+                        <div className="bg-black/20 rounded-2xl border border-white/5 p-2 max-h-40 overflow-y-auto no-scrollbar">
+                            {programs.map(p => (
+                                <label key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedPrograms.includes(p.id)}
+                                        onChange={() => {
+                                            if (selectedPrograms.includes(p.id)) setSelectedPrograms(selectedPrograms.filter(id => id !== p.id));
+                                            else setSelectedPrograms([...selectedPrograms, p.id]);
+                                        }}
+                                        className="accent-primary size-4"
+                                    />
+                                    <span className="text-white text-xs font-medium">{p.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-6 border-t border-white/5 bg-card-dark flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all">Cancelar</button>
+                    <button 
+                        onClick={handleShare} 
+                        disabled={!channel || selectedRecipients.length === 0 || selectedPrograms.length === 0}
+                        className="flex-1 py-4 bg-primary hover:bg-primary-dark text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all disabled:opacity-50"
+                    >
+                        Compartir
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};

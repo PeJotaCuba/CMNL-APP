@@ -12,6 +12,7 @@ interface TeamMember {
   level: string;
   photoUrl?: string;
   info?: string;
+  email?: string;
   habitualPrograms?: string[];
   habitualProgramsByRole?: Record<string, string[]>;
 }
@@ -155,7 +156,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               mobile,
               password,
               role: finalRole,
-              classification: (role || (userIdx >= 0 ? updatedUsers[userIdx].classification : 'Usuario')) as UserClassification
+              classification: (role || (userIdx >= 0 ? updatedUsers[userIdx].classification : 'Usuario')) as UserClassification,
+              specialty: specialty
             };
 
             if (userIdx >= 0) {
@@ -345,6 +347,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                             ...member,
                             username: user?.username || '',
                             mobile: user?.mobile || '',
+                            email: user?.email || member.email || '',
                             password: user?.password || '',
                             role: user?.classification || '',
                             coordinatorSections: user?.coordinatorSections || [],
@@ -576,6 +579,16 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                         className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
                       />
                     </div>
+                    <div>
+                      <label className="block text-xs text-[#9E7649] mb-1 uppercase">Email</label>
+                      <input 
+                        type="email" 
+                        value={editingMember.email || ''}
+                        onChange={e => setEditingMember({...editingMember, email: e.target.value})}
+                        className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                        placeholder="ejemplo@correo.com"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs text-[#9E7649] mb-1 uppercase">Contraseña</label>
@@ -731,6 +744,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     specialty: cleanJoined(editingMember.specialty),
                     level: cleanJoined(editingMember.level),
                     info: editingMember.info,
+                    email: editingMember.email,
                     photoUrl: editingMember.photoUrl,
                     habitualProgramsByRole: editingMember.habitualProgramsByRole
                   } : m);
@@ -742,8 +756,10 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     name: editingMember.name,
                     username: editingMember.username,
                     mobile: editingMember.mobile,
+                    email: editingMember.email,
                     password: editingMember.password,
                     classification: editingMember.role || u.classification || 'Usuario',
+                    specialty: cleanJoined(editingMember.specialty),
                     role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
                     coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
                     tools: editingMember.tools
@@ -756,8 +772,10 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       name: editingMember.name,
                       username: editingMember.username || editingMember.id,
                       mobile: editingMember.mobile || '',
+                      email: editingMember.email || '',
                       password: editingMember.password || '1234',
                       classification: editingMember.role || 'Usuario',
+                      specialty: cleanJoined(editingMember.specialty),
                       role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
                       coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
                       tools: editingMember.tools

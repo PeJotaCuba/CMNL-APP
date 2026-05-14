@@ -7,13 +7,13 @@ export const openWhatsApp = (text: string, phone: string = '') => {
   const encodedText = encodeURIComponent(text);
   const cleanPhone = phone.replace(/\D/g, '');
   
-  // Use api.whatsapp.com for broad compatibility
-  const webUrl = cleanPhone 
-    ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
-    : `https://api.whatsapp.com/send?text=${encodedText}`;
+  // Use wa.me for modern and broad compatibility (handles selection between WhatsApp and Business better)
+  const universalUrl = cleanPhone 
+    ? `https://wa.me/${cleanPhone}?text=${encodedText}`
+    : `https://wa.me/?text=${encodedText}`;
     
-  // On mobile, sometimes the protocol whatsapp:// works better for app selection (Business/Personal)
-  const mobileUrl = cleanPhone
+  // On mobile, sometimes the protocol whatsapp:// works better specifically for opening the app directly
+  const protocolUrl = cleanPhone
     ? `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`
     : `whatsapp://send?text=${encodedText}`;
 
@@ -21,17 +21,17 @@ export const openWhatsApp = (text: string, phone: string = '') => {
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   
   if (isMobile) {
-    // Try the protocol first, then fallback to web URL
-    const start = Date.now();
-    window.location.href = mobileUrl;
+    // Try https://wa.me first as it is the most reliable way to trigger the app chooser
+    // including WhatsApp Business.
+    window.location.href = universalUrl;
     
-    // If after 500ms nothing happened, try the web URL as backup
+    // Safety fallback just in case
     setTimeout(() => {
-      if (Date.now() - start < 1000) {
-        window.open(webUrl, '_blank');
+      if (document.visibilityState === 'visible') {
+        window.open(universalUrl, '_blank');
       }
-    }, 500);
+    }, 1500);
   } else {
-    window.open(webUrl, '_blank');
+    window.open(universalUrl, '_blank');
   }
 };

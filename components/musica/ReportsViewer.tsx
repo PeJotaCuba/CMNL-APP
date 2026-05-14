@@ -169,12 +169,16 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
                                 <button 
                                     onClick={async () => {
-                                        const adminUser = users.find(u => u.role === 'admin');
-                                        let phone = adminUser?.phone || '54413935';
+                                        const adminUser = users.find(u => u.role === 'admin' || u.classification === 'Administrador');
+                                        let phone = adminUser?.phone || adminUser?.mobile || '54413935';
                                         
                                         if (!phone) {
                                             alert('No se encontró el número de teléfono del administrador.');
                                             return;
+                                        }
+
+                                        if (!phone.startsWith('53')) {
+                                            phone = '53' + phone;
                                         }
 
                                         const datePart = report.date.split('T')[0];
@@ -182,7 +186,9 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                         const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
                                         const file = new File([report.pdfBlob], downloadName, { type: 'application/pdf' });
 
-                                        // Priorizar el envío del archivo PDF completo si el navegador lo permite
+                                        // Si el usuario reportó que prefiere ir directo y no le importa el PDF completo en este paso específico,
+                                        // o si el navigator.share falla, usamos openWhatsApp con resumen.
+                                        // Intentamos el share de archivo primero si es posible.
                                         if (navigator.canShare && navigator.canShare({ files: [file] })) {
                                             try {
                                                 await navigator.share({
@@ -194,24 +200,20 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                                 setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
                                                 return;
                                             } catch (error: any) {
-                                                // Si el error no es cancelación del usuario, lo registramos
-                                                if (error.name !== 'AbortError') {
-                                                    console.error('Error sharing PDF file:', error);
+                                                if (error.name === 'AbortError') {
+                                                    // Usuario canceló, no hacemos nada más
+                                                    return;
                                                 }
-                                                // Si falla el share del archivo, caemos al respaldo de texto directo
+                                                console.error('Error sharing PDF file:', error);
                                             }
                                         }
                                         
-                                        // Texto de respaldo si no se puede enviar el archivo PDF
+                                        // Texto de respaldo si no se puede enviar el archivo PDF o falla
                                         let text = `Hola, este es el reporte musical del programa *${report.program}* del día *${datePart}*:\n\n`;
                                         if (report.items && report.items.length > 0) {
                                             report.items.forEach((item, index) => {
                                                 text += `${index + 1}. ${item.title} - ${item.performer} (${item.author})\n`;
                                             });
-                                        }
-                                        
-                                        if (!phone.startsWith('53')) {
-                                            phone = '53' + phone;
                                         }
                                         
                                         openWhatsApp(text, phone);

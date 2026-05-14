@@ -99,8 +99,10 @@ export interface User {
   role: 'admin' | 'worker' | 'listener' | 'coordinator';
   name: string;
   classification?: UserClassification;
+  specialty?: string;
   avatar?: string;
   mobile?: string;
+  email?: string;
   password?: string;
   permissions?: UserPermissions;
   coordinatorSections?: string[];

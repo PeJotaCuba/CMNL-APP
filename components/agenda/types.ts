@@ -34,7 +34,11 @@ export interface UserProfile {
   pin: string; // Cambiado de password a pin
   role: UserRole;
   phone: string;
+  email?: string;
   photo?: string;
+  classification?: string;
+  specialty?: string;
+  coordinatorSections?: string[];
   interests?: UserInterests;
 }
 
