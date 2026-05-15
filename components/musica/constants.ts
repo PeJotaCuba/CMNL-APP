@@ -25,6 +25,7 @@ export const parseTxtDatabase = (text: string, rootContext: string = 'Importado'
   let currentGenre = "";
   let currentAlbum = "";       
   let currentOriginalPath = ""; 
+  let currentModificationDate = "";
   
   const normalizeKey = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
@@ -101,7 +102,8 @@ export const parseTxtDatabase = (text: string, rootContext: string = 'Importado'
                   performerCountry: "",
                   album: currentAlbum || (finalPath.split('/').pop() || "Carpeta General"), 
                   year: "", 
-                  genre: currentGenre || ""
+                  genre: currentGenre || "",
+                  modificado: currentModificationDate || ""
               }
           });
       }
@@ -112,6 +114,7 @@ export const parseTxtDatabase = (text: string, rootContext: string = 'Importado'
       currentGenre = "";
       currentAlbum = "";
       currentOriginalPath = "";
+      currentModificationDate = "";
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -125,23 +128,29 @@ export const parseTxtDatabase = (text: string, rootContext: string = 'Importado'
           continue;
       }
 
+      const colonIndex = line.indexOf(':');
+      const content = colonIndex !== -1 ? line.substring(colonIndex + 1).trim() : "";
+
       if (lowerLine.startsWith('titulo')) {
-          currentTitle = line.substring(line.indexOf(':') + 1).trim();
+          currentTitle = content;
       } 
       else if (lowerLine.startsWith('compositor') || lowerLine.startsWith('autor')) {
-          currentAuthor = line.substring(line.indexOf(':') + 1).trim();
+          currentAuthor = content;
       }
       else if (lowerLine.startsWith('interprete')) {
-          currentPerformer = line.substring(line.indexOf(':') + 1).trim();
+          currentPerformer = content;
       }
       else if (lowerLine.startsWith('genero')) {
-          currentGenre = line.substring(line.indexOf(':') + 1).trim();
+          currentGenre = content;
       }
       else if (lowerLine.startsWith('carpeta') || lowerLine.startsWith('album')) {
-          currentAlbum = line.substring(line.indexOf(':') + 1).trim();
+          currentAlbum = content;
       }
       else if (lowerLine.startsWith('ruta')) {
-          currentOriginalPath = line.substring(line.indexOf(':') + 1).trim();
+          currentOriginalPath = content;
+      }
+      else if (lowerLine.startsWith('modificado')) {
+          currentModificationDate = content;
       }
   }
   saveTrack(); 

@@ -868,7 +868,7 @@ const App: React.FC = () => {
       
       // CMNL Apps
       case AppView.APP_AGENDA:
-        return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
+        return <AgendaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} users={users} onDirtyChange={setIsDirty} />;
       case AppView.APP_MUSICA:
         return <MusicaApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_REPORTES:

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2 } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
-import { User, UserClassification } from '../../types';
+import { User, UserClassification, ProgramFicha } from '../../types';
 import { openWhatsApp } from '../../utils/whatsappUtils';
 
 interface TeamMember {
@@ -15,6 +15,7 @@ interface TeamMember {
   email?: string;
   habitualPrograms?: string[];
   habitualProgramsByRole?: Record<string, string[]>;
+  habitualProgramsDays?: Record<string, Record<string, string[]>>; // role -> programName -> days[]
 }
 
 interface EquipoSectionProps {
@@ -22,6 +23,7 @@ interface EquipoSectionProps {
   onBack: () => void;
   onMenuClick: () => void;
   catalogo: any[];
+  fichas: ProgramFicha[];
   onDirtyChange: (dirty: boolean) => void;
   onTeamUpdate?: (newTeam: TeamMember[]) => void;
   users: User[];
@@ -37,8 +39,31 @@ interface EquipoSectionProps {
 
 const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
 
-const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
+const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, fichas, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
+
+  const getProgramDays = (progName: string): string[] => {
+    const ficha = (fichas || []).find(f => f.name.toLowerCase() === progName.toLowerCase());
+    if (!ficha) return ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    
+    const freq = ficha.frequency.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (freq.includes('diario') || freq.includes('lunes a domingo')) return ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    if (freq.includes('lunes a sabado')) return ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    if (freq.includes('lunes a viernes')) return ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    
+    const allDays = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const result: string[] = [];
+    
+    if (freq.includes('lunes')) result.push('Lunes');
+    if (freq.includes('martes')) result.push('Martes');
+    if (freq.includes('miercoles')) result.push('Miércoles');
+    if (freq.includes('jueves')) result.push('Jueves');
+    if (freq.includes('viernes')) result.push('Viernes');
+    if (freq.includes('sabado')) result.push('Sábado');
+    if (freq.includes('domingo')) result.push('Domingo');
+    
+    return result.length > 0 ? result : ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  };
   const [loading, setLoading] = useState(false);
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || (currentUser?.classification === 'Coordinador' && (currentUser?.coordinatorSections || []).includes('Gestión'));
   const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
@@ -351,7 +376,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                             password: user?.password || '',
                             role: user?.classification || '',
                             coordinatorSections: user?.coordinatorSections || [],
-                            tools: user?.tools || []
+                            tools: user?.tools || [],
+                            habitualProgramsDays: user?.habitualProgramsDays || member.habitualProgramsDays || {}
                           }); 
                         }}
                         className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
@@ -655,33 +681,92 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     return (
                       <div key={roleName} className="bg-black/20 border border-[#9E7649]/20 rounded-xl p-3">
                         <h4 className="text-[10px] font-bold text-[#9E7649] mb-2 uppercase">{roleName}</h4>
-                        <div className="grid grid-cols-1 gap-1 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                           {catalogo.length > 0 ? (
-                            catalogo.map(prog => (
-                              <label key={prog.name} className="flex items-center gap-2 p-1.5 hover:bg-[#9E7649]/10 rounded cursor-pointer transition-colors">
-                                <input 
-                                  type="checkbox" 
-                                  checked={roleHabitual.includes(prog.name)}
-                                  onChange={e => {
-                                    const currentByRole = editingMember.habitualProgramsByRole || {};
-                                    const currentRoleProgs = currentByRole[roleName] || [];
-                                    const updatedRoleProgs = e.target.checked 
-                                      ? [...currentRoleProgs, prog.name]
-                                      : currentRoleProgs.filter(p => p !== prog.name);
-                                    
-                                    setEditingMember({
-                                      ...editingMember, 
-                                      habitualProgramsByRole: {
-                                        ...currentByRole,
-                                        [roleName]: updatedRoleProgs
-                                      }
-                                    });
-                                  }}
-                                  className="accent-[#9E7649] w-4 h-4"
-                                />
-                                <span className="text-xs text-white/90">{prog.name}</span>
-                              </label>
-                            ))
+                            catalogo.map(prog => {
+                              const isHabitual = roleHabitual.includes(prog.name);
+                              const isGuionista = roleName.toLowerCase().includes('guionista');
+                              const progDays = isGuionista && isHabitual ? getProgramDays(prog.name) : [];
+                              const selectedDays = editingMember.habitualProgramsDays?.[roleName]?.[prog.name] || [];
+
+                              return (
+                                <div key={prog.name} className="flex flex-col border-b border-[#9E7649]/10 last:border-0 py-2">
+                                  <label className="flex items-center gap-2 cursor-pointer transition-colors">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={isHabitual}
+                                      onChange={e => {
+                                        const currentByRole = editingMember.habitualProgramsByRole || {};
+                                        const currentRoleProgs = currentByRole[roleName] || [];
+                                        const updatedRoleProgs = e.target.checked 
+                                          ? [...currentRoleProgs, prog.name]
+                                          : currentRoleProgs.filter(p => p !== prog.name);
+                                        
+                                        // If deselected, also clear days
+                                        const currentDaysByRole = editingMember.habitualProgramsDays || {};
+                                        const currentRoleDaysMap = currentDaysByRole[roleName] || {};
+                                        const updatedRoleDaysMap = { ...currentRoleDaysMap };
+                                        if (!e.target.checked) {
+                                          delete updatedRoleDaysMap[prog.name];
+                                        } else if (isGuionista) {
+                                          // Default: all program days if it's a guionista
+                                          updatedRoleDaysMap[prog.name] = getProgramDays(prog.name);
+                                        }
+
+                                        setEditingMember({
+                                          ...editingMember, 
+                                          habitualProgramsByRole: {
+                                            ...currentByRole,
+                                            [roleName]: updatedRoleProgs
+                                          },
+                                          habitualProgramsDays: {
+                                            ...currentDaysByRole,
+                                            [roleName]: updatedRoleDaysMap
+                                          }
+                                        });
+                                      }}
+                                      className="accent-[#9E7649] w-4 h-4"
+                                    />
+                                    <span className="text-xs text-white/90">{prog.name}</span>
+                                  </label>
+
+                                  {isGuionista && isHabitual && progDays.length > 0 && (
+                                    <div className="ml-6 mt-2 flex flex-wrap gap-2">
+                                      {progDays.map(day => (
+                                        <label key={day} className="flex items-center gap-1 cursor-pointer">
+                                          <input 
+                                            type="checkbox"
+                                            checked={selectedDays.includes(day)}
+                                            onChange={e => {
+                                              const currentDaysByRole = editingMember.habitualProgramsDays || {};
+                                              const currentRoleDaysMap = currentDaysByRole[roleName] || {};
+                                              const currentProgDays = currentRoleDaysMap[prog.name] || [];
+                                              
+                                              const updatedProgDays = e.target.checked
+                                                ? [...currentProgDays, day]
+                                                : currentProgDays.filter(d => d !== day);
+                                              
+                                              setEditingMember({
+                                                ...editingMember,
+                                                habitualProgramsDays: {
+                                                  ...currentDaysByRole,
+                                                  [roleName]: {
+                                                    ...currentRoleDaysMap,
+                                                    [prog.name]: updatedProgDays
+                                                  }
+                                                }
+                                              });
+                                            }}
+                                            className="accent-[#9E7649] w-3 h-3"
+                                          />
+                                          <span className="text-[9px] text-[#9E7649] tracking-tighter uppercase">{day.slice(0, 3)}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
                           ) : (
                             <p className="text-[10px] text-[#E8DCCF]/40 p-2 italic">No hay programas en el catálogo</p>
                           )}
@@ -746,7 +831,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     info: editingMember.info,
                     email: editingMember.email,
                     photoUrl: editingMember.photoUrl,
-                    habitualProgramsByRole: editingMember.habitualProgramsByRole
+                    habitualProgramsByRole: editingMember.habitualProgramsByRole,
+                    habitualProgramsDays: editingMember.habitualProgramsDays
                   } : m);
                   saveTeam(updatedTeam);
 
@@ -762,7 +848,9 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     specialty: cleanJoined(editingMember.specialty),
                     role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
                     coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
-                    tools: editingMember.tools
+                    tools: editingMember.tools,
+                    habitualProgramsByRole: editingMember.habitualProgramsByRole,
+                    habitualProgramsDays: editingMember.habitualProgramsDays
                   } : u);
                   
                   // If user doesn't exist, create it
@@ -778,7 +866,9 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       specialty: cleanJoined(editingMember.specialty),
                       role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
                       coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
-                      tools: editingMember.tools
+                      tools: editingMember.tools,
+                      habitualProgramsByRole: editingMember.habitualProgramsByRole,
+                      habitualProgramsDays: editingMember.habitualProgramsDays
                     });
                   }
                   

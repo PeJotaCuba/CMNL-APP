@@ -2546,6 +2546,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               onBack={() => setActiveSection(null)}
               onMenuClick={onMenuClick || (() => {})}
               catalogo={catalogo}
+              fichas={fichas}
               onDirtyChange={onDirtyChange}
               users={users}
               setUsers={setUsers}

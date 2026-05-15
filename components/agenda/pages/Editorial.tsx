@@ -23,6 +23,13 @@ interface EditorialProps {
   onBack?: () => void;
 }
 
+const normalize = (str: string) => 
+  (str || "").toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 const ContentModal: React.FC<{ title: string; content: string; onClose: () => void }> = ({ title, content, onClose }) => {
   const [copied, setCopied] = useState(false);
 
@@ -114,9 +121,90 @@ const Editorial: React.FC<EditorialProps> = ({
   const [progSearch, setProgSearch] = useState(''); 
   const [viewModal, setViewModal] = useState<{ title: string, content: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportDownload = async () => {
+      const data = await generateDocxBlob();
+      if (data) {
+          const url = window.URL.createObjectURL(data.blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = data.filename;
+          a.click();
+          window.URL.revokeObjectURL(url);
+      }
+      setShowExportModal(false);
+  };
+
+  const handleExportWhatsApp = async () => {
+      const data = await generateDocxBlob();
+      if (!data) return;
+
+      const textDesc = `Buenos días, esta es la agenda editorial de la ${activeWeek?.label} del mes de ${currentMonthLabel}.`;
+      
+      const file = new File([data.blob], data.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+              await navigator.share({
+                  files: [file],
+                  title: 'Agenda Editorial',
+                  text: textDesc
+              });
+              setShowExportModal(false);
+              return;
+          } catch (e) {
+              console.error("Error sharing with navigator.share", e);
+          }
+      }
+
+      // Fallback: Group Link
+      const textEncoded = encodeURIComponent(textDesc);
+      window.open(`https://chat.whatsapp.com/IY4VnjbdYP9I9ozxV7BASS?text=${textEncoded}`, "_blank");
+      setShowExportModal(false);
+  };
+
+  const handleExportGmail = async () => {
+      const data = await generateDocxBlob();
+      if (!data) return;
+
+      const textDesc = `Buenos días, esta es la agenda editorial de la ${activeWeek?.label} del mes de ${currentMonthLabel}.`;
+      const file = new File([data.blob], data.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+              await navigator.share({
+                  files: [file],
+                  title: 'Agenda Editorial',
+                  text: textDesc
+              });
+              setShowExportModal(false);
+              return;
+          } catch (e) {
+              console.error("Error sharing with navigator.share", e);
+          }
+      }
+
+      // Fallback: Mailto (no attachment possible via mailto)
+      const targetUsers = users.filter(u => {
+          const c = normalize((u as any).classification || '');
+          const s = normalize((u as any).specialty || '');
+          return c.includes('guionist') || c.includes('asesor') || c.includes('especialista') ||
+                 s.includes('guionist') || s.includes('asesor') || s.includes('especialista');
+      });
+      const emails = targetUsers.map(u => (u as any).email).filter(e => e).join(',');
+      const subject = `Agenda Editorial CMNL - ${currentMonthLabel} ${activeWeek?.label}`;
+      
+      const subjectEncoded = encodeURIComponent(subject);
+      const bodyEncoded = encodeURIComponent(textDesc);
+      const mailtoUrl = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
+      
+      window.location.href = mailtoUrl;
+      setShowExportModal(false);
+  };
 
   const handleSendComment = () => {
       if (!commentModal || !commentText.trim()) return;
@@ -153,9 +241,6 @@ const Editorial: React.FC<EditorialProps> = ({
   const searchablePrograms = applyFilter
     ? programs.filter(p => (user.interests?.programIds || []).includes(p.id))
     : programs;
-
-  const normalize = (str: string) => 
-    str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
   // --- LÓGICA DE CLAVES DE DATOS (CORREGIDA) ---
   const getDataKey = (weekId: string, dayName: string) => `${currentMonthLabel}-${weekId}-${dayName}`;
@@ -403,12 +488,12 @@ const Editorial: React.FC<EditorialProps> = ({
     return days;
   };
 
-  const handleDownloadDocx = async () => {
-      if (!activeWeek) return;
+  const generateDocxBlob = async (): Promise<{blob: Blob, filename: string} | null> => {
+      if (!activeWeek) return null;
       const visibleDays = getVisibleDays(); // Usamos los días filtrados
       if (visibleDays.length === 0) {
           alert("No hay días visibles para generar el reporte.");
-          return;
+          return null;
       }
 
       const weekNumber = activeWeek.label.replace('Semana ', '');
@@ -599,13 +684,10 @@ const Editorial: React.FC<EditorialProps> = ({
         }] 
       });
       const blob = await Packer.toBlob(doc);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      // FORMATO: Agenda-Mes-Inicio-Fin
-      a.download = `Agenda-${currentMonthLabel}-${activeWeek.start}-${activeWeek.end}.docx`;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      return {
+          blob,
+          filename: `Agenda-${currentMonthLabel}-${activeWeek.start}-${activeWeek.end}.docx`
+      };
   };
 
   const savePortadaEdit = () => {
@@ -856,30 +938,30 @@ const Editorial: React.FC<EditorialProps> = ({
 
             {/* HERRAMIENTAS DE SEMANA (Solo visibles aquí) */}
             <div className="flex-none bg-card-dark/95 backdrop-blur border-t border-white/5 p-4 z-40">
-                <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="flex flex-row w-full gap-2 mb-3">
                     {/* Botón Word */}
-                     <button onClick={handleDownloadDocx} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
-                        <span className="material-symbols-outlined text-sm">description</span> Exportar Word
+                     <button onClick={() => setShowExportModal(true)} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
+                        <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Exportar<br/>Word</span>
                     </button>
                     
                     {/* Botón Compartir (WhatsApp/Email) */}
                     {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
                         <button 
                             onClick={() => setShowShareModal(true)} 
-                            className="bg-primary/20 hover:bg-primary/30 border border-primary/30 text-white py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all"
+                            className="flex-1 bg-primary/20 hover:bg-primary/30 border border-primary/30 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all"
                         >
-                            <span className="material-symbols-outlined text-sm">share</span> Compartir
+                            <span className="material-symbols-outlined text-sm">share</span> <span className="text-[9px] text-center leading-tight">Compartir<br/>Agenda</span>
                         </button>
                     )}
                     
                     {/* Botón Cargar TXT (Solo Admin) */}
                     {user.role === UserRole.ADMIN && (
-                        <>
+                        <div className="flex-1 flex flex-col">
                              <input type="file" accept=".txt" ref={fileInputRef} className="hidden" onChange={handleBulkTxtUpload} />
-                             <button onClick={() => fileInputRef.current?.click()} className="bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all">
-                                <span className="material-symbols-outlined text-sm">upload_file</span> Cargar TXT
+                             <button onClick={() => fileInputRef.current?.click()} className="h-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
+                                <span className="material-symbols-outlined text-sm">upload_file</span> <span className="text-[9px] text-center leading-tight">Cargar<br/>TXT</span>
                             </button>
-                        </>
+                        </div>
                     )}
                 </div>
                 
@@ -912,6 +994,14 @@ const Editorial: React.FC<EditorialProps> = ({
                     monthName={currentMonthLabel}
                     getEffectiveData={getEffectiveData}
                     selectedWeekId={selectedWeekId}
+                />
+            )}
+            {showExportModal && (
+                <ExportAgendaModal 
+                    onClose={() => setShowExportModal(false)}
+                    onDownload={handleExportDownload}
+                    onWhatsApp={handleExportWhatsApp}
+                    onGmail={handleExportGmail}
                 />
             )}
         </div>
@@ -989,15 +1079,37 @@ const ShareAgendaModal: React.FC<{
     const [channel, setChannel] = useState<'whatsapp' | 'email' | null>(null);
     const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
     const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
+    const [shareStep, setShareStep] = useState<1 | 2>(1);
     
     const targetUsers = useMemo(() => {
         return users.filter(u => {
-            const classification = (u as any).classification?.toLowerCase() || '';
-            const specialty = (u as any).specialty?.toLowerCase() || '';
-            return classification.includes('guionista') || classification.includes('asesor') || classification.includes('especialista') ||
-                   specialty.includes('guionista') || specialty.includes('asesor') || specialty.includes('especialista');
+            const classification = normalize((u as any).classification || '');
+            const specialty = normalize((u as any).specialty || '');
+            
+            const isGuionista = classification.includes('guionist') || specialty.includes('guionist');
+            const isAsesor = classification.includes('asesor') || specialty.includes('asesor');
+            
+            // Check for relevant programs in the new system
+            const byRole = (u as any).habitualProgramsByRole || {};
+            const hasRelevantPrograms = Object.entries(byRole).some(([role, progs]) => {
+                const lowRole = normalize(role);
+                return (lowRole.includes('guionist') || lowRole.includes('asesor')) && Array.isArray(progs) && progs.length > 0;
+            });
+
+            return isGuionista || isAsesor || hasRelevantPrograms;
         });
     }, [users]);
+
+    const uniquePrograms = useMemo(() => {
+        const map = new Map<string, Program>();
+        programs.forEach(p => {
+            const normName = normalize(p.name);
+            if (!map.has(normName)) {
+                map.set(normName, p);
+            }
+        });
+        return Array.from(map.values());
+    }, [programs]);
 
     const handleToggleAllRecipients = () => {
         if (selectedRecipients.length === targetUsers.length) setSelectedRecipients([]);
@@ -1009,19 +1121,70 @@ const ShareAgendaModal: React.FC<{
         else setSelectedPrograms(programs.map(p => p.id));
     };
 
-    const handleShare = () => {
-        if (selectedRecipients.length === 0 || selectedPrograms.length === 0 || !channel) return;
-
-        const recipientUsers = targetUsers.filter(u => selectedRecipients.includes(u.id));
+    const generateContent = (targetUser?: UserProfile) => {
         const filteredProgs = programs.filter(p => selectedPrograms.includes(p.id));
-
         let content = `*AGENDA EDITORIAL - CMNL*\n`;
         content += `*MES:* ${monthName}\n`;
-        content += `*${activeWeek.label}* (${activeWeek.start} al ${activeWeek.end})\n\n`;
+        content += `*${activeWeek.label}* (${activeWeek.start} al ${activeWeek.end})\n`;
+        if (targetUser) content += `*PARA:* ${targetUser.name}\n`;
+        content += `\n`;
 
         activeWeek.days.forEach((day: any) => {
             if (!day) return;
-            const dayProgs = filteredProgs.filter(p => p.days.includes(day.name));
+            let dayProgs = filteredProgs.filter(p => p.days.includes(day.name));
+            
+            // If we have a target user, filter by their habitual programs and days for their roles
+            if (targetUser) {
+                dayProgs = dayProgs.filter(p => {
+                    const byRole = (targetUser as any).habitualProgramsByRole || {};
+                    const daysByRole = (targetUser as any).habitualProgramsDays || {};
+                    const normP = normalize(p.name);
+                    const normDay = normalize(day.name);
+
+                    let isRelevant = false;
+                    Object.entries(byRole).forEach(([role, progs]) => {
+                        const lowRole = normalize(role);
+                        // SOLO tomar programas que corresponden a guionista o asesor
+                        if (!(lowRole.includes('guionist') || lowRole.includes('asesor'))) return;
+
+                        if (Array.isArray(progs) && progs.some(rp => normalize(rp) === normP)) {
+                            if (lowRole.includes('guionist')) {
+                                // Find assigned days using normalized program name lookup
+                                let assignedDays: string[] = [];
+                                const daysObj = daysByRole[role] || {};
+                                Object.entries(daysObj).forEach(([dpName, dDays]) => {
+                                    if (normalize(dpName) === normP && Array.isArray(dDays)) {
+                                        assignedDays = [ ...assignedDays, ...dDays ];
+                                    }
+                                });
+
+                                if (assignedDays.length > 0) {
+                                    if (assignedDays.some(rd => {
+                                        const nRd = normalize(rd);
+                                        return nRd.includes(normDay) || normDay.includes(nRd);
+                                    })) {
+                                        isRelevant = true;
+                                    }
+                                } else {
+                                    isRelevant = true;
+                                }
+                            } else {
+                                // Asesores
+                                isRelevant = true;
+                            }
+                        }
+                    });
+
+                    const hasNewSystemSetup = Object.keys(byRole).some(k => Array.isArray(byRole[k]) && byRole[k].length > 0);
+                    if (!isRelevant && !hasNewSystemSetup) {
+                        const legacyHabitual = (targetUser as any).habitualPrograms || [];
+                        if (legacyHabitual.some((lp: string) => normalize(lp) === normP)) isRelevant = true;
+                    }
+
+                    return isRelevant;
+                });
+            }
+
             if (dayProgs.length === 0) return;
 
             content += `*${day.name} ${day.date}:*\n`;
@@ -1033,24 +1196,90 @@ const ShareAgendaModal: React.FC<{
             });
             content += `\n`;
         });
+        return content;
+    };
+
+    const handleShareIndividual = (u: UserProfile) => {
+        let phone = (u as any).mobile || u.phone;
+        if (phone) {
+            const content = generateContent(u);
+            if (phone && !phone.startsWith('53') && phone.length === 8) phone = '53' + phone;
+            openWhatsApp(content, phone);
+        }
+    };
+
+    const handleShare = () => {
+        if (selectedRecipients.length === 0 || selectedPrograms.length === 0 || !channel) return;
+
+        const recipientUsers = targetUsers.filter(u => selectedRecipients.includes(u.id));
 
         if (channel === 'whatsapp') {
-            recipientUsers.forEach(u => {
-                const phone = (u as any).mobile || u.phone;
-                if (phone) openWhatsApp(content, phone);
-            });
+            if (recipientUsers.length === 1) {
+                handleShareIndividual(recipientUsers[0]);
+                onClose();
+            } else {
+                setShareStep(2);
+            }
         } else {
             const emails = recipientUsers.map(u => (u as any).email).filter(e => e);
             if (emails.length > 0) {
+                // For email, we might want to send a general agenda or one that includes everyone's programs
+                // The user requested: "email with all the directions for email addresses of all the users who are scriptwriters and advisors"
+                // "without the download of the Docs document or its automatic attachment"
+                const content = generateContent(); 
                 const subject = encodeURIComponent(`Agenda Editorial CMNL - ${monthName} ${activeWeek.label}`);
                 const body = encodeURIComponent(content.replace(/\*/g, ''));
                 window.open(`mailto:${emails.join(',')}?subject=${subject}&body=${body}`);
             } else {
                 alert("No se encontraron correos seleccionados.");
             }
+            onClose();
         }
-        onClose();
     };
+
+    if (shareStep === 2) {
+        const recipientUsers = targetUsers.filter(u => selectedRecipients.includes(u.id));
+        const content = generateContent();
+        
+        return (
+            <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
+                <div className="bg-card-dark w-full max-w-md rounded-[2.5rem] border border-white/10 shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-6 border-b border-white/5 bg-card-dark">
+                        <h3 className="text-white font-bold text-lg">Enviando por WhatsApp</h3>
+                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest mt-1">Envía el mensaje a cada destinatario</p>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-6 space-y-3 no-scrollbar">
+                        {recipientUsers.map(u => {
+                            let phone = (u as any).mobile || u.phone;
+                            const hasPhone = !!phone;
+                            return (
+                                <div key={u.id} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                                    <div>
+                                        <p className="text-white text-sm font-bold">{u.name}</p>
+                                        <p className="text-[10px] text-text-secondary">{phone || 'Sin número'}</p>
+                                    </div>
+                                    <button 
+                                        disabled={!hasPhone}
+                                        onClick={() => handleShareIndividual(u)}
+                                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                            hasPhone ? 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20' : 'bg-white/10 text-white/30 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        Enviar
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    
+                    <div className="p-6 border-t border-white/5 bg-card-dark">
+                        <button onClick={onClose} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all">Finalizar</button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
@@ -1097,8 +1326,42 @@ const ShareAgendaModal: React.FC<{
                                         type="checkbox" 
                                         checked={selectedRecipients.includes(u.id)}
                                         onChange={() => {
-                                            if (selectedRecipients.includes(u.id)) setSelectedRecipients(selectedRecipients.filter(id => id !== u.id));
-                                            else setSelectedRecipients([...selectedRecipients, u.id]);
+                                            if (selectedRecipients.includes(u.id)) {
+                                                setSelectedRecipients(selectedRecipients.filter(id => id !== u.id));
+                                            } else {
+                                                setSelectedRecipients([...selectedRecipients, u.id]);
+                                                
+                                                // Extract habitual programs ONLY for relevant roles (guionista/asesor)
+                                                const allHabitual = new Set<string>();
+                                                const hasByRole = !!u.habitualProgramsByRole;
+                                                
+                                                if (u.habitualProgramsByRole) {
+                                                    Object.entries(u.habitualProgramsByRole).forEach(([role, progs]) => {
+                                                        const lowRole = normalize(role);
+                                                        if (lowRole.includes('guionist') || lowRole.includes('asesor')) {
+                                                            if (Array.isArray(progs)) {
+                                                                progs.forEach(p => allHabitual.add(p));
+                                                            }
+                                                        }
+                                                    });
+                                                }
+
+                                                // Fallback to simple habitualPrograms ONLY if byRole is NOT present
+                                                if (!hasByRole && u.habitualPrograms) {
+                                                    u.habitualPrograms.forEach(p => allHabitual.add(p));
+                                                }
+ 
+                                                const programIdsToSelect = programs
+                                                    .filter(p => {
+                                                        const pNorm = normalize(p.name);
+                                                        return Array.from(allHabitual).some(h => normalize(h) === pNorm);
+                                                    })
+                                                    .map(p => p.id);
+                                                    
+                                                if (programIdsToSelect.length > 0) {
+                                                    setSelectedPrograms(prev => [...new Set([...prev, ...programIdsToSelect])]);
+                                                }
+                                            }
                                         }}
                                         className="accent-primary size-4"
                                     />
@@ -1116,26 +1379,35 @@ const ShareAgendaModal: React.FC<{
                     {/* Programs selection */}
                     <div className="space-y-3">
                         <div className="flex justify-between items-end px-1">
-                            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">3. Programas ({programs.length})</label>
+                            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">3. Programas ({uniquePrograms.length})</label>
                             <button onClick={handleToggleAllPrograms} className="text-[9px] font-bold text-primary uppercase">
                                 {selectedPrograms.length === programs.length ? "Deseleccionar" : "Seleccionar Todos"}
                             </button>
                         </div>
                         <div className="bg-black/20 rounded-2xl border border-white/5 p-2 max-h-40 overflow-y-auto no-scrollbar">
-                            {programs.map(p => (
-                                <label key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedPrograms.includes(p.id)}
-                                        onChange={() => {
-                                            if (selectedPrograms.includes(p.id)) setSelectedPrograms(selectedPrograms.filter(id => id !== p.id));
-                                            else setSelectedPrograms([...selectedPrograms, p.id]);
-                                        }}
-                                        className="accent-primary size-4"
-                                    />
-                                    <span className="text-white text-xs font-medium">{p.name}</span>
-                                </label>
-                            ))}
+                            {uniquePrograms.map(p => {
+                                const normName = normalize(p.name);
+                                const relatedIds = programs.filter(x => normalize(x.name) === normName).map(x => x.id);
+                                const isChecked = relatedIds.every(id => selectedPrograms.includes(id));
+                                
+                                return (
+                                    <label key={p.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isChecked}
+                                            onChange={() => {
+                                                if (isChecked) {
+                                                    setSelectedPrograms(selectedPrograms.filter(id => !relatedIds.includes(id)));
+                                                } else {
+                                                    setSelectedPrograms([...new Set([...selectedPrograms, ...relatedIds])]);
+                                                }
+                                            }}
+                                            className="accent-primary size-4"
+                                        />
+                                        <span className="text-white text-xs font-medium">{p.name}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -1148,6 +1420,59 @@ const ShareAgendaModal: React.FC<{
                         className="flex-1 py-4 bg-primary hover:bg-primary-dark text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all disabled:opacity-50"
                     >
                         Compartir
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const ExportAgendaModal: React.FC<{
+  onClose: () => void;
+  onDownload: () => void;
+  onWhatsApp: () => void;
+  onGmail: () => void;
+}> = ({ onClose, onDownload, onWhatsApp, onGmail }) => {
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
+            <div className="bg-card-dark w-full max-w-sm rounded-[2.5rem] border border-white/10 shadow-2xl relative flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="p-6 border-b border-white/5 bg-card-dark text-center">
+                    <div className="size-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
+                        <span className="material-symbols-outlined text-white text-2xl">description</span>
+                    </div>
+                    <h3 className="text-white font-bold text-xl">Exportar Agenda</h3>
+                    <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest mt-2">¿Cómo deseas obtener este documento .docx?</p>
+                </div>
+
+                <div className="p-6 space-y-3">
+                    <button 
+                        onClick={onWhatsApp}
+                        className="w-full py-4 rounded-2xl border bg-green-500/10 border-green-500/20 text-green-400 hover:bg-green-500/20 transition-all flex items-center justify-center gap-3"
+                    >
+                        <span className="material-symbols-outlined text-xl">chat</span>
+                        <span className="font-bold text-[11px] uppercase tracking-wider">WhatsApp</span>
+                    </button>
+
+                    <button 
+                        onClick={onGmail}
+                        className="w-full py-4 rounded-2xl border bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-all flex items-center justify-center gap-3"
+                    >
+                        <span className="material-symbols-outlined text-xl">mail</span>
+                        <span className="font-bold text-[11px] uppercase tracking-wider">Gmail</span>
+                    </button>
+
+                    <button 
+                        onClick={onDownload}
+                        className="w-full py-4 rounded-2xl border bg-white/5 border-white/10 text-white hover:bg-white/10 transition-all flex items-center justify-center gap-3"
+                    >
+                        <span className="material-symbols-outlined text-xl">download</span>
+                        <span className="font-bold text-[11px] uppercase tracking-wider">Descargar Local</span>
+                    </button>
+                </div>
+                
+                <div className="p-4 border-t border-white/5 bg-black/40 text-center">
+                    <button onClick={onClose} className="px-6 py-2 text-[10px] text-text-secondary hover:text-white font-bold uppercase tracking-widest transition-colors">
+                        Cancelar
                     </button>
                 </div>
             </div>

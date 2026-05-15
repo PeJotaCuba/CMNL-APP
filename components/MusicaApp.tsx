@@ -219,8 +219,12 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           const newTracks: Track[] = await r.json();
           const otherTracks = tracks.filter(t => !t.path.startsWith(rootName));
           await updateTracks([...otherTracks, ...newTracks]);
+          setIsUpdating(false);
           alert(`Base de datos de ${rootName} actualizada.`);
-      } catch (e) { alert(`Error al actualizar ${rootName}.`); } finally { setIsUpdating(false); }
+      } catch (e) { 
+          setIsUpdating(false);
+          alert(`Error al actualizar ${rootName}.`); 
+      }
   };
 
   const handleExportRoot = (rootName: string) => {
@@ -244,24 +248,67 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const handleAddCustomRoot = (name: string) => { const newRoots = [...customRoots, name]; setCustomRoots(newRoots); localStorage.setItem(CUSTOM_ROOTS_KEY, JSON.stringify(newRoots)); };
   const handleRenameRoot = async (oldName: string, newName: string) => {
       const newRoots = customRoots.map(r => r === oldName ? newName : r);
-      setCustomRoots(newRoots); localStorage.setItem(CUSTOM_ROOTS_KEY, JSON.stringify(newRoots));
+      setCustomRoots(newRoots); 
+      localStorage.setItem(CUSTOM_ROOTS_KEY, JSON.stringify(newRoots));
       const updatedTracks = tracks.map(t => t.path.startsWith(oldName) ? { ...t, path: t.path.replace(oldName, newName) } : t);
-      await updateTracks(updatedTracks);
-      alert(`Carpeta renombrada.`);
+      setIsUpdating(true);
+      try {
+          await updateTracks(updatedTracks);
+          setIsUpdating(false);
+          alert(`Carpeta renombrada.`);
+      } catch (e) {
+          setIsUpdating(false);
+          alert("Error al renombrar carpeta.");
+      }
   };
 
   const handleUploadMultipleTxt = async (files: FileList, targetRoot: string) => {
       if (!files || files.length === 0) return;
       setIsUpdating(true);
-      let parsedTracks: Track[] = [];
+      let allNewParsedTracks: Track[] = [];
       try {
           for (let i = 0; i < files.length; i++) {
               const text = await files[i].text();
-              parsedTracks = [...parsedTracks, ...parseTxtDatabase(text, targetRoot)];
+              const parsed = parseTxtDatabase(text, targetRoot);
+              allNewParsedTracks = [...allNewParsedTracks, ...parsed];
           }
-          await updateTracks(prev => [...prev, ...parsedTracks]);
-          alert(`${parsedTracks.length} pistas añadidas.`);
-      } catch (e) { console.error(e); } finally { setIsUpdating(false); }
+          
+          const normalize = (s: string) => (s || "").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const getTrackKey = (t: Track) => `${normalize(t.metadata.title)}|${normalize(t.metadata.performer)}|${normalize(t.metadata.author)}`;
+
+          // Batch process all parsed tracks into a single update
+          await updateTracks(prev => {
+              const updated = [...prev];
+              // Crear un mapa de búsqueda para los tracks existentes
+              const existingMap = new Map<string, number>();
+              updated.forEach((t, i) => {
+                  existingMap.set(getTrackKey(t), i);
+              });
+
+              allNewParsedTracks.forEach(newTrack => {
+                  const key = getTrackKey(newTrack);
+                  const existingIndex = existingMap.get(key);
+
+                  if (existingIndex !== undefined) {
+                      updated[existingIndex] = {
+                          ...newTrack,
+                          id: updated[existingIndex].id 
+                      };
+                  } else {
+                      updated.push(newTrack);
+                      existingMap.set(key, updated.length - 1);
+                  }
+              });
+              return updated;
+          });
+          
+          setIsUpdating(false);
+          alert(`${allNewParsedTracks.length} pistas procesadas correctamente.`);
+      } catch (e) {
+          console.error(e);
+          setIsUpdating(false);
+          alert("Error al cargar archivos TXT.");
+      }
   };
 
   const handleSelectTrack = (track: Track) => { setSelectedTrack(track); };

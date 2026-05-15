@@ -141,6 +141,10 @@ const TrackDetail: React.FC<TrackDetailProps> = ({ track, authMode, onClose, onS
                         </div>
                         <InfoBox icon="album" label="Álbum / Carpeta" value={track.metadata.album} />
                         
+                        {track.metadata.modificado && (
+                            <InfoBox icon="edit_calendar" label="Modificado" value={track.metadata.modificado} />
+                        )}
+                        
                         <div className="pt-4 border-t border-[#9E7649]/20">
                             <p className="text-xs text-[#E8DCCF]/40 font-mono break-all">{track.path}/{track.filename}</p>
                             <p className="text-[10px] text-[#E8DCCF]/30 mt-1">ID: {track.id}</p>

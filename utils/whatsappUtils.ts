@@ -7,31 +7,43 @@ export const openWhatsApp = (text: string, phone: string = '') => {
   const encodedText = encodeURIComponent(text);
   const cleanPhone = phone.replace(/\D/g, '');
   
-  // Use wa.me for modern and broad compatibility (handles selection between WhatsApp and Business better)
-  const universalUrl = cleanPhone 
-    ? `https://wa.me/${cleanPhone}?text=${encodedText}`
-    : `https://wa.me/?text=${encodedText}`;
-    
-  // On mobile, sometimes the protocol whatsapp:// works better specifically for opening the app directly
-  const protocolUrl = cleanPhone
-    ? `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`
-    : `whatsapp://send?text=${encodedText}`;
-
-  // Simple mobile detection
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  
+
+  const universalUrl = cleanPhone 
+    ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
+    : `https://api.whatsapp.com/send?text=${encodedText}`;
+
   if (isMobile) {
-    // Try https://wa.me first as it is the most reliable way to trigger the app chooser
-    // including WhatsApp Business.
-    window.location.href = universalUrl;
+    const protocolUrl = cleanPhone
+      ? `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`
+      : `whatsapp://send?text=${encodedText}`;
     
-    // Safety fallback just in case
+    // Use intent URL first via an anchor click to break out of iframe safely on mobile
+    const a = document.createElement('a');
+    a.href = protocolUrl;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    // Add a backup in case intent URL is not handled
     setTimeout(() => {
-      if (document.visibilityState === 'visible') {
-        window.open(universalUrl, '_blank');
-      }
+        if (document.visibilityState === 'visible') {
+            const backupAnchor = document.createElement('a');
+            backupAnchor.href = universalUrl;
+            backupAnchor.target = '_blank';
+            document.body.appendChild(backupAnchor);
+            backupAnchor.click();
+            document.body.removeChild(backupAnchor);
+        }
     }, 1500);
   } else {
-    window.open(universalUrl, '_blank');
+    // Desktop: use api.whatsapp.com
+    const a = document.createElement('a');
+    a.href = universalUrl;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 };

@@ -18,6 +18,7 @@ interface Props {
   onBack: () => void;
   onMenuClick?: () => void;
   currentUser: any; // From main app
+  users: any[]; // From main app
   onDirtyChange?: (isDirty: boolean) => void;
 }
 
@@ -111,19 +112,19 @@ const InnerAgendaApp: React.FC<{
   );
 };
 
-const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange }) => {
+const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, users: mainUsers, onDirtyChange }) => {
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('rcm_users');
       let currentUsers: UserProfile[] = saved ? JSON.parse(saved) : [];
       
-      // Intentar cargar especialidad e información estática del equipo desde rcm_team
+      // Intentar cargar especialidad e información estática del equipo desde rcm_equipo_cmnl
       let teamData: any[] = [];
       try {
-        const savedTeam = localStorage.getItem('rcm_team');
+        const savedTeam = localStorage.getItem('rcm_equipo_cmnl');
         if (savedTeam) teamData = JSON.parse(savedTeam);
       } catch (e) {
-        console.error("Error loading rcm_team", e);
+        console.error("Error loading rcm_equipo_cmnl", e);
       }
       
       // Si no hay datos, cargar iniciales
@@ -131,13 +132,26 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
         currentUsers = INITIAL_USERS;
       }
 
+      // Sincronizar con los usuarios de la app principal si se proporcionan
+      if (mainUsers && mainUsers.length > 0) {
+        // Combinar datos: preferir los de mainUsers pero mantener los intereses de rcm_users
+        currentUsers = mainUsers.map(mu => {
+          const agendaUser = currentUsers.find(au => au.id === mu.id || au.username === mu.username);
+          return {
+            ...mu,
+            id: mu.id || mu.username,
+            role: (mu.role === 'admin' || mu.classification === 'Administrador') ? UserRole.ADMIN : UserRole.ESCRITOR,
+            interests: agendaUser?.interests || { days: [], programIds: [] }
+          } as UserProfile;
+        });
+      }
+
       // IMPORTANTE: Forzar actualización del PIN del Admin desde código (INITIAL_USERS)
-      // Pero manteniendo sus otros datos como intereses y foto.
       const codeAdmin = INITIAL_USERS.find(u => u.id === 'admin');
       if (codeAdmin) {
-        const idx = currentUsers.findIndex(u => u.id === 'admin');
+        const idx = currentUsers.findIndex(u => u.id === 'admin' || u.username === 'admin');
         if (idx !== -1) {
-          currentUsers[idx] = { ...currentUsers[idx], pin: codeAdmin.pin };
+          currentUsers[idx] = { ...currentUsers[idx], pin: codeAdmin.pin, role: UserRole.ADMIN };
         } else {
           currentUsers.unshift(codeAdmin);
         }
@@ -145,26 +159,53 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyC
 
       // Migración de campos legacy (password -> pin) y sincronización con equipo
       currentUsers = currentUsers.map(u => {
-         const teamMember = teamData.find(m => m.id === u.id);
+         const teamMember = teamData.find(m => m.id === u.id || m.username === u.username || m.name === u.name);
          let mergedClassification = u.classification;
          let mergedSpecialty = u.specialty;
          
          if (teamMember) {
              if (teamMember.role && !mergedClassification) mergedClassification = teamMember.role;
              if (teamMember.specialty) {
+                 let ts = '';
                  if (Array.isArray(teamMember.specialty)) {
-                     mergedSpecialty = teamMember.specialty.join(' / ');
+                     ts = teamMember.specialty.join(' / ');
                  } else if (typeof teamMember.specialty === 'string') {
-                     mergedSpecialty = teamMember.specialty;
+                     ts = teamMember.specialty;
+                 }
+                 if (ts && (!mergedSpecialty || !mergedSpecialty.includes(ts))) {
+                     mergedSpecialty = mergedSpecialty ? `${mergedSpecialty} / ${ts}` : ts;
                  }
              }
          }
          
+         let flattenedHabitual: string[] = [];
+         let habitualByRole = u.habitualProgramsByRole;
+         let habitualDays = u.habitualProgramsDays;
+
+         if (teamMember) {
+             if (teamMember.habitualProgramsByRole) {
+                 habitualByRole = teamMember.habitualProgramsByRole;
+                 const allProgs = Object.values(teamMember.habitualProgramsByRole).flat() as string[];
+                 flattenedHabitual = [...new Set(allProgs)];
+             } else if (teamMember.habitualPrograms) {
+                 flattenedHabitual = teamMember.habitualPrograms;
+             }
+
+             if (teamMember.habitualProgramsDays) {
+                 habitualDays = teamMember.habitualProgramsDays;
+             }
+         } else if (u.habitualPrograms) {
+             flattenedHabitual = u.habitualPrograms;
+         }
+
          return {
              ...u,
              classification: mergedClassification,
              specialty: mergedSpecialty,
-             pin: u.pin || (u as any).password || ''
+             pin: u.pin || (u as any).password || '',
+             habitualPrograms: flattenedHabitual,
+             habitualProgramsByRole: habitualByRole,
+             habitualProgramsDays: habitualDays
          };
       });
 

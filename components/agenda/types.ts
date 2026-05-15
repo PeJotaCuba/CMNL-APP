@@ -40,6 +40,9 @@ export interface UserProfile {
   specialty?: string;
   coordinatorSections?: string[];
   interests?: UserInterests;
+  habitualPrograms?: string[];
+  habitualProgramsByRole?: Record<string, string[]>;
+  habitualProgramsDays?: Record<string, Record<string, string[]>>;
 }
 
 export interface CloudConfig {

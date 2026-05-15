@@ -100,6 +100,9 @@ export interface User {
   name: string;
   classification?: UserClassification;
   specialty?: string;
+  habitualPrograms?: string[];
+  habitualProgramsByRole?: Record<string, string[]>;
+  habitualProgramsDays?: Record<string, Record<string, string[]>>; // role -> program -> days[]
   avatar?: string;
   mobile?: string;
   email?: string;

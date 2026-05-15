@@ -16,6 +16,7 @@ export interface CreditInfo {
   album: string;
   year: string;
   genre?: string;
+  modificado?: string;
 }
 
 export interface ExportItem {
