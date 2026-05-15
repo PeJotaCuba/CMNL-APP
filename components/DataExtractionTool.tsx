@@ -58,6 +58,7 @@ const DataExtractionTool: React.FC<Props> = ({ onBack, isAdmin }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [editingCommand, setEditingCommand] = useState<PowerShellCommand | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('rcm_data_extraction_commands');
@@ -133,7 +134,7 @@ pause
         const writable = await handle.createWritable();
         await writable.write(batContent);
         await writable.close();
-        alert('Archivo guardado. Ve a la carpeta donde lo guardaste y ábrelo (doble clic) para ejecutar la automatización allí mismo.');
+        setShowCompletionDialog(true);
       } else {
         // Fallback clásico
         const element = document.createElement("a");
@@ -144,7 +145,7 @@ pause
         element.click();
         document.body.removeChild(element);
         URL.revokeObjectURL(element.href);
-        alert('El archivo se ha descargado. Muévelo a la carpeta deseada y ábrelo (doble clic) para ejecutarlo allí mismo.');
+        setShowCompletionDialog(true);
       }
     } catch (e) {
       console.error('Descarga cancelada o fallida', e);
@@ -353,6 +354,50 @@ pause
               )}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCompletionDialog && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#1A0F0A] border border-amber-900/40 p-6 rounded-xl w-full max-w-md shadow-2xl relative"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
+                  <CheckCircle2 size={24} />
+                </div>
+                <h2 className="text-xl font-bold text-amber-500">
+                  Archivo guardado con éxito
+                </h2>
+              </div>
+              
+              <p className="text-stone-300 mb-6 leading-relaxed">
+                ¿Deseas abrir la carpeta contenedora para ejecutar el archivo <strong>.bat</strong> ahora mismo?
+              </p>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
+                <button 
+                  onClick={() => setShowCompletionDialog(false)}
+                  className="px-4 py-2 text-sm font-medium text-stone-300 hover:text-white border border-stone-700 hover:bg-stone-800 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => {
+                    alert("Aviso de Seguridad:\\n\\nPor medidas de seguridad de los navegadores web modernos, no es posible abrir el Explorador de Archivos de Windows ni ejecutar archivos automáticamente desde esta interfaz web.\\n\\nPor favor, dirígete manualmente a la carpeta donde acabas de guardar el archivo y haz doble clic sobre él para iniciar la automatización.");
+                    setShowCompletionDialog(false);
+                  }}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-center rounded-lg text-sm font-bold transition-colors"
+                >
+                  Abrir Carpeta
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
