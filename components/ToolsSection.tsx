@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Wrench, 
@@ -7,9 +7,11 @@ import {
   Megaphone, 
   Settings,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Database
 } from 'lucide-react';
 import CMNLHeader from './CMNLHeader';
+import DataExtractionTool from './DataExtractionTool';
 
 interface ToolsSectionProps {
   onBack: () => void;
@@ -18,6 +20,8 @@ interface ToolsSectionProps {
 }
 
 const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser }) => {
+  const [activeTool, setActiveTool] = useState<string | null>(null);
+
   const allTools = [
     {
       id: 'script-format',
@@ -27,6 +31,15 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
       color: 'from-blue-500/20 to-blue-600/20',
       textColor: 'text-blue-400',
       borderColor: 'border-blue-500/30'
+    },
+    {
+      id: 'data-extraction',
+      title: 'Extracción de Datos',
+      description: 'Automatiza la extracción de propiedades de archivos de texto y audio mediante PowerShell.',
+      icon: Database,
+      color: 'from-cyan-500/20 to-cyan-600/20',
+      textColor: 'text-cyan-400',
+      borderColor: 'border-cyan-500/30'
     },
     {
       id: 'inst-docs',
@@ -63,6 +76,23 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   // Admins see all tools, workers see assigned tools
   const tools = isAdmin ? allTools : allTools.filter(t => userTools.includes(t.id));
 
+  // If a tool is active, render it instead of the list
+  if (activeTool === 'data-extraction') {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          title="Extracción de Datos" 
+          subtitle="Herramientas PowerShell" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <DataExtractionTool onBack={() => setActiveTool(null)} isAdmin={isAdmin} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
       <CMNLHeader 
@@ -96,6 +126,7 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
           {tools.map((tool, index) => (
             <motion.button
               key={tool.id}
+              onClick={() => setActiveTool(tool.id)}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.1 }}
