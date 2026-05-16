@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { UserRole, Program, DailyContent, UserProfile, DayThemeData, EfemeridesData, ConmemoracionesData } from '../types.ts';
 import { getWeeksInMonth, DayInfo, getCurrentDateInfo } from '../utils/dateUtils.ts';
 import { MONTHS_DATA } from '../constants.ts';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, TableLayoutType, VerticalAlign } from "docx";
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import AgendaHeader from '../components/AgendaHeader';
-import { saveAgendaDocx, loadAgendaDocxs, deleteAgendaDocx, GeneratedAgenda } from '../services/db';
+import { saveAgendaPdf, loadAgendaPdfs, deleteAgendaPdf, deleteAllAgendaPdfs, GeneratedAgenda } from '../services/db';
 
 interface EditorialProps {
   user: UserProfile;
@@ -122,24 +123,27 @@ const Editorial: React.FC<EditorialProps> = ({
   const [progSearch, setProgSearch] = useState(''); 
   const [viewModal, setViewModal] = useState<{ title: string, content: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [viewDocxArchive, setViewDocxArchive] = useState(false);
+  const [viewPdfArchive, setViewPdfArchive] = useState(false);
   const [archiveList, setArchiveList] = useState<GeneratedAgenda[]>([]);
+
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string, onConfirm: () => void } | null>(null);
+  const [alertDialog, setAlertDialog] = useState<{ message: string, onAlertClose?: () => void } | null>(null);
 
   const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-     if (viewDocxArchive) {
-        loadAgendaDocxs().then(setArchiveList);
+     if (viewPdfArchive) {
+        loadAgendaPdfs().then(setArchiveList);
      }
-  }, [viewDocxArchive]);
+  }, [viewPdfArchive]);
 
-  const handleGenerateDocx = async () => {
-      const data = await generateDocxBlob();
+  const handleGeneratePdf = async () => {
+      const data = await generatePdfBlob();
       if (!data) return;
 
-      const newDocx: GeneratedAgenda = {
+      const newPdf: GeneratedAgenda = {
           id: Date.now().toString(),
           filename: data.filename,
           blob: data.blob,
@@ -148,8 +152,8 @@ const Editorial: React.FC<EditorialProps> = ({
           weekLabel: activeWeek?.label || ''
       };
 
-      await saveAgendaDocx(newDocx);
-      setViewDocxArchive(true);
+      await saveAgendaPdf(newPdf);
+      setViewPdfArchive(true);
   };
 
   const handleArchiveDownload = (agenda: GeneratedAgenda) => {
@@ -162,70 +166,73 @@ const Editorial: React.FC<EditorialProps> = ({
   };
 
   const handleArchiveWhatsApp = async (agenda: GeneratedAgenda) => {
-      const textDesc = `Buenos días, esta es la agenda editorial de la ${agenda.weekLabel} del mes de ${agenda.month}.`;
-      const file = new File([agenda.blob], agenda.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-              await navigator.share({
-                  files: [file],
-                  title: 'Agenda Editorial',
-                  text: textDesc
-              });
-              return;
-          } catch (e: any) {
-              console.error("Error sharing with navigator.share", e);
-              if (e.name !== 'AbortError') {
-                  alert("La compartición directa del archivo DOCX no es soportada. El archivo se descargará para que lo adjuntes manualmente.");
-                  handleArchiveDownload(agenda);
-              } else {
-                  return; // User cancelled
-              }
-          }
-      }
+      // Direct redirect to WhatsApp Group as requested by user.
+      const whatsappGroupUrl = `https://chat.whatsapp.com/IY4VnjbdYP9I9ozxV7BASS`;
+      window.open(whatsappGroupUrl, "_blank");
 
-      // Fallback
-      const textEncoded = encodeURIComponent(textDesc);
-      window.open(`https://chat.whatsapp.com/IY4VnjbdYP9I9ozxV7BASS?text=${textEncoded}`, "_blank");
+      setAlertDialog({ 
+          message: "Redirigiendo al grupo de WhatsApp. El PDF está disponible en tus archivos generados." 
+      });
   };
 
   const handleArchiveGmail = async (agenda: GeneratedAgenda) => {
-      const textDesc = `Buenos días, esta es la agenda editorial de la ${agenda.weekLabel} del mes de ${agenda.month}.`;
-      const file = new File([agenda.blob], agenda.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const targetUsers = users.filter(u => {
+          const classification = normalize(u.classification || '');
+          const specialty = normalize(u.specialty || '');
+          return classification.includes('guionist') || classification.includes('asesor') || classification.includes('especialista') ||
+                 specialty.includes('guionist') || specialty.includes('asesor') || specialty.includes('especialista');
+      });
+      
+      const emailsList = targetUsers.map(u => u.email).filter(e => e);
+      const emails = emailsList.join(',');
+      
+      if (!emailsList.length) {
+          setAlertDialog({ message: "No se encontraron correos de guionistas o asesores registrados." });
+          return;
+      }
 
+      const subject = `Agenda Editorial CMNL - ${agenda.month} ${agenda.weekLabel}`;
+      const textDesc = `Buenos días, esta es la agenda editorial de la ${agenda.weekLabel} del mes de ${agenda.month}.`;
+
+      // Optimized flow: Copy emails to clipboard to assist the user
+      try {
+          await navigator.clipboard.writeText(emails);
+      } catch (err) {
+          console.error("Failed to copy emails", err);
+      }
+
+      // Try Automated Sharing (Web Share API) - Only way to attach the file
+      const file = new File([agenda.blob], agenda.filename, { type: 'application/pdf' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-              await navigator.share({
-                  files: [file],
-                  title: 'Agenda Editorial',
-                  text: textDesc
+              // We show a quick alert to prepare the user before the native sheet opens
+              setAlertDialog({ 
+                  message: "Los correos se han copiado al portapapeles. Selecciona Gmail en la siguiente ventana y pega los destinatarios en el campo 'Para'.",
+                  onAlertClose: async () => {
+                      try {
+                          await navigator.share({
+                              files: [file],
+                              title: subject,
+                              text: textDesc
+                          });
+                      } catch (e: any) {
+                          if (e.name !== 'AbortError') console.error(e);
+                      }
+                  }
               });
               return;
           } catch (e: any) {
-              console.error("Error sharing with navigator.share", e);
-              if (e.name !== 'AbortError') {
-                  alert("La compartición directa del archivo DOCX no es soportada. Se preparará un correo y el archivo se descargará para que lo adjuntes manualmente.");
-                  handleArchiveDownload(agenda);
-              } else {
-                  return; // User cancelled
-              }
+              console.error(e);
           }
       }
-
+      
       // Fallback
-      const targetUsers = users.filter(u => {
-          const c = normalize((u as any).classification || '');
-          const s = normalize((u as any).specialty || '');
-          return c.includes('guionist') || c.includes('asesor') || c.includes('especialista') ||
-                 s.includes('guionist') || s.includes('asesor') || s.includes('especialista');
-      });
-      const emails = targetUsers.map(u => (u as any).email).filter(e => e).join(',');
-      const subject = `Agenda Editorial CMNL - ${agenda.month} ${agenda.weekLabel}`;
       const subjectEncoded = encodeURIComponent(subject);
       const bodyEncoded = encodeURIComponent(textDesc);
-      const mailtoUrl = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
-      
-      window.location.href = mailtoUrl;
+      window.location.href = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
+      setAlertDialog({ 
+          message: "Se ha abierto tu aplicación de correo. Debido a restricciones del sistema, por favor adjunta el PDF manualmente." 
+      });
   };
 
   const handleSendComment = () => {
@@ -307,8 +314,8 @@ const Editorial: React.FC<EditorialProps> = ({
   };
 
   const handleBack = () => {
-    if (viewDocxArchive) {
-        setViewDocxArchive(false);
+    if (viewPdfArchive) {
+        setViewPdfArchive(false);
     } else if (selectedDay) {
         // Volver de Editor a Vista de Semana
         setSelectedDay(null);
@@ -363,11 +370,42 @@ const Editorial: React.FC<EditorialProps> = ({
      onUpdateDayThemes(updatedDayThemes);
   };
 
+  const dialogModals = (
+    <>
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-card-dark border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <h3 className="text-lg font-bold text-white mb-2">Confirmar acción</h3>
+            <p className="text-sm text-text-secondary mb-6">{confirmDialog.message}</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmDialog(null)} className="px-4 py-2 text-xs font-bold text-white/70 hover:bg-white/5 rounded-xl transition-colors tracking-widest uppercase">Cancelar</button>
+              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }} className="px-4 py-2 text-xs font-bold bg-primary text-background-dark rounded-xl hover:opacity-90 transition-opacity tracking-widest uppercase">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {alertDialog && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-card-dark border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+            <div className="size-12 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-2xl">info</span>
+            </div>
+            <p className="text-sm text-text-secondary mb-6">{alertDialog.message}</p>
+            <button onClick={() => { alertDialog.onAlertClose?.(); setAlertDialog(null); }} className="w-full py-3 text-xs font-bold bg-primary text-background-dark rounded-xl hover:opacity-90 transition-opacity tracking-widest uppercase">Aceptar</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   const handleClearWeek = () => {
-    if (confirm(`¿Estás seguro de BORRAR toda la planificación de esta semana (${currentMonthLabel})?`)) {
-        clearWeekData();
-        alert("🗑️ Semana limpiada correctamente.");
-    }
+    setConfirmDialog({
+        message: `¿Estás seguro de BORRAR toda la planificación de esta semana (${currentMonthLabel})?`,
+        onConfirm: () => {
+            clearWeekData();
+            setAlertDialog({ message: "🗑️ Semana limpiada correctamente." });
+        }
+    });
   };
 
   const processImportText = (text: string) => {
@@ -512,7 +550,7 @@ const Editorial: React.FC<EditorialProps> = ({
     return days;
   };
 
-  const generateDocxBlob = async (): Promise<{blob: Blob, filename: string} | null> => {
+  const generatePdfBlob = async (): Promise<{blob: Blob, filename: string} | null> => {
       if (!activeWeek) return null;
       const visibleDays = getVisibleDays(); // Usamos los días filtrados
       if (visibleDays.length === 0) {
@@ -522,73 +560,27 @@ const Editorial: React.FC<EditorialProps> = ({
 
       const weekNumber = activeWeek.label.replace('Semana ', '');
       const dateRange = `del ${activeWeek.start} al ${activeWeek.end}`;
-      const docChildren: any[] = [];
 
-      // TÍTULO DE LA EMISORA
-      docChildren.push(new Paragraph({
-          children: [new TextRun({ text: "RADIO CIUDAD MONUMENTO", bold: true, size: 36 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 120 }
-      }));
+      const jsPDFCtor = (jsPDF as any).default || jsPDF;
+      const doc = new jsPDFCtor();
 
-      // SUBTÍTULO
-      docChildren.push(new Paragraph({
-          children: [new TextRun({ text: "AGENDA EDITORIAL", bold: true, size: 32 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 240 }
-      }));
+      doc.setFontSize(20);
+      doc.setFont("helvetica", "bold");
+      doc.text("RADIO CIUDAD MONUMENTO", 105, 20, { align: "center" });
 
-      const headerTable = new Table({
-          width: { size: 5000, type: WidthType.PERCENTAGE },
-          alignment: AlignmentType.LEFT,
-          borders: { 
-            top: { style: BorderStyle.SINGLE, size: 4 }, 
-            bottom: { style: BorderStyle.SINGLE, size: 4 }, 
-            left: { style: BorderStyle.SINGLE, size: 4 }, 
-            right: { style: BorderStyle.SINGLE, size: 4 }, 
-            insideHorizontal: { style: BorderStyle.SINGLE, size: 2 }, 
-            insideVertical: { style: BorderStyle.SINGLE, size: 2 } 
-          },
-          rows: [
-              new TableRow({ 
-                children: [ 
-                  new TableCell({ 
-                    children: [new Paragraph({ children: [new TextRun({ text: "MES", bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
-                    verticalAlign: VerticalAlign.CENTER,
-                    width: { size: 1000, type: WidthType.PERCENTAGE },
-                    shading: { fill: "F2F2F2" }
-                  }), 
-                  new TableCell({ 
-                    children: [new Paragraph({ children: [new TextRun({ text: currentMonthLabel, bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
-                    verticalAlign: VerticalAlign.CENTER,
-                    width: { size: 1500, type: WidthType.PERCENTAGE }
-                  }), 
-                  new TableCell({ 
-                    children: [new Paragraph({ children: [new TextRun({ text: "Semana", bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
-                    verticalAlign: VerticalAlign.CENTER,
-                    width: { size: 1000, type: WidthType.PERCENTAGE },
-                    shading: { fill: "F2F2F2" }
-                  }), 
-                  new TableCell({ 
-                    children: [new Paragraph({ children: [new TextRun({ text: weekNumber, bold: true, size: 28 })], alignment: AlignmentType.CENTER })], 
-                    verticalAlign: VerticalAlign.CENTER,
-                    width: { size: 1500, type: WidthType.PERCENTAGE }
-                  }) 
-                ] 
-              }),
-              new TableRow({ 
-                children: [ 
-                  new TableCell({ 
-                    children: [new Paragraph({ children: [new TextRun({ text: dateRange, bold: true, size: 28 })], alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 } })], 
-                    columnSpan: 4,
-                    width: { size: 5000, type: WidthType.PERCENTAGE }
-                  }) 
-                ] 
-              })
-          ]
+      doc.setFontSize(16);
+      doc.text("AGENDA EDITORIAL", 105, 30, { align: "center" });
+
+      autoTable(doc, {
+          startY: 40,
+          head: [['MES', currentMonthLabel, 'Semana', weekNumber]],
+          body: [[{ content: dateRange, colSpan: 4, styles: { halign: 'center' } }]],
+          theme: 'grid',
+          headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0], halign: 'center' },
+          bodyStyles: { halign: 'center', fontStyle: 'bold' }
       });
-      docChildren.push(headerTable);
-      docChildren.push(new Paragraph({ text: "", spacing: { after: 200 } }));
+
+      let finalY = (doc as any).lastAutoTable.finalY + 10;
 
       for (const day of visibleDays) {
           if (!day) continue;
@@ -603,114 +595,50 @@ const Editorial: React.FC<EditorialProps> = ({
           const dayEfemerides = efemerides[dayMonthLabel]?.filter(e => e.day === day.date) || [];
           const dayConmemoraciones = conmemoraciones[dayMonthLabel]?.filter(c => c.day === day.date) || [];
 
-          const efemeridesParagraphs: Paragraph[] = [];
-          if (dayEfemerides.length > 0) {
-              dayEfemerides.forEach(e => {
-                  efemeridesParagraphs.push(new Paragraph({ 
-                      children: [ 
-                        new TextRun({ text: `${e.event}: `, bold: true, size: 24 }), 
-                        new TextRun({ text: e.description, size: 24 }) 
-                      ], 
-                      spacing: { after: 80, before: 80 } 
-                  }));
-              });
-          } else {
-              efemeridesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "No se reportan efemérides", size: 20, italics: true })], alignment: AlignmentType.CENTER }));
-          }
+          let efemStr = dayEfemerides.map(e => `${e.event}: ${e.description}`).join('\n\n') || "No se reportan efemérides";
+          
+          let conmemoStr = '';
+          dayConmemoraciones.forEach(c => {
+             if(c.national) conmemoStr += `Nacional: ${c.national}\n`;
+             if(c.international) conmemoStr += `Internacional: ${c.international}\n`;
+          });
+          if (!conmemoStr) conmemoStr = "No se reportan conmemoraciones";
 
-          const conmemoracionesParagraphs: Paragraph[] = [];
-          if (dayConmemoraciones.length > 0) {
-              dayConmemoraciones.forEach(c => {
-                  if (c.national) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "Nacional: ", bold: true, size: 24 }), new TextRun({ text: c.national, size: 24 })], spacing: { after: 80, before: 80 } }));
-                  if (c.international) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "Internacional: ", bold: true, size: 24 }), new TextRun({ text: c.international, size: 24 })], spacing: { after: 80, before: 80 } }));
-              });
-          }
-          if (conmemoracionesParagraphs.length === 0) conmemoracionesParagraphs.push(new Paragraph({ children: [new TextRun({ text: "No se reportan conmemoraciones", size: 20, italics: true })], alignment: AlignmentType.CENTER }));
-
-          const dayRows: TableRow[] = [];
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `${day.name} ${day.date}`, bold: true, size: 32 })], alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 } })], columnSpan: 2, shading: { fill: "D9D9D9" } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "EFEMÉRIDES", bold: true, size: 24 })], alignment: AlignmentType.CENTER, spacing: { before: 60, after: 60 } })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: efemeridesParagraphs, columnSpan: 2, margins: { left: 200, right: 200, top: 100, bottom: 100 } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "CONMEMORACIONES", bold: true, size: 24 })], alignment: AlignmentType.CENTER, spacing: { before: 60, after: 60 } })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: conmemoracionesParagraphs, columnSpan: 2, margins: { left: 200, right: 200, top: 100, bottom: 100 } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "TEMÁTICA CENTRAL", bold: true, size: 24 })], alignment: AlignmentType.CENTER, spacing: { before: 60, after: 60 } })], columnSpan: 2, shading: { fill: "F2F2F2" } })] }));
-          dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: dayTheme || "Por definir", size: 30, italics: !dayTheme })], alignment: AlignmentType.LEFT, spacing: { before: 120, after: 120 } })], columnSpan: 2, margins: { left: 200, right: 200 } })] }));
-
-          dayRows.push(new TableRow({ 
-            children: [ 
-              new TableCell({ 
-                children: [new Paragraph({ children: [new TextRun({ text: "PROGRAMA", bold: true, size: 24 })], alignment: AlignmentType.CENTER })], 
-                width: { size: 1750, type: WidthType.PERCENTAGE },
-                shading: { fill: "F2F2F2" }
-              }), 
-              new TableCell({ 
-                children: [new Paragraph({ children: [new TextRun({ text: "TEMÁTICA", bold: true, size: 24 })], alignment: AlignmentType.CENTER })], 
-                width: { size: 3250, type: WidthType.PERCENTAGE },
-                shading: { fill: "F2F2F2" }
-              }) 
-            ] 
-          }));
-
-          // Filtro de programas también aquí para la exportación
           const dayProgs = searchablePrograms.filter(p => p.days.includes(day.name));
           dayProgs.sort((a,b) => a.time.localeCompare(b.time));
 
-          if (dayProgs.length > 0) {
-              dayProgs.forEach(p => {
-                  const data = getEffectiveData(p, selectedWeekId!, day.name);
-                  dayRows.push(new TableRow({ 
-                    children: [ 
-                      new TableCell({ 
-                        children: [new Paragraph({ children: [new TextRun({ text: p.name, bold: true, size: 28 })], spacing: { before: 120, after: 120 } })], 
-                        width: { size: 1750, type: WidthType.PERCENTAGE },
-                        margins: { left: 100 }
-                      }), 
-                      new TableCell({ 
-                        children: [new Paragraph({ children: [new TextRun({ text: data.theme || "-", size: 28 })], spacing: { before: 120, after: 120 } })], 
-                        width: { size: 3250, type: WidthType.PERCENTAGE },
-                        margins: { left: 100, right: 100 }
-                      }) 
-                    ] 
-                  }));
-              });
-          } else {
-              dayRows.push(new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Sin programas asignados", italics: true, size: 20 })], alignment: AlignmentType.CENTER })], columnSpan: 2 })] }));
-          }
-          docChildren.push(new Table({ 
-              width: { size: 5000, type: WidthType.PERCENTAGE }, 
-              alignment: AlignmentType.LEFT,
-              rows: dayRows, 
-              borders: { 
-                  top: { style: BorderStyle.SINGLE, size: 6 }, 
-                  bottom: { style: BorderStyle.SINGLE, size: 6 }, 
-                  left: { style: BorderStyle.SINGLE, size: 6 }, 
-                  right: { style: BorderStyle.SINGLE, size: 6 }, 
-                  insideHorizontal: { style: BorderStyle.SINGLE, size: 2 }, 
-                  insideVertical: { style: BorderStyle.SINGLE, size: 2 } 
-              } 
-          }));
-          docChildren.push(new Paragraph({ text: "", spacing: { after: 300 } }));
+          const progBody = dayProgs.length > 0 ? dayProgs.map(p => {
+              const data = getEffectiveData(p, selectedWeekId!, day.name);
+              return [p.name, data.theme || '-'];
+          }) : [["Sin programas asignados", ""]];
+
+          autoTable(doc, {
+              startY: finalY,
+              head: [[{ content: `${day.name} ${day.date}`, colSpan: 2, styles: { halign: 'center', fillColor: [217, 217, 217], textColor: [0, 0, 0] } }]],
+              body: [
+                  [{ content: 'EFEMÉRIDES', colSpan: 2, styles: { halign: 'center', fontStyle: 'bold', fillColor: [242, 242, 242] } }],
+                  [{ content: efemStr, colSpan: 2 }],
+                  [{ content: 'CONMEMORACIONES', colSpan: 2, styles: { halign: 'center', fontStyle: 'bold', fillColor: [242, 242, 242] } }],
+                  [{ content: conmemoStr, colSpan: 2 }],
+                  [{ content: 'TEMÁTICA CENTRAL', colSpan: 2, styles: { halign: 'center', fontStyle: 'bold', fillColor: [242, 242, 242] } }],
+                  [{ content: dayTheme || "Por definir", colSpan: 2, styles: { fontStyle: dayTheme ? 'normal' : 'italic' } }],
+                  [{ content: 'PROGRAMA', styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }, { content: 'TEMÁTICA', styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } }],
+                  ...progBody
+              ],
+              theme: 'grid',
+              columnStyles: {
+                  0: { cellWidth: 60 },
+                  1: { cellWidth: 'auto' }
+              }
+          });
+
+          finalY = (doc as any).lastAutoTable.finalY + 10;
       }
 
-      const doc = new Document({ 
-        sections: [{ 
-          properties: {
-            page: {
-              margin: {
-                top: 720,
-                right: 720,
-                bottom: 720,
-                left: 720,
-              },
-            },
-          },
-          children: docChildren 
-        }] 
-      });
-      const blob = await Packer.toBlob(doc);
+      const blob = doc.output('blob');
       return {
           blob,
-          filename: `Agenda-${currentMonthLabel}-${activeWeek.start}-${activeWeek.end}.docx`
+          filename: `Agenda-${currentMonthLabel}-${activeWeek.start}-${activeWeek.end}.pdf`
       };
   };
 
@@ -875,20 +803,37 @@ const Editorial: React.FC<EditorialProps> = ({
           </div>
         )}
         {viewModal && <ContentModal title={viewModal.title} content={viewModal.content} onClose={() => setViewModal(null)} />}
+        {dialogModals}
       </div>
     );
   }
 
-  if (viewDocxArchive) {
+  if (viewPdfArchive) {
     return (
       <div className="h-full flex flex-col bg-background-dark">
         <AgendaHeader 
-          title="Archivos Docx Generados" 
+          title="Archivos PDF Generados" 
           user={user} 
           onMenuClick={onMenuClick} 
           onBack={handleBack}
         />
         <main className="flex-1 overflow-y-auto p-4 space-y-4 pt-10">
+          {archiveList.length > 0 && (
+            <div className="flex justify-end mb-2">
+              <button onClick={() => {
+                  setConfirmDialog({
+                      message: "¿Estás seguro de ELIMINAR TODOS los archivos PDF generados? Esta acción no se puede deshacer.",
+                      onConfirm: async () => {
+                          await deleteAllAgendaPdfs();
+                          setArchiveList([]);
+                      }
+                  });
+              }} className="text-admin-red hover:bg-admin-red/10 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-2 border border-admin-red/20 shadow-sm shadow-admin-red/10">
+                <span className="material-symbols-outlined text-sm">delete_sweep</span> 
+                Borrar Todos
+              </button>
+            </div>
+          )}
           {archiveList.length === 0 ? (
             <div className="text-center text-white/50 text-sm py-10">No hay archivos generados.</div>
           ) : (
@@ -909,17 +854,21 @@ const Editorial: React.FC<EditorialProps> = ({
                   </button>
                 </div>
                 <div className="text-right">
-                  <button onClick={async () => {
-                      if (window.confirm("¿Estás seguro de eliminar este archivo?")) {
-                          await deleteAgendaDocx(agenda.id);
-                          setArchiveList(archiveList.filter(a => a.id !== agenda.id));
-                      }
+                  <button onClick={() => {
+                      setConfirmDialog({
+                          message: "¿Estás seguro de eliminar este archivo?",
+                          onConfirm: async () => {
+                              await deleteAgendaPdf(agenda.id);
+                              setArchiveList(prev => prev.filter(a => a.id !== agenda.id));
+                          }
+                      });
                   }} className="text-red-400 text-xs font-medium hover:underline">Eliminar</button>
                 </div>
               </div>
             ))
           )}
         </main>
+        {dialogModals}
       </div>
     );
   }
@@ -946,11 +895,11 @@ const Editorial: React.FC<EditorialProps> = ({
               onBack={handleBack}
             >
               <button 
-                onClick={() => setViewDocxArchive(true)} 
+                onClick={() => setViewPdfArchive(true)} 
                 className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
               >
                 <span className="material-symbols-outlined text-[16px]">folder_open</span>
-                <span>Archivos Docx</span>
+                <span>Archivos PDF</span>
               </button>
             </AgendaHeader>
 
@@ -1016,10 +965,10 @@ const Editorial: React.FC<EditorialProps> = ({
             {/* HERRAMIENTAS DE SEMANA (Solo visibles aquí) */}
             <div className="flex-none bg-card-dark/95 backdrop-blur border-t border-white/5 p-4 z-40">
                 <div className="flex flex-row w-full gap-2 mb-3">
-                    {/* Botón Word */}
-                     <button onClick={handleGenerateDocx} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
-                        <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Generar<br/>Docx</span>
-                    </button>
+                    {/* Botón PDF */}
+                     <button onClick={handleGeneratePdf} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
+                        <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Generar<br/>PDF</span>
+                     </button>
                     
                     {/* Botón Compartir (WhatsApp/Email) */}
                     {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
@@ -1071,8 +1020,20 @@ const Editorial: React.FC<EditorialProps> = ({
                     monthName={currentMonthLabel}
                     getEffectiveData={getEffectiveData}
                     selectedWeekId={selectedWeekId}
+                    onDownloadPdf={async () => {
+                        const res = await generatePdfBlob();
+                        if (res) {
+                            const link = document.createElement("a");
+                            link.href = URL.createObjectURL(res.blob);
+                            link.download = res.filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }
+                    }}
                 />
             )}
+            {dialogModals}
         </div>
       );
   }
@@ -1130,6 +1091,7 @@ const Editorial: React.FC<EditorialProps> = ({
           </div>
         )}
       </main>
+      {dialogModals}
     </div>
   );
 };
@@ -1144,12 +1106,16 @@ const ShareAgendaModal: React.FC<{
   monthName: string;
   getEffectiveData: (p: Program, weekId: string, dayName: string) => DailyContent;
   selectedWeekId: string;
-}> = ({ activeWeek, programs, users, onClose, monthName, getEffectiveData, selectedWeekId }) => {
+  onDownloadPdf?: () => Promise<void>;
+}> = ({ activeWeek, programs, users, onClose, monthName, getEffectiveData, selectedWeekId, onDownloadPdf }) => {
     const [channel, setChannel] = useState<'whatsapp' | 'email' | null>(null);
     const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
     const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
     const [shareStep, setShareStep] = useState<1 | 2>(1);
     
+    // modal alert state if needed
+    const [modalAlert, setModalAlert] = useState<string | null>(null);
+
     const targetUsers = useMemo(() => {
         return users.filter(u => {
             const classification = normalize((u as any).classification || '');
@@ -1265,41 +1231,55 @@ const ShareAgendaModal: React.FC<{
         return content;
     };
 
-    const handleShareIndividual = (u: UserProfile) => {
+    const handleShareIndividual = async (u: UserProfile) => {
         let phone = (u as any).mobile || u.phone;
         if (phone) {
             const content = generateContent(u);
             if (phone && !phone.startsWith('53') && phone.length === 8) phone = '53' + phone;
+            
+            // Re-introduced as a nice info but skipped download to follow user preference
+            // and avoid pop-up blockers blocking the WhatsApp window
+            setModalAlert(`Preparando WhatsApp para ${u.name}. Recuerda adjuntar el PDF si lo necesitas.`);
+            
             openWhatsApp(content, phone);
         }
     };
 
-    const handleShare = () => {
+    const handleShare = async () => {
         if (selectedRecipients.length === 0 || selectedPrograms.length === 0 || !channel) return;
 
         const recipientUsers = targetUsers.filter(u => selectedRecipients.includes(u.id));
 
         if (channel === 'whatsapp') {
             if (recipientUsers.length === 1) {
-                handleShareIndividual(recipientUsers[0]);
+                await handleShareIndividual(recipientUsers[0]);
                 onClose();
             } else {
                 setShareStep(2);
             }
         } else {
-            const emails = recipientUsers.map(u => (u as any).email).filter(e => e);
-            if (emails.length > 0) {
-                // For email, we might want to send a general agenda or one that includes everyone's programs
-                // The user requested: "email with all the directions for email addresses of all the users who are scriptwriters and advisors"
-                // "without the download of the Docs document or its automatic attachment"
-                const content = generateContent(); 
-                const subject = encodeURIComponent(`Agenda Editorial CMNL - ${monthName} ${activeWeek.label}`);
-                const body = encodeURIComponent(content.replace(/\*/g, ''));
-                window.open(`mailto:${emails.join(',')}?subject=${subject}&body=${body}`);
+            const emailsList = recipientUsers.map(u => (u as any).email).filter(e => e);
+            if (emailsList.length > 0) {
+                const emails = emailsList.join(',');
+                const subject = `Agenda Editorial CMNL - ${monthName} ${activeWeek.label}`;
+                const textDesc = generateContent().replace(/\*/g, '');
+
+                // Assist by copying emails
+                try {
+                    await navigator.clipboard.writeText(emails);
+                } catch (err) {
+                    console.error(err);
+                }
+
+                const subjectEncoded = encodeURIComponent(subject);
+                const bodyEncoded = encodeURIComponent(textDesc);
+                
+                // Force open mail app to ensure recipients are there
+                window.location.href = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
+                setModalAlert("Se ha abierto Gmail con los destinatarios. Los correos también se copiaron al portapapeles. Recuerda adjuntar el PDF.");
             } else {
-                alert("No se encontraron correos seleccionados.");
+                setModalAlert("No se encontraron correos seleccionados.");
             }
-            onClose();
         }
     };
 
@@ -1342,6 +1322,17 @@ const ShareAgendaModal: React.FC<{
                     <div className="p-6 border-t border-white/5 bg-card-dark">
                         <button onClick={onClose} className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all">Finalizar</button>
                     </div>
+                    {modalAlert && (
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-card-dark border border-white/10 rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center">
+                                <div className="size-12 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <span className="material-symbols-outlined text-2xl">info</span>
+                                </div>
+                                <p className="text-sm text-text-secondary mb-6">{modalAlert}</p>
+                                <button onClick={() => { setModalAlert(null); if (shareStep === 1) onClose(); }} className="w-full py-3 text-xs font-bold bg-primary text-background-dark rounded-xl hover:opacity-90 transition-opacity tracking-widest uppercase">Aceptar</button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -1507,7 +1498,7 @@ const ExportAgendaModal: React.FC<{
                         <span className="material-symbols-outlined text-white text-2xl">description</span>
                     </div>
                     <h3 className="text-white font-bold text-xl">Exportar Agenda</h3>
-                    <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest mt-2">¿Cómo deseas obtener este documento .docx?</p>
+                    <p className="text-[10px] text-text-secondary font-bold uppercase tracking-widest mt-2">¿Cómo deseas obtener este documento PDF?</p>
                 </div>
 
                 <div className="p-6 space-y-3">

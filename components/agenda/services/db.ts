@@ -29,7 +29,7 @@ export const openAgendaDB = (): Promise<IDBDatabase> => {
     });
 };
 
-export const saveAgendaDocx = async (agenda: GeneratedAgenda): Promise<void> => {
+export const saveAgendaPdf = async (agenda: GeneratedAgenda): Promise<void> => {
     let db: IDBDatabase | null = null;
     try {
         db = await openAgendaDB();
@@ -44,12 +44,12 @@ export const saveAgendaDocx = async (agenda: GeneratedAgenda): Promise<void> => 
         });
     } catch (error) {
         db?.close();
-        console.error("Error guardando agenda docx:", error);
+        console.error("Error guardando agenda pdf:", error);
         throw error;
     }
 };
 
-export const loadAgendaDocxs = async (): Promise<GeneratedAgenda[]> => {
+export const loadAgendaPdfs = async (): Promise<GeneratedAgenda[]> => {
     let db: IDBDatabase | null = null;
     try {
         db = await openAgendaDB();
@@ -75,7 +75,7 @@ export const loadAgendaDocxs = async (): Promise<GeneratedAgenda[]> => {
     }
 };
 
-export const deleteAgendaDocx = async (id: string): Promise<void> => {
+export const deleteAgendaPdf = async (id: string): Promise<void> => {
     let db: IDBDatabase | null = null;
     try {
         db = await openAgendaDB();
@@ -83,6 +83,29 @@ export const deleteAgendaDocx = async (id: string): Promise<void> => {
             const tx = db!.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
             store.delete(id);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
+        });
+    } catch (e) {
+        db?.close();
+        throw e;
+    }
+};
+
+export const deleteAllAgendaPdfs = async (): Promise<void> => {
+    let db: IDBDatabase | null = null;
+    try {
+        db = await openAgendaDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.clear();
             tx.oncomplete = () => {
                 db?.close();
                 resolve();

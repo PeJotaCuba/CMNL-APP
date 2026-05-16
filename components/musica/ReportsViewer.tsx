@@ -200,7 +200,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                                 setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
                                                 return;
                                             } catch (error: any) {
-                                                if (error.name === 'AbortError') {
+                                                const errorMessage = error?.message || '';
+                                                if (error.name === 'AbortError' || errorMessage.includes('cancel')) {
                                                     // Usuario canceló, no hacemos nada más
                                                     return;
                                                 }
