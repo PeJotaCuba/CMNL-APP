@@ -6,6 +6,7 @@ import { getWeeksInMonth, DayInfo, getCurrentDateInfo } from '../utils/dateUtils
 import { MONTHS_DATA } from '../constants.ts';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType, TableLayoutType, VerticalAlign } from "docx";
 import AgendaHeader from '../components/AgendaHeader';
+import { saveAgendaDocx, loadAgendaDocxs, deleteAgendaDocx, GeneratedAgenda } from '../services/db';
 
 interface EditorialProps {
   user: UserProfile;
@@ -121,31 +122,48 @@ const Editorial: React.FC<EditorialProps> = ({
   const [progSearch, setProgSearch] = useState(''); 
   const [viewModal, setViewModal] = useState<{ title: string, content: string } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
+  const [viewDocxArchive, setViewDocxArchive] = useState(false);
+  const [archiveList, setArchiveList] = useState<GeneratedAgenda[]>([]);
+
   const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleExportDownload = async () => {
-      const data = await generateDocxBlob();
-      if (data) {
-          const url = window.URL.createObjectURL(data.blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = data.filename;
-          a.click();
-          window.URL.revokeObjectURL(url);
-      }
-      setShowExportModal(false);
-  };
+  React.useEffect(() => {
+     if (viewDocxArchive) {
+        loadAgendaDocxs().then(setArchiveList);
+     }
+  }, [viewDocxArchive]);
 
-  const handleExportWhatsApp = async () => {
+  const handleGenerateDocx = async () => {
       const data = await generateDocxBlob();
       if (!data) return;
 
-      const textDesc = `Buenos días, esta es la agenda editorial de la ${activeWeek?.label} del mes de ${currentMonthLabel}.`;
-      
-      const file = new File([data.blob], data.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const newDocx: GeneratedAgenda = {
+          id: Date.now().toString(),
+          filename: data.filename,
+          blob: data.blob,
+          createdAt: new Date().toISOString(),
+          month: currentMonthLabel,
+          weekLabel: activeWeek?.label || ''
+      };
+
+      await saveAgendaDocx(newDocx);
+      setViewDocxArchive(true);
+  };
+
+  const handleArchiveDownload = (agenda: GeneratedAgenda) => {
+      const url = window.URL.createObjectURL(agenda.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = agenda.filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+  };
+
+  const handleArchiveWhatsApp = async (agenda: GeneratedAgenda) => {
+      const textDesc = `Buenos días, esta es la agenda editorial de la ${agenda.weekLabel} del mes de ${agenda.month}.`;
+      const file = new File([agenda.blob], agenda.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
       
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
@@ -154,25 +172,26 @@ const Editorial: React.FC<EditorialProps> = ({
                   title: 'Agenda Editorial',
                   text: textDesc
               });
-              setShowExportModal(false);
               return;
-          } catch (e) {
+          } catch (e: any) {
               console.error("Error sharing with navigator.share", e);
+              if (e.name !== 'AbortError') {
+                  alert("La compartición directa del archivo DOCX no es soportada. El archivo se descargará para que lo adjuntes manualmente.");
+                  handleArchiveDownload(agenda);
+              } else {
+                  return; // User cancelled
+              }
           }
       }
 
-      // Fallback: Group Link
+      // Fallback
       const textEncoded = encodeURIComponent(textDesc);
       window.open(`https://chat.whatsapp.com/IY4VnjbdYP9I9ozxV7BASS?text=${textEncoded}`, "_blank");
-      setShowExportModal(false);
   };
 
-  const handleExportGmail = async () => {
-      const data = await generateDocxBlob();
-      if (!data) return;
-
-      const textDesc = `Buenos días, esta es la agenda editorial de la ${activeWeek?.label} del mes de ${currentMonthLabel}.`;
-      const file = new File([data.blob], data.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const handleArchiveGmail = async (agenda: GeneratedAgenda) => {
+      const textDesc = `Buenos días, esta es la agenda editorial de la ${agenda.weekLabel} del mes de ${agenda.month}.`;
+      const file = new File([agenda.blob], agenda.filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
@@ -181,14 +200,19 @@ const Editorial: React.FC<EditorialProps> = ({
                   title: 'Agenda Editorial',
                   text: textDesc
               });
-              setShowExportModal(false);
               return;
-          } catch (e) {
+          } catch (e: any) {
               console.error("Error sharing with navigator.share", e);
+              if (e.name !== 'AbortError') {
+                  alert("La compartición directa del archivo DOCX no es soportada. Se preparará un correo y el archivo se descargará para que lo adjuntes manualmente.");
+                  handleArchiveDownload(agenda);
+              } else {
+                  return; // User cancelled
+              }
           }
       }
 
-      // Fallback: Mailto (no attachment possible via mailto)
+      // Fallback
       const targetUsers = users.filter(u => {
           const c = normalize((u as any).classification || '');
           const s = normalize((u as any).specialty || '');
@@ -196,14 +220,12 @@ const Editorial: React.FC<EditorialProps> = ({
                  s.includes('guionist') || s.includes('asesor') || s.includes('especialista');
       });
       const emails = targetUsers.map(u => (u as any).email).filter(e => e).join(',');
-      const subject = `Agenda Editorial CMNL - ${currentMonthLabel} ${activeWeek?.label}`;
-      
+      const subject = `Agenda Editorial CMNL - ${agenda.month} ${agenda.weekLabel}`;
       const subjectEncoded = encodeURIComponent(subject);
       const bodyEncoded = encodeURIComponent(textDesc);
       const mailtoUrl = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
       
       window.location.href = mailtoUrl;
-      setShowExportModal(false);
   };
 
   const handleSendComment = () => {
@@ -285,7 +307,9 @@ const Editorial: React.FC<EditorialProps> = ({
   };
 
   const handleBack = () => {
-    if (selectedDay) {
+    if (viewDocxArchive) {
+        setViewDocxArchive(false);
+    } else if (selectedDay) {
         // Volver de Editor a Vista de Semana
         setSelectedDay(null);
     } else if (selectedWeekId) {
@@ -855,6 +879,51 @@ const Editorial: React.FC<EditorialProps> = ({
     );
   }
 
+  if (viewDocxArchive) {
+    return (
+      <div className="h-full flex flex-col bg-background-dark">
+        <AgendaHeader 
+          title="Archivos Docx Generados" 
+          user={user} 
+          onMenuClick={onMenuClick} 
+          onBack={handleBack}
+        />
+        <main className="flex-1 overflow-y-auto p-4 space-y-4 pt-10">
+          {archiveList.length === 0 ? (
+            <div className="text-center text-white/50 text-sm py-10">No hay archivos generados.</div>
+          ) : (
+            archiveList.map(agenda => (
+              <div key={agenda.id} className="bg-card-dark rounded-2xl p-4 border border-white/5 shadow-xl flex flex-col gap-3">
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <h3 className="text-white font-bold text-sm leading-tight">{agenda.filename}</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => handleArchiveWhatsApp(agenda)} className="bg-green-600/20 text-green-400 hover:bg-green-600/40 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">chat</span> WhatsApp
+                  </button>
+                  <button onClick={() => handleArchiveGmail(agenda)} className="bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">mail</span> Gmail
+                  </button>
+                  <button onClick={() => handleArchiveDownload(agenda)} className="bg-white/10 text-white hover:bg-white/20 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">download</span> Descargar
+                  </button>
+                </div>
+                <div className="text-right">
+                  <button onClick={async () => {
+                      if (window.confirm("¿Estás seguro de eliminar este archivo?")) {
+                          await deleteAgendaDocx(agenda.id);
+                          setArchiveList(archiveList.filter(a => a.id !== agenda.id));
+                      }
+                  }} className="text-red-400 text-xs font-medium hover:underline">Eliminar</button>
+                </div>
+              </div>
+            ))
+          )}
+        </main>
+      </div>
+    );
+  }
+
   // --- VISTA DE SEMANA (Nivel 2: Días de la Semana) ---
   if (selectedWeekId && !isMonthSelection && !selectedDay) {
       const visibleDays = getVisibleDays();
@@ -875,7 +944,15 @@ const Editorial: React.FC<EditorialProps> = ({
               user={user} 
               onMenuClick={onMenuClick} 
               onBack={handleBack}
-            />
+            >
+              <button 
+                onClick={() => setViewDocxArchive(true)} 
+                className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">folder_open</span>
+                <span>Archivos Docx</span>
+              </button>
+            </AgendaHeader>
 
             <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20 space-y-3">
                 <div className="flex items-center gap-3">
@@ -940,8 +1017,8 @@ const Editorial: React.FC<EditorialProps> = ({
             <div className="flex-none bg-card-dark/95 backdrop-blur border-t border-white/5 p-4 z-40">
                 <div className="flex flex-row w-full gap-2 mb-3">
                     {/* Botón Word */}
-                     <button onClick={() => setShowExportModal(true)} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
-                        <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Exportar<br/>Word</span>
+                     <button onClick={handleGenerateDocx} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
+                        <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Generar<br/>Docx</span>
                     </button>
                     
                     {/* Botón Compartir (WhatsApp/Email) */}
@@ -994,14 +1071,6 @@ const Editorial: React.FC<EditorialProps> = ({
                     monthName={currentMonthLabel}
                     getEffectiveData={getEffectiveData}
                     selectedWeekId={selectedWeekId}
-                />
-            )}
-            {showExportModal && (
-                <ExportAgendaModal 
-                    onClose={() => setShowExportModal(false)}
-                    onDownload={handleExportDownload}
-                    onWhatsApp={handleExportWhatsApp}
-                    onGmail={handleExportGmail}
                 />
             )}
         </div>
