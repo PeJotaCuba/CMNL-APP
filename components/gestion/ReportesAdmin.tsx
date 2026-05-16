@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, FileText, Calendar, Filter, FileCode, Search, FileDown, Trash2, Save, Upload } from 'lucide-react';
+import { Download, FileText, Calendar, Filter, FileCode, Search, FileDown, Trash2, Save, Upload, Edit2, Plus } from 'lucide-react';
 import { User, FP02Report, ProgramFicha, ConsolidatedPayment, ProgramCatalog } from '../../types';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
@@ -61,11 +61,64 @@ export const ReportesAdmin: React.FC<Props> = ({
   const [confirmAction, setConfirmAction] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [isManualProcessing, setIsManualProcessing] = useState(false);
 
+  const isProgramOnDay = (program: ProgramFicha, dateStr: string) => {
+      const date = new Date(dateStr + 'T12:00:00');
+      const day = date.getDay(); 
+      const freq = program.frequency.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      if (freq.includes('diario') || freq.includes('lunes a domingo') || freq.includes('lunes-domingo') || freq.includes('lunes - domingo')) return true;
+      if ((freq.includes('lunes a sabado') || freq.includes('lunes-sabado') || freq.includes('lunes - sabado')) && day !== 0) return true;
+      if ((freq.includes('lunes a viernes') || freq.includes('lunes-viernes') || freq.includes('lunes - viernes')) && day >= 1 && day <= 5) return true;
+      if ((freq.includes('lunes a jueves') || freq.includes('lunes-jueves') || freq.includes('lunes - jueves')) && day >= 1 && day <= 4) return true;
+      if ((freq.includes('lunes a miercoles') || freq.includes('lunes-miercoles') || freq.includes('lunes - miercoles')) && day >= 1 && day <= 3) return true;
+      if ((freq.includes('martes a viernes') || freq.includes('martes-viernes') || freq.includes('martes - viernes')) && day >= 2 && day <= 5) return true;
+      if ((freq.includes('martes a jueves') || freq.includes('martes-jueves') || freq.includes('martes - jueves')) && day >= 2 && day <= 4) return true;
+      if ((freq.includes('miercoles a viernes') || freq.includes('miercoles-viernes') || freq.includes('miercoles - viernes')) && day >= 3 && day <= 5) return true;
+      if ((freq.includes('jueves a domingo') || freq.includes('jueves-domingo') || freq.includes('jueves - domingo')) && (day >= 4 || day === 0)) return true;
+      if ((freq.includes('viernes a domingo') || freq.includes('viernes-domingo') || freq.includes('viernes - domingo')) && (day >= 5 || day === 0)) return true;
+      if ((freq.includes('fines de semana') || freq.includes('fin de semana')) && (day === 0 || day === 6)) return true;
+      
+      const daysMap: Record<number, string[]> = {
+          0: ['domingo', 'dominical'], 1: ['lunes'], 2: ['martes'], 3: ['miercoles'],
+          4: ['jueves'], 5: ['viernes'], 6: ['sabado', 'sabatina']
+      };
+      const freqWords = freq.split(/[\s,y-]+/);
+      return daysMap[day].some(d => freqWords.some(w => w.includes(d) || (d.includes(w) && w.length >= 3)));
+  };
+
+  const parseStartTime = (schedule: string) => {
+      const match = schedule.match(/(\d{1,2}):(\d{2})/);
+      if (match) return parseInt(match[1]) * 60 + parseInt(match[2]);
+      return 0;
+  };
+
+  const getNextProgramForDate = (dateStr: string) => {
+      const progsOnDay = fichas.filter(f => isProgramOnDay(f, dateStr));
+      progsOnDay.sort((a, b) => parseStartTime(a.schedule) - parseStartTime(b.schedule));
+      const existingReports = reports.filter(r => r.fecha === dateStr);
+      for (const p of progsOnDay) {
+          if (!existingReports.some(r => r.programa === p.name)) {
+              return p.name;
+          }
+      }
+      return '';
+  };
+
+  useEffect(() => {
+      if (inputMethod === 'manual' && formData.fecha) {
+          const nextProg = getNextProgramForDate(formData.fecha);
+          if (nextProg && formData.programa !== nextProg) {
+              handleProgramSelect(nextProg);
+          }
+      }
+  }, [formData.fecha, inputMethod, reports]);
+
   const clearManualForm = () => {
+    const nextProg = getNextProgramForDate(getLocalDateString());
     setFormData({
       fecha: getLocalDateString(),
       emisora: 'CMNL',
-      programa: '',
+      programa: nextProg,
       especialidades: [
         { rol: 'Director', nombre: '' },
         { rol: 'Asesor', nombre: '' },
@@ -73,6 +126,9 @@ export const ReportesAdmin: React.FC<Props> = ({
         { rol: 'Realizador de Sonido', nombre: '' },
       ]
     });
+    if (nextProg) {
+      setTimeout(() => handleProgramSelect(nextProg), 100);
+    }
   };
 
   const processNewReports = (newReports: FP02Report[], manual = false) => {
@@ -281,9 +337,6 @@ export const ReportesAdmin: React.FC<Props> = ({
   };
 
   const handleProgramSelect = (progName: string) => {
-    setFormData(prev => ({ ...prev, programa: progName }));
-    const newEspecialidades = [...(formData.especialidades || [])];
-    
     const matchRole = (r1: string, r2: string) => {
         const n1 = normalize(r1);
         const n2 = normalize(r2);
@@ -295,31 +348,55 @@ export const ReportesAdmin: React.FC<Props> = ({
         return false;
     };
 
-    newEspecialidades.forEach(esp => {
-      const assigned = equipoData.find(m => {
-        const rolesObj = m.habitualProgramsByRole || {};
-        for (const [rName, progs] of Object.entries(rolesObj)) {
-            if (matchRole(rName, esp.rol)) {
-                if ((progs as string[]).some((p: string) => isMatch(p, progName))) {
-                    return true;
-                }
-            }
+    setFormData(prev => {
+      const newEspecialidades = [...(prev.especialidades || [])];
+
+      newEspecialidades.forEach(esp => {
+        const assigned = equipoData.find(m => {
+          // Check days system (newest)
+          const daysObj = m.habitualProgramsDays || {};
+          for (const [rName, progsObj] of Object.entries(daysObj)) {
+              if (matchRole(rName, esp.rol)) {
+                  if (Object.keys(progsObj).some(p => isMatch(p, progName))) {
+                      return true;
+                  }
+              }
+          }
+          
+          // Check array system (new)
+          const rolesObj = m.habitualProgramsByRole || {};
+          for (const [rName, progs] of Object.entries(rolesObj)) {
+              if (matchRole(rName, esp.rol)) {
+                  if ((progs as string[]).some((p: string) => isMatch(p, progName))) {
+                      return true;
+                  }
+              }
+          }
+          
+          // Check legacy system
+          const hab = m.habitualPrograms || [];
+          if (hab.some((p: string) => isMatch(p, progName))) {
+              const specialties = m.specialty ? m.specialty.split(' / ') : [];
+              if (specialties.some((s: string) => matchRole(s, esp.rol))) {
+                  return true;
+              }
+          }
+          return false;
+        });
+
+        if (assigned) {
+          esp.nombre = assigned.name;
+        } else {
+          esp.nombre = ''; 
         }
-        return false;
       });
 
-      if (assigned && !esp.nombre) {
-        esp.nombre = assigned.name;
-      } else if (!assigned && progName) {
-        esp.nombre = ''; 
-      }
+      return {
+        ...prev,
+        programa: progName,
+        especialidades: newEspecialidades
+      };
     });
-
-    setFormData(prev => ({
-      ...prev,
-      programa: progName,
-      especialidades: newEspecialidades
-    }));
   };
 
   const handleParseText = (text: string) => {
@@ -454,6 +531,31 @@ export const ReportesAdmin: React.FC<Props> = ({
     saveAs(blob, `Reporte_FP02_${report.programa}_${report.fecha}.docx`);
   };
 
+  const exportPDF = (report: FP02Report) => {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.text("Modelo FP-02", 14, 22);
+    doc.setFontSize(12);
+    doc.text(`Fecha: ${report.fecha}`, 14, 32);
+    doc.text(`Emisora: ${report.emisora}`, 14, 40);
+    doc.text(`Programa: ${report.programa}`, 14, 48);
+
+    const tableData = report.especialidades.map(esp => [esp.rol, esp.nombre]);
+
+    autoTable(doc, {
+      startY: 55,
+      head: [['Especialidad', 'Nombre y Apellidos']],
+      body: tableData,
+    });
+    doc.save(`Reporte_FP02_${report.programa}_${report.fecha}.pdf`);
+  };
+
+  const handleEditReport = (report: FP02Report) => {
+    setFormData(report);
+    setActiveTab('registro');
+    setInputMethod('manual');
+  };
+
   const filteredForInforme = reports.filter(r => {
     if (filterProgram !== 'Todos' && r.programa !== filterProgram) return false;
     if (filterDate !== 'Todos' && r.fecha !== filterDate) return false;
@@ -567,7 +669,7 @@ export const ReportesAdmin: React.FC<Props> = ({
             <div className="grid gap-4 md:grid-cols-2">
                {filteredForInforme.filter(r => r.mes === filterMonth).map(rep => (
                  <div key={rep.id} className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/20 relative group hover:border-[#9E7649]/40 transition-all">
-                   <div className="flex justify-between items-start mb-4">
+                     <div className="flex justify-between items-start mb-4">
                      <div>
                        <h3 className="font-bold text-white text-lg">{rep.programa}</h3>
                        <div className="flex items-center gap-2 text-xs text-[#9E7649]">
@@ -575,23 +677,39 @@ export const ReportesAdmin: React.FC<Props> = ({
                            <span>{rep.fecha}</span>
                        </div>
                      </div>
-                     <button 
-                         onClick={() => { 
-                           setConfirmAction({
-                             message: '¿Eliminar reporte?',
-                             onConfirm: () => {
-                               setReports(reports.filter(r => r.id !== rep.id));
-                               setConfirmAction(null);
-                             }
-                           });
-                         }} 
-                         className="p-2 text-red-500 hover:bg-red-500/10 rounded-full transition-all"
-                         title="Eliminar Reporte"
-                      >
-                         <Trash2 size={20} />
-                      </button>
+                     <div className="flex items-center gap-1">
+                       <button 
+                           onClick={() => exportPDF(rep)}
+                           className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-full transition-all"
+                           title="Descargar PDF"
+                        >
+                           <Download size={18} />
+                        </button>
+                       <button 
+                           onClick={() => handleEditReport(rep)}
+                           className="p-2 text-yellow-400 hover:bg-yellow-400/10 rounded-full transition-all"
+                           title="Editar Reporte"
+                        >
+                           <Edit2 size={18} />
+                        </button>
+                       <button 
+                           onClick={() => { 
+                             setConfirmAction({
+                               message: '¿Eliminar reporte?',
+                               onConfirm: () => {
+                                 setReports(reports.filter(r => r.id !== rep.id));
+                                 setConfirmAction(null);
+                               }
+                             });
+                           }} 
+                           className="p-2 text-red-500 hover:bg-red-500/10 rounded-full transition-all"
+                           title="Eliminar Reporte"
+                        >
+                           <Trash2 size={18} />
+                        </button>
+                     </div>
                    </div>
-                    <div className="text-sm border-t border-[#9E7649]/10 pt-3 space-y-1">
+                   <div className="text-sm border-t border-[#9E7649]/10 pt-3 space-y-1">
                       {rep.especialidades.filter(e => e.nombre).map(e => {
                         return (
                           <div key={e.rol} className="flex justify-between items-center py-1 bg-black/10 px-2 rounded">
@@ -753,13 +871,26 @@ export const ReportesAdmin: React.FC<Props> = ({
                 </div>
 
                 <div className="mt-8 border-t border-[#9E7649]/20 pt-6">
-                  <h4 className="font-bold text-[#E8DCCF] mb-4">Especialidades</h4>
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-[#E8DCCF]">Especialidades</h4>
+                    <button 
+                      onClick={() => {
+                        const newEspecs = [...(formData.especialidades || [])];
+                        newEspecs.push({ rol: 'Locutor', nombre: '' });
+                        setFormData({...formData, especialidades: newEspecs});
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#9E7649] hover:text-white transition-colors border border-[#9E7649]/30 px-2 py-1 rounded-md"
+                    >
+                      <Plus size={14} /> Añadir Locutor
+                    </button>
+                  </div>
                   <div className="space-y-3">
                     {formData.especialidades?.map((esp, i) => (
-                      <div key={esp.rol} className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                         <div className="w-40 text-sm font-bold text-[#9E7649]">{esp.rol}</div>
+                      <div key={`${esp.rol}-${i}`} className="flex flex-col sm:flex-row gap-2 sm:items-center relative">
+                         <div className="w-40 text-sm font-bold text-[#9E7649]">{esp.rol} {i > 3 && esp.rol === 'Locutor' ? 'Adicional' : ''}</div>
                          <input 
                            type="text" 
+                           list={`datalist-${esp.rol.replace(/\s+/g,'-')}-${i}`}
                            value={esp.nombre}
                            onChange={e => {
                              const newEspecs = [...(formData.especialidades || [])];
@@ -769,6 +900,23 @@ export const ReportesAdmin: React.FC<Props> = ({
                            className="flex-1 bg-black/20 border border-[#9E7649]/30 rounded-lg p-2 text-white text-sm"
                            placeholder="Nombre y Apellidos"
                          />
+                         <datalist id={`datalist-${esp.rol.replace(/\s+/g,'-')}-${i}`}>
+                           {equipoData.filter(m => m.specialty && normalize(m.specialty).includes(normalize(esp.rol === 'Realizador de Sonido' ? 'Realizador' : esp.rol))).map(m => (
+                             <option key={m.id} value={m.name} />
+                           ))}
+                         </datalist>
+                         {i > 3 && (
+                            <button 
+                              onClick={() => {
+                                const newEspecs = formData.especialidades!.filter((_, idx) => idx !== i);
+                                setFormData({...formData, especialidades: newEspecs});
+                              }}
+                              className="p-2 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
+                              title="Eliminar especialidad adicional"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                         )}
                       </div>
                     ))}
                   </div>

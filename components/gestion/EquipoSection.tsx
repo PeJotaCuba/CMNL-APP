@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2 } from 'lucide-react';
+import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2, Search, FileText } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
 import { User, UserClassification, ProgramFicha } from '../../types';
@@ -269,6 +269,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     e.target.value = '';
   };
 
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const searchLower = searchQuery.toLowerCase().trim();
+  const searchBase = searchLower.length >= 3 ? searchLower.replace(/e?s$/, '') : searchLower;
+
   const getPriority = (specialtyStr: string) => {
     const roles = specialtyStr.split(' / ').map(s => s.trim().toLowerCase());
     let minPriority = 99;
@@ -296,6 +301,73 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     }
     return pA - pB;
   });
+
+  const filteredTeam = sortedTeam.filter(member => {
+    if (!searchLower) return true;
+    const matchName = member.name.toLowerCase().includes(searchLower);
+    const matchSpecialty = member.specialty.toLowerCase().includes(searchBase);
+    return matchName || matchSpecialty;
+  });
+
+  let specialtyMatches: string[] = [];
+  if (searchBase.length >= 3) {
+    specialtyMatches = ROLES.filter(role => role.toLowerCase().includes(searchBase) || searchBase.includes(role.toLowerCase()));
+  }
+  const isFilteredBySpecialty = (specialtyMatches.length > 0 || filteredTeam.some(m => m.specialty.toLowerCase().includes(searchBase) && !m.name.toLowerCase().includes(searchLower))) && filteredTeam.length > 0;
+
+  const handleDownloadFilteredList = () => {
+    let content = `Reporte de Equipo: Especialidad de búsqueda "${searchQuery}"\n`;
+    content += `Fecha: ${new Date().toLocaleDateString()}\n`;
+    content += `=========================================\n\n`;
+
+    filteredTeam.forEach(member => {
+      const memberRoles = member.specialty.split('/').map(s => s.trim());
+      
+      const matchedRoles = memberRoles.filter(role => role.toLowerCase().includes(searchBase));
+      const reportedRole = matchedRoles.length > 0 ? matchedRoles[0] : memberRoles[0];
+      
+      content += `Nombre: ${member.name}\n`;
+      content += `Especialidad: ${reportedRole}\n`;
+      
+      let programsForMatchedRole: string[] = [];
+      if (member.habitualProgramsByRole) {
+        const exactKey = Object.keys(member.habitualProgramsByRole).find(k => k.toLowerCase() === reportedRole.toLowerCase());
+        if (exactKey && member.habitualProgramsByRole[exactKey]) {
+          programsForMatchedRole = member.habitualProgramsByRole[exactKey];
+        }
+      }
+      
+      let programsStr = 'Ninguno';
+      if (programsForMatchedRole.length > 0) {
+        programsStr = programsForMatchedRole.map(prog => {
+          let daysStr = '';
+          if (member.habitualProgramsDays) {
+            const exactKey = Object.keys(member.habitualProgramsDays).find(k => k.toLowerCase() === reportedRole.toLowerCase());
+            if (exactKey && member.habitualProgramsDays[exactKey] && member.habitualProgramsDays[exactKey][prog]) {
+              const days = member.habitualProgramsDays[exactKey][prog];
+              if (days && days.length > 0) {
+                daysStr = ` (${days.join(', ')})`;
+              }
+            }
+          }
+          return `${prog}${daysStr}`;
+        }).join(', ');
+      }
+      
+      content += `Programas: ${programsStr}\n`;
+      content += `-----------------------------------------\n`;
+    });
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const element = document.createElement("a");
+    element.href = url;
+    element.download = `Equipo_${searchQuery.replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
@@ -326,8 +398,33 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       {/* Removed Tabs as per requirements */}
 
       <div className="p-6 overflow-y-auto pb-20">
+        <div className="max-w-7xl mx-auto mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full sm:w-96">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={18} className="text-[#9E7649]" />
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar por nombre o especialidad..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl py-2.5 pl-10 pr-4 text-white placeholder-[#E8DCCF]/40 focus:outline-none focus:border-[#9E7649] transition-colors"
+            />
+          </div>
+
+          {isFilteredBySpecialty && (
+            <button
+              onClick={handleDownloadFilteredList}
+              className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-xl transition-colors border border-cyan-500/30 font-medium whitespace-nowrap"
+            >
+              <Download size={18} />
+              Descargar Detalles ({filteredTeam.length})
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-          {sortedTeam.map(member => {
+          {filteredTeam.map(member => {
               const isSelf = currentUser?.name && member.name && currentUser.name.toLowerCase() === member.name.toLowerCase();
               const canEditPhoto = isAdmin || isSelf;
 

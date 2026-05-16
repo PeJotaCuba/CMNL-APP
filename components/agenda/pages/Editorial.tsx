@@ -1089,14 +1089,7 @@ const ShareAgendaModal: React.FC<{
             const isGuionista = classification.includes('guionist') || specialty.includes('guionist');
             const isAsesor = classification.includes('asesor') || specialty.includes('asesor');
             
-            // Check for relevant programs in the new system
-            const byRole = (u as any).habitualProgramsByRole || {};
-            const hasRelevantPrograms = Object.entries(byRole).some(([role, progs]) => {
-                const lowRole = normalize(role);
-                return (lowRole.includes('guionist') || lowRole.includes('asesor')) && Array.isArray(progs) && progs.length > 0;
-            });
-
-            return isGuionista || isAsesor || hasRelevantPrograms;
+            return isGuionista || isAsesor;
         });
     }, [users]);
 
@@ -1166,7 +1159,8 @@ const ShareAgendaModal: React.FC<{
                                         isRelevant = true;
                                     }
                                 } else {
-                                    isRelevant = true;
+                                    // strictly respect days, so if empty -> no relevant days assigned!
+                                    isRelevant = false;
                                 }
                             } else {
                                 // Asesores
@@ -1178,7 +1172,10 @@ const ShareAgendaModal: React.FC<{
                     const hasNewSystemSetup = Object.keys(byRole).some(k => Array.isArray(byRole[k]) && byRole[k].length > 0);
                     if (!isRelevant && !hasNewSystemSetup) {
                         const legacyHabitual = (targetUser as any).habitualPrograms || [];
-                        if (legacyHabitual.some((lp: string) => normalize(lp) === normP)) isRelevant = true;
+                        if (legacyHabitual.some((lp: string) => normalize(lp) === normP)) {
+                            // in legacy, we still output everything
+                            isRelevant = true;
+                        }
                     }
 
                     return isRelevant;
