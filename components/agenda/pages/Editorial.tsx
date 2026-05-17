@@ -1083,10 +1083,12 @@ const Editorial: React.FC<EditorialProps> = ({
             {/* HERRAMIENTAS DE SEMANA (Solo visibles aquí) */}
             <div className="flex-none bg-card-dark/95 backdrop-blur border-t border-white/5 p-4 z-40">
                 <div className="flex flex-row w-full gap-2 mb-3">
-                    {/* Botón PDF */}
-                     <button onClick={handleGeneratePdf} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
+                    {/* Botón PDF (Solo Autorizados) */}
+                    {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
+                      <button onClick={handleGeneratePdf} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
                         <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Generar<br/>PDF</span>
-                     </button>
+                      </button>
+                    )}
                     
                     {/* Botón Compartir (WhatsApp/Email) */}
                     {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
