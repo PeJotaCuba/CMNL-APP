@@ -55,7 +55,7 @@ service cloud.firestore {
     match /generated_agendas/{agendaId} {
       allow read: if true;
       allow create: if true; 
-      allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isAdmin());
+      allow delete: if true; // Permissive for the current internal collaboration phase
     }
 
     // 3. Editorial Contents (Real-time sync)

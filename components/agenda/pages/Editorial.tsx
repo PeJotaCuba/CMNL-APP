@@ -13,6 +13,8 @@ import {
   updateEditorialFirebase, 
   shareAgendaFirebase, 
   getSharedAgendas,
+  deleteSharedAgenda,
+  deleteAllSharedAgendas,
   EditorialSyncData 
 } from '../services/firebaseSync';
 
@@ -878,12 +880,40 @@ const Editorial: React.FC<EditorialProps> = ({
           onBack={handleBack}
         />
         <main className="flex-1 overflow-y-auto p-4 space-y-4 pt-10">
-          {/* Cloud Documents Section */}
-          <div className="mb-6">
-            <h2 className="text-[#9E7649] text-[10px] font-bold uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+          <div className="flex justify-between items-center mb-4 px-2">
+            <h2 className="text-[#9E7649] text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
               <span className="material-symbols-outlined text-sm">cloud</span>
               Documentos de la Nube (Compartidos)
             </h2>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => getSharedAgendas(setSharedAgendasList)}
+                className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:bg-white/10 transition-colors"
+                title="Actualizar Nube"
+              >
+                <span className="material-symbols-outlined text-sm">refresh</span>
+              </button>
+              {user.role === UserRole.ADMIN && sharedAgendasList.length > 0 && (
+                <button 
+                  onClick={() => {
+                    setConfirmDialog({
+                      message: "¿Estás seguro de ELIMINAR TODOS los archivos de la NUBE?",
+                      onConfirm: async () => {
+                        await deleteAllSharedAgendas();
+                        setAlertDialog({ message: "Nube de archivos limpiada." });
+                      }
+                    });
+                  }}
+                  className="size-8 rounded-full bg-admin-red/10 flex items-center justify-center text-admin-red hover:bg-admin-red/20 transition-colors"
+                  title="Borrar Nube"
+                >
+                  <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                </button>
+              )}
+            </div>
+          </div>
+          {/* Cloud Documents Section */}
+          <div className="mb-6">
             {sharedAgendasList.length === 0 ? (
               <div className="bg-white/5 border border-white/5 rounded-2xl p-6 text-center">
                 <p className="text-white/30 text-xs italic">No hay documentos compartidos en la nube.</p>
@@ -897,8 +927,25 @@ const Editorial: React.FC<EditorialProps> = ({
                         <h3 className="text-white font-bold text-sm leading-tight">{agenda.filename}</h3>
                         <p className="text-[10px] text-primary font-bold uppercase mt-1">Sincronizado por el equipo</p>
                       </div>
-                      <div className="bg-primary/20 text-primary p-1.5 rounded-lg">
-                        <span className="material-symbols-outlined text-sm">cloud_done</span>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-primary/20 text-primary p-1.5 rounded-lg">
+                          <span className="material-symbols-outlined text-sm">cloud_done</span>
+                        </div>
+                        {user.role === UserRole.ADMIN && (
+                          <button 
+                            onClick={() => {
+                              setConfirmDialog({
+                                message: "¿Eliminar este archivo de la nube?",
+                                onConfirm: async () => {
+                                  await deleteSharedAgenda(agenda.id);
+                                }
+                              });
+                            }}
+                            className="bg-admin-red/10 text-admin-red p-1.5 rounded-lg hover:bg-admin-red/20"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -1011,15 +1058,7 @@ const Editorial: React.FC<EditorialProps> = ({
               user={user} 
               onMenuClick={onMenuClick} 
               onBack={handleBack}
-            >
-              <button 
-                onClick={() => setViewPdfArchive(true)} 
-                className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
-              >
-                <span className="material-symbols-outlined text-[16px]">folder_open</span>
-                <span>Archivos PDF</span>
-              </button>
-            </AgendaHeader>
+            />
 
             <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20 space-y-3">
                 <div className="flex items-center gap-3">
@@ -1176,6 +1215,15 @@ const Editorial: React.FC<EditorialProps> = ({
             <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-1">{isMonthSelection ? dateInfo.year : currentMonthLabel}</p>
           </div>
         </div>
+        {!isMonthSelection && (
+          <button 
+            onClick={() => setViewPdfArchive(true)} 
+            className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[16px]">folder_open</span>
+            <span>PDF Compartidos</span>
+          </button>
+        )}
       </div>
 
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 pb-32">

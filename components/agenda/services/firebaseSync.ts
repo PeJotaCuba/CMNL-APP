@@ -64,6 +64,31 @@ export interface EditorialSyncData {
 }
 
 // 1. Agenda Sharing
+export const deleteSharedAgenda = async (id: string) => {
+  const path = `generated_agendas/${id}`;
+  try {
+    await deleteDoc(doc(db, 'generated_agendas', id));
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    return false;
+  }
+};
+
+export const deleteAllSharedAgendas = async () => {
+  const path = 'generated_agendas';
+  try {
+    const q = query(collection(db, path));
+    const snapshot = await getDocs(q);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, path, d.id)));
+    await Promise.all(deletePromises);
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+    return false;
+  }
+};
+
 export const shareAgendaFirebase = async (agenda: GeneratedAgenda) => {
   const path = `generated_agendas/${agenda.id}`;
   try {
