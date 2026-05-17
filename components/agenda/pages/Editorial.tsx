@@ -7,7 +7,7 @@ import { MONTHS_DATA } from '../constants.ts';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import AgendaHeader from '../components/AgendaHeader';
-import { saveAgendaPdf, loadAgendaPdfs, deleteAgendaPdf, deleteAllAgendaPdfs, GeneratedAgenda } from '../services/db';
+import { saveAgendaPdf, loadAgendaPdfs, deleteAgendaPdf, deleteAllAgendaPdfs, GeneratedAgenda, getAgendaPdfBlob } from '../services/db';
 
 interface EditorialProps {
   user: UserProfile;
@@ -156,13 +156,19 @@ const Editorial: React.FC<EditorialProps> = ({
       setViewPdfArchive(true);
   };
 
-  const handleArchiveDownload = (agenda: GeneratedAgenda) => {
-      const url = window.URL.createObjectURL(agenda.blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = agenda.filename;
-      a.click();
-      window.URL.revokeObjectURL(url);
+  const handleArchiveDownload = async (agenda: GeneratedAgenda) => {
+      try {
+          const blob = agenda.blob || await getAgendaPdfBlob(agenda.id);
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = agenda.filename;
+          a.click();
+          window.URL.revokeObjectURL(url);
+      } catch (error) {
+          console.error("Error downloading PDF:", error);
+          setAlertDialog({ message: "Error al descargar el archivo del servidor." });
+      }
   };
 
   const handleArchiveWhatsApp = async (agenda: GeneratedAgenda) => {
@@ -201,29 +207,34 @@ const Editorial: React.FC<EditorialProps> = ({
           console.error("Failed to copy emails", err);
       }
 
-      // Try Automated Sharing (Web Share API) - Only way to attach the file
-      const file = new File([agenda.blob], agenda.filename, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-              // We show a quick alert to prepare the user before the native sheet opens
-              setAlertDialog({ 
-                  message: "Los correos se han copiado al portapapeles. Selecciona Gmail en la siguiente ventana y pega los destinatarios en el campo 'Para'.",
-                  onAlertClose: async () => {
-                      try {
-                          await navigator.share({
-                              files: [file],
-                              title: subject,
-                              text: textDesc
-                          });
-                      } catch (e: any) {
-                          if (e.name !== 'AbortError') console.error(e);
+      try {
+          const blob = agenda.blob || await getAgendaPdfBlob(agenda.id);
+          // Try Automated Sharing (Web Share API) - Only way to attach the file
+          const file = new File([blob], agenda.filename, { type: 'application/pdf' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              try {
+                  // We show a quick alert to prepare the user before the native sheet opens
+                  setAlertDialog({ 
+                      message: "Los correos se han copiado al portapapeles. Selecciona Gmail en la siguiente ventana y pega los destinatarios en el campo 'Para'.",
+                      onAlertClose: async () => {
+                          try {
+                              await navigator.share({
+                                  files: [file],
+                                  title: subject,
+                                  text: textDesc
+                              });
+                          } catch (e: any) {
+                              if (e.name !== 'AbortError') console.error(e);
+                          }
                       }
-                  }
-              });
-              return;
-          } catch (e: any) {
-              console.error(e);
+                  });
+                  return;
+              } catch (e: any) {
+                  console.error(e);
+              }
           }
+      } catch (error) {
+          console.error("Error preparing share:", error);
       }
       
       // Fallback

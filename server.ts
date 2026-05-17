@@ -2,16 +2,119 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 import path from "path";
+import Database from "better-sqlite3";
+
+const db = new Database("data.db");
+
+// Initialize database schema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shared_pdfs (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    content BLOB NOT NULL,
+    createdAt TEXT NOT NULL,
+    month TEXT,
+    weekLabel TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS system_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+`);
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
 
   // API routes FIRST
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Endpoints para PDFs compartidos
+  app.get("/api/agenda-pdfs", (req, res) => {
+    try {
+      const rows = db.prepare("SELECT id, filename, createdAt, month, weekLabel FROM shared_pdfs ORDER BY createdAt DESC").all();
+      res.json(rows);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/agenda-pdfs/:id", (req, res) => {
+    try {
+      const row: any = db.prepare("SELECT content, filename FROM shared_pdfs WHERE id = ?").get(req.params.id);
+      if (row) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${row.filename}"`);
+        res.send(row.content);
+      } else {
+        res.status(404).send("Not found");
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/agenda-pdfs", (req, res) => {
+    const { id, filename, content, createdAt, month, weekLabel } = req.body;
+    try {
+      // content llega como base64 string
+      const buffer = Buffer.from(content, 'base64');
+      db.prepare("INSERT OR REPLACE INTO shared_pdfs (id, filename, content, createdAt, month, weekLabel) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(id, filename, buffer, createdAt, month, weekLabel);
+      res.json({ status: "ok" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/agenda-pdfs/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM shared_pdfs WHERE id = ?").run(req.params.id);
+      res.json({ status: "ok" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/agenda-pdfs", (req, res) => {
+    try {
+      db.prepare("DELETE FROM shared_pdfs").run();
+      res.json({ status: "ok" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Endpoints para sincronización global (CML)
+  app.get("/api/sync-data", (req, res) => {
+    try {
+      const row: any = db.prepare("SELECT value FROM system_state WHERE key = 'current'").get();
+      if (row) {
+        res.json(JSON.parse(row.value));
+      } else {
+        res.status(404).json({ error: "No state found" });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/sync-data", (req, res) => {
+    try {
+      const value = JSON.stringify(req.body);
+      const updatedAt = new Date().toISOString();
+      db.prepare("INSERT OR REPLACE INTO system_state (key, value, updatedAt) VALUES (?, ?, ?)")
+        .run('current', value, updatedAt);
+      res.json({ status: "ok", updatedAt });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   app.post('/api/news', async (req, res) => {
