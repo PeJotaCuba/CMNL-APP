@@ -1,90 +1,122 @@
 export interface GeneratedAgenda {
     id: string;
     filename: string;
-    blob?: Blob;
+    blob: Blob;
     createdAt: string; // ISO date
     month: string;
     weekLabel: string;
 }
 
-export const saveAgendaPdf = async (agenda: GeneratedAgenda): Promise<void> => {
-    try {
-        // Convert blob to base64
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => {
-                const base64String = (reader.result as string).split(',')[1];
-                resolve(base64String);
-            };
-            reader.onerror = () => reject(new Error("Error reading PDF file"));
-        });
-        reader.readAsDataURL(agenda.blob!);
-        const content = await base64Promise;
+const DB_NAME = 'RCM_Agenda_DB';
+const STORE_NAME = 'generated_agendas';
+const DB_VERSION = 1;
 
-        const response = await fetch('/api/agenda-pdfs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: agenda.id,
-                filename: agenda.filename,
-                content: content,
-                createdAt: agenda.createdAt,
-                month: agenda.month,
-                weekLabel: agenda.weekLabel
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `Server Error ${response.status}`);
+export const openAgendaDB = (): Promise<IDBDatabase> => {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject("IndexedDB no es soportado en este navegador.");
+            return;
         }
-    } catch (error: any) {
-        console.error("Error saving agenda pdf:", error);
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (event) => {
+            const db = (event.target as IDBOpenDBRequest).result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            }
+        };
+    });
+};
+
+export const saveAgendaPdf = async (agenda: GeneratedAgenda): Promise<void> => {
+    let db: IDBDatabase | null = null;
+    try {
+        db = await openAgendaDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.put(agenda);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+            tx.oncomplete = () => db?.close();
+            tx.onabort = () => db?.close();
+        });
+    } catch (error) {
+        db?.close();
+        console.error("Error guardando agenda pdf:", error);
         throw error;
     }
 };
 
 export const loadAgendaPdfs = async (): Promise<GeneratedAgenda[]> => {
+    let db: IDBDatabase | null = null;
     try {
-        const response = await fetch('/api/agenda-pdfs');
-        if (!response.ok) throw new Error("Error loading PDFs from server");
-        const data = await response.json();
-        return data.map((item: any) => ({
-            ...item,
-            // blob is fetched on demand
-        }));
+        db = await openAgendaDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const request = store.getAll();
+            request.onsuccess = () => {
+                db?.close();
+                let results = request.result || [];
+                results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                resolve(results);
+            };
+            request.onerror = () => {
+                db?.close();
+                reject(request.error);
+            };
+        });
     } catch (error) {
+        db?.close();
         console.error("Error cargando agendas de DB:", error);
         return [];
     }
 };
 
-export const getAgendaPdfBlob = async (id: string): Promise<Blob> => {
-    const response = await fetch(`/api/agenda-pdfs/${id}`);
-    if (!response.ok) throw new Error("Error fetching PDF blob");
-    return await response.blob();
-};
-
 export const deleteAgendaPdf = async (id: string): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const response = await fetch(`/api/agenda-pdfs/${id}`, {
-            method: 'DELETE'
+        db = await openAgendaDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.delete(id);
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
         });
-        if (!response.ok) throw new Error("Error deleting PDF from server");
     } catch (e) {
-        console.error("Error deleting PDF:", e);
+        db?.close();
         throw e;
     }
 };
 
 export const deleteAllAgendaPdfs = async (): Promise<void> => {
+    let db: IDBDatabase | null = null;
     try {
-        const response = await fetch('/api/agenda-pdfs', {
-            method: 'DELETE'
+        db = await openAgendaDB();
+        return new Promise((resolve, reject) => {
+            const tx = db!.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.clear();
+            tx.oncomplete = () => {
+                db?.close();
+                resolve();
+            };
+            tx.onerror = () => {
+                db?.close();
+                reject(tx.error);
+            };
         });
-        if (!response.ok) throw new Error("Error deleting all PDFs from server");
     } catch (e) {
-        console.error("Error deleting all PDFs:", e);
+        db?.close();
         throw e;
     }
 };
