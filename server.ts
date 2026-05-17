@@ -4,7 +4,12 @@ import * as cheerio from "cheerio";
 import path from "path";
 import Database from "better-sqlite3";
 
-const db = new Database("data.db");
+const isProduction = process.env.NODE_ENV === "production";
+const dbPath = isProduction 
+  ? path.join("/tmp", "data.db") 
+  : path.join(process.cwd(), "data.db");
+console.log(`Using database at: ${dbPath}`);
+const db = new Database(dbPath);
 
 // Initialize database schema
 db.exec(`

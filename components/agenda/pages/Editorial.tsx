@@ -140,20 +140,35 @@ const Editorial: React.FC<EditorialProps> = ({
   }, [viewPdfArchive]);
 
   const handleGeneratePdf = async () => {
-      const data = await generatePdfBlob();
-      if (!data) return;
+      try {
+          console.log("Iniciando generación de PDF...");
+          const data = await generatePdfBlob();
+          if (!data) {
+              console.warn("generatePdfBlob devolvió null o undefined");
+              return;
+          }
+          console.log("PDF generado en memoria local:", data.filename);
 
-      const newPdf: GeneratedAgenda = {
-          id: Date.now().toString(),
-          filename: data.filename,
-          blob: data.blob,
-          createdAt: new Date().toISOString(),
-          month: currentMonthLabel,
-          weekLabel: activeWeek?.label || ''
-      };
+          const newPdf: GeneratedAgenda = {
+              id: Date.now().toString(),
+              filename: data.filename,
+              blob: data.blob,
+              createdAt: new Date().toISOString(),
+              month: currentMonthLabel,
+              weekLabel: activeWeek?.label || ''
+          };
 
-      await saveAgendaPdf(newPdf);
-      setViewPdfArchive(true);
+          console.log("Intentando guardar PDF en el servidor...");
+          await saveAgendaPdf(newPdf);
+          console.log("PDF guardado exitosamente en el servidor.");
+          
+          // Actualizamos la lista local inmediatamente para que aparezca
+          setArchiveList(prev => [newPdf, ...prev]);
+          setViewPdfArchive(true);
+      } catch (error: any) {
+          console.error("Error crítico en handleGeneratePdf:", error);
+          setAlertDialog({ message: `No se pudo generar o guardar el PDF: ${error.message || 'Error de conexión o servidor'}` });
+      }
   };
 
   const handleArchiveDownload = async (agenda: GeneratedAgenda) => {
@@ -572,8 +587,7 @@ const Editorial: React.FC<EditorialProps> = ({
       const weekNumber = activeWeek.label.replace('Semana ', '');
       const dateRange = `del ${activeWeek.start} al ${activeWeek.end}`;
 
-      const jsPDFCtor = (jsPDF as any).default || jsPDF;
-      const doc = new jsPDFCtor();
+      const doc = new jsPDF();
 
       doc.setFontSize(20);
       doc.setFont("helvetica", "bold");
