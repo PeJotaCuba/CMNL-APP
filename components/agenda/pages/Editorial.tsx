@@ -8,15 +8,6 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import AgendaHeader from '../components/AgendaHeader';
 import { saveAgendaPdf, loadAgendaPdfs, deleteAgendaPdf, deleteAllAgendaPdfs, GeneratedAgenda } from '../services/db';
-import { 
-  syncEditorialContent, 
-  updateEditorialFirebase, 
-  shareAgendaFirebase, 
-  getSharedAgendas,
-  deleteSharedAgenda,
-  deleteAllSharedAgendas,
-  EditorialSyncData 
-} from '../services/firebaseSync';
 
 interface EditorialProps {
   user: UserProfile;
@@ -138,10 +129,6 @@ const Editorial: React.FC<EditorialProps> = ({
   const [confirmDialog, setConfirmDialog] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [alertDialog, setAlertDialog] = useState<{ message: string, onAlertClose?: () => void } | null>(null);
 
-  // Firestore Data State
-  const [firebaseEditorialData, setFirebaseEditorialData] = useState<Record<string, EditorialSyncData>>({});
-  const [sharedAgendasList, setSharedAgendasList] = useState<any[]>([]);
-
   const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,19 +136,8 @@ const Editorial: React.FC<EditorialProps> = ({
   React.useEffect(() => {
      if (viewPdfArchive) {
         loadAgendaPdfs().then(setArchiveList);
-        // Also listen to shared agendas from cloud
-        return getSharedAgendas(setSharedAgendasList);
      }
   }, [viewPdfArchive]);
-
-  // Real-time synchronization for editorial content
-  React.useEffect(() => {
-    if (selectedWeekId) {
-      return syncEditorialContent(currentMonthLabel, selectedWeekId, (data) => {
-        setFirebaseEditorialData(data);
-      });
-    }
-  }, [selectedWeekId, currentMonthLabel]);
 
   const handleGeneratePdf = async () => {
       const data = await generatePdfBlob();
@@ -177,20 +153,6 @@ const Editorial: React.FC<EditorialProps> = ({
       };
 
       await saveAgendaPdf(newPdf);
-      
-      // Also share to cloud for team visibility
-      try {
-        const success = await shareAgendaFirebase(newPdf);
-        if (success) {
-          setAlertDialog({ message: "Agenda generada y compartida en la Nube con éxito." });
-        } else {
-          setAlertDialog({ message: "Agenda guardada localmente, pero no se pudo sincronizar con la Nube. Revisa tu conexión." });
-        }
-      } catch (e) {
-        console.error("Cloud share error:", e);
-        setAlertDialog({ message: "Error al sincronizar con la Nube. Se guardó solo localmente." });
-      }
-
       setViewPdfArchive(true);
   };
 
@@ -316,15 +278,6 @@ const Editorial: React.FC<EditorialProps> = ({
   // CORRECCIÓN CRÍTICA: Solo usar fallback a legacy si el mes es Enero.
   // Esto evita que datos de Enero se muestren en Febrero, Marzo, etc.
   const getEffectiveData = (program: Program, weekId: string, dayName: string): DailyContent => {
-      // 0. Check Firebase Real-time Data (Highest Priority)
-      const fbKey = `${program.id}-${dayName}`;
-      if (firebaseEditorialData[fbKey]) {
-          return {
-              theme: firebaseEditorialData[fbKey].theme,
-              ideas: firebaseEditorialData[fbKey].ideas
-          };
-      }
-
       const newKey = getDataKey(weekId, dayName);
       const oldKey = getLegacyKey(weekId, dayName);
       
@@ -704,8 +657,8 @@ const Editorial: React.FC<EditorialProps> = ({
     setEditData({ theme: data.theme, ideas: data.ideas || '' });
   };
 
-  const saveProgEdit = async () => {
-    if (!editingProg || !activeWeek || !selectedDay) return;
+  const saveProgEdit = () => {
+    if (!editingProg) return;
     const { program, key } = editingProg;
     
     // Create a copy to update
@@ -715,21 +668,6 @@ const Editorial: React.FC<EditorialProps> = ({
       ideas: editData.ideas
     };
     onUpdateProgram(updatedProgram);
-
-    // Sync to Firebase for real-time communication
-    try {
-      await updateEditorialFirebase({
-          programId: program.id,
-          weekId: activeWeek.id,
-          dayName: selectedDay.dayName,
-          month: currentMonthLabel,
-          theme: editData.theme,
-          ideas: editData.ideas
-      });
-    } catch (e) {
-      console.error("Firebase Sync Error:", e);
-    }
-
     setEditingProg(null);
   };
 
@@ -880,109 +818,6 @@ const Editorial: React.FC<EditorialProps> = ({
           onBack={handleBack}
         />
         <main className="flex-1 overflow-y-auto p-4 space-y-4 pt-10">
-          <div className="flex justify-between items-center mb-4 px-2">
-            <h2 className="text-[#9E7649] text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">cloud</span>
-              Documentos de la Nube (Compartidos)
-            </h2>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => getSharedAgendas(setSharedAgendasList)}
-                className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:bg-white/10 transition-colors"
-                title="Actualizar Nube"
-              >
-                <span className="material-symbols-outlined text-sm">refresh</span>
-              </button>
-              {user.role === UserRole.ADMIN && sharedAgendasList.length > 0 && (
-                <button 
-                  onClick={() => {
-                    setConfirmDialog({
-                      message: "¿Estás seguro de ELIMINAR TODOS los archivos de la NUBE?",
-                      onConfirm: async () => {
-                        await deleteAllSharedAgendas();
-                        setAlertDialog({ message: "Nube de archivos limpiada." });
-                      }
-                    });
-                  }}
-                  className="size-8 rounded-full bg-admin-red/10 flex items-center justify-center text-admin-red hover:bg-admin-red/20 transition-colors"
-                  title="Borrar Nube"
-                >
-                  <span className="material-symbols-outlined text-sm">delete_sweep</span>
-                </button>
-              )}
-            </div>
-          </div>
-          {/* Cloud Documents Section */}
-          <div className="mb-6">
-            {sharedAgendasList.length === 0 ? (
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-6 text-center">
-                <p className="text-white/30 text-xs italic">No hay documentos compartidos en la nube.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {sharedAgendasList.map(agenda => (
-                  <div key={agenda.id} className="bg-primary/5 rounded-2xl p-4 border border-primary/20 shadow-xl flex flex-col gap-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-white font-bold text-sm leading-tight">{agenda.filename}</h3>
-                        <p className="text-[10px] text-primary font-bold uppercase mt-1">Sincronizado por el equipo</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="bg-primary/20 text-primary p-1.5 rounded-lg">
-                          <span className="material-symbols-outlined text-sm">cloud_done</span>
-                        </div>
-                        {user.role === UserRole.ADMIN && (
-                          <button 
-                            onClick={() => {
-                              setConfirmDialog({
-                                message: "¿Eliminar este archivo de la nube?",
-                                onConfirm: async () => {
-                                  await deleteSharedAgenda(agenda.id);
-                                }
-                              });
-                            }}
-                            className="bg-admin-red/10 text-admin-red p-1.5 rounded-lg hover:bg-admin-red/20"
-                          >
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => {
-                        if (agenda.hasBinary && agenda.fileData) {
-                          const binaryData = typeof agenda.fileData.toUint8Array === 'function' 
-                            ? agenda.fileData.toUint8Array() 
-                            : agenda.fileData;
-                          const blob = new Blob([binaryData], { type: 'application/pdf' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = agenda.filename;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        } else {
-                          setAlertDialog({ message: "Este archivo de la nube solo tiene metadatos (probablemente es mayor a 1MB). Por favor, solicita el archivo original por WhatsApp." });
-                        }
-                      }} className="bg-primary text-background-dark py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1 shadow-lg shadow-primary/20">
-                        <span className="material-symbols-outlined text-sm">download</span> Descargar
-                      </button>
-                      <button onClick={() => handleArchiveWhatsApp(agenda)} className="bg-green-600/20 text-green-400 hover:bg-green-600/30 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1">
-                        <span className="material-symbols-outlined text-sm">chat</span> Grupo WhatsApp
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <hr className="border-white/5 my-6" />
-
-          <h2 className="text-white/50 text-[10px] font-bold uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-sm">folder</span>
-            Mis Archivos Locales
-          </h2>
           {archiveList.length > 0 && (
             <div className="flex justify-end mb-2">
               <button onClick={() => {
@@ -1058,7 +893,15 @@ const Editorial: React.FC<EditorialProps> = ({
               user={user} 
               onMenuClick={onMenuClick} 
               onBack={handleBack}
-            />
+            >
+              <button 
+                onClick={() => setViewPdfArchive(true)} 
+                className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">folder_open</span>
+                <span>Archivos PDF</span>
+              </button>
+            </AgendaHeader>
 
             <div className="flex-none flex flex-col bg-card-dark/95 backdrop-blur px-4 py-3 border-b border-white/5 z-20 space-y-3">
                 <div className="flex items-center gap-3">
@@ -1122,12 +965,10 @@ const Editorial: React.FC<EditorialProps> = ({
             {/* HERRAMIENTAS DE SEMANA (Solo visibles aquí) */}
             <div className="flex-none bg-card-dark/95 backdrop-blur border-t border-white/5 p-4 z-40">
                 <div className="flex flex-row w-full gap-2 mb-3">
-                    {/* Botón PDF (Solo Autorizados) */}
-                    {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
-                      <button onClick={handleGeneratePdf} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
+                    {/* Botón PDF */}
+                     <button onClick={handleGeneratePdf} className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 px-1 rounded-xl text-[10px] font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1 transition-all">
                         <span className="material-symbols-outlined text-sm">description</span> <span className="text-[9px] text-center leading-tight">Generar<br/>PDF</span>
-                      </button>
-                    )}
+                     </button>
                     
                     {/* Botón Compartir (WhatsApp/Email) */}
                     {(user.role === UserRole.ADMIN || (user.classification === 'Coordinador' && (user.coordinatorSections || []).includes('Agenda'))) && (
@@ -1215,15 +1056,6 @@ const Editorial: React.FC<EditorialProps> = ({
             <p className="text-[9px] font-bold text-primary uppercase tracking-widest mt-1">{isMonthSelection ? dateInfo.year : currentMonthLabel}</p>
           </div>
         </div>
-        {!isMonthSelection && (
-          <button 
-            onClick={() => setViewPdfArchive(true)} 
-            className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
-          >
-            <span className="material-symbols-outlined text-[16px]">folder_open</span>
-            <span>PDF Compartidos</span>
-          </button>
-        )}
       </div>
 
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 pb-32">

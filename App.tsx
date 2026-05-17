@@ -23,18 +23,7 @@ import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSav
 import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { FirebaseProvider, useFirebase } from './src/contexts/FirebaseContext';
-
 const App: React.FC = () => {
-  return (
-    <FirebaseProvider>
-      <AppContent />
-    </FirebaseProvider>
-  );
-};
-
-const AppContent: React.FC = () => {
-  const { user: firebaseUser } = useFirebase();
   const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
   const [history, setHistory] = useState<AppView[]>([]);
   const [isDirty, setIsDirty] = useState(false);

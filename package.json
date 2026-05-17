@@ -15,7 +15,6 @@
     "docx": "^9.6.1",
     "express": "^5.2.1",
     "file-saver": "^2.0.5",
-    "firebase": "^12.13.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.344.0",
