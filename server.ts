@@ -6,12 +6,12 @@ import Database from "better-sqlite3";
 
 let db: Database.Database;
 try {
-  const isProduction = process.env.NODE_ENV === "production" || process.cwd().includes("dist");
+  const isProduction = process.env.NODE_ENV === "production";
   const dbPath = isProduction 
     ? path.join("/tmp", "data.db") 
     : path.join(process.cwd(), "data.db");
   
-  console.log(`[Server] Initializing database at: ${dbPath} (Production: ${isProduction})`);
+  console.log(`[Server] Initializing database at: ${dbPath} (Mode: ${process.env.NODE_ENV})`);
   db = new Database(dbPath);
   
   // Initialize database schema
@@ -47,6 +47,21 @@ async function startServer() {
   // API routes FIRST
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.get("/api/db-status", (req, res) => {
+    try {
+      const stats = db.prepare("SELECT count(*) as count FROM shared_pdfs").get();
+      res.json({ 
+        status: "ready", 
+        dbPath, 
+        count: (stats as any).count,
+        nodeEnv: process.env.NODE_ENV,
+        cwd: process.cwd()
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message, dbPath });
+    }
   });
 
   // Endpoints para PDFs compartidos
@@ -207,7 +222,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

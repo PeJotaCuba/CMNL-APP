@@ -167,7 +167,8 @@ const Editorial: React.FC<EditorialProps> = ({
           setViewPdfArchive(true);
       } catch (error: any) {
           console.error("Error crítico en handleGeneratePdf:", error);
-          setAlertDialog({ message: `No se pudo generar o guardar el PDF: ${error.message || 'Error de conexión o servidor'}` });
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          setAlertDialog({ message: `X-DEBUG-ERROR: No se pudo guardar el PDF. Detalle: ${errorMsg}` });
       }
   };
 
