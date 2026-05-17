@@ -11,11 +11,12 @@ export const saveAgendaPdf = async (agenda: GeneratedAgenda): Promise<void> => {
     try {
         // Convert blob to base64
         const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve) => {
+        const base64Promise = new Promise<string>((resolve, reject) => {
             reader.onloadend = () => {
                 const base64String = (reader.result as string).split(',')[1];
                 resolve(base64String);
             };
+            reader.onerror = () => reject(new Error("Error reading PDF file"));
         });
         reader.readAsDataURL(agenda.blob!);
         const content = await base64Promise;
@@ -33,8 +34,11 @@ export const saveAgendaPdf = async (agenda: GeneratedAgenda): Promise<void> => {
             })
         });
 
-        if (!response.ok) throw new Error("Error saving PDF to server");
-    } catch (error) {
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server Error ${response.status}`);
+        }
+    } catch (error: any) {
         console.error("Error saving agenda pdf:", error);
         throw error;
     }

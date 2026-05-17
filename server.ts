@@ -4,30 +4,39 @@ import * as cheerio from "cheerio";
 import path from "path";
 import Database from "better-sqlite3";
 
-const isProduction = process.env.NODE_ENV === "production";
-const dbPath = isProduction 
-  ? path.join("/tmp", "data.db") 
-  : path.join(process.cwd(), "data.db");
-console.log(`Using database at: ${dbPath}`);
-const db = new Database(dbPath);
+let db: Database.Database;
+try {
+  const isProduction = process.env.NODE_ENV === "production" || process.cwd().includes("dist");
+  const dbPath = isProduction 
+    ? path.join("/tmp", "data.db") 
+    : path.join(process.cwd(), "data.db");
+  
+  console.log(`[Server] Initializing database at: ${dbPath} (Production: ${isProduction})`);
+  db = new Database(dbPath);
+  
+  // Initialize database schema
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shared_pdfs (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      content BLOB NOT NULL,
+      createdAt TEXT NOT NULL,
+      month TEXT,
+      weekLabel TEXT
+    );
 
-// Initialize database schema
-db.exec(`
-  CREATE TABLE IF NOT EXISTS shared_pdfs (
-    id TEXT PRIMARY KEY,
-    filename TEXT NOT NULL,
-    content BLOB NOT NULL,
-    createdAt TEXT NOT NULL,
-    month TEXT,
-    weekLabel TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS system_state (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updatedAt TEXT NOT NULL
-  );
-`);
+    CREATE TABLE IF NOT EXISTS system_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+  `);
+  console.log("[Server] Database initialized successfully");
+} catch (error) {
+  console.error("[Server] Critical database error:", error);
+  // Fail fast to see error in logs
+  process.exit(1);
+}
 
 async function startServer() {
   const app = express();
@@ -67,13 +76,25 @@ async function startServer() {
 
   app.post("/api/agenda-pdfs", (req, res) => {
     const { id, filename, content, createdAt, month, weekLabel } = req.body;
+    console.log(`[Server] Received request to save PDF: ${filename} (${id})`);
+    
+    if (!content) {
+      console.error("[Server] Error: No content in body");
+      return res.status(400).json({ error: "No content provided" });
+    }
+
     try {
       // content llega como base64 string
       const buffer = Buffer.from(content, 'base64');
-      db.prepare("INSERT OR REPLACE INTO shared_pdfs (id, filename, content, createdAt, month, weekLabel) VALUES (?, ?, ?, ?, ?, ?)")
-        .run(id, filename, buffer, createdAt, month, weekLabel);
+      console.log(`[Server] Buffer size: ${buffer.length} bytes`);
+      
+      const stmt = db.prepare("INSERT OR REPLACE INTO shared_pdfs (id, filename, content, createdAt, month, weekLabel) VALUES (?, ?, ?, ?, ?, ?)");
+      stmt.run(id, filename, buffer, createdAt, month, weekLabel);
+      
+      console.log("[Server] PDF saved successfully to database");
       res.json({ status: "ok" });
     } catch (error: any) {
+      console.error("[Server] Error saving PDF to DB:", error);
       res.status(500).json({ error: error.message });
     }
   });
