@@ -685,7 +685,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
 
   const allScriptwriters = useMemo(() => {
       const uniqueWriters = new Set<string>();
-      Object.values(filteredScripts).forEach(scripts => scripts.forEach(s => uniqueWriters.add(s.writer)));
+      Object.values(filteredScripts).forEach((scripts: any) => scripts.forEach((s: any) => uniqueWriters.add(s.writer)));
       return Array.from(uniqueWriters).sort();
   }, [filteredScripts]);
 

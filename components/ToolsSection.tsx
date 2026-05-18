@@ -10,12 +10,14 @@ import {
   Sparkles,
   Database,
   Briefcase,
-  Bell
+  Bell,
+  Shield
 } from 'lucide-react';
 import CMNLHeader from './CMNLHeader';
 import DataExtractionTool from './DataExtractionTool';
 import GenericTool from './GenericTool';
 import GuionesGestionTool from './GuionesGestionTool';
+import FirmaDigitalTool from './FirmaDigitalTool';
 
 interface ToolsSectionProps {
   onBack: () => void;
@@ -98,6 +100,15 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
       color: 'from-indigo-500/20 to-indigo-600/20',
       textColor: 'text-indigo-400',
       borderColor: 'border-indigo-500/30'
+    },
+    {
+      id: 'digital-signature',
+      title: 'Firma Digital',
+      description: 'Módulo de identidad corporativa para la solicitud, emisión y validación de firmas criptográficas vinculadas al hardware del dispositivo.',
+      icon: Shield,
+      color: 'from-amber-600/20 to-amber-700/20',
+      textColor: 'text-amber-500',
+      borderColor: 'border-amber-500/30'
     }
   ];
 
@@ -137,6 +148,31 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
         />
         <main className="max-w-7xl mx-auto px-4 py-8">
           <GuionesGestionTool onBack={() => setActiveTool(null)} isAdmin={isAdmin} currentUser={currentUser} />
+        </main>
+      </div>
+    );
+  }
+
+  if (activeTool === 'digital-signature') {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          title="Firma Digital" 
+          subtitle="Seguridad Criptográfica" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <FirmaDigitalTool 
+            user={currentUser} 
+            isAdmin={isAdmin} 
+            onUpdateDatabase={(newCert) => {
+               const saved = localStorage.getItem('cmnl_digital_signatures');
+               const data = saved ? JSON.parse(saved) : { validated_users: [] };
+               data.validated_users.push(newCert);
+               localStorage.setItem('cmnl_digital_signatures', JSON.stringify(data));
+            }}
+          />
         </main>
       </div>
     );

@@ -513,6 +513,7 @@ const AppContent: React.FC = () => {
       dataToExport.customRoots = getLocal('rcm_custom_roots') || [];
       dataToExport.equipo = getLocal('rcm_equipo_cmnl') || [];
       dataToExport.manualProgramming = getLocal('rcm_manual_programming') || [];
+      dataToExport.digital_signatures = getLocal('cmnl_digital_signatures');
       
       // Management Reports and Consolidated Payments
       dataToExport.managementReports = getLocal('rcm_gestion_reportes') || [];
@@ -683,6 +684,7 @@ const AppContent: React.FC = () => {
                   if (json.programsList && Array.isArray(json.programsList)) setLocal('rcm_programs_list', json.programsList);
                   if (json.customRoots && Array.isArray(json.customRoots)) setLocal('rcm_custom_roots', json.customRoots);
                   if (json.manualProgramming) setLocal('rcm_manual_programming', json.manualProgramming);
+                  if (json.digital_signatures) setLocal('cmnl_digital_signatures', json.digital_signatures);
                   if (json.managementReports) setLocal('rcm_gestion_reportes', json.managementReports);
                   if (json.allConsolidatedPayments) setLocal('rcm_all_consolidated_payments', json.allConsolidatedPayments);
                   if (json.userData) {

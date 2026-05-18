@@ -886,7 +886,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     { id: 'inst-comm', label: 'Comunicación Institucional' },
                     { id: 'maintenance', label: 'Mantenimiento' },
                     { id: 'secretary', label: 'Secretaría' },
-                    { id: 'reception', label: 'Recepción' }
+                    { id: 'reception', label: 'Recepción' },
+                    { id: 'digital-signature', label: 'Firma Digital' }
                   ].map(tool => {
                      const currentTools = editingMember.tools || [];
                      return (
