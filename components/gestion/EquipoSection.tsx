@@ -879,10 +879,14 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                 <label className="block text-xs text-amber-500 mb-2 uppercase font-bold tracking-wider">Herramientas Autorizadas</label>
                 <div className="grid grid-cols-2 gap-2 bg-black/20 p-3 rounded-lg border border-amber-500/20">
                   {[
+                    { id: 'guiones-management', label: 'Gestión de Guiones' },
                     { id: 'script-format', label: 'Formato de Guion' },
+                    { id: 'data-extraction', label: 'Extracción de Datos' },
                     { id: 'inst-docs', label: 'Documentos Institucionales' },
                     { id: 'inst-comm', label: 'Comunicación Institucional' },
-                    { id: 'maintenance', label: 'Mantenimiento' }
+                    { id: 'maintenance', label: 'Mantenimiento' },
+                    { id: 'secretary', label: 'Secretaría' },
+                    { id: 'reception', label: 'Recepción' }
                   ].map(tool => {
                      const currentTools = editingMember.tools || [];
                      return (
