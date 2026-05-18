@@ -125,6 +125,18 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+
+      .no-scrollbar-hidden::-webkit-scrollbar {
+        height: 4px;
+      }
+      .no-scrollbar-hidden::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .no-scrollbar-hidden::-webkit-scrollbar-thumb {
+        background: #4a3728;
+        border-radius: 10px;
+      }
+
       .filled-icon {
         font-variation-settings: 'FILL' 1;
       }

@@ -236,14 +236,14 @@ const AppContent: React.FC = () => {
     if (lastSyncStr) {
       const lastSync = parseInt(lastSyncStr, 10);
       const now = Date.now();
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      if (now - lastSync > twentyFourHours) {
+      const fortyEightHours = 48 * 60 * 60 * 1000;
+      if (now - lastSync > fortyEightHours) {
         setShowUpdateReminder(true);
       }
     }
   }, []);
 
-  // 24-Hour Backup Reminder Effect
+  // 48-Hour Backup Reminder Effect
   useEffect(() => {
     if (currentUser) {
       const isExcluded = currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador' || currentUser.role === 'admin' || currentUser.role === 'coordinator';
@@ -252,10 +252,10 @@ const AppContent: React.FC = () => {
       if (!isExcluded && isActiveRole) {
         const lastBackup = localStorage.getItem(`last_backup_${currentUser.username}`);
         const now = new Date().getTime();
-        const twentyFourHours = 24 * 60 * 60 * 1000;
+        const fortyEightHours = 48 * 60 * 60 * 1000;
 
-        if (!lastBackup || (now - parseInt(lastBackup)) > twentyFourHours) {
-          // If 24h passed, mark as dirty to trigger prompt on next navigation or logout
+        if (!lastBackup || (now - parseInt(lastBackup)) > fortyEightHours) {
+          // If 48h passed, mark as dirty to trigger prompt on next navigation or logout
           setIsDirty(true);
         }
       }

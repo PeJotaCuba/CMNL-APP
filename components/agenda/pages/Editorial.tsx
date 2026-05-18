@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { LOGO_URL } from '../../../utils/scheduleData';
 import { openWhatsApp } from '../../../utils/whatsappUtils';
 import { useNavigate } from 'react-router-dom';
 import { UserRole, Program, DailyContent, UserProfile, DayThemeData, EfemeridesData, ConmemoracionesData } from '../types.ts';
@@ -6,17 +7,9 @@ import { getWeeksInMonth, DayInfo, getCurrentDateInfo } from '../utils/dateUtils
 import { MONTHS_DATA } from '../constants.ts';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx-js-style';
 import AgendaHeader from '../components/AgendaHeader';
 import { saveAgendaPdf, loadAgendaPdfs, deleteAgendaPdf, deleteAllAgendaPdfs, GeneratedAgenda } from '../services/db';
-import { 
-  syncEditorialContent, 
-  updateEditorialFirebase, 
-  shareAgendaFirebase, 
-  getSharedAgendas,
-  deleteSharedAgenda,
-  deleteAllSharedAgendas,
-  EditorialSyncData 
-} from '../services/firebaseSync';
 
 interface EditorialProps {
   user: UserProfile;
@@ -138,10 +131,6 @@ const Editorial: React.FC<EditorialProps> = ({
   const [confirmDialog, setConfirmDialog] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [alertDialog, setAlertDialog] = useState<{ message: string, onAlertClose?: () => void } | null>(null);
 
-  // Firestore Data State
-  const [firebaseEditorialData, setFirebaseEditorialData] = useState<Record<string, EditorialSyncData>>({});
-  const [sharedAgendasList, setSharedAgendasList] = useState<any[]>([]);
-
   const [commentModal, setCommentModal] = useState<{program: Program, dayName: string, fullDate: string, data: DailyContent} | null>(null);
   const [commentText, setCommentText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,19 +138,8 @@ const Editorial: React.FC<EditorialProps> = ({
   React.useEffect(() => {
      if (viewPdfArchive) {
         loadAgendaPdfs().then(setArchiveList);
-        // Also listen to shared agendas from cloud
-        return getSharedAgendas(setSharedAgendasList);
      }
   }, [viewPdfArchive]);
-
-  // Real-time synchronization for editorial content
-  React.useEffect(() => {
-    if (selectedWeekId) {
-      return syncEditorialContent(currentMonthLabel, selectedWeekId, (data) => {
-        setFirebaseEditorialData(data);
-      });
-    }
-  }, [selectedWeekId, currentMonthLabel]);
 
   const handleGeneratePdf = async () => {
       const data = await generatePdfBlob();
@@ -177,20 +155,7 @@ const Editorial: React.FC<EditorialProps> = ({
       };
 
       await saveAgendaPdf(newPdf);
-      
-      // Also share to cloud for team visibility
-      try {
-        const success = await shareAgendaFirebase(newPdf);
-        if (success) {
-          setAlertDialog({ message: "Agenda generada y compartida en la Nube con éxito." });
-        } else {
-          setAlertDialog({ message: "Agenda guardada localmente, pero no se pudo sincronizar con la Nube. Revisa tu conexión." });
-        }
-      } catch (e) {
-        console.error("Cloud share error:", e);
-        setAlertDialog({ message: "Error al sincronizar con la Nube. Se guardó solo localmente." });
-      }
-
+      setAlertDialog({ message: "Agenda generada y guardada con éxito." });
       setViewPdfArchive(true);
   };
 
@@ -222,7 +187,7 @@ const Editorial: React.FC<EditorialProps> = ({
       });
       
       const emailsList = targetUsers.map(u => u.email).filter(e => e);
-      const emails = emailsList.join(',');
+      const recipientEmails = emailsList.join(',');
       
       if (!emailsList.length) {
           setAlertDialog({ message: "No se encontraron correos de guionistas o asesores registrados." });
@@ -232,20 +197,24 @@ const Editorial: React.FC<EditorialProps> = ({
       const subject = `Agenda Editorial CMNL - ${agenda.month} ${agenda.weekLabel}`;
       const textDesc = `Buenos días, esta es la agenda editorial de la ${agenda.weekLabel} del mes de ${agenda.month}.`;
 
-      // Optimized flow: Copy emails to clipboard to assist the user
+      // Copy emails to clipboard
       try {
-          await navigator.clipboard.writeText(emails);
+          await navigator.clipboard.writeText(recipientEmails);
       } catch (err) {
           console.error("Failed to copy emails", err);
       }
 
-      // Try Automated Sharing (Web Share API) - Only way to attach the file
-      const file = new File([agenda.blob], agenda.filename, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-              // We show a quick alert to prepare the user before the native sheet opens
+      // Gmail direct link - browser based
+      const gmailUrl = `https://mail.google.com/mail?view=cm&fs=1&to=${recipientEmails}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(textDesc)}`;
+      
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      // On mobile, try sharing the file first. On PC, always browser.
+      if (isMobile && navigator.canShare) {
+          const file = new File([agenda.blob], agenda.filename, { type: 'application/pdf' });
+          if (navigator.canShare({ files: [file] })) {
               setAlertDialog({ 
-                  message: "Los correos se han copiado al portapapeles. Selecciona Gmail en la siguiente ventana y pega los destinatarios en el campo 'Para'.",
+                  message: "Los correos se han copiado al portapapeles. Selecciona Gmail en la siguiente ventana.",
                   onAlertClose: async () => {
                       try {
                           await navigator.share({
@@ -254,22 +223,19 @@ const Editorial: React.FC<EditorialProps> = ({
                               text: textDesc
                           });
                       } catch (e: any) {
-                          if (e.name !== 'AbortError') console.error(e);
+                          if (e.name !== 'AbortError') {
+                              window.open(gmailUrl, "_blank");
+                          }
                       }
                   }
               });
               return;
-          } catch (e: any) {
-              console.error(e);
           }
       }
       
-      // Fallback
-      const subjectEncoded = encodeURIComponent(subject);
-      const bodyEncoded = encodeURIComponent(textDesc);
-      window.location.href = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
+      window.open(gmailUrl, "_blank");
       setAlertDialog({ 
-          message: "Se ha abierto tu aplicación de correo. Debido a restricciones del sistema, por favor adjunta el PDF manualmente." 
+          message: "Se ha abierto Gmail en el navegador. Por favor adjunta el PDF manualmente (los correos se copiaron al portapapeles)." 
       });
   };
 
@@ -298,6 +264,86 @@ const Editorial: React.FC<EditorialProps> = ({
       setCommentText('');
   };
 
+  const handleFullMonthlyReport = () => {
+    const selectedYear = targetDate.getFullYear();
+    const monthName = currentMonthLabel;
+    
+    const classifyTheme = (theme: string) => {
+        const t = theme.toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+            
+        if (t.includes('fidel') || t.includes('castro')) return "Legado de Fidel Castro";
+        if (t.includes('soberania') || t.includes('alimentaria') || t.includes('agricultura')) return "Soberanía alimentaria";
+        if (t.includes('tarea vida') || t.includes('medio ambiente') || t.includes('clima') || t.includes('ecologia')) return "Tarea Vida (medio ambiente)";
+        if (t.includes('droga') || t.includes('lucha contra las drogas')) return "Lucha contra las drogas";
+        if (t.includes('adelanto') || t.includes('mujeres') || t.includes('feminismo') || t.includes('pam ')) return "Programa de Adelanto de las mujeres";
+        return "Otras temáticas";
+    };
+
+    const groupings: Record<string, { date: string, program: string, specificTheme: string }[]> = {
+      "Legado de Fidel Castro": [],
+      "Soberanía alimentaria": [],
+      "Tarea Vida (medio ambiente)": [],
+      "Lucha contra las drogas": [],
+      "Programa de Adelanto de las mujeres": [],
+      "Otras temáticas": []
+    };
+    
+    // Process all weeks of the month
+    weeks.forEach(week => {
+        programs.forEach(prog => {
+            if (prog.dailyData) {
+                week.days.forEach(day => {
+                    if (!day) return;
+                    const key = `${monthName}-${week.id}-${day.name}`;
+                    const data = prog.dailyData[key];
+                    if (data && data.theme) {
+                        const category = classifyTheme(data.theme);
+                        const formattedDate = `${day.date.toString().padStart(2, '0')}/${(targetDate.getMonth() + 1).toString().padStart(2, '0')}/${selectedYear.toString().slice(-2)}`;
+                        groupings[category].push({ 
+                            date: formattedDate, 
+                            program: prog.name,
+                            specificTheme: data.theme
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    const rows: any[] = [];
+    Object.keys(groupings).forEach(cat => {
+      if (groupings[cat].length > 0) {
+        rows.push({ 'Categoría': cat, 'Fecha': '', 'Programa': '', 'Temática Específica': '' });
+        // Sort by date (simple string sort works for DD/MM/YY if we are careful, but better to just push)
+        groupings[cat].forEach(e => {
+          rows.push({ 'Categoría': '', 'Fecha': e.date, 'Programa': e.program, 'Temática Específica': e.specificTheme });
+        });
+      }
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    
+    // Styling
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:D1');
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+        const catCell = ws[XLSX.utils.encode_cell({c: 0, r: R})];
+        if (catCell && catCell.v && Object.keys(groupings).includes(catCell.v)) {
+            ws[XLSX.utils.encode_cell({c: 0, r: R})].s = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "9E7649" } }
+            };
+        }
+    }
+    
+    ws['!cols'] = [{ wch: 35 }, { wch: 12 }, { wch: 25 }, { wch: 50 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Temáticas");
+    XLSX.writeFile(wb, `Informe_Tematico_${monthName}_${selectedYear}.xlsx`);
+  };
+
   const activeWeek = weeks.find(w => w.id === selectedWeekId);
   
   // Filtrado de usuario
@@ -316,15 +362,6 @@ const Editorial: React.FC<EditorialProps> = ({
   // CORRECCIÓN CRÍTICA: Solo usar fallback a legacy si el mes es Enero.
   // Esto evita que datos de Enero se muestren en Febrero, Marzo, etc.
   const getEffectiveData = (program: Program, weekId: string, dayName: string): DailyContent => {
-      // 0. Check Firebase Real-time Data (Highest Priority)
-      const fbKey = `${program.id}-${dayName}`;
-      if (firebaseEditorialData[fbKey]) {
-          return {
-              theme: firebaseEditorialData[fbKey].theme,
-              ideas: firebaseEditorialData[fbKey].ideas
-          };
-      }
-
       const newKey = getDataKey(weekId, dayName);
       const oldKey = getLegacyKey(weekId, dayName);
       
@@ -611,6 +648,32 @@ const Editorial: React.FC<EditorialProps> = ({
       const jsPDFCtor = (jsPDF as any).default || jsPDF;
       const doc = new jsPDFCtor();
 
+      // Convert SVG Logo to PNG for better compatibility with jsPDF
+      const logoPng = await new Promise<string>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = 500;
+              canvas.height = 500;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                  ctx.fillStyle = "white";
+                  ctx.fillRect(0, 0, 500, 500);
+                  ctx.drawImage(img, 0, 0);
+                  resolve(canvas.toDataURL('image/png'));
+              } else resolve(LOGO_URL);
+          };
+          img.onerror = () => resolve(LOGO_URL);
+          img.src = LOGO_URL;
+      });
+
+      // Add Logo
+      try {
+          doc.addImage(logoPng, 'PNG', 10, 10, 25, 25);
+      } catch (e) {
+          console.error("Error adding logo to PDF:", e);
+      }
+
       doc.setFontSize(20);
       doc.setFont("helvetica", "bold");
       doc.text("RADIO CIUDAD MONUMENTO", 105, 20, { align: "center" });
@@ -715,20 +778,6 @@ const Editorial: React.FC<EditorialProps> = ({
       ideas: editData.ideas
     };
     onUpdateProgram(updatedProgram);
-
-    // Sync to Firebase for real-time communication
-    try {
-      await updateEditorialFirebase({
-          programId: program.id,
-          weekId: activeWeek.id,
-          dayName: selectedDay.dayName,
-          month: currentMonthLabel,
-          theme: editData.theme,
-          ideas: editData.ideas
-      });
-    } catch (e) {
-      console.error("Firebase Sync Error:", e);
-    }
 
     setEditingProg(null);
   };
@@ -874,111 +923,12 @@ const Editorial: React.FC<EditorialProps> = ({
     return (
       <div className="h-full flex flex-col bg-background-dark">
         <AgendaHeader 
-          title="Archivos PDF Generados" 
+          title="Historial de Agendas" 
           user={user} 
           onMenuClick={onMenuClick} 
           onBack={handleBack}
         />
         <main className="flex-1 overflow-y-auto p-4 space-y-4 pt-10">
-          <div className="flex justify-between items-center mb-4 px-2">
-            <h2 className="text-[#9E7649] text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">cloud</span>
-              Documentos de la Nube (Compartidos)
-            </h2>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => getSharedAgendas(setSharedAgendasList)}
-                className="size-8 rounded-full bg-white/5 flex items-center justify-center text-text-secondary hover:bg-white/10 transition-colors"
-                title="Actualizar Nube"
-              >
-                <span className="material-symbols-outlined text-sm">refresh</span>
-              </button>
-              {user.role === UserRole.ADMIN && sharedAgendasList.length > 0 && (
-                <button 
-                  onClick={() => {
-                    setConfirmDialog({
-                      message: "¿Estás seguro de ELIMINAR TODOS los archivos de la NUBE?",
-                      onConfirm: async () => {
-                        await deleteAllSharedAgendas();
-                        setAlertDialog({ message: "Nube de archivos limpiada." });
-                      }
-                    });
-                  }}
-                  className="size-8 rounded-full bg-admin-red/10 flex items-center justify-center text-admin-red hover:bg-admin-red/20 transition-colors"
-                  title="Borrar Nube"
-                >
-                  <span className="material-symbols-outlined text-sm">delete_sweep</span>
-                </button>
-              )}
-            </div>
-          </div>
-          {/* Cloud Documents Section */}
-          <div className="mb-6">
-            {sharedAgendasList.length === 0 ? (
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-6 text-center">
-                <p className="text-white/30 text-xs italic">No hay documentos compartidos en la nube.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {sharedAgendasList.map(agenda => (
-                  <div key={agenda.id} className="bg-primary/5 rounded-2xl p-4 border border-primary/20 shadow-xl flex flex-col gap-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-white font-bold text-sm leading-tight">{agenda.filename}</h3>
-                        <p className="text-[10px] text-primary font-bold uppercase mt-1">Sincronizado por el equipo</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="bg-primary/20 text-primary p-1.5 rounded-lg">
-                          <span className="material-symbols-outlined text-sm">cloud_done</span>
-                        </div>
-                        {user.role === UserRole.ADMIN && (
-                          <button 
-                            onClick={() => {
-                              setConfirmDialog({
-                                message: "¿Eliminar este archivo de la nube?",
-                                onConfirm: async () => {
-                                  await deleteSharedAgenda(agenda.id);
-                                }
-                              });
-                            }}
-                            className="bg-admin-red/10 text-admin-red p-1.5 rounded-lg hover:bg-admin-red/20"
-                          >
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => {
-                        if (agenda.hasBinary && agenda.fileData) {
-                          const binaryData = typeof agenda.fileData.toUint8Array === 'function' 
-                            ? agenda.fileData.toUint8Array() 
-                            : agenda.fileData;
-                          const blob = new Blob([binaryData], { type: 'application/pdf' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = agenda.filename;
-                          a.click();
-                          URL.revokeObjectURL(url);
-                        } else {
-                          setAlertDialog({ message: "Este archivo de la nube solo tiene metadatos (probablemente es mayor a 1MB). Por favor, solicita el archivo original por WhatsApp." });
-                        }
-                      }} className="bg-primary text-background-dark py-2 rounded-xl text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1 shadow-lg shadow-primary/20">
-                        <span className="material-symbols-outlined text-sm">download</span> Descargar
-                      </button>
-                      <button onClick={() => handleArchiveWhatsApp(agenda)} className="bg-green-600/20 text-green-400 hover:bg-green-600/30 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1">
-                        <span className="material-symbols-outlined text-sm">chat</span> Grupo WhatsApp
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <hr className="border-white/5 my-6" />
-
           <h2 className="text-white/50 text-[10px] font-bold uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-sm">folder</span>
             Mis Archivos Locales
@@ -1002,7 +952,7 @@ const Editorial: React.FC<EditorialProps> = ({
           {archiveList.length === 0 ? (
             <div className="text-center text-white/50 text-sm py-10">No hay archivos generados.</div>
           ) : (
-            archiveList.map(agenda => (
+            archiveList.sort((a,b) => b.createdAt.localeCompare(a.createdAt)).map(agenda => (
               <div key={agenda.id} className="bg-card-dark rounded-2xl p-4 border border-white/5 shadow-xl flex flex-col gap-3">
                 <div className="flex justify-between items-center border-b border-white/5 pb-2">
                   <h3 className="text-white font-bold text-sm leading-tight">{agenda.filename}</h3>
@@ -1216,13 +1166,23 @@ const Editorial: React.FC<EditorialProps> = ({
           </div>
         </div>
         {!isMonthSelection && (
-          <button 
-            onClick={() => setViewPdfArchive(true)} 
-            className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
-          >
-            <span className="material-symbols-outlined text-[16px]">folder_open</span>
-            <span>PDF Compartidos</span>
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleFullMonthlyReport}
+              className="bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-primary/20 shadow-sm"
+              title="Descargar informe temático de todo el mes"
+            >
+              <span className="material-symbols-outlined text-[16px]">summarize</span>
+              <span>Informe Temático</span>
+            </button>
+            <button 
+              onClick={() => setViewPdfArchive(true)} 
+              className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 border border-white/10 shadow-sm"
+            >
+              <span className="material-symbols-outlined text-[16px]">folder_open</span>
+              <span>Historial</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -1428,13 +1388,13 @@ const ShareAgendaModal: React.FC<{
         } else {
             const emailsList = recipientUsers.map(u => (u as any).email).filter(e => e);
             if (emailsList.length > 0) {
-                const emails = emailsList.join(',');
+                const recipientEmails = emailsList.join(',');
                 const subject = `Agenda Editorial CMNL - ${monthName} ${activeWeek.label}`;
                 const textDesc = generateContent().replace(/\*/g, '');
 
                 // Assist by copying emails
                 try {
-                    await navigator.clipboard.writeText(emails);
+                    await navigator.clipboard.writeText(recipientEmails);
                 } catch (err) {
                     console.error(err);
                 }
@@ -1442,9 +1402,11 @@ const ShareAgendaModal: React.FC<{
                 const subjectEncoded = encodeURIComponent(subject);
                 const bodyEncoded = encodeURIComponent(textDesc);
                 
-                // Force open mail app to ensure recipients are there
-                window.location.href = `mailto:${emails}?subject=${subjectEncoded}&body=${bodyEncoded}`;
-                setModalAlert("Se ha abierto Gmail con los destinatarios. Los correos también se copiaron al portapapeles. Recuerda adjuntar el PDF.");
+                // Use Gmail browser link to avoid opening local mail apps on PC
+                const gmailUrl = `https://mail.google.com/mail?view=cm&fs=1&to=${recipientEmails}&su=${subjectEncoded}&body=${bodyEncoded}`;
+                window.open(gmailUrl, "_blank");
+                
+                setModalAlert("Se ha abierto Gmail en el navegador con los destinatarios. Los correos también se copiaron al portapapeles. Recuerda adjuntar el PDF.");
             } else {
                 setModalAlert("No se encontraron correos seleccionados.");
             }

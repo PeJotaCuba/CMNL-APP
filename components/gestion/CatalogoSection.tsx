@@ -12,13 +12,20 @@ interface Props {
   currentUser: any;
   catalogo: ProgramCatalog[];
   setCatalogo: React.Dispatch<React.SetStateAction<ProgramCatalog[]>>;
+  showConfirm: (title: string, message: string, onConfirm: () => void) => void;
 }
 
-const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, catalogo, setCatalogo }) => {
+const normalizeStr = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+
+const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, catalogo, setCatalogo, showConfirm }) => {
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<ProgramCatalog | null>(null);
   const [isEditingCatalogo, setIsEditingCatalogo] = useState(false);
   const [editingProg, setEditingProg] = useState<ProgramCatalog | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const isMatch = (name1: string, name2: string) => {
+      return normalizeStr(name1) === normalizeStr(name2);
+  };
 
   const isAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
 
@@ -76,12 +83,13 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
   };
 
   const handleSaveEditCatalogo = () => {
-      if (editingProg) {
-          const updatedCatalogo = catalogo.map(c => c.name === editingProg.name ? editingProg : c);
+      if (editingProg && selectedCatalogItem) {
+          const updatedCatalogo = catalogo.map(c => c.name === selectedCatalogItem.name ? editingProg : c);
           setCatalogo(updatedCatalogo);
           localStorage.setItem('rcm_data_catalogo', JSON.stringify(updatedCatalogo));
           setIsEditingCatalogo(false);
           setEditingProg(null);
+          setSelectedCatalogItem(editingProg);
       }
   };
 
@@ -105,12 +113,31 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
       const programs: ProgramCatalog[] = [];
       const blocks = text.split(/_{10,}/); 
 
+      // Load Fichas for homologation
+      const savedFichas = localStorage.getItem('rcm_data_fichas');
+      const fichas: any[] = savedFichas ? JSON.parse(savedFichas) : [];
+      const validNames = fichas.map(f => f.name.toLowerCase().trim());
+
       blocks.forEach(block => {
           if (!block.trim()) return;
 
           const nameMatch = block.match(/Programa:\s*(.+)/);
           if (!nameMatch) return;
-          const name = nameMatch[1].trim();
+          let name = nameMatch[1].trim();
+
+          // Homologation
+          const lowerName = name.toLowerCase().trim();
+          if (!validNames.includes(lowerName)) {
+              // Try to find a partial match or similar name
+              const bestMatch = fichas.find(f => 
+                  f.name.toLowerCase().includes(lowerName) || 
+                  lowerName.includes(f.name.toLowerCase())
+              );
+              if (bestMatch) {
+                  console.log(`Homologando "${name}" -> "${bestMatch.name}"`);
+                  name = bestMatch.name;
+              }
+          }
 
           const roles: RolePaymentInfo[] = [];
           
@@ -161,7 +188,7 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
           setCatalogo(prev => {
               const newCatalogo = [...prev];
               programs.forEach(newProg => {
-                  const existingIndex = newCatalogo.findIndex(p => p.name === newProg.name);
+                  const existingIndex = newCatalogo.findIndex(p => isMatch(p.name, newProg.name));
                   if (existingIndex >= 0) newCatalogo[existingIndex] = newProg;
                   else newCatalogo.push(newProg);
               });
@@ -217,10 +244,10 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
                      </label>
                      <button 
                          onClick={() => {
-                             if(confirm('¿Seguro que desea eliminar todo el catálogo mensual? Esta acción es irreversible.')) {
+                             showConfirm('Eliminar todo', '¿Seguro que desea eliminar todo el catálogo mensual? Esta acción es irreversible.', () => {
                                  setCatalogo([]);
                                  localStorage.setItem('rcm_data_catalogo', JSON.stringify([]));
-                             }
+                             });
                          }}
                          className="bg-red-900/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-red-900/60 transition-colors flex-1 md:flex-none justify-center"
                      >
@@ -254,11 +281,11 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
                                     <button onClick={() => exportCatalogoDoc(prog)} className="p-1.5 bg-amber-900/40 text-amber-400 rounded hover:bg-amber-900/60 transition-all" title="Descargar .docx"><Download size={14}/></button>
                                     <button 
                                         onClick={() => {
-                                            if(confirm('¿Eliminar del catálogo?')) {
+                                            showConfirm('Eliminar programa', `¿Eliminar "${prog.name}" del catálogo?`, () => {
                                                 const updated = catalogo.filter(c => c.name !== prog.name);
                                                 setCatalogo(updated);
                                                 localStorage.setItem('rcm_data_catalogo', JSON.stringify(updated));
-                                            }
+                                            });
                                         }}
                                         className="p-1.5 bg-red-900/40 text-red-400 rounded hover:bg-red-900/60 transition-all" title="Eliminar"
                                     >
@@ -325,8 +352,16 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
               <div className="bg-[#1A100C] border border-[#9E7649]/40 p-6 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar">
                   <div className="flex justify-between items-center mb-6">
-                      <h2 className="text-xl font-bold text-white">Editar Programa: {editingProg.name}</h2>
-                      <button onClick={() => setIsEditingCatalogo(false)} className="text-[#9E7649] hover:text-white">
+                      <div className="flex-1 mr-4">
+                          <label className="block text-xs uppercase text-[#9E7649] tracking-widest mb-1">Nombre del Programa</label>
+                          <input 
+                              className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white font-bold text-xl"
+                              type="text" 
+                              value={editingProg.name}
+                              onChange={e => setEditingProg({ ...editingProg, name: e.target.value })}
+                          />
+                      </div>
+                      <button onClick={() => setIsEditingCatalogo(false)} className="text-[#9E7649] hover:text-white mt-4">
                           <X size={24} />
                       </button>
                   </div>

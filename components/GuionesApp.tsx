@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { User, Script } from '../types';
 import CMNLHeader from './CMNLHeader';
-import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
+import { FileStack, ChevronLeft, Search, Radio, Music, BookOpen, Users, Leaf, Newspaper, Home, Activity, Palette, Upload, Database, FileText, X, Plus, Wand2, Trash2, Edit2, BarChart3, Calendar, Filter, ChevronRight, FileDown, List, AlertCircle, AlertTriangle, UserX, Tag, User as UserIcon, Shield } from 'lucide-react';
 import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
 import { juanaPorDentroData } from '../utils/juanaPorDentroData';
@@ -20,12 +20,15 @@ export const parseSpanishDate = (dateStr: string): Date => {
         return new Date(year, month, day);
     }
 
-    // 2. Check for DD/MM/YYYY or DD-MM-YYYY
-    const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    // 2. Check for DD/MM/YYYY or DD/MM/YY
+    const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if (dmyMatch) {
         const p1 = parseInt(dmyMatch[1], 10);
         const p2 = parseInt(dmyMatch[2], 10);
-        const p3 = parseInt(dmyMatch[3], 10);
+        let p3 = parseInt(dmyMatch[3], 10);
+        
+        // Handle 2-digit year (assume 20xx)
+        if (p3 < 100) p3 += 2000;
         
         // If p2 > 12, it must be MM/DD/YYYY
         if (p2 > 12) {
@@ -202,6 +205,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     }, [showStats, selectedProgram]);
     const [balanceMonth, setBalanceMonth] = useState('Todos');
     const [balanceSearch, setBalanceSearch] = useState('');
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void} | null>(null);
 
     const [showNewScript, setShowNewScript] = useState(false);
     const [editingScript, setEditingScript] = useState<Script | null>(null);
@@ -253,6 +258,7 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
            .toUpperCase();
 
     const getProgramScripts = (prog: typeof PROGRAMS[0]): Script[] => {
+        const _ = refreshTrigger;
         const key = `guionbd_data_${prog.file}`;
         const saved = localStorage.getItem(key);
         if (!saved) return [];
@@ -320,7 +326,8 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             const mergedMap = new Map<string, Script>();
             const generateKey = (s: Script) => {
                 if (useIdAsKey) return s.id;
-                return `${s.dateAdded}|${normalize(s.genre)}`;
+                const themeStr = Array.isArray(s.themes) ? s.themes.join('|') : String(s.themes || '');
+                return `${s.dateAdded}|${normalize(themeStr)}`;
             };
 
             existing.forEach(s => mergedMap.set(generateKey(s), s));
@@ -363,18 +370,18 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         }
     };
 
-    const handleDownloadDatabase = () => {
-        const allData: Script[] = [];
-        PROGRAMS.forEach(prog => {
-            allData.push(...getProgramScripts(prog));
+    const handleClearAllData = () => {
+        setConfirmDialog({
+            isOpen: true,
+            message: `¿Estás seguro de que deseas eliminar TODOS los guiones de la base de datos local? Esta acción no se puede deshacer.`,
+            onConfirm: () => {
+                PROGRAMS.forEach(p => {
+                    localStorage.removeItem(`guionbd_data_${p.file}`);
+                });
+                setRefreshTrigger(prev => prev + 1);
+                setConfirmDialog(null);
+            }
         });
-
-        const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = "guiones.json";
-        link.click();
     };
 
     if (!currentUser) {
@@ -402,31 +409,23 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         );
     };
 
-    const handleClearAllData = () => {
-        if (window.confirm(`¿Estás seguro de que deseas eliminar TODOS los guiones de la base de datos local? Esta acción no se puede deshacer.`)) {
-            PROGRAMS.forEach(p => {
-                localStorage.removeItem(`guionbd_data_${p.file}`);
-            });
-            // trigger re-render
-            setSearchQuery(' ');
-            setTimeout(() => setSearchQuery(''), 0);
-        }
-    };
-
     const handleDeleteScript = (id: string) => {
         if (!selectedProgram) return;
-        if (window.confirm('¿Eliminar este guion?')) {
-            if (onDirtyChange) onDirtyChange(true);
-            const program = PROGRAMS.find(p => p.name === selectedProgram);
-            if (program) {
-                const scripts = getProgramScripts(program);
-                const updated = scripts.filter(s => s.id !== id);
-                localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify(updated));
-                // Forzar re-render (hack simple)
-                setSelectedProgram('');
-                setTimeout(() => setSelectedProgram(selectedProgram), 0);
+        setConfirmDialog({
+            isOpen: true,
+            message: '¿Eliminar este guion?',
+            onConfirm: () => {
+                if (onDirtyChange) onDirtyChange(true);
+                const program = PROGRAMS.find(p => p.name === selectedProgram);
+                if (program) {
+                    const scripts = getProgramScripts(program);
+                    const updated = scripts.filter(s => s.id !== id);
+                    localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify(updated));
+                    setRefreshTrigger(prev => prev + 1);
+                }
+                setConfirmDialog(null);
             }
-        }
+        });
     };
 
     const handleSaveScript = (e: React.FormEvent) => {
@@ -1044,6 +1043,19 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                 <button onClick={() => setShowPulir(true)} className="flex items-center justify-center p-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors" title="Pulir">
                                     <Wand2 size={24} />
                                 </button>
+                                <button onClick={() => {
+                                    setConfirmDialog({
+                                        isOpen: true,
+                                        message: `¿Estás seguro de que deseas eliminar TODOS los guiones de ${program.name}? Esta acción no se puede deshacer.`,
+                                        onConfirm: () => {
+                                            localStorage.removeItem(`guionbd_data_${program.file}`);
+                                            setRefreshTrigger(prev => prev + 1);
+                                            setConfirmDialog(null);
+                                        }
+                                    });
+                                }} className="flex items-center justify-center p-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-colors" title="Limpiar Guiones">
+                                    <Trash2 size={24} />
+                                </button>
                             </>
                         )}
                     </div>
@@ -1292,19 +1304,12 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                     )}
                                     {isFullAdmin && (
                                         <>
-                                            <button 
-                                                onClick={handleDownloadDatabase}
-                                                className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
-                                            >
-                                                <Database size={18} />
-                                                <span className="hidden md:inline text-sm font-bold">Descargar BD</span>
-                                            </button>
                                             <button
                                                 onClick={handleClearAllData}
                                                 className="flex items-center gap-2 px-4 md:px-5 py-3 bg-red-900/20 border border-red-500/30 rounded-xl text-red-500 hover:bg-red-900/40 hover:text-red-400 transition-all shadow-sm"
                                             >
                                                 <Trash2 size={18} />
-                                                <span className="hidden md:inline text-sm font-bold">Limpiar BD</span>
+                                                <span className="hidden md:inline text-sm font-bold">Limpiar Todo</span>
                                             </button>
                                         </>
                                     )}
@@ -1424,6 +1429,31 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                         >
                             <Wand2 size={14} /> Pulir Selección
                         </button>
+                    </div>
+                )}
+                {confirmDialog && (
+                    <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="bg-[#2C1B15] w-full max-w-sm rounded-3xl border border-red-900/50 p-6 flex flex-col items-center text-center space-y-6">
+                            <div className="w-16 h-16 bg-red-900/20 text-red-500 rounded-full flex items-center justify-center mb-2">
+                                <AlertTriangle size={32} />
+                            </div>
+                            <h3 className="font-bold text-xl text-white">Confirmar Acción</h3>
+                            <p className="text-stone-300 text-sm leading-relaxed">{confirmDialog.message}</p>
+                            <div className="flex justify-center gap-3 w-full mt-4">
+                                <button 
+                                    onClick={() => setConfirmDialog(null)}
+                                    className="flex-1 px-4 py-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-white font-bold hover:bg-[#3E1E16] transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button 
+                                    onClick={confirmDialog.onConfirm}
+                                    className="flex-1 px-4 py-3 bg-red-600 rounded-xl text-white font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+                                >
+                                    Confirmar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </main>

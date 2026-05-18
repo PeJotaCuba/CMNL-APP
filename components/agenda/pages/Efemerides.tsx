@@ -107,8 +107,59 @@ const Efemerides: React.FC<EfemeridesProps> = ({ user, data, onUpdate, onMenuCli
       alert("Información editada con éxito.");
   };
 
-  const handleDownloadDocx = () => {
-    // Download logic
+  const handleDownloadDocx = async () => {
+    if (!selectedMonth || !data[selectedMonth]) return;
+
+    const monthEfemerides = (data[selectedMonth] || []).sort((a, b) => a.day - b.day);
+    
+    const children: any[] = [
+      new Paragraph({
+        text: "RADIO CIUDAD MONUMENTO",
+        alignment: AlignmentType.CENTER,
+        heading: "Heading1",
+      }),
+      new Paragraph({
+        text: `Efemérides - ${selectedMonth}`,
+        alignment: AlignmentType.CENTER,
+        heading: "Heading2",
+      }),
+      new Paragraph({ text: "" })
+    ];
+
+    const days = Array.from(new Set(monthEfemerides.map(e => e.day))).sort((a: number, b: number) => a - b);
+    
+    days.forEach(dayNum => {
+      children.push(new Paragraph({
+        text: `Día ${dayNum} de ${selectedMonth}`,
+        heading: "Heading3",
+        spacing: { before: 200, after: 100 }
+      }));
+
+      monthEfemerides.filter(e => e.day === dayNum).forEach(ef => {
+        children.push(new Paragraph({
+          children: [
+            new TextRun({ text: `${ef.event}: `, bold: true }),
+            new TextRun({ text: ef.description })
+          ],
+          spacing: { after: 100 }
+        }));
+      });
+    });
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: children
+      }]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Efemerides_${selectedMonth}.docx`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const renderUploadBtn = () => {

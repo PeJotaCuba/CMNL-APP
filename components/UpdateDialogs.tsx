@@ -93,7 +93,7 @@ export const UpdateReminderModal: React.FC<UpdateReminderModalProps> = ({
                         </div>
                         <h2 className="text-xl font-bold text-gray-900 mb-2">Recordatorio de Actualización</h2>
                         <p className="text-gray-600 text-sm mb-6">
-                            Han pasado más de 24 horas desde tu última actualización de datos.
+                            Han pasado más de 48 horas desde tu última actualización de datos.
                         </p>
                         <div className="flex flex-col gap-3">
                             <button 

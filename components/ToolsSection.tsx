@@ -8,10 +8,14 @@ import {
   Settings,
   ChevronRight,
   Sparkles,
-  Database
+  Database,
+  Briefcase,
+  Bell
 } from 'lucide-react';
 import CMNLHeader from './CMNLHeader';
 import DataExtractionTool from './DataExtractionTool';
+import GenericTool from './GenericTool';
+import GuionesGestionTool from './GuionesGestionTool';
 
 interface ToolsSectionProps {
   onBack: () => void;
@@ -24,9 +28,18 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
 
   const allTools = [
     {
+      id: 'guiones-management',
+      title: 'Gestión de Guiones',
+      description: 'Módulo administrativo para coordinadores: Reportes temáticos, control de calidad y cierre financiero de pagos a guionistas y asesores.',
+      icon: Briefcase,
+      color: 'from-stone-500/20 to-stone-600/20',
+      textColor: 'text-[#9E7649]',
+      borderColor: 'border-[#9E7649]/30'
+    },
+    {
       id: 'script-format',
       title: 'Formato de Guion',
-      description: 'Plantillas y herramientas para la creación de guiones radiales.',
+      description: 'Permite a asesores y guionistas formatear la estructura de su guion y modificar elementos del texto, estandarizándolo según carta de estilo de la emisora.',
       icon: FileText,
       color: 'from-blue-500/20 to-blue-600/20',
       textColor: 'text-blue-400',
@@ -44,7 +57,7 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     {
       id: 'inst-docs',
       title: 'Documentos Institucionales',
-      description: 'Acceso a normativas, reglamentos y documentos oficiales.',
+      description: 'Permite acceder a normas jurídicas, disposiciones, reglamentos y procedimientos internos lo que incluye la posibilidad de descargarlos.',
       icon: BookOpen,
       color: 'from-emerald-500/20 to-emerald-600/20',
       textColor: 'text-emerald-400',
@@ -53,7 +66,7 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     {
       id: 'inst-comm',
       title: 'Comunicación Institucional',
-      description: 'Herramientas de difusión y comunicación interna.',
+      description: 'Herramienta de trabajo para el especialista en comunicación, patrimonio, archivo y atención a la población, con la cual puede gestionar y automatizar todos estos procesos.',
       icon: Megaphone,
       color: 'from-purple-500/20 to-purple-600/20',
       textColor: 'text-purple-400',
@@ -62,11 +75,29 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     {
       id: 'maintenance',
       title: 'Mantenimiento',
-      description: 'Reporte y seguimiento de incidencias técnicas.',
+      description: 'Permite al técnico en explotación de la radio de la emisora dar seguimiento a todos los equipos, sus ciclos de mantenimiento, necesidades de materiales para hacerlo etc.',
       icon: Settings,
       color: 'from-amber-500/20 to-amber-600/20',
       textColor: 'text-amber-400',
       borderColor: 'border-amber-500/30'
+    },
+    {
+      id: 'secretary',
+      title: 'Secretaría',
+      description: 'Facilita la gestión de la secretaría de la directora de la emisora, actas de consejos de dirección, seguimiento a acuerdos, localización de documentos, guía telefónica de instituciones y funcionarios, planes de trabajo y otros.',
+      icon: Briefcase,
+      color: 'from-rose-500/20 to-rose-600/20',
+      textColor: 'text-rose-400',
+      borderColor: 'border-rose-500/30'
+    },
+    {
+      id: 'reception',
+      title: 'Recepción',
+      description: 'Permite a la recepcionista manejar y crear documentos como el Control de acceso, objetos perdidos, clasificados entre otros que se vayan sumando.',
+      icon: Bell,
+      color: 'from-indigo-500/20 to-indigo-600/20',
+      textColor: 'text-indigo-400',
+      borderColor: 'border-indigo-500/30'
     }
   ];
 
@@ -76,7 +107,9 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   // Admins see all tools, workers see assigned tools
   const tools = isAdmin ? allTools : allTools.filter(t => userTools.includes(t.id));
 
-  // If a tool is active, render it instead of the list
+  // If a tool is active, render it
+  const currentTool = allTools.find(t => t.id === activeTool);
+
   if (activeTool === 'data-extraction') {
     return (
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
@@ -88,6 +121,44 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
         />
         <main className="max-w-7xl mx-auto px-4 py-8">
           <DataExtractionTool onBack={() => setActiveTool(null)} isAdmin={isAdmin} />
+        </main>
+      </div>
+    );
+  }
+
+  if (activeTool === 'guiones-management') {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          title="Gestión de Guiones" 
+          subtitle="Módulo Coordinador" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <GuionesGestionTool onBack={() => setActiveTool(null)} isAdmin={isAdmin} currentUser={currentUser} />
+        </main>
+      </div>
+    );
+  }
+
+  if (activeTool && currentTool) {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          title={currentTool.title} 
+          subtitle="Módulo Operativo" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <GenericTool 
+            id={currentTool.id}
+            title={currentTool.title}
+            description={currentTool.description}
+            onBack={() => setActiveTool(null)}
+            isAdmin={isAdmin}
+          />
         </main>
       </div>
     );

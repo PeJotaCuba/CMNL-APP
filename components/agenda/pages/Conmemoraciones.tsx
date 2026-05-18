@@ -125,8 +125,66 @@ const Conmemoraciones: React.FC<ConmemoracionesProps> = ({ user, data, onUpdate,
       alert("Información editada con éxito.");
   };
 
-  const handleDownloadDocx = () => {
-    // Download logic
+  const handleDownloadDocx = async () => {
+    if (!selectedMonth || !data[selectedMonth]) return;
+
+    const monthEvents = (data[selectedMonth] || []).sort((a, b) => a.day - b.day);
+    
+    const children: any[] = [
+      new Paragraph({
+        text: "RADIO CIUDAD MONUMENTO",
+        alignment: AlignmentType.CENTER,
+        heading: "Heading1",
+      }),
+      new Paragraph({
+        text: `Conmemoraciones - ${selectedMonth}`,
+        alignment: AlignmentType.CENTER,
+        heading: "Heading2",
+      }),
+      new Paragraph({ text: "" })
+    ];
+
+    monthEvents.forEach(ev => {
+      children.push(new Paragraph({
+        text: `Día ${ev.day}`,
+        heading: "Heading3",
+        spacing: { before: 200, after: 100 }
+      }));
+
+      if (ev.national) {
+          children.push(new Paragraph({
+            children: [
+              new TextRun({ text: "Nacionales: ", bold: true }),
+              new TextRun({ text: ev.national })
+            ]
+          }));
+      }
+      
+      if (ev.international) {
+          children.push(new Paragraph({
+            children: [
+              new TextRun({ text: "Internacionales: ", bold: true }),
+              new TextRun({ text: ev.international })
+            ],
+            spacing: { after: 100 }
+          }));
+      }
+    });
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: children
+      }]
+    });
+
+    const blob = await Packer.toBlob(doc);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Conmemoraciones_${selectedMonth}.docx`;
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const renderUploadBtn = () => {

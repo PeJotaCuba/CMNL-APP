@@ -145,9 +145,14 @@ const CulturalOptions: React.FC<CulturalOptionsProps> = ({ user, data, onUpdate,
     
     const children: any[] = [
       new Paragraph({
-        text: `Opciones Culturales - ${activeMonthName}`,
-        heading: "Heading1",
+        text: "RADIO CIUDAD MONUMENTO",
         alignment: AlignmentType.CENTER,
+        heading: "Heading1",
+      }),
+      new Paragraph({
+        text: `Opciones Culturales - ${activeMonthName}`,
+        alignment: AlignmentType.CENTER,
+        heading: "Heading2",
       }),
       new Paragraph({ text: "" })
     ];

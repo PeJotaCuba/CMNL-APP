@@ -37,12 +37,12 @@ const QuienesSomos: React.FC<QuienesSomosProps> = ({ onBack, onMenuClick }) => {
       }
     }
 
-    // Check if we need to prompt for update (every 24 hours)
+    // Check if we need to prompt for update (every 48 hours)
     const lastUpdate = localStorage.getItem('rcm_equipo_last_update');
     const now = Date.now();
-    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000;
 
-    if (!lastUpdate || now - parseInt(lastUpdate) > TWENTY_FOUR_HOURS) {
+    if (!lastUpdate || now - parseInt(lastUpdate) > FORTY_EIGHT_HOURS) {
       setShowUpdatePrompt(true);
     }
   }, []);

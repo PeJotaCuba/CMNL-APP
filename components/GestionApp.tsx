@@ -100,7 +100,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       if (saved) {
           try {
               const parsed = JSON.parse(saved);
-              if (Array.isArray(parsed) && parsed.length > 0) {
+              if (Array.isArray(parsed)) {
                   return parsed;
               }
           } catch (e) {
@@ -279,14 +279,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
   useEffect(() => {
       const fetchTeamData = async () => {
-          // Only fetch if we don't have local data or if it's explicitly requested
+          // Only fetch if we don't have local data
           const saved = localStorage.getItem('rcm_equipo_cmnl');
-          if (saved) {
+          if (saved !== null) {
               try {
                   const parsed = JSON.parse(saved);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
+                  if (Array.isArray(parsed)) {
                       setTeamData(parsed);
-                      return; // Don't fetch if we have data
+                      return; // Don't fetch if we have data (even empty)
                   }
               } catch (e) {}
           }
@@ -309,10 +309,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
       const fetchCatalogData = async () => {
           const saved = localStorage.getItem('rcm_data_catalogo');
-          if (saved) {
+          if (saved !== null) {
               try {
                   const parsed = JSON.parse(saved);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
+                  if (Array.isArray(parsed)) {
                       setCatalogo(parsed);
                       return;
                   }
@@ -334,6 +334,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       };
       
       fetchCatalogData();
+      
+      // Removed automatic refetching of catalog and team data if they are empty
+      // to ensure 'Limpiar todo' functionality works as expected.
   }, []);
 
   const userPaymentConfig = React.useMemo<UserPaymentConfig | null>(() => {
@@ -495,6 +498,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const [dialog, setDialog] = useState<{isOpen: boolean, title: string, message: string, type: 'alert' | 'confirm', onConfirm?: () => void}>({
       isOpen: false, title: '', message: '', type: 'alert'
   });
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+      setDialog({ isOpen: true, title, message, type: 'confirm', onConfirm });
+  };
   
   const todayForState = new Date();
   const [manualMonth, setManualMonth] = useState(todayForState.getMonth() === 0 ? 11 : todayForState.getMonth() - 1);
@@ -2488,6 +2495,58 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   }
 
   // Render Reportes Section
+  const handleHomologate = () => {
+    showConfirm('Homologar Datos', '¿Desea sincronizar los nombres de programas en el catálogo y programación usando las Fichas como fuente de verdad? Esto evitará duplicados por diferencias mínimas en escritura.', () => {
+        // Homologate Catalogo
+        let updatedCatalogo = [...catalogo];
+        let changesCatalogo = 0;
+        updatedCatalogo = updatedCatalogo.map(item => {
+            const match = fichas.find(f => isMatch(f.name, item.name));
+            if (match && match.name !== item.name) {
+                changesCatalogo++;
+                return { ...item, name: match.name };
+            }
+            return item;
+        });
+
+        // Homologate Manual Programming
+        const manualData = localStorage.getItem('rcm_manual_programming');
+        let updatedManual = manualData ? JSON.parse(manualData) : [];
+        let changesManual = 0;
+        updatedManual = updatedManual.map((item: any) => {
+            const match = fichas.find(f => isMatch(f.name, item.name));
+            if (match && match.name !== item.name) {
+                changesManual++;
+                return { ...item, name: match.name };
+            }
+            return item;
+        });
+
+        if (changesCatalogo > 0 || changesManual > 0) {
+            if (changesCatalogo > 0) {
+                setCatalogo(updatedCatalogo);
+                localStorage.setItem('rcm_data_catalogo', JSON.stringify(updatedCatalogo));
+            }
+            if (changesManual > 0) {
+                localStorage.setItem('rcm_manual_programming', JSON.stringify(updatedManual));
+            }
+            setDialog({
+                isOpen: true,
+                type: 'info',
+                title: 'Homologación completada',
+                message: `Se actualizaron ${changesCatalogo} programas en el catálogo y ${changesManual} en la programación para coincidir con las fichas técnicas.`
+            });
+        } else {
+            setDialog({
+                isOpen: true,
+                type: 'info',
+                title: 'Homologación',
+                message: 'No se encontraron discrepancias. Los nombres ya están sincronizados.'
+            });
+        }
+    });
+  };
+
   if (activeSection === 'reportes') {
       const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
       const isCoordinatorWithAccess = currentUser?.classification === 'Coordinador' && (currentUser.coordinatorSections || []).includes('Gestión');
@@ -2515,14 +2574,56 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       );
   }
 
+  // Ordering logic based on programming
+  const getProgramSortScore = () => {
+    const manualData = localStorage.getItem('rcm_manual_programming');
+    if (!manualData) return (name: string) => 999999;
+    try {
+      const programs: any[] = JSON.parse(manualData);
+      const scoreMap: Record<string, number> = {};
+      
+      programs.forEach(p => {
+          const normName = normalize(p.name);
+          if (!p.days || !Array.isArray(p.days)) return;
+          
+          p.days.forEach((day: number) => {
+              let dayTier = 0;
+              if (day >= 1 && day <= 5) dayTier = 1; // Mon-Fri
+              else if (day === 6) dayTier = 2; // Sat
+              else if (day === 0) dayTier = 3; // Sun
+
+              // Time score (HH:mm)
+              const timeParts = (p.startTime || "00:00").split(':');
+              const timeScore = parseInt(timeParts[0]) * 60 + parseInt(timeParts[1]);
+              
+              const totalScore = dayTier * 10000 + timeScore;
+              
+              if (!scoreMap[normName] || totalScore < scoreMap[normName]) {
+                  scoreMap[normName] = totalScore;
+              }
+          });
+      });
+      
+      return (name: string) => scoreMap[normalize(name)] ?? 999999;
+    } catch (e) {
+      return (name: string) => 999999;
+    }
+  };
+
+  const sortScore = getProgramSortScore();
+  const sortedFichas = [...fichas].sort((a, b) => sortScore(a.name) - sortScore(b.name));
+  const sortedCatalogo = [...catalogo].sort((a, b) => sortScore(a.name) - sortScore(b.name));
+
   if (activeSection === 'fichas') {
       return (
           <FichasSection
              currentUser={currentUser}
              onBack={() => setActiveSection(null)}
              onMenuClick={onMenuClick || (() => {})}
-             fichas={fichas}
+             fichas={sortedFichas}
              setFichas={setFichas}
+             showConfirm={showConfirm}
+             onHomologate={handleHomologate}
           />
       );
   }
@@ -2533,8 +2634,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
              currentUser={currentUser}
              onBack={() => setActiveSection(null)}
              onMenuClick={onMenuClick || (() => {})}
-             catalogo={catalogo}
+             catalogo={sortedCatalogo}
              setCatalogo={setCatalogo}
+             showConfirm={showConfirm}
           />
       );
   }

@@ -12,15 +12,37 @@ interface Props {
   currentUser: any;
   fichas: ProgramFicha[];
   setFichas: React.Dispatch<React.SetStateAction<ProgramFicha[]>>;
+  showConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  onHomologate?: () => void;
 }
 
-const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fichas, setFichas }) => {
+const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fichas, setFichas, showConfirm, onHomologate }) => {
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<ProgramFicha | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const isAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
+
+  const labelMap: Record<string, string> = {
+    name: 'Nombre del Programa',
+    schedule: 'Horario',
+    duration: 'Tiempo/Duración',
+    frequency: 'Frecuencia',
+    func: 'Función',
+    music_cuban: 'Música Cubana',
+    music_foreign: 'Música Extranjera',
+    group: 'Grupo',
+    form: 'Forma',
+    complexity: 'Complejidad',
+    theme: 'Tema',
+    target: 'Intencionalidad de Destinatario',
+    startDate: 'Fecha de Inicio',
+    emissionType: 'Tipo de Emisión',
+    literarySupport: 'Soporte Literario',
+    objective: 'Objetivo Principal',
+    profile: 'Perfil'
+  };
 
   const exportFichaDoc = async (ficha: ProgramFicha) => {
     const doc = new Document({
@@ -34,9 +56,10 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
             rows: [
               ...Object.entries(ficha).map(([key, value]) => {
                 if (key === 'sections' || key === 'times') return null;
+                const label = labelMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
                 return new DocRow({
                   children: [
-                    new DocCell({ children: [new Paragraph({ children: [new TextRun({ text: key.charAt(0).toUpperCase() + key.slice(1), bold: true })] })], width: { size: 30, type: WidthType.PERCENTAGE } }),
+                    new DocCell({ children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })] })], width: { size: 30, type: WidthType.PERCENTAGE } }),
                     new DocCell({ children: [new Paragraph(String(value || 'N/A'))], width: { size: 70, type: WidthType.PERCENTAGE } }),
                   ]
                 });
@@ -263,12 +286,21 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                          <span>Importar Fichas (TXT)</span>
                          <input type="file" accept=".txt" className="hidden" onChange={handleFileUpload} />
                      </label>
+                     {onHomologate && (
+                         <button 
+                             onClick={onHomologate}
+                             className="bg-blue-900/40 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-900/60 transition-colors flex-1 md:flex-none justify-center"
+                         >
+                             <Plus size={20} />
+                             <span>Homologar</span>
+                         </button>
+                     )}
                      <button 
                          onClick={() => {
-                             if(confirm('¿Seguro que desea eliminar todas las fichas? Esta acción es irreversible.')) {
+                             showConfirm('Eliminar todo', '¿Seguro que desea eliminar todas las fichas? Esta acción es irreversible.', () => {
                                  setFichas([]);
                                  localStorage.setItem('rcm_data_fichas', JSON.stringify([]));
-                             }
+                             });
                          }}
                          className="bg-red-900/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-red-900/60 transition-colors flex-1 md:flex-none justify-center"
                      >
@@ -317,12 +349,12 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                                   </button>
                                   <button 
                                       onClick={() => {
-                                          if(confirm('¿Eliminar esta ficha?')) {
+                                          showConfirm('Eliminar ficha', `¿Está seguro de eliminar la ficha de "${selectedFicha.name}"?`, () => {
                                               const updated = fichas.filter(f => f.name !== selectedFicha.name);
                                               setFichas(updated);
                                               localStorage.setItem('rcm_data_fichas', JSON.stringify(updated));
                                               setSelectedFicha(null);
-                                          }
+                                          });
                                       }}
                                       className="p-2 bg-red-900/40 text-red-400 rounded-lg hover:bg-red-900/60 transition-colors shadow-lg" title="Eliminar"
                                   >
@@ -352,7 +384,7 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                           if (k === 'sections' || k === 'times') return null;
                           return (
                               <div key={k} className="border-b border-[#9E7649]/20 pb-2">
-                                  <span className="block text-xs uppercase text-[#9E7649] tracking-widest">{k}</span>
+                                  <span className="block text-xs uppercase text-[#9E7649] tracking-widest">{labelMap[k] || k}</span>
                                   <span className="text-white whitespace-pre-line">{(selectedFicha as any)[k]}</span>
                               </div>
                           );
@@ -403,7 +435,7 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                           if (k === 'sections' || k === 'times') return null;
                           return (
                               <div key={k}>
-                                  <label className="block text-xs uppercase text-[#9E7649] tracking-widest mb-1">{k}</label>
+                                  <label className="block text-xs uppercase text-[#9E7649] tracking-widest mb-1">{labelMap[k] || k}</label>
                                   {['objective', 'profile', 'literarySupport'].includes(k) ? (
                                       <textarea 
                                           className="w-full bg-[#2C1B15] border border-[#9E7649]/20 rounded-lg p-3 text-white h-24"
