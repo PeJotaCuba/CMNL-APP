@@ -94,6 +94,13 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const handleDownload = async (report: Report) => {
+        if (!report.status?.signed) {
+            alert("Debe firmar digitalmente el reporte antes de descargarlo.");
+            setSigningReport(report);
+            setShowSignDialog(true);
+            return;
+        }
+
         const datePart = report.date.split('T')[0];
         const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
         const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
@@ -242,6 +249,13 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
                                 <button 
                                     onClick={async () => {
+                                        if (!report.status?.signed) {
+                                            alert("Debe firmar digitalmente el reporte antes de enviarlo por WhatsApp.");
+                                            setSigningReport(report);
+                                            setShowSignDialog(true);
+                                            return;
+                                        }
+
                                         const adminUser = users.find(u => u.role === 'admin' || u.classification === 'Administrador');
                                         let phone = adminUser?.phone || adminUser?.mobile || '54413935';
                                         
@@ -255,41 +269,22 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                         }
 
                                         const datePart = report.date.split('T')[0];
-                                        const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
-                                        const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
-                                        const file = new File([report.pdfBlob], downloadName, { type: 'application/pdf' });
-
-                                        // Si el usuario reportó que prefiere ir directo y no le importa el PDF completo en este paso específico,
-                                        // o si el navigator.share falla, usamos openWhatsApp con resumen.
-                                        // Intentamos el share de archivo primero si es posible.
-                                        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                                            try {
-                                                await navigator.share({
-                                                    files: [file],
-                                                    title: 'Reporte Musical',
-                                                    text: `Hola, adjunto el reporte musical del programa *${report.program}* del día *${datePart}*.`
-                                                });
-                                                await updateReportStatus(report.id, { sent: true });
-                                                setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
-                                                return;
-                                            } catch (error: any) {
-                                                const errorMessage = error?.message || '';
-                                                if (error.name === 'AbortError' || errorMessage.includes('cancel')) {
-                                                    // Usuario canceló, no hacemos nada más
-                                                    return;
-                                                }
-                                                console.error('Error sharing PDF file:', error);
-                                            }
-                                        }
                                         
                                         // Texto de respaldo si no se puede enviar el archivo PDF o falla
-                                        let text = `Hola, este es el reporte musical del programa *${report.program}* del día *${datePart}*:\n\n`;
+                                        let text = `Hola Administrador, adjunto el reporte musical del programa *${report.program}* del día *${datePart}*.\n\n`;
+                                        
+                                        if (report.status?.signed) {
+                                            text += `Este reporte ha sido firmado digitalmente por: ${report.generatedBy}\n\n`;
+                                        }
+
                                         if (report.items && report.items.length > 0) {
+                                            text += "*CRÉDITOS:*\n";
                                             report.items.forEach((item, index) => {
-                                                text += `${index + 1}. ${item.title} - ${item.performer} (${item.author})\n`;
+                                                text += `${index + 1}. ${item.title} - ${item.performer}\n`;
                                             });
                                         }
                                         
+                                        // Direct redirect to WhatsApp to avoid "Share" dialogue on mobile as requested
                                         openWhatsApp(text, phone);
                                         
                                         await updateReportStatus(report.id, { sent: true });
