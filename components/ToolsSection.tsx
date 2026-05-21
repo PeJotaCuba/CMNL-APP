@@ -23,9 +23,11 @@ interface ToolsSectionProps {
   onBack: () => void;
   onMenuClick: () => void;
   currentUser: any;
+  equipoData?: any[];
+  users?: any[];
 }
 
-const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser }) => {
+const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser, equipoData = [], users = [] }) => {
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
   const allTools = [
@@ -116,7 +118,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador';
   
   // Admins see all tools, workers see assigned tools
-  const tools = isAdmin ? allTools : allTools.filter(t => userTools.includes(t.id));
+  // Requirement: Institutional Documents and Digital Signature are enabled for everyone by default
+  const tools = isAdmin ? allTools : allTools.filter(t => userTools.includes(t.id) || t.id === 'inst-docs' || t.id === 'digital-signature');
 
   // If a tool is active, render it
   const currentTool = allTools.find(t => t.id === activeTool);
@@ -125,8 +128,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     return (
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
         <CMNLHeader 
-          title="Extracción de Datos" 
-          subtitle="Herramientas PowerShell" 
+          user={currentUser}
+          sectionTitle="Extracción de Datos" 
           onBack={() => setActiveTool(null)}
           onMenuClick={onMenuClick}
         />
@@ -141,8 +144,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     return (
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
         <CMNLHeader 
-          title="Gestión de Guiones" 
-          subtitle="Módulo Coordinador" 
+          user={currentUser}
+          sectionTitle="Gestión de Guiones" 
           onBack={() => setActiveTool(null)}
           onMenuClick={onMenuClick}
         />
@@ -157,8 +160,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     return (
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
         <CMNLHeader 
-          title="Firma Digital" 
-          subtitle="Seguridad Criptográfica" 
+          user={currentUser}
+          sectionTitle="Firma Digital" 
           onBack={() => setActiveTool(null)}
           onMenuClick={onMenuClick}
         />
@@ -166,6 +169,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
           <FirmaDigitalTool 
             user={currentUser} 
             isAdmin={isAdmin} 
+            equipoData={equipoData}
+            users={users}
             onUpdateDatabase={(newCert) => {
                const saved = localStorage.getItem('cmnl_digital_signatures');
                const data = saved ? JSON.parse(saved) : { validated_users: [] };
@@ -182,8 +187,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     return (
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
         <CMNLHeader 
-          title={currentTool.title} 
-          subtitle="Módulo Operativo" 
+          user={currentUser}
+          sectionTitle={currentTool.title} 
           onBack={() => setActiveTool(null)}
           onMenuClick={onMenuClick}
         />

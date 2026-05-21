@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2, Search, FileText } from 'lucide-react';
+import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2, Search, FileText, AlertTriangle } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
 import { User, UserClassification, ProgramFicha } from '../../types';
@@ -13,6 +13,7 @@ interface TeamMember {
   photoUrl?: string;
   info?: string;
   email?: string;
+  designatedUserId?: string;
   habitualPrograms?: string[];
   habitualProgramsByRole?: Record<string, string[]>;
   habitualProgramsDays?: Record<string, Record<string, string[]>>; // role -> programName -> days[]
@@ -69,25 +70,106 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
   const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
+  const [customAlert, setCustomAlert] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
+  const [customConfirm, setCustomConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setCustomAlert({ message, type });
+  };
 
   const ROLES = [
-    'director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 
-    'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 
-    'auxiliar general', 'asistente de dirección', 'recepcionista'
+    'Director', 
+    'Asesor', 
+    'Realizador', 
+    'Locutor', 
+    'Guionista', 
+    'Periodista', 
+    'Coordinador', 
+    'Director de emisora', 
+    'Jefe de Programación', 
+    'Especialista', 
+    'Auxiliar general', 
+    'Asistente de dirección', 
+    'Recepcionista'
   ];
+
+  const cleanJoined = (str: string) => {
+    return (str || '')
+      .split('/')
+      .map(s => {
+        const trimmed = s.trim();
+        const lower = trimmed.toLowerCase();
+        if (lower === 'directora' || lower === 'directora de emisora' || lower === 'directora de la emisora') {
+          return 'Director de emisora';
+        }
+        if (lower === 'coordinador' || lower === 'coordinadora') {
+          return 'Coordinador';
+        }
+        return trimmed;
+      })
+      .filter(s => s)
+      .join(' / ');
+  };
+
+  const normalizeRole = (roleName: string) => {
+    const lower = (roleName || '').toLowerCase().trim()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove accents
+    
+    // Director de emisora matches (avoid matching plain 'director', which is ordinary)
+    if (lower === 'director de emisora' || lower === 'directora de emisora' || lower === 'director de la emisora' || lower === 'directora de la emisora' || lower === 'directora' || lower === 'directora de emisoras') {
+      return 'director de emisora';
+    }
+    // Jefe de Programación matches
+    if (lower === 'jefe de programacion' || lower === 'jefa de programacion' || lower === 'jefe de programación' || lower === 'jefa de programación') {
+      return 'jefe de programación';
+    }
+    // Coordinador de programación matches
+    if (lower === 'coordinador de programacion' || lower === 'coordinadora de programacion' || lower === 'coordinador de programación' || lower === 'coordinadora de programación' || lower === 'coordinador' || lower === 'coordinadora') {
+      return 'coordinador';
+    }
+    return lower;
+  };
+
+  const STATIC_ADMIN_MEMBER: TeamMember = {
+    id: 'admin_app_static',
+    name: 'Administrador App',
+    specialty: 'Soporte, Redacción y Criptografía',
+    level: 'Administración Global',
+    photoUrl: '',
+    email: 'emisora@cmnl.cu',
+    info: `DATOS DE LA CUENTA DE ADMINISTRADOR APP:
+• Teléfono Directo: +53 54321098
+• Correo Electrónico: emisora@cmnl.cu
+• Usuario de Acceso: admin
+• Contraseña de Acceso: adminpassword123
+
+Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`,
+    habitualPrograms: []
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('rcm_equipo_cmnl');
+    let loadedTeam: TeamMember[] = [];
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          setTeam(parsed);
+          loadedTeam = parsed;
         }
       } catch (e) {
         console.error("Error parsing team data", e);
       }
     }
+    
+    // Ensure the static admin member always exists
+    if (!loadedTeam.some(m => m.id === 'admin_app_static')) {
+      loadedTeam = [STATIC_ADMIN_MEMBER, ...loadedTeam];
+      localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(loadedTeam));
+    } else {
+      // Force update its info and fields to match requirements to avoid stale structures
+      loadedTeam = loadedTeam.map(m => m.id === 'admin_app_static' ? { ...STATIC_ADMIN_MEMBER, designatedUserId: m.designatedUserId } : m);
+    }
+    
+    setTeam(loadedTeam);
   }, []);
 
   const saveTeam = (newTeam: TeamMember[]) => {
@@ -198,7 +280,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       saveTeam(currentTeam);
       setUsers(updatedUsers);
       localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
-      alert(`Se procesaron ${processedCount} registros de equipo y usuarios.`);
+      showAlert(`Se procesaron ${processedCount} registros de equipo y usuarios.`, 'success');
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -249,7 +331,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       });
 
       saveTeam(currentTeam);
-      alert(`Se actualizaron ${processedCount} biografías.`);
+      showAlert(`Se actualizaron ${processedCount} biografías.`, 'success');
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -281,14 +363,15 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     for (const role of roles) {
       if (role.includes('directora de la emisora') || role.includes('director de la emisora')) minPriority = Math.min(minPriority, 1);
       else if (role.includes('jefa de programación') || role.includes('jefe de programación')) minPriority = Math.min(minPriority, 2);
-      else if (role.includes('coordinadora') || role.includes('coordinador')) minPriority = Math.min(minPriority, 3);
+      else if (role.includes('coordinador de programación') || role.includes('coordinadora de programación')) minPriority = Math.min(minPriority, 3);
       else if (role.includes('directora') || role.includes('director')) minPriority = Math.min(minPriority, 4);
       else if (role.includes('asesora') || role.includes('asesor')) minPriority = Math.min(minPriority, 5);
-      else if (role.includes('locutora') || role.includes('locutor')) minPriority = Math.min(minPriority, 6);
-      else if (role.includes('realizadora de sonido') || role.includes('realizador de sonido')) minPriority = Math.min(minPriority, 7);
-      else if (role.includes('periodista')) minPriority = Math.min(minPriority, 8);
-      else if (role.includes('comunicadora') || role.includes('comunicador')) minPriority = Math.min(minPriority, 9);
-      else if (role.includes('especialista')) minPriority = Math.min(minPriority, 10);
+      else if (role.includes('guionista')) minPriority = Math.min(minPriority, 6);
+      else if (role.includes('locutora') || role.includes('locutor')) minPriority = Math.min(minPriority, 7);
+      else if (role.includes('realizadora de sonido') || role.includes('realizador de sonido')) minPriority = Math.min(minPriority, 8);
+      else if (role.includes('periodista')) minPriority = Math.min(minPriority, 9);
+      else if (role.includes('comunicadora') || role.includes('comunicador')) minPriority = Math.min(minPriority, 10);
+      else if (role.includes('especialista')) minPriority = Math.min(minPriority, 11);
     }
     return minPriority;
   };
@@ -369,6 +452,26 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     URL.revokeObjectURL(url);
   };
 
+  const handleClearAll = () => {
+    setCustomConfirm({
+      message: "¿ESTÁ SEGURO? Esta acción eliminará permanentemente a TODOS los miembros del equipo y usuarios de esta sección (con excepción de las cuentas administrativas activas o tu propia cuenta para evitar bloqueos de acceso).",
+      onConfirm: () => {
+        const keptTeam = [STATIC_ADMIN_MEMBER];
+        if (currentUser && currentUser.id !== 'admin_app_static') {
+            const currentStaff = team.find(m => m.id === currentUser.id);
+            if (currentStaff) keptTeam.push(currentStaff);
+        }
+        saveTeam(keptTeam);
+
+        const keptUsers = users.filter(u => u.role === 'admin' || u.id === 'admin_app_static' || u.id === currentUser?.id);
+        setUsers(keptUsers);
+        localStorage.setItem('rcm_users', JSON.stringify(keptUsers));
+        
+        showAlert("Todos los datos de usuarios y personal de esta sección se han limpiado correctamente.", 'success');
+      }
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
       <CMNLHeader 
@@ -390,6 +493,15 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                 <span className="hidden sm:inline text-sm font-medium">Cargar Biografías</span>
                 <input type="file" accept=".txt" onChange={handleBioUpload} className="hidden" />
               </label>
+              <button 
+                onClick={handleClearAll}
+                className="p-2 bg-red-950/40 hover:bg-red-900/30 text-red-400 rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2 border border-red-500/25 font-semibold"
+                title="Limpiar Todo"
+                id="btn-limpiar-todo-equipo"
+              >
+                <Trash2 size={20} />
+                <span className="hidden sm:inline text-sm font-medium">Limpiar Todo</span>
+              </button>
             </>
           )}
         </div>
@@ -444,22 +556,24 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                 >
                   {isAdmin && (
                     <div className="absolute top-4 right-4 flex gap-2 z-20 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          const user = users.find(u => u.id === member.id);
-                          if (user) {
-                            const message = `Hola ${member.name}, aquí tienes tus credenciales para CMNL App:\n\nUsuario: ${user.username}\nMóvil: ${user.mobile}\nContraseña: ${user.password}\nPIN: ${user.password.slice(-4)}\n\nAccede aquí: https://cmnl-app.vercel.app/`;
-                            openWhatsApp(message, user.mobile);
-                          } else {
-                            alert('No se encontró información de usuario para este miembro.');
-                          }
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-[#25D366] hover:bg-[#128C7E] text-white rounded-lg transition-all shadow-lg border border-[#25D366]/30"
-                        title="Compartir vía WhatsApp"
-                      >
-                        <Share2 size={16} />
-                      </button>
+                      {member.id !== 'admin_app_static' && (
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            const user = users.find(u => u.id === member.id);
+                            if (user) {
+                              const message = `Hola ${member.name}, aquí tienes tus credenciales para CMNL App:\n\nUsuario: ${user.username}\nMóvil: ${user.mobile}\nContraseña: ${user.password}\nPIN: ${user.password.slice(-4)}\n\nAccede aquí: https://cmnl-app.vercel.app/`;
+                              openWhatsApp(message, user.mobile);
+                            } else {
+                              showAlert('No se encontró información de usuario para este miembro.', 'error');
+                            }
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-[#25D366] hover:bg-[#128C7E] text-white rounded-lg transition-all shadow-lg border border-[#25D366]/30"
+                          title="Compartir vía WhatsApp"
+                        >
+                          <Share2 size={16} />
+                        </button>
+                      )}
                       <button 
                         onClick={(e) => { 
                           e.stopPropagation(); 
@@ -467,11 +581,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                           const user = users.find(u => u.id === member.id);
                           setEditingMember({
                             ...member,
-                            username: user?.username || '',
+                            username: user?.username || (member.id === 'admin_app_static' ? 'admin' : ''),
                             mobile: user?.mobile || '',
                             email: user?.email || member.email || '',
-                            password: user?.password || '',
-                            role: user?.classification || '',
+                            password: user?.password || (member.id === 'admin_app_static' ? 'adminpassword123' : ''),
+                            role: user?.classification === 'Directora' ? 'Director' : (user?.classification === 'Coordinador' ? 'Coordinador de programación' : user?.classification || ''),
                             coordinatorSections: user?.coordinatorSections || [],
                             tools: user?.tools || [],
                             habitualProgramsDays: user?.habitualProgramsDays || member.habitualProgramsDays || {}
@@ -482,22 +596,27 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          if (window.confirm(`¿Estás seguro de eliminar a ${member.name}?`)) {
-                            const updatedTeam = team.filter(m => m.id !== member.id);
-                            saveTeam(updatedTeam);
-                            const updatedUsers = users.filter(u => u.id !== member.id);
-                            setUsers(updatedUsers);
-                            localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
-                          }
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-700/30"
-                        title="Eliminar Miembro"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {member.id !== 'admin_app_static' && (
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setCustomConfirm({
+                              message: `¿Estás seguro de eliminar a ${member.name}?`,
+                              onConfirm: () => {
+                                const updatedTeam = team.filter(m => m.id !== member.id);
+                                saveTeam(updatedTeam);
+                                const updatedUsers = users.filter(u => u.id !== member.id);
+                                setUsers(updatedUsers);
+                                localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                              }
+                            });
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-700/30"
+                          title="Eliminar Miembro"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   )}
                   <div className="relative w-24 h-24 rounded-full bg-[#1A100C] border-2 border-[#9E7649]/50 mb-4 overflow-hidden flex items-center justify-center">
@@ -577,6 +696,22 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   {Array.from(new Set(viewingMember.level.split(' / '))).join(' / ')}
                 </span>
               )}
+              {viewingMember.contracts && viewingMember.contracts.some(Boolean) && (
+                <div className="mt-4 w-full text-center bg-black/25 rounded-xl p-2.5 border border-[#9E7649]/10">
+                  <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-widest mb-1.5 font-mono">Nro. Contratos Especialidad</p>
+                  <div className="text-xs text-stone-300 font-mono space-y-1">
+                    {viewingMember.specialty.split(' / ').map((spec, sIdx) => {
+                      const contract = viewingMember.contracts?.[sIdx];
+                      return contract ? (
+                        <div key={spec} className="flex justify-between px-2 text-[11px] border-b border-stone-800/20 py-0.5">
+                          <span className="text-stone-400 font-sans">{spec}:</span>
+                          <span className="text-[#E8DCCF] font-bold">{contract}</span>
+                        </div>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="bg-[#2C1B15] rounded-xl p-4 border border-[#9E7649]/20">
@@ -599,13 +734,32 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               {/* Section: Basic Info */}
               <div className="space-y-4">
                 <h3 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Información de Producción</h3>
+                
+                {editingMember.id === 'admin_app_static' && (
+                  <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20 mb-4">
+                    <label className="block text-xs font-bold text-amber-500 mb-1 uppercase tracking-wider">Vincular con Usuario Físico (Firma Digital)</label>
+                    <p className="text-[10px] text-amber-200/70 mb-2">Seleccione con qué miembro del equipo compartirán los datos para la criptografía de la firma del administrador.</p>
+                    <select
+                      className="w-full bg-[#1A100C] border border-amber-500/30 rounded-lg p-2 text-white text-sm focus:outline-none"
+                      value={editingMember.designatedUserId || ''}
+                      onChange={e => setEditingMember({...editingMember, designatedUserId: e.target.value})}
+                    >
+                      <option value="">-- No vinculado --</option>
+                      {team.filter(m => m.id !== 'admin_app_static').map(m => (
+                        <option key={m.id} value={m.id}>{m.name} ({m.specialty})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs text-[#9E7649] mb-1 uppercase">Nombre Completo</label>
                   <input 
                     type="text" 
                     value={editingMember.name}
+                    readOnly={editingMember.id === 'admin_app_static'}
                     onChange={e => setEditingMember({...editingMember, name: e.target.value})}
-                    className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649]"
+                    className={`w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white focus:outline-none focus:border-[#9E7649] ${editingMember.id === 'admin_app_static' ? 'opacity-50 cursor-not-allowed' : ''}`}
                   />
                 </div>
                 <div className="space-y-4">
@@ -614,43 +768,63 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     {[0, 1, 2].map((idx) => {
                       const specs = (editingMember.specialty || '').split('/').map(s => s.trim());
                       const lvls = (editingMember.level || '').split('/').map(l => l.trim());
+                      const cnts = (editingMember.contracts || []);
                       
                       return (
-                        <div key={idx} className="grid grid-cols-2 gap-3 bg-black/20 p-3 rounded-xl border border-[#9E7649]/10">
-                          <div>
-                            <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Especialidad {idx + 1}</label>
-                            <input 
-                              list="roles-list"
-                              type="text"
-                              value={specs[idx] || ''}
-                              onChange={e => {
-                                const newSpecs = [specs[0] || '', specs[1] || '', specs[2] || ''];
-                                newSpecs[idx] = e.target.value;
-                                setEditingMember({
-                                  ...editingMember, 
-                                  specialty: newSpecs.join(' / ').replace(/( \/ )+$/, '').trim()
-                                });
-                              }}
-                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
-                              placeholder="Seleccione o escriba..."
-                            />
+                        <div key={idx} className="bg-black/25 p-3 rounded-xl border border-[#9E7649]/10 space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Especialidad {idx + 1}</label>
+                              <input 
+                                list="roles-list"
+                                type="text"
+                                value={specs[idx] || ''}
+                                onChange={e => {
+                                  const newSpecs = [specs[0] || '', specs[1] || '', specs[2] || ''];
+                                  newSpecs[idx] = e.target.value;
+                                  setEditingMember({
+                                    ...editingMember, 
+                                    specialty: newSpecs.join(' / ').replace(/( \/ )+$/, '').trim()
+                                  });
+                                }}
+                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
+                                placeholder="Seleccione o escriba..."
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Nivel {idx + 1}</label>
+                              <input 
+                                list="levels-list"
+                                type="text"
+                                value={lvls[idx] || ''}
+                                onChange={e => {
+                                  const newLvls = [lvls[0] || '', lvls[1] || '', lvls[2] || ''];
+                                  newLvls[idx] = e.target.value;
+                                  setEditingMember({
+                                    ...editingMember, 
+                                    level: newLvls.join(' / ').replace(/( \/ )+$/, '').trim()
+                                  });
+                                }}
+                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
+                                placeholder="Nivel..."
+                              />
+                            </div>
                           </div>
                           <div>
-                            <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Nivel {idx + 1}</label>
+                            <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Número de Contrato {idx + 1}</label>
                             <input 
-                              list="levels-list"
                               type="text"
-                              value={lvls[idx] || ''}
+                              value={cnts[idx] || ''}
                               onChange={e => {
-                                const newLvls = [lvls[0] || '', lvls[1] || '', lvls[2] || ''];
-                                newLvls[idx] = e.target.value;
+                                const newCnts = [cnts[0] || '', cnts[1] || '', cnts[2] || ''];
+                                newCnts[idx] = e.target.value;
                                 setEditingMember({
-                                  ...editingMember, 
-                                  level: newLvls.join(' / ').replace(/( \/ )+$/, '').trim()
+                                  ...editingMember,
+                                  contracts: newCnts
                                 });
                               }}
-                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
-                              placeholder="Nivel..."
+                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-[#9E7649]"
+                              placeholder="Escriba número de contrato..."
                             />
                           </div>
                         </div>
@@ -659,7 +833,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                   </div>
                   <datalist id="roles-list">
                     {ROLES.map(role => (
-                      <option key={role} value={role.charAt(0).toUpperCase() + role.slice(1)} />
+                      <option key={role} value={role} />
                     ))}
                   </datalist>
                   <datalist id="levels-list">
@@ -730,13 +904,13 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
                     >
                       <option value="">Seleccionar Rol</option>
-                      {['Usuario', 'Trabajador', 'Director', 'Coordinador', 'Administrador'].map(role => (
+                      {['Usuario', 'Trabajador', 'Director', 'Coordinador de programación', 'Administrador'].map(role => (
                         <option key={role} value={role}>{role}</option>
                       ))}
                     </select>
                   </div>
 
-                  {editingMember.role === 'Coordinador' && (
+                  {['Coordinador', 'Coordinador de programación'].includes(editingMember.role) && (
                     <div>
                       <label className="block text-xs text-orange-400 mb-2 uppercase font-bold">Permisos de Coordinador (Secciones autorizadas)</label>
                       <div className="grid grid-cols-2 gap-2 bg-black/20 p-3 rounded-lg border border-orange-500/20">
@@ -770,7 +944,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               <div>
                 <label className="block text-xs text-[#9E7649] mb-1 font-bold uppercase tracking-wider">Programas Habituales</label>
                 <div className="space-y-4">
-                  {editingMember.specialty.split(' / ').map(role => {
+                  {(editingMember.specialty || '').split(' / ').map(role => {
                     const roleName = role.trim();
                     if (!roleName) return null;
                     const roleHabitual = editingMember.habitualProgramsByRole?.[roleName] || [];
@@ -921,69 +1095,181 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
               <button 
                 onClick={() => {
-                  // Helper to clean joined strings
-                  const cleanJoined = (str: string) => str.split('/').map(s => s.trim()).filter(s => s).join(' / ');
+                  try {
+                    const cleanTeam = team.filter(Boolean);
+                    const cleanUsers = users.filter(Boolean);
 
-                  // 1. Update Team Member
-                  const updatedTeam = team.map(m => m.id === editingMember.id ? {
-                    id: editingMember.id,
-                    name: editingMember.name,
-                    specialty: cleanJoined(editingMember.specialty),
-                    level: cleanJoined(editingMember.level),
-                    info: editingMember.info,
-                    email: editingMember.email,
-                    photoUrl: editingMember.photoUrl,
-                    habitualProgramsByRole: editingMember.habitualProgramsByRole,
-                    habitualProgramsDays: editingMember.habitualProgramsDays
-                  } : m);
-                  saveTeam(updatedTeam);
+                    // Find original member and their existing normalized specialties to allow keeping them
+                    const originalMember = cleanTeam.find(m => m.id === editingMember.id);
+                    const originalSpecs = originalMember 
+                      ? (originalMember.specialty || '').split('/').map(s => normalizeRole(s))
+                      : [];
 
-                  // 2. Update User
-                  let updatedUsers = users.map(u => u.id === editingMember.id ? {
-                    ...u,
-                    name: editingMember.name,
-                    username: editingMember.username,
-                    mobile: editingMember.mobile,
-                    email: editingMember.email,
-                    password: editingMember.password,
-                    classification: editingMember.role || u.classification || 'Usuario',
-                    specialty: cleanJoined(editingMember.specialty),
-                    role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
-                    coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
-                    tools: editingMember.tools,
-                    habitualProgramsByRole: editingMember.habitualProgramsByRole,
-                    habitualProgramsDays: editingMember.habitualProgramsDays
-                  } : u);
-                  
-                  // If user doesn't exist, create it
-                  if (!users.find(u => u.id === editingMember.id)) {
-                    updatedUsers.push({
+                    // Enforce unique member restriction for designated specialties
+                    const specs = cleanJoined(editingMember.specialty || '').split('/').map(s => s.trim());
+                    for (const spec of specs) {
+                      const normSpec = normalizeRole(spec);
+                      if (normSpec === 'director de emisora' || normSpec === 'jefe de programación' || normSpec === 'coordinador de programación') {
+                        // If they didn't have this specialty originally, check for conflict
+                        if (!originalSpecs.includes(normSpec)) {
+                          // Check if another member already has this specialty
+                          const conflictingMember = cleanTeam.find(m => 
+                            m.id !== editingMember.id && 
+                            m.specialty && (m.specialty || '').split('/').some(s => normalizeRole(s) === normSpec)
+                          );
+                          if (conflictingMember) {
+                            showAlert(`¡Especialidad de Titular Único!\n\nLa especialidad de "${spec}" ya está asignada a "${conflictingMember.name}". Solo un miembro del equipo puede tener esta especialidad.`, 'error');
+                            return; // Halt save operation
+                          }
+                        }
+                      }
+                    }
+
+                    // 1. Update Team Member
+                    const updatedTeam = cleanTeam.map(m => m.id === editingMember.id ? {
                       id: editingMember.id,
                       name: editingMember.name,
-                      username: editingMember.username || editingMember.id,
-                      mobile: editingMember.mobile || '',
+                      specialty: cleanJoined(editingMember.specialty || ''),
+                      level: cleanJoined(editingMember.level || ''),
+                      info: editingMember.info || '',
                       email: editingMember.email || '',
-                      password: editingMember.password || '1234',
-                      classification: editingMember.role || 'Usuario',
-                      specialty: cleanJoined(editingMember.specialty),
-                      role: editingMember.role === 'Administrador' ? 'admin' : (editingMember.role === 'Coordinador' ? 'coordinator' : 'worker'),
-                      coordinatorSections: editingMember.role === 'Coordinador' ? editingMember.coordinatorSections : undefined,
-                      tools: editingMember.tools,
-                      habitualProgramsByRole: editingMember.habitualProgramsByRole,
-                      habitualProgramsDays: editingMember.habitualProgramsDays
-                    });
+                      photoUrl: editingMember.photoUrl || '',
+                      habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
+                      habitualProgramsDays: editingMember.habitualProgramsDays || {},
+                      contracts: editingMember.contracts || []
+                    } : m);
+                    saveTeam(updatedTeam);
+
+                    // 2. Update User
+                    let updatedUsers = cleanUsers.map(u => u.id === editingMember.id ? {
+                      ...u,
+                      name: editingMember.name,
+                      username: editingMember.username || u.username,
+                      mobile: editingMember.mobile || u.mobile || '',
+                      email: editingMember.email || u.email || '',
+                      password: editingMember.password || u.password,
+                      classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || u.classification || 'Usuario'),
+                      specialty: cleanJoined(editingMember.specialty || ''),
+                      contracts: editingMember.contracts || [],
+                      role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
+                      coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
+                      tools: editingMember.tools || [],
+                      habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
+                      habitualProgramsDays: editingMember.habitualProgramsDays || {}
+                    } : u);
+                    
+                    // If user doesn't exist, create it
+                    if (!cleanUsers.some(u => u.id === editingMember.id)) {
+                      updatedUsers.push({
+                        id: editingMember.id,
+                        name: editingMember.name,
+                        username: editingMember.username || editingMember.id,
+                        mobile: editingMember.mobile || '',
+                        email: editingMember.email || '',
+                        password: editingMember.password || '1234',
+                        classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || 'Usuario'),
+                        specialty: cleanJoined(editingMember.specialty || ''),
+                        contracts: editingMember.contracts || [],
+                        role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
+                        coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
+                        tools: editingMember.tools || [],
+                        habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
+                        habitualProgramsDays: editingMember.habitualProgramsDays || {}
+                      });
+                    }
+
+                    // Admin Takeover Logic (User Request)
+                    if (editingMember.id === 'admin_app_static' && editingMember.designatedUserId) {
+                      const adminData = {
+                        username: editingMember.username || 'admin',
+                        password: editingMember.password || 'adminpassword123',
+                        role: 'admin',
+                        classification: 'Administrador'
+                      };
+                      
+                      // The physical user assumes the admin's global permissions and authentication
+                      updatedUsers = updatedUsers.map(u => 
+                        u.id === editingMember.designatedUserId ? {
+                          ...u,
+                          username: adminData.username,
+                          password: adminData.password,
+                          role: adminData.role as 'admin',
+                          classification: adminData.classification,
+                        } : u
+                      );
+                      
+                      // Remove the pure abstract admin_app_static user entry so only the designated user logs in with admin credentials
+                      updatedUsers = updatedUsers.filter(u => u.id !== 'admin_app_static');
+                      
+                      showAlert(`¡Éxito! El usuario ha asumido las credenciales del Administrador:\n\nUsuario: ${adminData.username}\nContraseña: ${adminData.password}`, 'success');
+                    }
+                    
+                    setUsers(updatedUsers);
+                    localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                    
+                    setEditingMember(null);
+                  } catch (error: any) {
+                    console.error("Error saving member:", error);
+                    showAlert("Error fatal al guardar los cambios: " + (error?.message || error), 'error');
                   }
-                  
-                  setUsers(updatedUsers);
-                  localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
-                  
-                  setEditingMember(null);
                 }}
                 className="flex-1 py-3 rounded-lg font-bold text-white bg-[#9E7649] hover:bg-[#8B653D] transition-colors"
               >
                 Guardar Cambios
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Modal */}
+      {customConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center text-red-500">
+              <AlertTriangle className="text-4xl animate-pulse" />
+            </div>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">¿Confirmar Acción?</h3>
+            <p className="text-xs text-[#E8DCCF]/70 leading-relaxed font-sans px-2">
+              {customConfirm.message}
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setCustomConfirm(null)}
+                className="flex-1 py-3 bg-black/20 text-[#E8DCCF] border border-[#9E7649]/30 font-bold rounded-xl hover:bg-[#9E7649]/10 transition-all text-xs uppercase"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  customConfirm.onConfirm();
+                  setCustomConfirm(null);
+                }}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition-all text-xs uppercase"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert Modal */}
+      {customAlert && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className={`flex justify-center ${customAlert.type === 'error' ? 'text-red-500' : 'text-[#9E7649]'}`}>
+              {customAlert.type === 'error' ? <AlertTriangle className="text-4xl" /> : <div className="text-4xl">ℹ️</div>}
+            </div>
+            <p className="text-sm font-bold text-white text-center leading-relaxed">
+              {customAlert.message}
+            </p>
+            <button
+              onClick={() => setCustomAlert(null)}
+              className="w-full py-3 bg-[#9E7649] text-white font-bold rounded-xl hover:bg-[#8B653D] transition-all text-xs uppercase mt-4"
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

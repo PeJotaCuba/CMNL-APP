@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Report, User } from './types';
-import { loadReportsFromDB, deleteReportFromDB, updateReportStatus, clearReportsDB } from './services/db';
+import { loadReportsFromDB, deleteReportFromDB, updateReportStatus, clearReportsDB, saveReportToDB } from './services/db';
 import { openWhatsApp } from '../../utils/whatsappUtils';
+import { generateReportPDF } from './services/pdfService';
+import { getStoredPassword, getStoredCertificate, generateDigitalSignature } from '../../utils/signatureUtils';
 
 interface ReportsViewerProps {
     users?: User[]; 
@@ -15,6 +17,11 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const [isLoading, setIsLoading] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
+    
+    // Signing state
+    const [signingReport, setSigningReport] = useState<Report | null>(null);
+    const [signPass, setSignPass] = useState('');
+    const [showSignDialog, setShowSignDialog] = useState(false);
 
     useEffect(() => {
         const seen = localStorage.getItem('rcm_tut_reports');
@@ -27,6 +34,55 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const closeTutorial = () => {
         localStorage.setItem('rcm_tut_reports', 'true');
         setShowTutorial(false);
+    };
+
+    const confirmSignReport = async () => {
+        if (!signingReport || !currentUser) return;
+        
+        const globalUserId = (currentUser as any).id || currentUser.username;
+        const storedPass = getStoredPassword(globalUserId);
+        const cert = getStoredCertificate(globalUserId);
+        
+        if (!cert) {
+            alert("No tiene un certificado de firma digital cargado en este equipo.");
+            return;
+        }
+
+        if (cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
+            alert("Su certificado ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
+            return;
+        }
+
+        if (signPass !== storedPass) {
+            alert("Contraseña original incorrecta o equipo no certificado.");
+            return;
+        }
+
+        const signature = generateDigitalSignature(cert);
+        
+        // Regenerate the PDF Blob
+        const userFullName = currentUser.fullName || currentUser.username;
+        const newPdfBlob = generateReportPDF({
+            userFullName,
+            userUniqueId: signature,
+            program: signingReport.program,
+            date: signingReport.date,
+            items: signingReport.items || []
+        });
+
+        const updatedReport: Report = {
+            ...signingReport,
+            pdfBlob: newPdfBlob,
+            status: { ...signingReport.status, downloaded: signingReport.status?.downloaded || false, sent: signingReport.status?.sent || false, signed: true }
+        };
+
+        await saveReportToDB(updatedReport);
+        setReports(prev => prev.map(r => r.id === signingReport.id ? updatedReport : r));
+        
+        setShowSignDialog(false);
+        setSigningReport(null);
+        setSignPass('');
+        alert("Reporte firmado correctamente con su certificado digital.");
     };
 
     const loadData = async () => {
@@ -167,6 +223,23 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                     <span className="material-symbols-outlined text-sm">edit_document</span> Editar
                                 </button>
 
+                                {(!report.status?.signed) ? (
+                                    <button 
+                                        onClick={() => {
+                                            setSigningReport(report);
+                                            setShowSignDialog(true);
+                                        }}
+                                        className="size-8 rounded-full bg-[#1A100C] text-yellow-500 hover:bg-yellow-500 hover:text-white transition-colors flex items-center justify-center"
+                                        title="Firmar con Estampado"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">draw</span>
+                                    </button>
+                                ) : (
+                                    <div className="size-8 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center" title="Reporte Firmado">
+                                        <span className="material-symbols-outlined text-sm">verified</span>
+                                    </div>
+                                )}
+
                                 <button 
                                     onClick={async () => {
                                         const adminUser = users.find(u => u.role === 'admin' || u.classification === 'Administrador');
@@ -278,6 +351,36 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showSignDialog && signingReport && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSignDialog(false)}>
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 text-yellow-500 mb-4">
+                            <span className="material-symbols-outlined text-3xl">draw</span>
+                            <h3 className="text-xl font-bold text-white">Firmar Reporte</h3>
+                        </div>
+                        <p className="text-xs text-[#E8DCCF]/60 mb-6">
+                            Para estampar su firma digital en el reporte <strong>{signingReport.program}</strong> del día <strong>{signingReport.date.split('T')[0]}</strong>, por favor ingrese su contraseña de certificado:
+                        </p>
+                        
+                        <div className="mb-6">
+                            <label className="text-[10px] text-[#E8DCCF]/40 uppercase tracking-wider mb-2 block">Contraseña de Certificado</label>
+                            <input 
+                                type="password" 
+                                value={signPass}
+                                onChange={(e) => setSignPass(e.target.value)}
+                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-xl p-3 text-white text-center tracking-[0.5em] font-mono focus:border-yellow-500/50 outline-none transition-colors"
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button onClick={() => setShowSignDialog(false)} className="flex-1 py-3 rounded-xl border border-white/5 text-white text-xs font-bold hover:bg-white/5 transition-colors">CANCELAR</button>
+                            <button onClick={confirmSignReport} className="flex-1 py-3 rounded-xl bg-yellow-600 text-white text-xs font-bold hover:bg-yellow-500 transition-colors">FIRMAR</button>
                         </div>
                     </div>
                 </div>

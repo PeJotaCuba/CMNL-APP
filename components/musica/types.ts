@@ -67,6 +67,7 @@ export interface ReportStatus {
     downloaded: boolean;
     sent: boolean;
     cloudUploaded?: boolean;
+    signed?: boolean;
 }
 
 export interface Report {

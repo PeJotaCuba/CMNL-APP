@@ -208,6 +208,11 @@ const AppContent: React.FC = () => {
     return saved || INITIAL_ABOUT;
   });
 
+  const [equipoData, setEquipoData] = useState<any[]>(() => {
+    const saved = localStorage.getItem('rcm_equipo_cmnl');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   
   // Auth State
@@ -887,7 +892,7 @@ const AppContent: React.FC = () => {
       case AppView.APP_REPORTES:
         return <Reports />;
       case AppView.APP_TOOLS:
-        return <ToolsSection onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} />;
+        return <ToolsSection onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} equipoData={equipoData} users={users} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_PROGRAMACION:

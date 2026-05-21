@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search, PenTool, Share2, Mail, Lock } from 'lucide-react';
 import { User, FP02Report, ProgramFicha, ConsolidatedPayment, ProgramCatalog, WorkLog } from '../../types';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { getStoredCertificate, getStoredPassword, generateDigitalSignature } from '../../utils/signatureUtils';
 
 interface Props {
   currentUser: User | null;
@@ -32,6 +35,189 @@ export const ReportesTrabajador: React.FC<Props> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'autogestion' | 'oficiales' | 'pagos'>('autogestion');
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().substring(0, 7));
+  const [signingReport, setSigningReport] = useState<FP02Report | null>(null);
+  const [signPass, setSignPass] = useState('');
+  const [showSignDialog, setShowSignDialog] = useState(false);
+  const ADMIN_EMAIL = 'emisora@cmnl.cu';
+
+  // Persistence for signed reports (Local simulation)
+  const [signedReports, setSignedReports] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('cmnl_signed_reports_json');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      }
+    } catch (e) {
+      console.error("Error loading signed reports:", e);
+    }
+    return {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('cmnl_signed_reports_json', JSON.stringify(signedReports));
+  }, [signedReports]);
+
+  const handleSignReport = () => {
+    if (!currentUser || !signingReport) return;
+    
+    // Find the worker whose signature is being requested (should be the specialist in the report)
+    const specialist = signingReport.especialidades.find(e => isMatch(e.nombre, currentUser.name));
+    if (!specialist) {
+        alert("Su nombre no figura en este reporte.");
+        return;
+    }
+
+    const storedPass = getStoredPassword(currentUser.id);
+    const cert = getStoredCertificate(currentUser.id);
+
+    if (cert && cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
+        alert("Su certificado de firma digital ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
+        return;
+    }
+
+    // Fallback logic for Director/Coordinator authorized devices
+    const isAuthorizedDevice = currentUser.role === 'director' || currentUser.role === 'coordinator' || currentUser.classification === 'Coordinador';
+    
+    // Original password calculation: 8 characters (name + CI)
+    const ciPart = currentUser.ci || '';
+    const namePart = currentUser.name.split(' ')[0] || '';
+    const originalPass = (namePart.substring(0, 4) + ciPart.substring(0, 4)).toUpperCase().substring(0, 8);
+
+    if (!cert) {
+        if (isAuthorizedDevice) {
+            if (signPass.toUpperCase() === originalPass) {
+                // Generate a temporary signature using user data since we don't have the cert (using a mock/stable one for now)
+                const mockCert = { 
+                    userData: { 
+                        fullName: currentUser.name, 
+                        ci: currentUser.ci || '', 
+                        tomo: currentUser.tomo || '0', 
+                        folio: currentUser.folio || '0' 
+                    }, 
+                    contracts: {} 
+                };
+                const signature = generateDigitalSignature(mockCert);
+                setSignedReports(prev => ({ ...prev, [signingReport.id]: `[AUTH] ${signature}` }));
+                setShowSignDialog(false);
+                setSignPass('');
+                setSigningReport(null);
+                alert("Reporte firmado mediante autorización de dirección.");
+                return;
+            } else {
+                alert("Contraseña original incorrecta o equipo no certificado.");
+                return;
+            }
+        } else {
+            alert("No tiene un certificado de firma digital cargado en este equipo.");
+            return;
+        }
+    }
+
+    if (signPass !== storedPass) {
+        alert("Contraseña de firma incorrecta.");
+        return;
+    }
+
+    const signature = generateDigitalSignature(cert);
+    setSignedReports(prev => ({ ...prev, [signingReport.id]: signature }));
+    
+    setShowSignDialog(false);
+    setSignPass('');
+    setSigningReport(null);
+    alert("Reporte firmado exitosamente.");
+  };
+
+  const shareSignedReport = (report: FP02Report) => {
+    const signature = signedReports[report.id];
+    if (!signature) return;
+
+    const signatureData = {
+        type: 'REPORT_SIGNATURE',
+        reportId: report.id,
+        userName: currentUser?.name,
+        userId: currentUser?.id,
+        signature: signature,
+        program: report.programa,
+        date: report.fecha,
+        timestamp: new Date().toISOString()
+    };
+
+    const fileContent = JSON.stringify(signatureData, null, 2);
+    const blob = new Blob([fileContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `firma_${report.programa.replace(/\s+/g, '_')}_${report.fecha}.json`;
+    a.click();
+
+    const msg = `Hola Administrador, adjunto el archivo JSON de mi firma digital para el reporte de emisión de "${report.programa}" del día ${report.fecha}.\n\nNombre: ${currentUser?.name}\nToken: ${signature.substring(0, 32)}...`;
+    
+    // Check if web share is available, else fallback or just notice
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const isDirectorUser = currentUser?.role === 'director' || currentUser?.classification === 'Director' || currentUser?.classification === 'Directora';
+
+  const isReportFullySignedByOthers = (report: FP02Report) => {
+      if (!currentUser) return false;
+      const otherSpecialists = report.especialidades.filter(e => e.nombre && !isMatch(e.nombre, currentUser.name));
+      const signedUserIds = Object.keys(report.signatures || {});
+      return otherSpecialists.every(esp => 
+          signedUserIds.some(uid => {
+              const u = equipoData.find(m => m.id === uid || m.username === uid);
+              return u && isMatch(u.name, esp.nombre);
+          })
+      );
+  };
+
+  const handleDirectorSignAndShare = async (report: FP02Report) => {
+      // First sign the report
+      setSigningReport(report);
+      setShowSignDialog(true);
+      // Signature happens in handleSignReport which is called from the dialog
+  };
+
+  const generateAndSharePDF = (report: FP02Report) => {
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.text("Modelo FP-02", 14, 22);
+      doc.setFontSize(12);
+      doc.text(`Fecha: ${report.fecha}`, 14, 32);
+      doc.text(`Emisora: ${report.emisora}`, 14, 40);
+      doc.text(`Programa: ${report.programa}`, 14, 48);
+
+      const tableData = report.especialidades.filter(e => e.nombre).map(esp => {
+          const userMatch = equipoData.find(m => isMatch(m.name, esp.nombre));
+          // Use either existing signatures in report object or the locally stored one if just signed
+          const signature = (report.signatures?.[userMatch?.id || userMatch?.username]) || (isMatch(esp.nombre, currentUser?.name || '') ? signedReports[report.id] : null);
+          let displaySig = 'SIN FIRMAR';
+          if (signature) {
+              const sigLines = signature.startsWith('[AUTH]') ? [signature] : (signature.length > 50 ? [signature.substring(0, 32) + '...', signature.substring(32, 64) + '...'] : [signature]);
+              displaySig = sigLines.join('\n');
+          }
+          return [esp.rol, esp.nombre, displaySig];
+      });
+
+      autoTable(doc, {
+          startY: 55,
+          head: [['Especialidad', 'Nombre y Apellidos', 'Firma Digital']],
+          body: tableData,
+      });
+
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = pdfUrl;
+      a.download = `Reporte_${report.programa}_${report.fecha}.pdf`;
+      a.click();
+
+      // Share via WhatsApp
+      const msg = `Hola Administrador, adjunto el PDF del reporte de emisión de "${report.programa}" del día ${report.fecha}, ya firmado por todo el equipo técnico y por mí como director.\n\nAtentamente,\n${currentUser?.name}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
 
   // Auto-set view to daily and prevent weekly
   useEffect(() => {
@@ -458,7 +644,12 @@ export const ReportesTrabajador: React.FC<Props> = ({
     };
     
     setConsolidatedPayments(prev => [...prev.filter(c => !(c.userId === currentUser.username && c.month === viewedMonthPrefix && c.calculationMode === 'autogestionado')), newConsolidated]);
-    alert("Mes consolidado enviado a sus pagos autogestionados exitosamente.");
+    
+    // Requirement 4: Notify admin via WhatsApp
+    const msg = `Hola Administrador, he finalizado mi reporte de autogestión semanal/mensual correspondiente a ${viewedMonthPrefix}.\n\nNombre: ${currentUser.name}\nTotal Bruto: $${autogestionMetrics.bruto.toFixed(2)}\nPago Neto: $${autogestionMetrics.neto.toFixed(2)}\nCant. Inserciones: ${autogestionMetrics.count}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    
+    alert("Cierre de autogestión procesado. Se ha abierto WhatsApp para notificar al administrador.");
     setActiveTab('pagos');
   };
 
@@ -749,30 +940,127 @@ export const ReportesTrabajador: React.FC<Props> = ({
                     </div>
                  </div>
 
-                 {/* Display simple list of user's official reports */}
-                 <div className="bg-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/20 shadow-xl">
-                     <h4 className="text-[#E8DCCF] font-bold mb-4">Detalle de Inserciones Oficiales</h4>
-                     <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                         {reports.filter(r => r.mes === workLogDate.substring(0, 7) && r.especialidades.some(esp => isMatch(esp.nombre, currentUser?.name || ''))).map(rep => {
-                             const esp = rep.especialidades.find(e => isMatch(e.nombre, currentUser?.name || ''));
-                             return (
-                                 <div key={rep.id} className="flex justify-between items-center p-3 bg-black/20 rounded-lg border border-[#9E7649]/10">
-                                     <div>
-                                         <div className="text-white font-bold text-sm">{rep.programa}</div>
-                                         <div className="text-[10px] text-[#9E7649] flex gap-2"><Clock size={12}/> {rep.fecha}</div>
-                                     </div>
-                                     <div className="text-sm font-medium text-[#E8DCCF]/80 bg-[#3E1E16] px-2 py-1 rounded">
-                                         {esp?.rol}
-                                     </div>
-                                 </div>
-                             );
-                         })}
-                         {reports.filter(r => r.mes === workLogDate.substring(0, 7) && r.especialidades.some(esp => isMatch(esp.nombre, currentUser?.name || ''))).length === 0 && (
-                             <p className="text-center text-[#E8DCCF]/50 italic py-10">No hay reportes oficiales registrados para este mes.</p>
-                         )}
-                     </div>
-                 </div>
-              </div>
+                  {/* Display simple list of user's official reports */}
+                  <div className="bg-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/20 shadow-xl">
+                      <h4 className="text-[#E8DCCF] font-bold mb-4">
+                        {isDirectorUser ? 'Reportes Listos para Cierre/Firma de Dirección' : 'Detalle de Inserciones Oficiales'}
+                      </h4>
+                      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                          {reports.filter(r => {
+                              if (r.mes !== workLogDate.substring(0, 7)) return false;
+                              const assigned = r.especialidades.some(esp => isMatch(esp.nombre, currentUser?.name || ''));
+                              if (!assigned) return false;
+                              // Requirement: Only show to directors if fully signed by others
+                              if (isDirectorUser) return isReportFullySignedByOthers(r);
+                              return true;
+                          }).map(rep => {
+                              const esp = rep.especialidades.find(e => isMatch(e.nombre, currentUser?.name || ''));
+                              const isSigned = !!signedReports[rep.id];
+                              
+                              return (
+                                  <div key={rep.id} className="flex flex-col p-4 bg-black/20 rounded-xl border border-[#9E7649]/10 hover:border-[#9E7649]/30 transition-all gap-3">
+                                      <div className="flex justify-between items-center">
+                                          <div className="flex-1">
+                                              <div className="text-white font-bold text-base">{rep.programa}</div>
+                                              <div className="flex items-center gap-3 mt-1">
+                                                <div className="text-[10px] text-[#9E7649] flex items-center gap-1 font-bold"><Clock size={12}/> {rep.fecha}</div>
+                                                <div className="text-[10px] font-bold text-[#E8DCCF]/60 bg-[#3E1E16] px-2 py-0.5 rounded uppercase tracking-wider">
+                                                  {esp?.rol}
+                                                </div>
+                                              </div>
+                                          </div>
+                                          
+                                          <div className="flex items-center gap-2">
+                                             {!isSigned ? (
+                                               <button 
+                                                 onClick={() => { setSigningReport(rep); setShowSignDialog(true); }}
+                                                 className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 text-amber-500 font-bold rounded-lg hover:bg-amber-500/20 transition-all text-xs border border-amber-500/20"
+                                               >
+                                                 <PenTool size={14} /> FIRMAR
+                                               </button>
+                                             ) : (
+                                               <div className="flex items-center gap-2">
+                                                  <button 
+                                                    onClick={() => isDirectorUser ? generateAndSharePDF(rep) : shareSignedReport(rep)}
+                                                    className={`flex items-center gap-2 px-3 py-2 ${isDirectorUser ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'} text-white font-bold rounded-lg transition-all text-xs shadow-lg`}
+                                                  >
+                                                    <Share2 size={14} /> {isDirectorUser ? 'ENVIAR PDF (WA)' : 'ENVIAR FIRMA (JSON)'}
+                                                  </button>
+                                                  <div className="p-2 bg-green-500/10 text-green-500 rounded-lg" title="Firmado">
+                                                    <CheckCircle2 size={18} />
+                                                  </div>
+                                               </div>
+                                             )}
+                                          </div>
+                                      </div>
+
+                                      {/* Signatories List for Review */}
+                                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/5">
+                                          {rep.especialidades.filter(e => e.nombre).map(e => {
+                                              const userMatch = equipoData.find(m => isMatch(m.name, e.nombre));
+                                              const hasSigned = (rep.signatures?.[userMatch?.id || userMatch?.username]) || (isMatch(e.nombre, currentUser?.name || '') && isSigned);
+                                              return (
+                                                  <div key={e.rol} className="flex flex-col bg-black/30 p-2 rounded border border-white/5">
+                                                      <span className="text-[8px] text-[#9E7649] uppercase font-bold truncate">{e.rol}</span>
+                                                      <div className="flex items-center justify-between gap-1">
+                                                          <span className="text-[10px] text-white/70 truncate">{e.nombre.split(' ')[0]}</span>
+                                                          {hasSigned && <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.6)] shrink-0" title="Usuario firmó este reporte" />}
+                                                      </div>
+                                                  </div>
+                                              );
+                                          })}
+                                      </div>
+                                  </div>
+                              );
+                          })}
+                          {reports.filter(r => r.mes === workLogDate.substring(0, 7) && r.especialidades.some(esp => isMatch(esp.nombre, currentUser?.name || ''))).length === 0 && (
+                              <p className="text-center text-[#E8DCCF]/50 italic py-10">No hay reportes oficiales registrados para este mes.</p>
+                          )}
+                      </div>
+                  </div>
+
+                  {/* SIGNING DIALOG */}
+                  {showSignDialog && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in">
+                      <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6">
+                        <div className="flex items-center gap-4 text-amber-500">
+                          <div className="p-3 bg-amber-500/10 rounded-2xl">
+                             <Lock size={32} />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-bold text-white">Confirmar Firma</h3>
+                            <p className="text-sm text-stone-400">Ingrese su contraseña de firma digital para {signingReport?.programa}</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                           <input 
+                              type="password"
+                              placeholder="Contraseña de Firma"
+                              className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white font-bold text-center tracking-widest focus:border-amber-500 outline-none"
+                              value={signPass}
+                              onChange={e => setSignPass(e.target.value)}
+                              autoFocus
+                           />
+                           <div className="flex gap-4">
+                              <button 
+                                onClick={() => { setShowSignDialog(false); setSignPass(''); }}
+                                className="flex-1 py-4 bg-stone-800 text-white font-bold rounded-2xl hover:bg-stone-700 transition-all"
+                              >
+                                CANCELAR
+                              </button>
+                              <button 
+                                onClick={handleSignReport}
+                                className="flex-1 py-4 bg-amber-500 text-black font-black rounded-2xl hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20"
+                              >
+                                FIRMAR
+                              </button>
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+               </div>
           )}
 
           {activeTab === 'pagos' && (

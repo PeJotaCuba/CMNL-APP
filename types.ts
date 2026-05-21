@@ -79,6 +79,7 @@ export interface FP02Report {
   hora?: string;
   especialidades: FP02Especialidad[];
   mes: string; // for grouping by month
+  signatures?: Record<string, string>; // userId -> signature string
 }
 
 export interface ConsolidatedPayment {

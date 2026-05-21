@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Download, FileText, Calendar, Filter, FileCode, Search, FileDown, Trash2, Save, Upload, Edit2, Plus } from 'lucide-react';
+import { Download, FileText, Calendar, Filter, FileCode, Search, FileDown, Trash2, Save, Upload, Edit2, Plus, FileUp } from 'lucide-react';
 import { User, FP02Report, ProgramFicha, ConsolidatedPayment, ProgramCatalog } from '../../types';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx-js-style';
+import { formatDigitalSignatureForDocuments } from '../../utils/signatureUtils';
 
 // [NOTE]: Extracted Admin section to preserve all existing logic safely
 interface Props {
@@ -57,6 +58,7 @@ export const ReportesAdmin: React.FC<Props> = ({
   const [duplicateConflicts, setDuplicateConflicts] = useState<{ existing: FP02Report, newReport: FP02Report }[]>([]);
   const [safeReportsToAdd, setSafeReportsToAdd] = useState<FP02Report[]>([]);
   const [reportsToRemove, setReportsToRemove] = useState<string[]>([]);
+  const [signatureAlert, setSignatureAlert] = useState<{ message: string, user: string } | null>(null);
   const [loadResult, setLoadResult] = useState<{ message: string, success: boolean } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [isManualProcessing, setIsManualProcessing] = useState(false);
@@ -531,7 +533,95 @@ export const ReportesAdmin: React.FC<Props> = ({
     saveAs(blob, `Reporte_FP02_${report.programa}_${report.fecha}.docx`);
   };
 
-  const exportPDF = (report: FP02Report) => {
+  const handleLoadSignature = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const processFile = (file: File) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const result = event.target?.result;
+          if (typeof result !== 'string') return;
+          const data = JSON.parse(result);
+          
+          if (data.type !== 'REPORT_SIGNATURE' && data.type !== 'J-ZOOM_SIGNED_REPORT') {
+            alert(`El archivo ${file.name} no es una firma válida de reporte.`);
+            return;
+          }
+
+          setReports(prev => {
+            const reportIndex = prev.findIndex(r => r.id === data.reportId);
+            if (reportIndex === -1) {
+              alert(`No se encontró el reporte para la firma en ${file.name}`);
+              return prev;
+            }
+
+            const updatedReports = [...prev];
+            const report = { ...updatedReports[reportIndex] };
+            report.signatures = { ...(report.signatures || {}), [data.userId]: data.signature };
+            updatedReports[reportIndex] = report;
+
+            setSignatureAlert({
+                message: `Se ha cargado y vinculado la firma digital para el reporte de "${data.program}" (${data.date}).`,
+                user: data.userName || 'Usuario'
+            });
+
+            return updatedReports;
+          });
+        } catch (err) {
+          alert(`Error al procesar el archivo: ${file.name}`);
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    Array.from(files).forEach(processFile);
+    e.target.value = '';
+  };
+
+  const isReportFullySigned = (report: FP02Report) => {
+    // A report is fully signed if all specialists listed have a signature
+    const requiredNames = report.especialidades.filter(e => e.nombre).map(e => normalize(e.nombre));
+    const signedUserIds = Object.keys(report.signatures || {});
+    
+    // We need to match signed users with the specialists
+    return requiredNames.every(name => {
+      // Find if any signed user matches this name
+      return signedUserIds.some(uid => {
+        const u = equipoData.find(m => m.id === uid || m.username === uid);
+        return u && isMatch(u.name, name);
+      });
+    });
+  };
+
+  const exportConsolidatedPDF = (data: any[]) => {
+    // Check if ALL reports included in consolidated payments are signed
+    // For this app, we'll check if the reports for the current filterMonth are signed
+    const monthReports = reports.filter(r => r.mes === filterMonth);
+    const unsignedReports = monthReports.filter(r => !isReportFullySigned(r));
+
+    if (unsignedReports.length > 0) {
+      alert(`No se puede descargar el PDF consolidado. Faltan firmas en ${unsignedReports.length} reportes.`);
+      return;
+    }
+
+    const doc = new jsPDF();
+    doc.text(`Pagos Realizados - CMNL - ${filterMonth}`, 14, 15);
+    autoTable(doc, {
+        startY: 20,
+        head: [['Nombre', 'Mes', 'Reportes', 'Bruto', 'Impuestos', 'Neto']],
+        body: data.map(d => [d.nombre, d.mes, d.reportes.toString(), `$${d.bruto.toFixed(2)}`, `$${d.impuestos.toFixed(2)}`, `$${d.neto.toFixed(2)}`]),
+    });
+    doc.save(`Pagos_CMNL_${filterMonth}.pdf`);
+  };
+
+  const exportSinglePDF = (report: FP02Report) => {
+    if (!isReportFullySigned(report)) {
+      alert("Este reporte aún no tiene todas las firmas necesarias.");
+      return;
+    }
+
     const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text("Modelo FP-02", 14, 22);
@@ -540,11 +630,20 @@ export const ReportesAdmin: React.FC<Props> = ({
     doc.text(`Emisora: ${report.emisora}`, 14, 40);
     doc.text(`Programa: ${report.programa}`, 14, 48);
 
-    const tableData = report.especialidades.map(esp => [esp.rol, esp.nombre]);
+    const tableData = report.especialidades.map(esp => {
+      const userMatch = equipoData.find(m => isMatch(m.name, esp.nombre));
+      const signature = userMatch ? report.signatures?.[userMatch.id || userMatch.username] : null;
+      let displaySig = 'SIN FIRMAR';
+      if (signature) {
+        const sigLines = formatDigitalSignatureForDocuments(signature);
+        displaySig = sigLines.join('\n');
+      }
+      return [esp.rol, esp.nombre, displaySig];
+    });
 
     autoTable(doc, {
       startY: 55,
-      head: [['Especialidad', 'Nombre y Apellidos']],
+      head: [['Especialidad', 'Nombre y Apellidos', 'Firma Digital']],
       body: tableData,
     });
     doc.save(`Reporte_FP02_${report.programa}_${report.fecha}.pdf`);
@@ -614,6 +713,13 @@ export const ReportesAdmin: React.FC<Props> = ({
                        {Array.from(new Set(reports.map(r => r.programa))).map(p => <option key={p} value={p as string}>{p}</option>)}
                      </select>
                    </div>
+                   <div className="flex-1 min-w-[150px]">
+                     <label className="block text-[10px] text-[#9E7649] uppercase mb-1">Cargar Firmas (JSON)</label>
+                     <label className="w-full bg-black/40 p-2 rounded text-sm text-amber-500 border border-amber-500/30 flex items-center justify-center gap-2 cursor-pointer hover:bg-amber-500/10 transition-colors">
+                       <FileUp size={16} /> Subir Archivos JSON
+                       <input type="file" className="hidden" accept=".json,.jzoom" multiple onChange={handleLoadSignature} />
+                     </label>
+                   </div>
                 </div>
 
                 {metrics && (
@@ -634,7 +740,13 @@ export const ReportesAdmin: React.FC<Props> = ({
                             <p className="text-[10px] text-[#9E7649] uppercase">Pago Neto</p>
                             <p className="text-xl font-bold text-green-400">${metrics.neto.toFixed(2)}</p>
                         </div>
-                        <div className="col-span-full border-t border-[#9E7649]/20 pt-4 flex justify-end">
+                        <div className="col-span-full border-t border-[#9E7649]/20 pt-4 flex justify-end gap-4">
+                            <button 
+                                onClick={() => exportConsolidatedPDF(consolidatedPayments.filter(p => p.month === filterMonth))}
+                                className="flex items-center gap-2 bg-[#1A100C] text-[#9E7649] px-6 py-2 rounded-lg font-bold hover:bg-[#2C1B15] border border-[#9E7649]/30 transition-all font-display text-sm"
+                            >
+                                <Download size={18} /> Exportar PDF Consolidado
+                            </button>
                             <button 
                                 onClick={handleConsolidate}
                                 className="flex items-center gap-2 bg-[#9E7649] text-white px-6 py-2 rounded-lg font-bold hover:bg-[#8B653D] shadow-lg transition-all"
@@ -678,10 +790,22 @@ export const ReportesAdmin: React.FC<Props> = ({
                        </div>
                      </div>
                      <div className="flex items-center gap-1">
+                       <div className="mr-2">
+                         {(() => {
+                            const requiredCount = rep.especialidades.filter(e => e.nombre).length;
+                            const signedCount = Object.keys(rep.signatures || {}).length;
+                            const fullySigned = isReportFullySigned(rep);
+                            
+                            if (fullySigned) return <span className="p-1 px-2 bg-green-500/10 text-green-500 text-[8px] font-black rounded-full border border-green-500/20">FIRMADO OK</span>;
+                            if (signedCount > 0) return <span className="p-1 px-2 bg-amber-500/10 text-amber-500 text-[8px] font-black rounded-full border border-amber-500/20">PARCIAL ({signedCount}/{requiredCount})</span>;
+                            return <span className="p-1 px-2 bg-red-500/10 text-red-500 text-[8px] font-black rounded-full border border-red-500/20">PENDIENTE</span>;
+                         })()}
+                       </div>
                        <button 
-                           onClick={() => exportPDF(rep)}
-                           className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-full transition-all"
-                           title="Descargar PDF"
+                           onClick={() => exportSinglePDF(rep)}
+                           className={`p-2 rounded-full transition-all ${isReportFullySigned(rep) ? 'text-blue-400 hover:bg-blue-400/10' : 'text-stone-600 cursor-not-allowed opacity-50'}`}
+                           title={isReportFullySigned(rep) ? "Descargar PDF Firmado" : "Faltan firmas"}
+                           disabled={!isReportFullySigned(rep)}
                         >
                            <Download size={18} />
                         </button>
@@ -711,10 +835,17 @@ export const ReportesAdmin: React.FC<Props> = ({
                    </div>
                    <div className="text-sm border-t border-[#9E7649]/10 pt-3 space-y-1">
                       {rep.especialidades.filter(e => e.nombre).map(e => {
+                        const isSigned = Object.keys(rep.signatures || {}).some(uid => {
+                          const u = equipoData.find(m => m.id === uid || m.username === uid);
+                          return u && isMatch(u.name, e.nombre);
+                        });
                         return (
                           <div key={e.rol} className="flex justify-between items-center py-1 bg-black/10 px-2 rounded">
                             <span className="text-[#E8DCCF]/60 text-[10px] uppercase font-bold">{e.rol}</span>
-                            <span className="text-white text-sm font-medium">{e.nombre}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-white text-sm font-medium">{e.nombre}</span>
+                              {isSigned && <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.6)]" title="Usuario firmó este reporte" />}
+                            </div>
                           </div>
                         );
                       })}
@@ -1013,6 +1144,29 @@ export const ReportesAdmin: React.FC<Props> = ({
                 Confirmar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {signatureAlert && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSignatureAlert(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-amber-500/30 text-center space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center text-amber-500">
+              <FileCode className="text-4xl animate-pulse" />
+            </div>
+            <h3 className="text-white font-bold uppercase tracking-tight text-sm">Firma Procesada</h3>
+            <div className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-amber-500 uppercase font-black opacity-60">Firmado por:</p>
+                <p className="text-white font-bold text-base">{signatureAlert.user}</p>
+            </div>
+            <p className="text-xs text-stone-300 leading-relaxed font-sans px-2">
+              {signatureAlert.message}
+            </p>
+            <button
+              onClick={() => setSignatureAlert(null)}
+              className="w-full py-3 bg-[#9E7649] text-white font-bold rounded-xl hover:bg-[#8A633B] transition-all text-xs uppercase tracking-widest font-mono"
+            >
+              Continuar
+            </button>
           </div>
         </div>
       )}

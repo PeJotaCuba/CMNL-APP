@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import * as pdfjsLib from 'pdfjs-dist';
+import { formatDigitalSignatureForDocuments } from "../../../utils/signatureUtils";
 
 const pdfjs = pdfjsLib;
 
@@ -94,11 +95,15 @@ export const generateReportPDF = (data: ReportData): Blob => {
     }
     
     doc.setLineWidth(0.5);
-    doc.line(60, y, 150, y);
-    doc.setFontSize(10);
-    doc.text("FIRMA DIGITAL", 105, y + 5, { align: "center" });
-    doc.setFont("courier", "normal");
-    doc.text(data.userUniqueId, 105, y + 10, { align: "center" });
+    doc.line(110, y, 190, y);
+    doc.setFont("courier", "bold");
+    doc.setFontSize(8);
+    const sigLines = formatDigitalSignatureForDocuments(data.userUniqueId);
+    if (sigLines.length > 0) {
+        doc.text(`Firma Digital: ${sigLines[0]}`, 190, y + 6, { align: "right" });
+        if (sigLines[1]) doc.text(sigLines[1], 190, y + 10, { align: "right" });
+        if (sigLines[2]) doc.text(sigLines[2], 190, y + 14, { align: "right" });
+    }
 
     return doc.output('blob');
 };
