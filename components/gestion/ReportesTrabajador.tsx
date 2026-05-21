@@ -27,6 +27,16 @@ interface Props {
   setWorkLogView: React.Dispatch<React.SetStateAction<'daily' | 'weekly' | 'monthly'>>;
 }
 
+interface AdditionalPayment {
+  id: string;
+  userId: string;
+  month: string; // e.g., '2026-05'
+  role: string;  // e.g., 'Director', 'Locutor'
+  concept: string; // "concepto"
+  amount: number; // "importe"
+  period: 'diario' | 'semanal' | 'mensual'; // "período"
+}
+
 export const ReportesTrabajador: React.FC<Props> = ({
   currentUser, fichas, equipoData, catalogo,
   consolidatedPayments, setConsolidatedPayments,
@@ -39,6 +49,82 @@ export const ReportesTrabajador: React.FC<Props> = ({
   const [signPass, setSignPass] = useState('');
   const [showSignDialog, setShowSignDialog] = useState(false);
   const ADMIN_EMAIL = 'emisora@cmnl.cu';
+
+  // State for additional payments
+  const [additionalPayments, setAdditionalPayments] = useState<AdditionalPayment[]>(() => {
+    try {
+      const saved = localStorage.getItem('cmnl_additional_payments_json');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Error loading additional payments:", e);
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('cmnl_additional_payments_json', JSON.stringify(additionalPayments));
+  }, [additionalPayments]);
+
+  const [openAddFormRole, setOpenAddFormRole] = useState<string | null>(null);
+  const [newConcept, setNewConcept] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+  const [newPeriod, setNewPeriod] = useState<'diario' | 'semanal' | 'mensual'>('mensual');
+
+  const getDaysInViewedMonth = () => {
+      const currentMonthPrefix = workLogDate.substring(0, 7);
+      const parts = currentMonthPrefix.split('-');
+      const yyyy = parseInt(parts[0]);
+      const mm = parseInt(parts[1]);
+      const daysInMonth = new Date(yyyy, mm, 0).getDate();
+      
+      const today = new Date();
+      const [yearNow, monthNow] = [today.getFullYear(), today.getMonth() + 1];
+      if (yyyy === yearNow && mm === monthNow) {
+          return Math.max(0, today.getDate() - 1);
+      }
+      return daysInMonth;
+  };
+
+  const getPeriodMultiplier = (period: 'diario' | 'semanal' | 'mensual', daysCount: number) => {
+      if (period === 'diario') return daysCount;
+      if (period === 'semanal') return Math.ceil(daysCount / 7);
+      return 1; // mensual is added once
+  };
+
+  const handleAddAdditionalPayment = (role: string) => {
+      if (!currentUser) return;
+      if (!newConcept.trim()) {
+          alert('Por favor, introduzca un concepto.');
+          return;
+      }
+      const amountNum = parseFloat(newAmount);
+      if (isNaN(amountNum) || amountNum <= 0) {
+          alert('Por favor, introduzca un importe válido mayor a 0.');
+          return;
+      }
+
+      const currentMonthPrefix = workLogDate.substring(0, 7);
+
+      const newPayment: AdditionalPayment = {
+          id: Math.random().toString(36).substr(2, 9),
+          userId: currentUser.username,
+          month: currentMonthPrefix,
+          role: role,
+          concept: newConcept.trim(),
+          amount: amountNum,
+          period: newPeriod
+      };
+
+      setAdditionalPayments(prev => [...prev, newPayment]);
+      setNewConcept('');
+      setNewAmount('');
+      setNewPeriod('mensual');
+      setOpenAddFormRole(null);
+  };
+
+  const handleDeleteAdditionalPayment = (id: string) => {
+      setAdditionalPayments(prev => prev.filter(ap => ap.id !== id));
+  };
 
   // Persistence for signed reports (Local simulation)
   const [signedReports, setSignedReports] = useState<Record<string, string>>(() => {
@@ -392,6 +478,8 @@ export const ReportesTrabajador: React.FC<Props> = ({
               newLogs.splice(existingIndex, 1);
               setWorkLogs(newLogs);
           } else {
+              const roleConfig = userPaymentConfig?.roles.find(r => r.role === role);
+              const computedAmount = getProgramRate(programName, role, roleConfig?.level || 'I');
               setWorkLogs([...workLogs, {
                   id: Date.now().toString(),
                   userId: currentUser.username,
@@ -400,6 +488,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                   role,
                   hours: 0,
                   type: 'habitual',
+                  amount: computedAmount,
                   syncStatus: 'pending'
               }]);
           }
@@ -451,6 +540,10 @@ export const ReportesTrabajador: React.FC<Props> = ({
       const date = new Date(dateStr + 'T12:00:00');
       const day = date.getDay();
       const progNameLower = normalize(programName);
+
+      if (progNameLower === 'propaganda' || progNameLower.includes('propaganda')) {
+          return true;
+      }
 
       // Cabina specific logic first
       if (progNameLower.includes('cabina')) {
@@ -515,6 +608,9 @@ export const ReportesTrabajador: React.FC<Props> = ({
               uniqueCanonical.set(norm, c.name);
           }
       });
+      if (!uniqueCanonical.has(normalize('Propaganda'))) {
+          uniqueCanonical.set(normalize('Propaganda'), 'Propaganda');
+      }
       return Array.from(uniqueCanonical.values());
   }, [catalogo, normalize]);
 
@@ -525,19 +621,28 @@ export const ReportesTrabajador: React.FC<Props> = ({
 
   const sortedPrograms = (list: string[]) => {
       const newList = [...list];
-      newList.sort((a, b) => {
+      const hasPropaganda = newList.some(p => normalize(p) === 'propaganda');
+      const filtered = newList.filter(p => normalize(p) !== 'propaganda');
+
+      filtered.sort((a, b) => {
           const timeA = getProgramStartTime(a);
           const timeB = getProgramStartTime(b);
           if (timeA !== timeB) return timeA - timeB;
           return a.localeCompare(b);
       });
-      return newList;
+
+      if (hasPropaganda) {
+          filtered.push('Propaganda');
+      }
+      return filtered;
   };
 
   const programsByRole = React.useMemo(() => {
       if (!currentUser || !userPaymentConfig) return [];
       return userPaymentConfig.roles.map((role, idx) => {
           const filtered = programsListFilteredByDay.filter(prog => {
+              if (normalize(prog) === 'propaganda') return true;
+
               // Rate check
               const rate = getProgramRate(prog, role.role, role.level);
               if (rate <= 0) return false;
@@ -564,22 +669,22 @@ export const ReportesTrabajador: React.FC<Props> = ({
     const today = new Date();
     const [yearNow, monthNow] = [today.getFullYear(), today.getMonth() + 1];
 
+    const parts = currentMonthPrefix.split('-');
+    const yyyy = parseInt(parts[0]);
+    const mm = parseInt(parts[1]);
+    const daysInMonth = new Date(yyyy, mm, 0).getDate();
+
+    // Rule: Calculate from day 1 to (current day - 1) for current month
+    // For past months, do full month.
+    let endDay = daysInMonth;
+    if (yyyy === yearNow && mm === monthNow) {
+        endDay = Math.max(0, today.getDate() - 1);
+    }
+
     if (userPaymentConfig && currentUser) {
         const member = equipoData.find(m => m.username === currentUser.username || m.name === currentUser.name);
         const habitualPrograms = member?.habitualProgramsByRole || {};
         const allPossiblePrograms = programsListRaw;
-
-        const parts = currentMonthPrefix.split('-');
-        const yyyy = parseInt(parts[0]);
-        const mm = parseInt(parts[1]);
-        const daysInMonth = new Date(yyyy, mm, 0).getDate();
-
-        // Rule: Calculate from day 1 to (current day - 1) for current month
-        // For past months, do full month.
-        let endDay = daysInMonth;
-        if (yyyy === yearNow && mm === monthNow) {
-            endDay = Math.max(0, today.getDate() - 1);
-        }
 
         for (let day = 1; day <= endDay; day++) {
              const dateStr = `${yyyy}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -608,14 +713,28 @@ export const ReportesTrabajador: React.FC<Props> = ({
              });
         }
     }
-    const tax = calculateTax(income);
+
+    // Add additional payments to total gross income
+    let additionalGross = 0;
+    if (currentUser) {
+        additionalPayments
+            .filter(ap => ap.userId === currentUser.username && ap.month === currentMonthPrefix)
+            .forEach(ap => {
+                const mult = getPeriodMultiplier(ap.period, endDay);
+                additionalGross += ap.amount * mult;
+            });
+    }
+
+    const totalIncome = income + additionalGross;
+    const tax = calculateTax(totalIncome);
+
     return {
-        bruto: income,
+        bruto: totalIncome,
         tax: tax,
-        neto: income - tax,
+        neto: totalIncome - tax,
         count
     };
-  }, [workLogs, userPaymentConfig, currentUser, workLogDate.substring(0, 7), getProgramRate, calculateTax, equipoData, catalogo, isMatch, normalize]);
+  }, [workLogs, userPaymentConfig, currentUser, workLogDate.substring(0, 7), getProgramRate, calculateTax, equipoData, catalogo, isMatch, normalize, additionalPayments]);
 
   // Handle Autogestion Consolidate
   const handleConsolidateAutogestion = () => {
@@ -887,6 +1006,125 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                                 })}
                                             </tr>
                                         ))}
+                                        {/* Row for Additional Payments */}
+                                        <tr className="bg-[#1A100C]/60">
+                                            <td colSpan={dates.length + 1} className="px-4 py-4 border-t border-[#9E7649]/10">
+                                                <div className="flex flex-col gap-3">
+                                                    <div className="flex justify-between items-center bg-[#2C1B15]/40 p-2.5 rounded-lg border border-[#9E7649]/10">
+                                                        <span className="text-xs font-bold text-[#E8DCCF]/80 uppercase tracking-wider">
+                                                            Pagos Adicionales ({roleData.role})
+                                                        </span>
+                                                        {openAddFormRole !== roleData.role && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setOpenAddFormRole(roleData.role);
+                                                                    setNewConcept('');
+                                                                    setNewAmount('');
+                                                                    setNewPeriod('mensual');
+                                                                }}
+                                                                className="text-xs px-3 py-1.5 bg-[#9E7649]/30 text-white rounded border border-[#9E7649]/50 hover:bg-[#9E7649]/50 hover:text-white transition-all font-bold"
+                                                            >
+                                                                + Añadir Pago Adicional
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* List of existing additional payments for this role in the active month */}
+                                                    {additionalPayments.filter(ap => ap.userId === currentUser?.username && ap.month === workLogDate.substring(0, 7) && ap.role === roleData.role).length > 0 ? (
+                                                        <div className="space-y-2 max-w-2xl">
+                                                            {additionalPayments
+                                                                .filter(ap => ap.userId === currentUser?.username && ap.month === workLogDate.substring(0, 7) && ap.role === roleData.role)
+                                                                .map(ap => {
+                                                                    const daysCount = getDaysInViewedMonth();
+                                                                    const mult = getPeriodMultiplier(ap.period, daysCount);
+                                                                    const subtotal = ap.amount * mult;
+                                                                    return (
+                                                                        <div key={ap.id} className="flex justify-between items-center bg-[#1A100C]/80 px-4 py-2 rounded border border-[#9E7649]/10 text-xs">
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <span className="font-bold text-white">{ap.concept}</span>
+                                                                                <span className="text-[10px] text-[#9E7649] capitalize">
+                                                                                    Importe base: ${ap.amount.toFixed(2)} | Período: {ap.period} (x{mult})
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-4">
+                                                                                <span className="font-bold text-green-400 font-mono">${subtotal.toFixed(2)}</span>
+                                                                                <button 
+                                                                                    onClick={() => handleDeleteAdditionalPayment(ap.id)}
+                                                                                    className="text-red-400 hover:text-red-300 font-black px-1.5 py-0.5 hover:bg-red-500/10 rounded-md transition-colors"
+                                                                                    title="Eliminar pago"
+                                                                                >
+                                                                                    ✕
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            }
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-[11px] text-[#E8DCCF]/40 italic">No hay pagos adicionales registrados para esta especialidad.</p>
+                                                    )}
+
+                                                    {/* inline form to add additional payment */}
+                                                    {openAddFormRole === roleData.role && (
+                                                        <div className="bg-[#1A100C] p-4 rounded-xl border border-[#9E7649]/20 flex flex-col gap-3 max-w-md animate-in fade-in slide-in-from-top-1">
+                                                            <div className="text-xs font-bold text-white mb-1 border-b border-[#9E7649]/10 pb-1">Nuevo Pago Adicional</div>
+                                                            <div className="flex flex-col gap-1.5">
+                                                                <label className="text-[10px] text-[#9E7649] uppercase font-bold">Concepto:</label>
+                                                                <input 
+                                                                    type="text" 
+                                                                    placeholder="Ej. Cobertura transmisión especial, Guardia" 
+                                                                    value={newConcept}
+                                                                    onChange={e => setNewConcept(e.target.value)}
+                                                                    className="bg-black/40 text-white border border-[#9E7649]/30 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-[#9E7649] outline-none"
+                                                                />
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    <label className="text-[10px] text-[#9E7649] uppercase font-bold">Importe ($):</label>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        step="0.01"
+                                                                        min="0.01"
+                                                                        placeholder="Ej. 150.00" 
+                                                                        value={newAmount}
+                                                                        onChange={e => setNewAmount(e.target.value)}
+                                                                        className="bg-black/40 text-white border border-[#9E7649]/30 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-[#9E7649] outline-none"
+                                                                    />
+                                                                </div>
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    <label className="text-[10px] text-[#9E7649] uppercase font-bold">Período:</label>
+                                                                    <select 
+                                                                        value={newPeriod}
+                                                                        onChange={e => setNewPeriod(e.target.value as any)}
+                                                                        className="bg-[#2C1B15] text-white border border-[#9E7649]/30 rounded px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-[#9E7649] outline-none"
+                                                                    >
+                                                                        <option value="diario">Diario</option>
+                                                                        <option value="semanal">Semanal</option>
+                                                                        <option value="mensual">Mensual</option>
+                                                                    </select>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex justify-end gap-2 mt-2">
+                                                                <button 
+                                                                    onClick={() => setOpenAddFormRole(null)}
+                                                                    className="px-3 py-1.5 bg-black/40 border border-[#9E7649]/20 text-[#E8DCCF]/60 hover:text-white rounded text-xs font-bold"
+                                                                >
+                                                                    Cancelar
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleAddAdditionalPayment(roleData.role)}
+                                                                    className="px-3 py-1.5 bg-[#9E7649] text-white hover:bg-[#8B653D] rounded text-xs font-bold transition-all"
+                                                                >
+                                                                    Guardar Pago
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
                                     </React.Fragment>
                                 );
                             })}

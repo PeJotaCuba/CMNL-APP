@@ -69,12 +69,14 @@ interface UpdateReminderModalProps {
     isOpen: boolean;
     onClose: () => void;
     onUpdate: () => void;
+    onSnooze: (hours: number) => void;
 }
 
 export const UpdateReminderModal: React.FC<UpdateReminderModalProps> = ({
     isOpen,
     onClose,
-    onUpdate
+    onUpdate,
+    onSnooze
 }) => {
     if (!isOpen) return null;
 
@@ -105,6 +107,31 @@ export const UpdateReminderModal: React.FC<UpdateReminderModalProps> = ({
                             >
                                 Sí, actualizar ahora
                             </button>
+
+                            <div className="mt-2 pt-3 border-t border-gray-100">
+                                <p className="text-[10px] text-gray-400 mb-2 font-bold uppercase tracking-wider text-left">No volver a mostrar en:</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button 
+                                        onClick={() => onSnooze(24)}
+                                        className="py-2 px-1 bg-gray-50 hover:bg-[#5D3A24]/10 text-gray-700 hover:text-[#5D3A24] border border-gray-200 hover:border-[#5D3A24]/30 rounded-lg text-xs transition-all font-semibold"
+                                    >
+                                        24 horas
+                                    </button>
+                                    <button 
+                                        onClick={() => onSnooze(48)}
+                                        className="py-2 px-1 bg-gray-50 hover:bg-[#5D3A24]/10 text-gray-700 hover:text-[#5D3A24] border border-gray-200 hover:border-[#5D3A24]/30 rounded-lg text-xs transition-all font-semibold"
+                                    >
+                                        48 horas
+                                    </button>
+                                    <button 
+                                        onClick={() => onSnooze(72)}
+                                        className="py-2 px-1 bg-gray-50 hover:bg-[#5D3A24]/10 text-gray-700 hover:text-[#5D3A24] border border-gray-200 hover:border-[#5D3A24]/30 rounded-lg text-xs transition-all font-semibold"
+                                    >
+                                        72 horas
+                                    </button>
+                                </div>
+                            </div>
+
                             <button 
                               onClick={onClose}
                               className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-xl transition-colors"

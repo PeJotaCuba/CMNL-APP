@@ -5,10 +5,11 @@ interface BackupDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onBackup: () => void;
+    onSnooze: (hours: number) => void;
     isLogoutTrigger?: boolean;
 }
 
-const BackupDialog: React.FC<BackupDialogProps> = ({ isOpen, onClose, onBackup, isLogoutTrigger = false }) => {
+const BackupDialog: React.FC<BackupDialogProps> = ({ isOpen, onClose, onBackup, onSnooze, isLogoutTrigger = false }) => {
     if (!isOpen) return null;
 
     return (
@@ -68,6 +69,33 @@ const BackupDialog: React.FC<BackupDialogProps> = ({ isOpen, onClose, onBackup, 
                             <Download size={20} />
                             Generar Archivo de Respaldo
                         </button>
+
+                        {!isLogoutTrigger && (
+                            <div className="mt-2 pt-4 border-t border-white/5">
+                                <p className="text-[11px] text-[#E8DCCF]/50 mb-2 font-bold uppercase tracking-wider text-center">No volver a mostrar en:</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button 
+                                        onClick={() => onSnooze(24)}
+                                        className="py-2.5 px-2 bg-white/5 hover:bg-[#9E7649]/20 text-[#E8DCCF]/80 hover:text-white border border-white/10 hover:border-[#9E7649]/40 rounded-xl text-xs transition-all font-semibold"
+                                    >
+                                        24 horas
+                                    </button>
+                                    <button 
+                                        onClick={() => onSnooze(48)}
+                                        className="py-2.5 px-2 bg-white/5 hover:bg-[#9E7649]/20 text-[#E8DCCF]/80 hover:text-white border border-white/10 hover:border-[#9E7649]/40 rounded-xl text-xs transition-all font-semibold"
+                                    >
+                                        48 horas
+                                    </button>
+                                    <button 
+                                        onClick={() => onSnooze(72)}
+                                        className="py-2.5 px-2 bg-white/5 hover:bg-[#9E7649]/20 text-[#E8DCCF]/80 hover:text-white border border-white/10 hover:border-[#9E7649]/40 rounded-xl text-xs transition-all font-semibold"
+                                    >
+                                        72 horas
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <button 
                             onClick={onClose}
                             className="w-full py-4 bg-transparent hover:bg-white/5 text-[#E8DCCF]/50 hover:text-white rounded-2xl font-bold transition-all"

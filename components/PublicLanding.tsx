@@ -14,6 +14,23 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
   const [credential, setCredential] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [deviceToken, setDeviceToken] = useState('');
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  React.useEffect(() => {
+    let token = localStorage.getItem('rcm_device_token');
+    if (!token) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let randomStr = '';
+      for (let i = 0; i < 4; i++) {
+        randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      token = `DVC-${randomStr}`;
+      localStorage.setItem('rcm_device_token', token);
+    }
+    setDeviceToken(token);
+    setIsMobileDevice(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+  }, []);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +61,19 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
     });
 
     if (user) {
+      // Check if device limits are enabled for this user
+      if (user.deviceLimitEnabled) {
+        const clientToken = deviceToken || localStorage.getItem('rcm_device_token') || 'DVC-STDC';
+        const isAuthorized = user.authorizedDevices?.some(
+          d => d.token.trim().toUpperCase() === clientToken.trim().toUpperCase()
+        );
+        
+        if (!isAuthorized) {
+          setError(`Dispositivo no autorizado (${clientToken}). Solicita el registro de este dispositivo a tu Administrador.`);
+          return;
+        }
+      }
+
       localStorage.setItem('rcm_user_session', user.role);
       localStorage.setItem('rcm_user_username', user.username);
       onLoginSuccess(user);
@@ -124,6 +154,20 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
               Iniciar Sesión
             </button>
           </form>
+
+          {/* Device identity info for authorized devices */}
+          <div className="mt-5 p-3.5 bg-white border border-[#E8DCCF]/50 rounded-xl flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-3">
+              <Smartphone className="text-[#8B5E3C] animate-pulse" size={18} />
+              <div className="text-left">
+                <p className="text-[9px] text-[#8C7B70] uppercase font-bold tracking-wider">ID de este Dispositivo</p>
+                <p className="text-xs font-mono font-bold text-[#5D3A24]">{deviceToken || 'Generando...'}</p>
+              </div>
+            </div>
+            <span className="text-[9px] px-2.5 py-1 bg-[#F5F0EB] text-[#5D3A24] rounded-full font-bold uppercase tracking-wider">
+              {isMobileDevice ? 'Móvil' : 'PC / Laptop'}
+            </span>
+          </div>
         </div>
       </div>
 

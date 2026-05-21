@@ -4,6 +4,7 @@ import { loadReportsFromDB, deleteReportFromDB, updateReportStatus, clearReports
 import { openWhatsApp } from '../../utils/whatsappUtils';
 import { generateReportPDF } from './services/pdfService';
 import { getStoredPassword, getStoredCertificate, generateDigitalSignature } from '../../utils/signatureUtils';
+import BatchSigner from './BatchSigner';
 
 interface ReportsViewerProps {
     users?: User[]; 
@@ -16,6 +17,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const [reports, setReports] = useState<Report[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showSummary, setShowSummary] = useState(false);
+    const [showBatchSigner, setShowBatchSigner] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
     
     // Signing state
@@ -146,6 +148,23 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         return Object.entries(stats).map(([program, data]) => ({ program, ...data }));
     }, [reports]);
 
+    if (showBatchSigner) {
+        return (
+            <div className="h-full bg-[#1A100C]">
+                <div className="p-4 flex items-center justify-between border-b border-[#9E7649]/20">
+                    <button onClick={() => setShowBatchSigner(false)} className="text-[#E8DCCF] hover:text-white flex items-center gap-1 text-sm font-bold">
+                        <span className="material-symbols-outlined">arrow_back</span>
+                        Volver
+                    </button>
+                    <h2 className="text-lg font-bold text-white uppercase tracking-widest text-[#9E7649]">Firma por Carga</h2>
+                </div>
+                <div className="h-[calc(100%-60px)]">
+                    <BatchSigner currentUser={currentUser} onFinish={() => setShowBatchSigner(false)} />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24 relative">
             <div className="flex justify-between items-center mb-6">
@@ -164,11 +183,11 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                         </button>
                     )}
                     <button 
-                        onClick={() => setShowSummary(true)}
+                        onClick={() => setShowBatchSigner(true)}
                         className="bg-[#9E7649] text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-[#8B653D] shadow-sm"
                     >
-                        <span className="material-symbols-outlined text-sm">analytics</span>
-                        Resumen
+                        <span className="material-symbols-outlined text-sm">upload_file</span>
+                        Firma por carga
                     </button>
                 </div>
             </div>

@@ -111,6 +111,8 @@ export interface User {
   permissions?: UserPermissions;
   coordinatorSections?: string[];
   tools?: string[];
+  deviceLimitEnabled?: boolean;
+  authorizedDevices?: { token: string; name: string; type: string; os?: string; addedAt?: string }[];
 }
 
 export interface ProgramSchedule {

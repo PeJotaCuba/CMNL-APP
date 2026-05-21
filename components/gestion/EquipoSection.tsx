@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2, Search, FileText, AlertTriangle } from 'lucide-react';
+import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2, Search, FileText, AlertTriangle, Plus, Smartphone, Monitor, Shield } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
 import { User, UserClassification, ProgramFicha } from '../../types';
@@ -69,6 +69,9 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador' || (currentUser?.classification === 'Coordinador' && (currentUser?.coordinatorSections || []).includes('Gestión'));
   const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
   const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [newDeviceToken, setNewDeviceToken] = useState('');
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [newDeviceType, setNewDeviceType] = useState('PC');
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
   const [customAlert, setCustomAlert] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
   const [customConfirm, setCustomConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -588,8 +591,10 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                             role: user?.classification === 'Directora' ? 'Director' : (user?.classification === 'Coordinador' ? 'Coordinador de programación' : user?.classification || ''),
                             coordinatorSections: user?.coordinatorSections || [],
                             tools: user?.tools || [],
-                            habitualProgramsDays: user?.habitualProgramsDays || member.habitualProgramsDays || {}
-                          }); 
+                            habitualProgramsDays: user?.habitualProgramsDays || member.habitualProgramsDays || {},
+                            deviceLimitEnabled: user?.deviceLimitEnabled || false,
+                            authorizedDevices: user?.authorizedDevices || []
+                          });  
                         }}
                         className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
                         title="Editar Información"
@@ -910,6 +915,169 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                     </select>
                   </div>
 
+                  {/* CONTROL DE DISPOSITIVOS AUTORIZADOS */}
+                  <div className="border border-[#9E7649]/30 bg-[#251510] rounded-xl p-4 space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#9E7649]/20 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Shield className="text-[#9E7649]" size={18} />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider">Control de Dispositivos</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={editingMember.deviceLimitEnabled || false} 
+                          onChange={(e) => setEditingMember({ ...editingMember, deviceLimitEnabled: e.target.checked })}
+                          className="sr-only peer" 
+                        />
+                        <div className="w-9 h-5 bg-[#3c251e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#9E7649]"></div>
+                        <span className="ml-2 text-[10px] text-[#E8DCCF]/80 uppercase font-bold">
+                          {editingMember.deviceLimitEnabled ? "Activado" : "Desactivado"}
+                        </span>
+                      </label>
+                    </div>
+
+                    <p className="text-[11px] text-[#E8DCCF]/65 leading-relaxed">
+                      Si está activado, el usuario solo podrá iniciar sesión desde los dispositivos agregados y validados a continuación.
+                    </p>
+
+                    {editingMember.deviceLimitEnabled && (
+                      <div className="space-y-4">
+                        {/* List of registered devices */}
+                        <div className="space-y-2">
+                          <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider">Dispositivos Autorizados</p>
+                          {(!editingMember.authorizedDevices || editingMember.authorizedDevices.length === 0) ? (
+                            <div className="bg-[#1C0F0A] rounded-lg p-4 text-center border border-[#9E7649]/10">
+                              <p className="text-xs text-[#E8DCCF]/40 italic">No hay dispositivos registrados. El usuario no podrá iniciar sesión.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {editingMember.authorizedDevices.map((dev: any, i: number) => (
+                                <div key={i} className="flex items-center justify-between bg-[#1C0F0A] border border-[#9E7649]/20 p-2.5 rounded-lg">
+                                  <div className="flex items-center gap-2.5">
+                                    {dev.type === 'Móvil' ? (
+                                      <Smartphone className="text-[#9E7649]" size={16} />
+                                    ) : (
+                                      <Monitor className="text-[#9E7649]" size={16} />
+                                    )}
+                                    <div>
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="text-xs text-white font-bold">{dev.name}</p>
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-[#401F12] text-[#E8DCCF]/90 rounded uppercase font-semibold">
+                                          {dev.type}
+                                        </span>
+                                      </div>
+                                      <p className="text-[10px] text-[#E8DCCF]/50 font-mono">Código: {dev.token}</p>
+                                    </div>
+                                  </div>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const updatedDevs = (editingMember.authorizedDevices || []).filter((_: any, idx: number) => idx !== i);
+                                      setEditingMember({ ...editingMember, authorizedDevices: updatedDevs });
+                                    }}
+                                    className="p-1 px-2 text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500/30 rounded border border-red-500/20 text-[10px] font-bold transition-all uppercase"
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Add Device Form */}
+                        <div className="bg-[#1C0F0A] rounded-lg p-3 border border-[#9E7649]/20 space-y-3">
+                          <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider">Autorizar Nuevo Dispositivo</p>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Código de Dispositivo</label>
+                              <input 
+                                type="text"
+                                value={newDeviceToken}
+                                onChange={(e) => setNewDeviceToken(e.target.value.toUpperCase())}
+                                placeholder="Ej: DVC-A7K"
+                                className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-[#9E7649]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Nombre / Identificación</label>
+                              <input 
+                                type="text"
+                                value={newDeviceName}
+                                onChange={(e) => setNewDeviceName(e.target.value)}
+                                placeholder="Ej: Laptop Oficina"
+                                className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white focus:outline-none focus:border-[#9E7649]"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2.5 pt-1">
+                            <div className="flex items-center gap-3">
+                              <span className="text-[9px] text-[#9E7649] uppercase font-bold">Tipo:</span>
+                              <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-1 cursor-pointer text-[10px] text-[#E8DCCF]">
+                                  <input 
+                                    type="radio" 
+                                    checked={newDeviceType === 'PC'} 
+                                    onChange={() => setNewDeviceType('PC')}
+                                    className="accent-[#9E7649]"
+                                  />
+                                  <span>PC / Laptop</span>
+                                </label>
+                                <label className="flex items-center gap-1 cursor-pointer text-[10px] text-[#E8DCCF]">
+                                  <input 
+                                    type="radio" 
+                                    checked={newDeviceType === 'Móvil'} 
+                                    onChange={() => setNewDeviceType('Móvil')}
+                                    className="accent-[#9E7649]"
+                                  />
+                                  <span>Móvil / Tablet</span>
+                                </label>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const trimmedToken = newDeviceToken.trim().toUpperCase();
+                                const trimmedName = newDeviceName.trim();
+                                
+                                if (!trimmedToken || !trimmedName) {
+                                  showAlert('Por favor, ingresa el código y nombre del dispositivo.', 'error');
+                                  return;
+                                }
+
+                                if (editingMember.authorizedDevices?.some((d: any) => d.token.toUpperCase() === trimmedToken)) {
+                                  showAlert('Este código de dispositivo ya está registrado.', 'error');
+                                  return;
+                                }
+
+                                const newDevice = {
+                                  token: trimmedToken,
+                                  name: trimmedName,
+                                  type: newDeviceType,
+                                  addedAt: new Date().toLocaleDateString('es-ES')
+                                };
+
+                                const updatedDevices = [...(editingMember.authorizedDevices || []), newDevice];
+                                setEditingMember({ ...editingMember, authorizedDevices: updatedDevices });
+                                
+                                // Reset inputs
+                                setNewDeviceToken('');
+                                setNewDeviceName('');
+                              }}
+                              className="px-3 py-1.5 bg-[#9E7649] hover:bg-[#85603A] text-white font-bold text-[10px] rounded uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                            >
+                              <Plus size={12} />
+                              Registrar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {['Coordinador', 'Coordinador de programación'].includes(editingMember.role) && (
                     <div>
                       <label className="block text-xs text-orange-400 mb-2 uppercase font-bold">Permisos de Coordinador (Secciones autorizadas)</label>
@@ -1155,7 +1323,9 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                       coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
                       tools: editingMember.tools || [],
                       habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
-                      habitualProgramsDays: editingMember.habitualProgramsDays || {}
+                      habitualProgramsDays: editingMember.habitualProgramsDays || {},
+                      deviceLimitEnabled: editingMember.deviceLimitEnabled,
+                      authorizedDevices: editingMember.authorizedDevices
                     } : u);
                     
                     // If user doesn't exist, create it
@@ -1174,7 +1344,9 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                         coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
                         tools: editingMember.tools || [],
                         habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
-                        habitualProgramsDays: editingMember.habitualProgramsDays || {}
+                        habitualProgramsDays: editingMember.habitualProgramsDays || {},
+                        deviceLimitEnabled: editingMember.deviceLimitEnabled,
+                        authorizedDevices: editingMember.authorizedDevices
                       });
                     }
 

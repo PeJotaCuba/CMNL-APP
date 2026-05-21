@@ -58,8 +58,20 @@ const AppContent: React.FC = () => {
       
       const isSensitiveView = currentView === AppView.APP_MUSICA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_EQUIPO;
 
-      // Trigger if dirty, in sensitive view, or logging out
-      if ((isDirty || isSensitiveView || isLogout) && !isExcluded && isActiveRole) {
+      // Check if backup is snoozed
+      let isSnoozed = false;
+      if (currentUser) {
+          const snoozedUntilStr = localStorage.getItem(`backup_snoozed_until_${currentUser.username}`);
+          if (snoozedUntilStr) {
+              const snoozedUntil = parseInt(snoozedUntilStr, 10);
+              if (Date.now() < snoozedUntil) {
+                  isSnoozed = true;
+              }
+          }
+      }
+
+      // Trigger if dirty, in sensitive view, or logging out, AND NOT SNOOZED
+      if ((isDirty || isSensitiveView || isLogout) && !isExcluded && isActiveRole && !isSnoozed) {
           pendingNavigation.current = callback;
           setIsLogoutTrigger(isLogout);
           setShowBackupDialog(true);
@@ -156,6 +168,13 @@ const AppContent: React.FC = () => {
 
           // Update last backup timestamp
           localStorage.setItem(`last_backup_${username}`, new Date().getTime().toString());
+
+          // Automatically snooze the reminder for 24 hours, or keep existing snooze if it's longer
+          const existingSnoozeStr = localStorage.getItem(`backup_snoozed_until_${username}`);
+          const previousSnooze = existingSnoozeStr ? parseInt(existingSnoozeStr, 10) : 0;
+          const twentyFourHoursFromNow = Date.now() + 24 * 60 * 60 * 1000;
+          const newSnooze = Math.max(previousSnooze, twentyFourHoursFromNow);
+          localStorage.setItem(`backup_snoozed_until_${username}`, newSnooze.toString());
       }
 
       setIsDirty(false);
@@ -237,16 +256,22 @@ const AppContent: React.FC = () => {
 
   // Update Reminder Check
   useEffect(() => {
-    const lastSyncStr = localStorage.getItem('last_sync_time');
-    if (lastSyncStr) {
-      const lastSync = parseInt(lastSyncStr, 10);
-      const now = Date.now();
-      const fortyEightHours = 48 * 60 * 60 * 1000;
-      if (now - lastSync > fortyEightHours) {
-        setShowUpdateReminder(true);
+    if (currentUser) {
+      const lastSyncStr = localStorage.getItem('last_sync_time');
+      if (lastSyncStr) {
+        const lastSync = parseInt(lastSyncStr, 10);
+        const now = Date.now();
+        const fortyEightHours = 48 * 60 * 60 * 1000;
+        if (now - lastSync > fortyEightHours) {
+          const snoozedUntilStr = localStorage.getItem(`update_snoozed_until_${currentUser.username}`);
+          const snoozedUntil = snoozedUntilStr ? parseInt(snoozedUntilStr, 10) : 0;
+          if (now >= snoozedUntil) {
+            setShowUpdateReminder(true);
+          }
+        }
       }
     }
-  }, []);
+  }, [currentUser]);
 
   // 48-Hour Backup Reminder Effect
   useEffect(() => {
@@ -788,6 +813,16 @@ const AppContent: React.FC = () => {
                   
                   localStorage.setItem('last_sync_time', Date.now().toString());
 
+                  // Automatically snooze the update reminder for 24 hours, or keep existing snooze if it's longer
+                  if (currentUser) {
+                      const username = currentUser.username;
+                      const existingSnoozeStr = localStorage.getItem(`update_snoozed_until_${username}`);
+                      const previousSnooze = existingSnoozeStr ? parseInt(existingSnoozeStr, 10) : 0;
+                      const twentyFourHoursFromNow = Date.now() + 24 * 60 * 60 * 1000;
+                      const newSnooze = Math.max(previousSnooze, twentyFourHoursFromNow);
+                      localStorage.setItem(`update_snoozed_until_${username}`, newSnooze.toString());
+                  }
+
                   // Only set the modal state, the component will handle the acceptance and reload
                   setUpdateDetails({ show: true, content: detailsContent });
               } catch (error) {
@@ -1009,6 +1044,17 @@ const AppContent: React.FC = () => {
               }
           }}
           onBackup={handleBackup}
+          onSnooze={(hours) => {
+              if (currentUser) {
+                  const snoozeUntil = Date.now() + hours * 60 * 60 * 1000;
+                  localStorage.setItem(`backup_snoozed_until_${currentUser.username}`, snoozeUntil.toString());
+              }
+              setShowBackupDialog(false);
+              if (pendingNavigation.current) {
+                  pendingNavigation.current();
+                  pendingNavigation.current = null;
+              }
+          }}
           isLogoutTrigger={isLogoutTrigger}
         />
 
@@ -1051,6 +1097,13 @@ const AppContent: React.FC = () => {
             onUpdate={() => {
                 setShowUpdateReminder(false);
                 handleCloudSync();
+            }}
+            onSnooze={(hours) => {
+                if (currentUser) {
+                    const snoozeUntil = Date.now() + hours * 60 * 60 * 1000;
+                    localStorage.setItem(`update_snoozed_until_${currentUser.username}`, snoozeUntil.toString());
+                }
+                setShowUpdateReminder(false);
             }}
         />
 

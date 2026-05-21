@@ -5,7 +5,7 @@ import { formatDigitalSignatureForDocuments } from "../../../utils/signatureUtil
 const pdfjs = pdfjsLib;
 
 if (pdfjs.GlobalWorkerOptions) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.5.207/pdf.worker.min.js`;
 } else {
     console.warn("PDF.js GlobalWorkerOptions no encontrado, la lectura de PDF podría fallar.");
 }
@@ -117,10 +117,31 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
+            const items = textContent.items as any[];
             
-            const pageText = textContent.items.map((item: any) => item.str).join('\n');
-            
-            fullText += pageText + '\n';
+            // Group text fragments by similar Y coordinate (tolerance of 4 points)
+            const linesMap: { [y: number]: any[] } = {};
+            items.forEach(item => {
+                if (!item.transform) return;
+                const y = Math.round(item.transform[5]);
+                // Search for any existing line key within a tolerance margin
+                const foundYKey = Object.keys(linesMap).find(k => Math.abs(Number(k) - y) < 4);
+                if (foundYKey) {
+                    linesMap[Number(foundYKey)].push(item);
+                } else {
+                    linesMap[y] = [item];
+                }
+            });
+
+            // Sort lines top-to-bottom (descending Y value)
+            const sortedYKeys = Object.keys(linesMap).map(Number).sort((a, b) => b - a);
+            const pageLines = sortedYKeys.map(y => {
+                // Sort items inside the line from left-to-right (ascending X value: transform[4])
+                const lineItems = linesMap[y].sort((a, b) => (a.transform[4] || 0) - (b.transform[4] || 0));
+                return lineItems.map(item => item.str).join(' ');
+            });
+
+            fullText += pageLines.join('\n') + '\n';
         }
 
         return fullText;

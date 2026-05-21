@@ -779,18 +779,25 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       
       // Normalize role for matching
       let searchRole = role;
-      if (normalize(role).includes('realizador de sonido')) searchRole = 'Realizador';
-      else if (normalize(role).includes('director')) searchRole = 'Director';
-      else if (normalize(role).includes('asesor')) searchRole = 'Asesor';
-      else if (normalize(role).includes('locutor')) searchRole = 'Locutor';
+      const normRole = normalize(role);
+      if (normRole.includes('realizador') || normRole.includes('sonido')) searchRole = 'Realizador';
+      else if (normRole.includes('director')) searchRole = 'Director';
+      else if (normRole.includes('asesor')) searchRole = 'Asesor';
+      else if (normRole.includes('locutor')) searchRole = 'Locutor';
 
-      // Find main role rate
-      const roleInfo = program.roles.find(r => normalize(r.role).includes(normalize(searchRole)));
+      // Find main role rate with bidirectional matching
+      const searchRoleNorm = normalize(searchRole);
+      const roleInfo = program.roles.find(r => {
+          const rNorm = normalize(r.role);
+          return rNorm.includes(searchRoleNorm) || searchRoleNorm.includes(rNorm);
+      });
       
       if (roleInfo) {
            const rateObj = roleInfo.rates.find(r => r.level === level);
            if (rateObj) {
-               total += parseFloat(rateObj.amount) || 0;
+               // Robust float parsing stripping any currency symbols like $
+               const cleanAmount = String(rateObj.amount).replace(/[^0-9.]/g, '');
+               total += parseFloat(cleanAmount) || 0;
            }
       }
 
@@ -800,7 +807,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           if (musicRole) {
               const musicRate = musicRole.rates.find(r => r.level === level);
               if (musicRate) {
-                  total += parseFloat(musicRate.amount) || 0;
+                  const cleanMusicAmount = String(musicRate.amount).replace(/[^0-9.]/g, '');
+                  total += parseFloat(cleanMusicAmount) || 0;
               }
           }
       }
