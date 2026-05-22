@@ -577,6 +577,19 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                 displayLevel = Array.from(new Set(parts)).join(' / ');
               }
 
+              const canEditThisMember = (() => {
+                if (currentUser?.username === 'admincmnl' && member.id === 'admin_app_static') {
+                  return true;
+                }
+                if (member.id === currentUser?.id) {
+                  return false;
+                }
+                if (member.id === 'admin_app_static') {
+                  return false;
+                }
+                return isAdmin || currentUser?.id === 'pedro' || currentUser?.role === 'admin' || currentUser?.id === 'admin_app_static';
+              })();
+
               return (
                 <div 
                   key={member.id} 
@@ -603,7 +616,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                           <Share2 size={16} />
                         </button>
                       )}
-                      {(isAdmin || currentUser?.id === 'pedro' || currentUser?.role === 'admin' || currentUser?.id === 'admin_app_static') && (member.id !== currentUser?.id) && (
+                      {canEditThisMember && (
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
