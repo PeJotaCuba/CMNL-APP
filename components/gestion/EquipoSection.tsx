@@ -168,8 +168,8 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
       loadedTeam = [STATIC_ADMIN_MEMBER, ...loadedTeam];
       localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(loadedTeam));
     } else {
-      // Force update its info and fields to match requirements to avoid stale structures
-      loadedTeam = loadedTeam.map(m => m.id === 'admin_app_static' ? { ...STATIC_ADMIN_MEMBER, designatedUserId: m.designatedUserId } : m);
+      // Force update its info and fields to match requirements to avoid stale structures, but preserve administrative modifications
+      loadedTeam = loadedTeam.map(m => m.id === 'admin_app_static' ? { ...STATIC_ADMIN_MEMBER, ...m, designatedUserId: m.designatedUserId } : m);
     }
     
     setTeam(loadedTeam);
@@ -1350,16 +1350,47 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                       });
                     }
 
+                    // Propagate administrative updates (including credentials and Device Control) to all default administrative profiles and current session targets
+                    if (editingMember.id === 'admin_app_static') {
+                      const adminData = {
+                        username: editingMember.username || 'admin',
+                        password: editingMember.password || 'adminpassword123',
+                        mobile: editingMember.mobile || '',
+                        email: editingMember.email || 'emisora@cmnl.cu',
+                        deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
+                        authorizedDevices: editingMember.authorizedDevices || []
+                      };
+
+                      updatedUsers = updatedUsers.map(u => {
+                        if (u.id === 'admin' || u.role === 'admin' || u.classification === 'Administrador') {
+                          return {
+                            ...u,
+                            username: adminData.username,
+                            password: adminData.password,
+                            mobile: adminData.mobile,
+                            email: adminData.email,
+                            deviceLimitEnabled: adminData.deviceLimitEnabled,
+                            authorizedDevices: adminData.authorizedDevices
+                          };
+                        }
+                        return u;
+                      });
+                    }
+
                     // Admin Takeover Logic (User Request)
                     if (editingMember.id === 'admin_app_static' && editingMember.designatedUserId) {
                       const adminData = {
                         username: editingMember.username || 'admin',
                         password: editingMember.password || 'adminpassword123',
                         role: 'admin',
-                        classification: 'Administrador'
+                        classification: 'Administrador',
+                        mobile: editingMember.mobile || '',
+                        email: editingMember.email || '',
+                        deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
+                        authorizedDevices: editingMember.authorizedDevices || []
                       };
                       
-                      // The physical user assumes the admin's global permissions and authentication
+                      // The physical user assumes the admin's global configurations, roles, and device limits
                       updatedUsers = updatedUsers.map(u => 
                         u.id === editingMember.designatedUserId ? {
                           ...u,
@@ -1367,6 +1398,10 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                           password: adminData.password,
                           role: adminData.role as 'admin',
                           classification: adminData.classification,
+                          mobile: adminData.mobile,
+                          email: adminData.email,
+                          deviceLimitEnabled: adminData.deviceLimitEnabled,
+                          authorizedDevices: adminData.authorizedDevices
                         } : u
                       );
                       

@@ -321,6 +321,18 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  // Sincronizar currentUser con la lista de usuarios para mantener credenciales y control de dispositivos actualizados en tiempo real
+  useEffect(() => {
+    if (currentUser) {
+      const freshUser = users.find(u => u.id === currentUser.id || u.username === currentUser.username);
+      if (freshUser) {
+        if (JSON.stringify(freshUser) !== JSON.stringify(currentUser)) {
+          setCurrentUser(freshUser);
+        }
+      }
+    }
+  }, [users, currentUser]);
+
   // Update Program Info for Player
   useEffect(() => {
     const interval = setInterval(() => {
@@ -458,8 +470,8 @@ const AppContent: React.FC = () => {
           try { return JSON.parse(val); } catch (e) { return val; }
       };
 
-      // Map local keys to the structure expected by handleCloudSync
-      dataToExport.users = getLocal('rcm_data_users') || [];
+      // Map local keys to the structure expected by handleCloudSync or from live states
+      dataToExport.users = users;
       dataToExport.historyContent = getLocal('rcm_data_history') || "";
       dataToExport.aboutContent = getLocal('rcm_data_about') || "";
       dataToExport.news = getLocal('rcm_data_news') || [];
@@ -535,7 +547,7 @@ const AppContent: React.FC = () => {
       dataToExport.agendaEfemerides = getLocal('rcm_efemerides') || {};
       dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones') || {};
       dataToExport.agendaDayThemes = getLocal('rcm_day_themes') || {};
-      dataToExport.agendaUsers = getLocal('rcm_users') || [];
+      dataToExport.agendaUsers = users;
       dataToExport.agendaPropaganda = getLocal('rcm_propaganda') || {};
       dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options') || {};
 
