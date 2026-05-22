@@ -487,8 +487,14 @@ const WorkerHome: React.FC<Props> = ({
                  </div>
                  <div>
                     <p className="text-[10px] text-stone-400 uppercase tracking-wide">Usuario conectado</p>
-                    <p className="text-sm text-[#FFF8DC] font-medium">{currentUser?.name}</p>
-                    <p className="text-xs text-[#CD853F]">{currentUser?.classification || 'Trabajador'}</p>
+                    {currentUser?.username === 'admincmnl' ? (
+                       <p className="text-sm text-[#FFF8DC] font-medium">Administrador Global</p>
+                    ) : (
+                       <>
+                          <p className="text-sm text-[#FFF8DC] font-medium">{currentUser?.name}</p>
+                          <p className="text-xs text-[#CD853F]">{currentUser?.role === 'admin' ? 'Administrador' : (currentUser?.classification || 'Trabajador')}</p>
+                       </>
+                    )}
                  </div>
               </div>
               <div className="flex gap-2">

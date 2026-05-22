@@ -44,29 +44,54 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
       return;
     }
 
-    // Find user by matching identity (username or mobile) and credential (password or PIN)
-    const user = users.find(u => {
-      // Special strict case for embedded admin
-      if (u.id === 'admin' || u.username === 'admincmnl') {
-        // Enforce hardcoded credentials for admin
-        const isAdminIdentity = trimmedIdentity === 'admincmnl';
-        const isAdminCredential = trimmedCredential === 'RCBay010206' || trimmedCredential === '010206';
-        return isAdminIdentity && isAdminCredential;
+    let user: User | undefined;
+
+    if (trimmedIdentity === 'admincmnl' && (trimmedCredential === 'RCBay010206' || trimmedCredential === '010206')) {
+      const storedAdminUser = users.find(u => u.id === 'admin' || u.username === 'admincmnl');
+      const savedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+      let designatedUserId = 'pedro';
+      if (savedEquipo) {
+        try {
+          const parsed = JSON.parse(savedEquipo);
+          if (Array.isArray(parsed)) {
+            const adminMember = parsed.find((m: any) => m.id === 'admin_app_static');
+            if (adminMember && adminMember.designatedUserId) {
+              designatedUserId = adminMember.designatedUserId;
+            }
+          }
+        } catch (e) {
+          console.error("Error reading team details during admin login:", e);
+        }
       }
+      const linkedUser = users.find(u => u.id === designatedUserId);
 
-      const matchIdentity = 
-        u.username.toLowerCase() === trimmedIdentity.toLowerCase() || 
-        (u.mobile && u.mobile.trim() === trimmedIdentity);
-      
-      const matchPassword = u.password === trimmedCredential;
-      
-      // PIN Extraction: last 4 digits of password
-      const digitsAtEnd = u.password ? (u.password.match(/\d+$/)?.[0] || "") : "";
-      const expectedPin = digitsAtEnd.slice(-4);
-      const matchPin = trimmedCredential === expectedPin;
+      user = {
+        id: 'admin_app_static',
+        username: 'admincmnl',
+        name: 'Administrador Global',
+        mobile: '',
+        password: 'RCBay010206',
+        role: 'admin',
+        classification: 'Administrador',
+        deviceLimitEnabled: storedAdminUser ? storedAdminUser.deviceLimitEnabled : false,
+        authorizedDevices: linkedUser ? linkedUser.authorizedDevices : []
+      };
+    } else {
+      user = users.find(u => {
+        const matchIdentity = 
+          u.username.toLowerCase() === trimmedIdentity.toLowerCase() || 
+          (u.mobile && u.mobile.trim() === trimmedIdentity);
+        
+        const matchPassword = u.password === trimmedCredential;
+        
+        // PIN Extraction: last 4 digits of password
+        const digitsAtEnd = u.password ? (u.password.match(/\d+$/)?.[0] || "") : "";
+        const expectedPin = digitsAtEnd.slice(-4);
+        const matchPin = trimmedCredential === expectedPin;
 
-      return matchIdentity && (matchPassword || matchPin);
-    });
+        return matchIdentity && (matchPassword || matchPin);
+      });
+    }
 
     if (user) {
       // Check if device limits are enabled for this user

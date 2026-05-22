@@ -2,9 +2,9 @@ import { Program, UserProfile, UserRole, EfemeridesData, ConmemoracionesData, Da
 
 export const INITIAL_USERS: UserProfile[] = [
   { 
-    id: 'admin', 
+    id: 'pedro', 
     name: 'Pedro José Reyes Acuña', 
-    username: 'admin', 
+    username: 'pedro', 
     pin: 'RC0026', 
     role: UserRole.ADMIN, 
     phone: '54413935',

@@ -185,7 +185,7 @@ const Settings: React.FC<SettingsProps> = ({ tracks, users, onAddUser, onEditUse
   };
 
   const canDelete = (u: User) => {
-      if (u.username === 'admin') return false;
+      if (u.username === 'pedro' || u.username === 'admincmnl') return false;
       if (currentUser && u.username === currentUser.username) return false;
       return true;
   };

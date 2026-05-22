@@ -143,11 +143,17 @@ const AdminDashboard: React.FC<Props> = ({
                </div>
             )}
             <div className="text-right ml-1">
-               <p className="text-[10px] font-bold text-white leading-none">{currentUser?.name || 'Admin'}</p>
-               <p className="text-[8px] text-[#9E7649] flex items-center justify-end gap-1 mt-0.5">
-                   <span className="w-1 h-1 bg-green-500 rounded-full"></span>
-                   {currentUser?.classification || 'Admin'}
-               </p>
+               {currentUser?.username === 'admincmnl' ? (
+                  <p className="text-[10px] font-bold text-white leading-none">Administrador Global</p>
+               ) : (
+                  <>
+                     <p className="text-[10px] font-bold text-white leading-none">{currentUser?.name || 'Admin'}</p>
+                     <p className="text-[8px] text-[#9E7649] flex items-center justify-end gap-1 mt-0.5">
+                         <span className="w-1 h-1 bg-green-500 rounded-full"></span>
+                         Administrador
+                     </p>
+                  </>
+               )}
             </div>
         </div>
       </header>

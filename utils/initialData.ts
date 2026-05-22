@@ -1,9 +1,9 @@
 export const appData = {
   "users": [
     {
-      "id": "admin",
+      "id": "pedro",
       "name": "Pedro José Reyes Acuña",
-      "username": "admin",
+      "username": "pedro",
       "mobile": "54413935",
       "password": "RadioCiudad0026",
       "role": "admin",

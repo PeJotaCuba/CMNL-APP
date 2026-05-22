@@ -177,16 +177,21 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
   }, []);
 
   useEffect(() => {
-    // Keep admin_app_static details stable and secure on the team roster
+    // Keep admin_app_static info updated with live user credentials and linked user details
     setTeam(prevTeam => prevTeam.map(m => {
       if (m.id === 'admin_app_static') {
+        const linkedUserId = m.designatedUserId || 'pedro';
+        const linkedUser = users.find(u => u.id === linkedUserId) || users.find(u => u.id === 'pedro');
+        const adminRealUser = users.find(u => u.id === 'pedro') || linkedUser;
+        
         return {
           ...m,
-          name: 'Administrador App',
-          mobile: '+53 54321098',
-          email: 'emisora@cmnl.cu',
-          photoUrl: '',
-          info: 'Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.'
+          name: linkedUser && linkedUserId !== 'pedro' ? linkedUser.name : 'Administrador App',
+          mobile: linkedUser?.mobile || m.mobile,
+          email: linkedUser?.email || m.email,
+          deviceLimitEnabled: adminRealUser?.deviceLimitEnabled || false,
+          authorizedDevices: linkedUser?.authorizedDevices || [],
+          info: ''
         };
       }
       return m;
@@ -407,6 +412,9 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
   });
 
   const filteredTeam = sortedTeam.filter(member => {
+    if (member.id === 'admin_app_static' && currentUser?.username !== 'admincmnl') {
+      return false;
+    }
     if (!searchLower) return true;
     const matchName = member.name.toLowerCase().includes(searchLower);
     const matchSpecialty = member.specialty.toLowerCase().includes(searchBase);
@@ -595,15 +603,15 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                           <Share2 size={16} />
                         </button>
                       )}
-                      {(isAdmin || currentUser?.id === 'admin' || currentUser?.role === 'admin' || currentUser?.id === 'admin_app_static') && (
+                      {(isAdmin || currentUser?.id === 'pedro' || currentUser?.role === 'admin' || currentUser?.id === 'admin_app_static') && (member.id !== currentUser?.id) && (
                           <button 
                             onClick={(e) => { 
                               e.stopPropagation(); 
                               // Find corresponding user
                               const isStaticAdmin = member.id === 'admin_app_static';
-                              const linkedUserId = isStaticAdmin ? (member.designatedUserId || 'admin') : member.id;
+                              const linkedUserId = isStaticAdmin ? (member.designatedUserId || 'pedro') : member.id;
                               const linkedUser = users.find(u => u.id === linkedUserId) || users.find(u => u.id === member.id);
-                              const adminUser = users.find(u => u.id === 'admin');
+                              const adminUser = users.find(u => u.id === 'pedro');
                               
                               setEditingMember({
                                 ...member,
@@ -625,8 +633,8 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                             <Edit2 size={16} />
                           </button>
                         )}
-                      {member.id !== 'admin_app_static' && (() => {
-                        const canEdit = currentUser?.id === 'admin' || (member.id !== 'admin_app_static' && member.id !== currentUser?.id);
+                      {member.id !== 'admin_app_static' && member.id !== currentUser?.id && (() => {
+                        const canEdit = currentUser?.id === 'admin_app_static' || currentUser?.role === 'admin' || (member.id !== 'admin_app_static' && member.id !== currentUser?.id);
                         return canEdit && (
                           <button 
                             onClick={(e) => { 
@@ -1351,19 +1359,17 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                     }
 
                     const isStaticAdmin = editingMember.id === 'admin_app_static';
-                    const prevDesignatedUserId = originalMember?.designatedUserId;
-                    const newDesignatedUserId = editingMember.designatedUserId;
-                    const adminLinkedUser = isStaticAdmin && newDesignatedUserId ? cleanUsers.find(u => u.id === newDesignatedUserId) : null;
+                    const adminLinkedUser = isStaticAdmin ? cleanUsers.find(u => u.id === editingMember.designatedUserId) : null;
 
                     // 1. Update Team Member
                     const updatedTeam = cleanTeam.map(m => m.id === editingMember.id ? {
                       id: editingMember.id,
-                      name: 'Administrador App',
+                      name: editingMember.name,
                       specialty: isStaticAdmin ? 'Soporte, Redacción y Criptografía' : cleanJoined(editingMember.specialty || ''),
                       level: isStaticAdmin ? 'Administración Global' : cleanJoined(editingMember.level || ''),
-                      info: isStaticAdmin ? 'Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.' : (editingMember.info || ''),
-                      email: 'emisora@cmnl.cu',
-                      mobile: '+53 54321098',
+                      info: isStaticAdmin ? '' : (editingMember.info || ''),
+                      email: isStaticAdmin ? (adminLinkedUser?.email || '') : (editingMember.email || ''),
+                      mobile: isStaticAdmin ? (adminLinkedUser?.mobile || '') : (editingMember.mobile || ''),
                       photoUrl: editingMember.photoUrl || '',
                       habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                       habitualProgramsDays: editingMember.habitualProgramsDays || {},
@@ -1373,77 +1379,37 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                     saveTeam(updatedTeam);
 
                     // 2. Update User
-                    let updatedUsers = [...cleanUsers];
+                    const mappedUserId = editingMember.id === 'admin_app_static' ? 'admin' : editingMember.id;
 
-                    if (isStaticAdmin) {
-                      // CASE A: We are editing the App Global Administrator
-                      updatedUsers = updatedUsers.map(u => {
-                        // A1: Technical static admin user (keeps its own access details completely independent and static)
-                        if (u.id === 'admin') {
-                          return {
-                            ...u,
-                            name: 'Administrador App',
-                            username: 'admincmnl',
-                            password: 'RCBay010206',
-                            mobile: '+53 54321098',
-                            email: 'emisora@cmnl.cu',
-                            role: 'admin',
-                            classification: 'Administrador',
-                            deviceLimitEnabled: false,
-                            authorizedDevices: []
-                          };
-                        }
-
-                        // A2: The newly linked physical user (inherits admin roles, but keeping original credentials/mobile/email/devices untouched!)
-                        if (newDesignatedUserId && u.id === newDesignatedUserId) {
-                          return {
-                            ...u,
-                            role: 'admin',
-                            classification: 'Administrador'
-                          };
-                        }
-
-                        // A3: Revert previously linked user back to their normal physical staff classification and role
-                        if (prevDesignatedUserId && prevDesignatedUserId !== newDesignatedUserId && u.id === prevDesignatedUserId) {
-                          const prevMember = cleanTeam.find(m => m.id === prevDesignatedUserId);
-                          const specialtyRole = prevMember?.specialty ? prevMember.specialty.split('/')[0].trim() : 'Usuario';
-                          const calculatedRole = specialtyRole.toLowerCase().includes('coordinador') ? 'coordinator' : 'worker';
-                          
-                          return {
-                            ...u,
-                            role: calculatedRole,
-                            classification: specialtyRole === 'Administrador' ? 'Usuario' : specialtyRole
-                          };
-                        }
-
-                        return u;
-                      });
-
-                      // Assert that the 'admin' user always exists
-                      if (!updatedUsers.some(u => u.id === 'admin')) {
-                        updatedUsers.push({
-                          id: 'admin',
-                          name: 'Administrador App',
-                          username: 'admincmnl',
-                          password: 'RCBay010206',
-                          mobile: '+53 54321098',
-                          email: 'emisora@cmnl.cu',
-                          role: 'admin',
-                          classification: 'Administrador',
-                          deviceLimitEnabled: false,
-                          authorizedDevices: []
-                        });
-                      }
-                    } else {
-                      // CASE B: Edit or creation of a standard physical team member
-                      updatedUsers = updatedUsers.map(u => u.id === editingMember.id ? {
-                        ...u,
+                    let updatedUsers = cleanUsers.map(u => u.id === mappedUserId ? {
+                      ...u,
+                      name: editingMember.name,
+                      username: mappedUserId === 'admin' ? 'admincmnl' : (editingMember.username || u.username),
+                      mobile: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.mobile : (editingMember.mobile || u.mobile || ''),
+                      email: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.email : (editingMember.email || u.email || ''),
+                      password: mappedUserId === 'admin' ? 'RCBay010206' : (editingMember.password || u.password),
+                      classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || u.classification || 'Usuario'),
+                      specialty: cleanJoined(editingMember.specialty || ''),
+                      contracts: editingMember.contracts || [],
+                      role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
+                      coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
+                      tools: editingMember.tools || [],
+                      habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
+                      habitualProgramsDays: editingMember.habitualProgramsDays || {},
+                      deviceLimitEnabled: editingMember.deviceLimitEnabled,
+                      authorizedDevices: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.authorizedDevices : (editingMember.authorizedDevices || [])
+                    } : u);
+                    
+                    // If user doesn't exist, create it
+                    if (!cleanUsers.some(u => u.id === mappedUserId)) {
+                      updatedUsers.push({
+                        id: mappedUserId,
                         name: editingMember.name,
-                        username: editingMember.username || u.username,
-                        mobile: editingMember.mobile || u.mobile || '',
-                        email: editingMember.email || u.email || '',
-                        password: editingMember.password || u.password,
-                        classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || u.classification || 'Usuario'),
+                        username: mappedUserId === 'admin' ? 'admincmnl' : (editingMember.username || mappedUserId),
+                        mobile: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.mobile : '',
+                        email: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.email : '',
+                        password: mappedUserId === 'admin' ? 'RCBay010206' : (editingMember.password || '1234'),
+                        classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || 'Usuario'),
                         specialty: cleanJoined(editingMember.specialty || ''),
                         contracts: editingMember.contracts || [],
                         role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
@@ -1452,29 +1418,19 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                         habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                         habitualProgramsDays: editingMember.habitualProgramsDays || {},
                         deviceLimitEnabled: editingMember.deviceLimitEnabled,
-                        authorizedDevices: editingMember.authorizedDevices || []
-                      } : u);
+                        authorizedDevices: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.authorizedDevices : (editingMember.authorizedDevices || [])
+                      });
+                    }
 
-                      if (!cleanUsers.some(u => u.id === editingMember.id)) {
-                        updatedUsers.push({
-                          id: editingMember.id,
-                          name: editingMember.name,
-                          username: editingMember.username || editingMember.id,
-                          mobile: editingMember.mobile || '',
-                          email: editingMember.email || '',
-                          password: editingMember.password || '1234',
-                          classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || 'Usuario'),
-                          specialty: cleanJoined(editingMember.specialty || ''),
-                          contracts: editingMember.contracts || [],
-                          role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
-                          coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
-                          tools: editingMember.tools || [],
-                          habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
-                          habitualProgramsDays: editingMember.habitualProgramsDays || {},
-                          deviceLimitEnabled: editingMember.deviceLimitEnabled,
-                          authorizedDevices: editingMember.authorizedDevices || []
-                        });
-                      }
+                    // Grant Administrator rights to the linked physical user, keeping their own specialties, username, password, email, and mobile intact.
+                    if (editingMember.id === 'admin_app_static' && editingMember.designatedUserId) {
+                      updatedUsers = updatedUsers.map(u => 
+                        u.id === editingMember.designatedUserId ? {
+                          ...u,
+                          role: 'admin',
+                          classification: 'Administrador',
+                        } : u
+                      );
                     }
                     
                     setUsers(updatedUsers);

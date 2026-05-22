@@ -146,10 +146,10 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, users: m
         });
       }
 
-      // IMPORTANTE: Forzar actualización del PIN del Admin desde código (INITIAL_USERS)
-      const codeAdmin = INITIAL_USERS.find(u => u.id === 'admin');
+      // IMPORTANTE: Forzar actualización del PIN del Administrador (pedro) desde código (INITIAL_USERS)
+      const codeAdmin = INITIAL_USERS.find(u => u.id === 'pedro');
       if (codeAdmin) {
-        const idx = currentUsers.findIndex(u => u.id === 'admin' || u.username === 'admin');
+        const idx = currentUsers.findIndex(u => u.id === 'pedro' || u.username === 'pedro');
         if (idx !== -1) {
           currentUsers[idx] = { ...currentUsers[idx], pin: codeAdmin.pin, role: UserRole.ADMIN };
         } else {
