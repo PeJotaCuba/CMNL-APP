@@ -40,6 +40,13 @@ interface EquipoSectionProps {
 
 const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
 
+const isStationDirectorSpecialty = (spStr?: string) => {
+  const sp = (spStr || '').toLowerCase();
+  const hasDir = sp.includes('director') || sp.includes('directora');
+  const hasEmisora = sp.includes('emisora') || sp.includes('la emisora');
+  return hasDir && hasEmisora;
+};
+
 const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, fichas, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
 
@@ -869,9 +876,12 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                           </div>
                           {editingMember.id !== 'admin_app_static' && (
                             <div>
-                              <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Fecha de Contrato {idx + 1}</label>
+                              <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">
+                                {isStationDirectorSpecialty(specs[idx]) ? "Número de Resolución de Nombramiento" : `Fecha de Contrato ${idx + 1}`}
+                              </label>
                               <input 
-                                type="date"
+                                type={isStationDirectorSpecialty(specs[idx]) ? "text" : "date"}
+                                placeholder={isStationDirectorSpecialty(specs[idx]) ? "Ej: Res. 120/2026" : ""}
                                 value={cnts[idx] || ''}
                                 onChange={e => {
                                   const newCnts = [cnts[0] || '', cnts[1] || '', cnts[2] || ''];

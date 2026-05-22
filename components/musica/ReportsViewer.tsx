@@ -50,12 +50,14 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             return;
         }
 
+        const effectivePass = (cert && cert.originalPassword) ? cert.originalPassword : storedPass;
+
         if (cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
             alert("Su certificado ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
             return;
         }
 
-        if (signPass !== storedPass) {
+        if (signPass !== effectivePass) {
             alert("Contraseña original incorrecta o equipo no certificado.");
             return;
         }

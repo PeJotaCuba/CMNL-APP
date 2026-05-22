@@ -156,6 +156,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
 
     const storedPass = getStoredPassword(currentUser.id);
     const cert = getStoredCertificate(currentUser.id);
+    const effectivePass = (cert && cert.originalPassword) ? cert.originalPassword : storedPass;
 
     if (cert && cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
         alert("Su certificado de firma digital ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
@@ -200,7 +201,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
         }
     }
 
-    if (signPass !== storedPass) {
+    if (signPass !== effectivePass) {
         alert("Contraseña de firma incorrecta.");
         return;
     }

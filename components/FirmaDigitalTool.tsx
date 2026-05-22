@@ -30,6 +30,11 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const userId = user?.id || user?.username;
   const userTeamMember = equipoData.find((m: any) => m.id === userId || m.name?.toLowerCase() === (user?.fullName || user?.name || '').toLowerCase());
   const isDirectorEmisora = isStationDirector(user?.classification, user?.specialty || userTeamMember?.specialty);
+  const isGlobalAdmin = user?.username === 'admincmnl';
+
+  const currentUserAuth = React.useMemo(() => {
+    return users.find((u: any) => u.id === userId || u.username === user?.username) || null;
+  }, [userId, user, users]);
 
   const abstractAdminTeamMember = equipoData.find((m: any) => m.id === 'admin_app_static');
   
@@ -101,28 +106,88 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     if (nameToUse && (!formData.fullName || formData.fullName === '' || formData.fullName === nameToUse)) {
       setFormData(prev => {
         const currentCi = prev.ci || userTeamMember?.ci || '';
+        const date1 = userTeamMember?.contracts?.[0] || userTeamMember?.contract1 || user?.contracts?.[0] || user?.contract1 || '';
+        const date2 = userTeamMember?.contracts?.[1] || userTeamMember?.contract2 || user?.contracts?.[1] || user?.contract2 || '';
+        const specs = userTeamMember?.specialty ? userTeamMember.specialty.split('/').map((s: string) => s.trim()) : [];
+        const isSpec1Dir = specs[0] ? isStationDirector('', specs[0]) : isDirectorEmisora;
+        const isSpec2Dir = specs[1] ? isStationDirector('', specs[1]) : false;
         return { 
           ...prev, 
           fullName: nameToUse,
           ci: currentCi,
-          contract1: currentCi.length === 11 && userTeamMember?.contracts?.[0] ? calcContract(currentCi, userTeamMember.contracts[0]) : '',
-          contract2: currentCi.length === 11 && userTeamMember?.contracts?.[1] ? calcContract(currentCi, userTeamMember.contracts[1]) : ''
+          contract1: currentCi.length === 11 && date1 ? calcContract(currentCi, date1, isSpec1Dir) : '',
+          contract2: currentCi.length === 11 && date2 ? calcContract(currentCi, date2, isSpec2Dir) : ''
         };
       });
     }
   }, [user, userTeamMember]);
 
-  const calcContract = (ci: string, dateStr: string) => {
+  const calcContract = (ci: string, dateStr: string, isDirector: boolean = false) => {
     if (!ci || ci.length < 11 || !dateStr) return '';
+    if (isDirector) {
+      return dateStr;
+    }
     const last3 = ci.slice(-3);
-    // dateStr format: YYYY-MM-DD
-    const parts = dateStr.split('-');
+
+    // If it is already a contract number (e.g. 421-092601), return it as is
+    if (/^\d{3}-\d{6}$/.test(dateStr)) {
+      return dateStr;
+    }
+
+    // Split by dash (-), slash (/), or space
+    const parts = dateStr.trim().split(/[-/\s]+/);
     if (parts.length === 3) {
-      const yy = parts[0].slice(-2);
-      const mm = parts[1];
-      const dd = parts[2];
+      let yy = '';
+      let mm = '';
+      let dd = '';
+
+      const p0 = parts[0];
+      const p1 = parts[1];
+      const p2 = parts[2];
+
+      // Format is YYYY-MM-DD (e.g. 2026-09-01) or YYYY-M-D
+      if (p0.length === 4 || parseInt(p0, 10) > 100) {
+        yy = p0.slice(-2);
+        mm = p1.padStart(2, '0');
+        dd = p2.padStart(2, '0');
+      } 
+      // Format is DD-MM-YYYY (e.g. 01-09-2026) or D-M-YYYY
+      else if (p2.length === 4 || parseInt(p2, 10) > 100) {
+        yy = p2.slice(-2);
+        mm = p1.padStart(2, '0');
+        dd = p0.padStart(2, '0');
+      } 
+      // Format uses 2-digit years like DD-MM-YY (e.g. 01-09-26) or YY-MM-DD (e.g. 26-09-01)
+      else {
+        const num0 = parseInt(p0, 10);
+        const num2 = parseInt(p2, 10);
+        if (num0 > 31 && num2 <= 31) {
+          yy = p0.slice(-2);
+          mm = p1.padStart(2, '0');
+          dd = p2.padStart(2, '0');
+        } else {
+          yy = p2.slice(-2);
+          mm = p1.padStart(2, '0');
+          dd = p0.padStart(2, '0');
+        }
+      }
+
       return `${last3}-${mm}${yy}${dd}`;
     }
+
+    // Check if we can parse it as a standard native JS date
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        const yy = d.getFullYear().toString().slice(-2);
+        const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+        const dd = d.getDate().toString().padStart(2, '0');
+        return `${last3}-${mm}${yy}${dd}`;
+      }
+    } catch (e) {
+      // ignore
+    }
+
     return dateStr; // fallback
   };
 
@@ -143,14 +208,19 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     }
     setCiWarning(warning);
 
+    const date1 = userTeamMember?.contracts?.[0] || userTeamMember?.contract1 || user?.contracts?.[0] || user?.contract1 || '';
+    const date2 = userTeamMember?.contracts?.[1] || userTeamMember?.contract2 || user?.contracts?.[1] || user?.contract2 || '';
+    const specs = userTeamMember?.specialty ? userTeamMember.specialty.split('/').map((s: string) => s.trim()) : [];
+    const isSpec1Dir = specs[0] ? isStationDirector('', specs[0]) : isDirectorEmisora;
+    const isSpec2Dir = specs[1] ? isStationDirector('', specs[1]) : false;
+
     setFormData(prev => {
       const updated = { ...prev, ci: rawVal };
       if (rawVal.length === 11) {
-        if (userTeamMember?.contracts?.[0]) updated.contract1 = calcContract(rawVal, userTeamMember.contracts[0]);
-        if (userTeamMember?.contracts?.[1]) updated.contract2 = calcContract(rawVal, userTeamMember.contracts[1]);
+        if (date1) updated.contract1 = calcContract(rawVal, date1, isSpec1Dir);
+        if (date2) updated.contract2 = calcContract(rawVal, date2, isSpec2Dir);
       } else {
-        // Clear them if ci length is not 11, or should we reset to the raw date? The requirement says:
-        // "el numero de contrato se genera una vez que el usuario coloca el ultimo numero de su carné de identidad."
+        // Clear them if ci length is not 11
         updated.contract1 = '';
         updated.contract2 = '';
       }
@@ -164,6 +234,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   // Loaded Certificate visualization & Password Update
   const [loadedCert, setLoadedCert] = useState<any>(null);
   const [passForm, setPassForm] = useState({ old: '', new: '', confirm: '' });
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [workerRevealTimer, setWorkerRevealTimer] = useState<number>(0);
+  const [workerTempPass, setWorkerTempPass] = useState<string>('');
 
   // Director review states
   const [signingCert, setSigningCert] = useState<any>(null);
@@ -197,10 +270,27 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     const isExpired = dbCert && dbCert.validUntil && new Date(dbCert.validUntil).getTime() < Date.now();
     
     if (dbCert && !isExpired) {
+      const localCertStr = localStorage.getItem(`cmnl_cert_${userId}`);
+      let newlyAutoLoaded = false;
+      if (!localCertStr) {
+        newlyAutoLoaded = true;
+      } else {
+        try {
+          const parsed = JSON.parse(localCertStr);
+          if (parsed.issueDate !== dbCert.issueDate) {
+            newlyAutoLoaded = true;
+          }
+        } catch (e) {
+          newlyAutoLoaded = true;
+        }
+      }
       setCertStatus('active');
       setLoadedCert(dbCert);
       localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(dbCert));
       localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+      if (newlyAutoLoaded) {
+        localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userId}`);
+      }
     } else {
       // If expired or missing, clean up and allow re-request
       if (isExpired) {
@@ -246,6 +336,15 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       setAdminTempPass(''); // Clear it out when hidden
     }
   }, [adminRevealTimer]);
+
+  useEffect(() => {
+    if (workerRevealTimer > 0) {
+      const to = setTimeout(() => setWorkerRevealTimer(prev => prev - 1), 1000);
+      return () => clearTimeout(to);
+    } else {
+      setWorkerTempPass(''); // Clear it out when hidden
+    }
+  }, [workerRevealTimer]);
 
   // --- CERTIFICATE PDF BUILDER DOWNLOADER ---
   const downloadCertificatePDF = (cert: any) => {
@@ -568,6 +667,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         
         localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(certData));
         localStorage.setItem(`cmnl_pass_${userId}`, certData.originalPassword);
+        // Reset local reveal limit as well since we are loading or re-loading a certificate
+        localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userId}`);
         
         setLoadedCert(certData);
         setCertStatus('active');
@@ -614,13 +715,16 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       // Initialize contracts using values from the global team database (member) OR the request data
       const initContracts: Record<string, string> = {};
       const isDir = isStationDirector('', specialties.join(' / ')) || specialties.some((s: string) => isStationDirector('', s));
+      const ci = req.userData?.ci || member?.ci || '';
       if (isDir) {
-        initContracts['Resolución'] = member?.contracts?.[0] || member?.contract1 || req.userData.contract1 || req.contracts?.['Resolución'] || '';
+        const rawContract = req.userData?.contract1 || member?.contracts?.[0] || member?.contract1 || req.contracts?.['Resolución'] || '';
+        initContracts['Resolución'] = calcContract(ci, rawContract, true);
       } else {
         specialties.forEach((spec: string, idx: number) => {
           const memberContract = member?.contracts?.[idx] || (idx === 0 ? member?.contract1 : (idx === 1 ? member?.contract2 : ''));
-          const reqContract = idx === 0 ? req.userData.contract1 : (idx === 1 ? req.userData.contract2 : req.contracts?.[spec]);
-          initContracts[spec] = memberContract || reqContract || '';
+          const reqContract = idx === 0 ? req.userData?.contract1 : (idx === 1 ? req.userData?.contract2 : req.contracts?.[spec]);
+          const chosen = reqContract || memberContract || '';
+          initContracts[spec] = calcContract(ci, chosen, isStationDirector('', spec));
         });
       }
       setContractNumbers(initContracts);
@@ -963,7 +1067,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       return;
     }
 
-    const directorStoredPass = getStoredPassword(userId);
+    const directorStoredPass = directorCertLocal.originalPassword || getStoredPassword(userId);
     if (directorPass !== directorStoredPass) {
       showAlert("Contraseña de certificado incorrecta. No se pudo firmar.", 'error');
       return;
@@ -1114,15 +1218,6 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <h3 className="text-2xl font-black text-white italic tracking-tight">DATOS DEL CERTIFICADO</h3>
             <p className="text-stone-400 text-xs">Identificación criptográfica activa en este dispositivo</p>
           </div>
-          {!isAdmin && (
-            <button 
-              onClick={() => downloadCertificatePDF(loadedCert)} 
-              className="p-3 bg-blue-500 hover:bg-blue-400 text-white rounded-xl flex items-center gap-2 font-bold text-xs transition-colors shadow-lg"
-              title="Descargar Certificado Completo en PDF"
-            >
-              <Download size={16} /> DESCARGAR PDF REGISTRO
-            </button>
-          )}
         </div>
 
         {isCertExpired && (
@@ -1168,7 +1263,13 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-stone-500 text-[10px] uppercase font-bold">Tomo / Folio</p>
-                <p className="text-white text-sm">{loadedCert.userData.tomo} / {loadedCert.userData.folio}</p>
+                <p className="text-white text-sm font-mono">
+                  {isGlobalAdmin ? (
+                    `${loadedCert.userData.tomo} / ${loadedCert.userData.folio}`
+                  ) : (
+                    <span className="blur-[4px] select-none text-stone-500 font-sans italic opacity-65">DIFFUSE</span>
+                  )}
+                </p>
               </div>
               <div>
                 <p className="text-stone-500 text-[10px] uppercase font-bold">Caduca el</p>
@@ -1286,10 +1387,77 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             ) : (
               <>
                 <h4 className="text-white font-bold flex items-center gap-2 border-b border-white/5 pb-2">
+                  <Lock size={18} className="text-blue-500" /> Contraseña de Firma Encriptada
+                </h4>
+                
+                <div className="space-y-4 pt-2 mb-6 border-b border-white/5 pb-6">
+                  <div className="flex justify-between items-center bg-black/40 border border-white/10 rounded-lg p-3">
+                    <span className="text-stone-400 text-xs uppercase font-bold tracking-widest">Valor Local</span>
+                    <span className="text-blue-400 font-mono text-lg tracking-[0.3em]">
+                      {workerRevealTimer > 0 ? (loadedCert.originalPassword || 'N/A') : '••••••••'}
+                    </span>
+                  </div>
+
+                  {workerRevealTimer > 0 ? (
+                    <p className="text-xs text-blue-400 font-bold text-center animate-pulse">Ocultando en {workerRevealTimer}s...</p>
+                  ) : (
+                    <div className="space-y-3 bg-white/5 p-4 rounded-xl">
+                      <p className="text-[10px] text-stone-400 leading-relaxed text-center">Para revelar su contraseña de firma encriptada, ingrese su contraseña de acceso de usuario completa. Este proceso tiene un límite estricto de seguridad.</p>
+                      <input 
+                        type="password"
+                        placeholder="Contraseña de Acceso Completa"
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm tracking-widest font-mono outline-none focus:border-blue-500"
+                        value={workerTempPass}
+                        onChange={e => setWorkerTempPass(e.target.value)}
+                      />
+                      <button 
+                        onClick={() => {
+                          try {
+                            const actualUserPass = user?.password || currentUserAuth?.password;
+                            if (!actualUserPass) {
+                              showAlert('No se pudo verificar la contraseña del usuario actual de manera segura.', 'error');
+                              return;
+                            }
+                            
+                            let times = [];
+                            try {
+                              const timesRaw = localStorage.getItem(`cmnl_worker_cert_reveal_times_v5_${userId}`);
+                              times = timesRaw ? JSON.parse(timesRaw) : [];
+                            } catch(e) { times = []; }
+                            
+                            times = times.filter((t: number) => Date.now() - t < 24 * 60 * 60 * 1000);
+                            if (times.length >= 3) {
+                              showAlert('Límite excedido: Solo puede revelar la contraseña de firma 3 veces cada 24 horas por motivos de seguridad.', 'error');
+                              return;
+                            }
+                            
+                            if (workerTempPass !== actualUserPass) {
+                              showAlert('Contraseña de acceso de usuario incorrecta.', 'error');
+                              return;
+                            }
+                            
+                            times.push(Date.now());
+                            localStorage.setItem(`cmnl_worker_cert_reveal_times_v5_${userId}`, JSON.stringify(times));
+                            setWorkerRevealTimer(5);
+                            setWorkerTempPass('');
+                          } catch (e: any) {
+                             console.error(e);
+                             showAlert('Error interno al revelar contraseña.', 'error');
+                          }
+                        }}
+                        className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-500 transition-all text-xs uppercase tracking-wider"
+                      >
+                         Revelar por 5 Segundos
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <h4 className="text-white font-bold flex items-center gap-2 border-b border-white/5 pb-2">
                   <Lock size={18} className="text-blue-500" /> Claves de Seguridad Locales
                 </h4>
                 
-                <div className="space-y-4">
+                <div className="space-y-4 pt-2">
                   <div>
                     <label className="block text-[10px] text-stone-500 uppercase tracking-widest mb-1.5 font-bold">Contraseña Actual</label>
                     <input 
@@ -1297,7 +1465,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                       className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm tracking-wider font-mono outline-none focus:border-blue-500"
                       value={passForm.old}
                       onChange={e => setPassForm({...passForm, old: e.target.value})}
-                      placeholder="La suministrada en su .pdf o la actual"
+                      placeholder="La suministrada en su .semanal o la actual"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -1329,7 +1497,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 </div>
 
                 <div className="pt-2">
-                   <p className="text-[9px] text-stone-500 italic leading-relaxed">Nota: Esta actualización de contraseña solo impacta de forma local e individual. Guarde bien su contraseña original o descargue el archivo PDF de registro para respaldar.</p>
+                   <p className="text-[9px] text-stone-500 italic leading-relaxed">Nota: Esta actualización de contraseña solo impacta de forma local e individual. Guarde bien su contraseña original para respaldar su uso.</p>
                 </div>
               </>
             )}
@@ -1459,102 +1627,144 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         {/* VIEW: REGISTRATION REQUEST FORM */}
         {((!isAdmin && certStatus === 'none') || (isAdmin && certStatus === 'none')) && (
           <div className="bg-[#2C1B15] p-8 rounded-3xl border border-white/5 space-y-6 shadow-xl h-fit">
-            <div className="flex items-center gap-3 pb-2 border-b border-white/5">
-              <FileText size={20} className={isAdmin ? "text-blue-500" : "text-amber-500"} />
-              <h3 className="text-base font-bold text-white">
-                {isAdmin ? 'Auto-Generar Certificado de Administrador' : 'Iniciar Solicitud (.semanal)'}
-              </h3>
-            </div>
-            
-            {isAdmin && !physicalAdminUser && (
-              <p className="text-xs text-red-400 bg-red-900/20 p-3 rounded-lg border border-red-500/20 mb-4 font-bold">
-                Requiere vincular la cuenta Admin a un Usuario Físico en "Equipo" antes de continuar.
-              </p>
-            )}
-
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-stone-500 uppercase tracking-wider block">Documento de Identidad (CI)</label>
-                <input 
-                  type="text" placeholder="Número de carnet de identidad" 
-                  maxLength={11}
-                  className={`w-full bg-black/40 border rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono ${ciWarning ? 'border-red-500/50 focus:border-red-500' : 'border-white/10'}`}
-                  value={formData.ci} onChange={e => handleCiChange(e.target.value)}
-                />
-                {ciWarning && (
-                  <p className="text-red-400 text-[10px] font-bold mt-1 uppercase tracking-wider">{ciWarning}</p>
-                )}
+            {!privacyAccepted ? (
+              <div className="space-y-4 text-left animate-in fade-in duration-200">
+                <div className="flex items-center gap-2.5 pb-2 border-b border-white/5 text-amber-500">
+                  <Shield size={20} className={isAdmin ? "text-blue-500" : "text-amber-500"} />
+                  <h3 className="text-base font-bold text-white">Protocolo de Privacidad y Consentimiento</h3>
+                </div>
+                <div className="text-xs text-[#E8DCCF]/80 space-y-3 leading-relaxed">
+                  <p>
+                    Radio Ciudad Monumento (CMNL) se compromete formalmente con la protección de los datos personales de todo su equipo de programación y directivos.
+                  </p>
+                  <p className="bg-black/25 p-3 rounded-xl border border-white/5 text-[11px] font-sans text-stone-400">
+                    Los datos ingresados en el formulario (Carnet de Identidad, Tomo, Folio de registro corporativo, y Contratos asociados) son estrictamente confidenciales y se procesan de forma local en su dispositivo únicamente para la validación criptográfica del certificado. Tomo y Folio solo serán legibles por el Administrador Global.
+                  </p>
+                  <p>
+                    Al marcar la casilla y continuar, usted otorga su consentimiento expreso, libre e informado para el tratamiento seguro de sus datos con el fin de emitir y certificar su firma digital.
+                  </p>
+                </div>
+                
+                <label className="flex items-start gap-3 pt-2 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={privacyAccepted} 
+                    onChange={e => setPrivacyAccepted(e.target.checked)}
+                    className="mt-1 accent-amber-500 rounded border-white/10 bg-black/40 text-amber-500"
+                  />
+                  <span className="text-[11px] text-[#E8DCCF]/70 select-none group-hover:text-white transition-colors">
+                    He leído y acepto expresamente el Protocolo de Privacidad corporativo.
+                  </span>
+                </label>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-stone-500 uppercase tracking-wider block">Tomo</label>
-                  <input 
-                    type="text" placeholder="Tomo" 
-                    className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono"
-                    value={formData.tomo} onChange={e => setFormData({...formData, tomo: e.target.value})}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-stone-500 uppercase tracking-wider block">Folio</label>
-                  <input 
-                    type="text" placeholder="Folio" 
-                    className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono"
-                    value={formData.folio} onChange={e => setFormData({...formData, folio: e.target.value})}
-                  />
-                </div>
-              </div>
-              
-              {/* REQUIREMENT 1: Dynamic Contract Numbers Fields */}
-              {(isDirectorEmisora || (isAdmin && physicalAdminUser && isStationDirector('', physicalAdminUser.specialty))) ? (
-                <div className="space-y-1">
-                  <label className="text-[10px] text-amber-500 uppercase tracking-wider block font-bold">Nro. Resolución de Nombramiento</label>
-                  <input 
-                    type="text" placeholder="Resolución de Nombramiento" 
-                    readOnly
-                    className="w-full bg-black/40 border border-[#9E7649]/30 rounded-xl p-3 text-white text-sm outline-none font-mono opacity-60 cursor-not-allowed"
-                    value={formData.contract1}
-                  />
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-amber-500 uppercase tracking-wider block font-bold">Nro. Contrato Uno</label>
-                    <input 
-                      type="text" placeholder="Contrato Especialidad 1" 
-                      readOnly
-                      className="w-full bg-black/40 border border-[#9E7649]/30 rounded-xl p-3 text-white text-sm outline-none font-mono opacity-60 cursor-not-allowed"
-                      value={formData.contract1}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-amber-500 uppercase tracking-wider block font-bold">Nro. Contrato Dos</label>
-                    <input 
-                      type="text" placeholder="Contrato Especialidad 2" 
-                      readOnly
-                      className="w-full bg-black/40 border border-[#9E7649]/30 rounded-xl p-3 text-white text-sm outline-none font-mono opacity-60 cursor-not-allowed"
-                      value={formData.contract2}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {isAdmin ? (
-              <button 
-                onClick={handleGenerateAdminSelfCertificate}
-                disabled={loading || !formData.ci || !formData.tomo || !formData.folio || (!formData.contract1 && !formData.contract2) || !physicalAdminUser}
-                className="w-full py-4 bg-blue-500 text-white font-black rounded-2xl hover:bg-blue-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
-              >
-                <Shield size={18} /> GENERAR MI FIRMA
-              </button>
             ) : (
-              <button 
-                onClick={handleGenerateRequest}
-                disabled={loading || !formData.ci || !formData.tomo || !formData.folio || !formData.contract1}
-                className="w-full py-4 bg-amber-500 text-black font-black rounded-2xl hover:bg-amber-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
-              >
-                <FileCode /> GENERAR Y ENVIAR (.SEMANAL)
-              </button>
+              <>
+                <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                  <div className="flex items-center gap-3">
+                    <FileText size={20} className={isAdmin ? "text-blue-500" : "text-amber-500"} />
+                    <h3 className="text-base font-bold text-white">
+                      {isAdmin ? 'Auto-Generar Certificado de Administrador' : 'Iniciar Solicitud (.semanal)'}
+                    </h3>
+                  </div>
+                  <button 
+                    onClick={() => setPrivacyAccepted(false)}
+                    className="text-[10px] text-stone-500 hover:text-stone-300 font-bold uppercase underline"
+                  >
+                    Ver Protocolo
+                  </button>
+                </div>
+                
+                {isAdmin && !physicalAdminUser && (
+                  <p className="text-xs text-red-400 bg-red-900/20 p-3 rounded-lg border border-red-500/20 mb-4 font-bold">
+                    Requiere vincular la cuenta Admin a un Usuario Físico en "Equipo" antes de continuar.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-stone-500 uppercase tracking-wider block text-left">Documento de Identidad (CI)</label>
+                    <input 
+                      type="text" placeholder="Número de carnet de identidad" 
+                      maxLength={11}
+                      className={`w-full bg-black/40 border rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono ${ciWarning ? 'border-red-500/50 focus:border-red-500' : 'border-white/10'}`}
+                      value={formData.ci} onChange={e => handleCiChange(e.target.value)}
+                    />
+                    {ciWarning && (
+                      <p className="text-red-400 text-[10px] font-bold mt-1 uppercase tracking-wider text-left">{ciWarning}</p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-left">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-stone-500 uppercase tracking-wider block">Tomo</label>
+                      <input 
+                        type="text" placeholder="Tomo" 
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono"
+                        value={formData.tomo} onChange={e => setFormData({...formData, tomo: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-stone-500 uppercase tracking-wider block">Folio</label>
+                      <input 
+                        type="text" placeholder="Folio" 
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono"
+                        value={formData.folio} onChange={e => setFormData({...formData, folio: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* REQUIREMENT 1: Dynamic Contract Numbers Fields */}
+                  {(isDirectorEmisora || (isAdmin && physicalAdminUser && isStationDirector('', physicalAdminUser.specialty))) ? (
+                    <div className="space-y-1 text-left">
+                      <label className="text-[10px] text-amber-500 uppercase tracking-wider block font-bold">Nro. Resolución de Nombramiento</label>
+                      <input 
+                        type="text" placeholder="Resolución de Nombramiento" 
+                        readOnly
+                        className="w-full bg-black/40 border border-[#9E7649]/30 rounded-xl p-3 text-white text-sm outline-none font-mono opacity-60 cursor-not-allowed"
+                        value={formData.contract1}
+                      />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4 text-left">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-amber-500 uppercase tracking-wider block font-bold">Nro. Contrato Uno</label>
+                        <input 
+                          type="text" placeholder="Contrato Especialidad 1" 
+                          readOnly
+                          className="w-full bg-black/40 border border-[#9E7649]/30 rounded-xl p-3 text-white text-sm outline-none font-mono opacity-60 cursor-not-allowed"
+                          value={formData.contract1}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-amber-500 uppercase tracking-wider block font-bold">Nro. Contrato Dos</label>
+                        <input 
+                          type="text" placeholder="Contrato Especialidad 2" 
+                          readOnly
+                          className="w-full bg-black/40 border border-[#9E7649]/30 rounded-xl p-3 text-white text-sm outline-none font-mono opacity-60 cursor-not-allowed"
+                          value={formData.contract2}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {isAdmin ? (
+                  <button 
+                    onClick={handleGenerateAdminSelfCertificate}
+                    disabled={loading || !formData.ci || !formData.tomo || !formData.folio || (!formData.contract1 && !formData.contract2) || !physicalAdminUser}
+                    className="w-full py-4 bg-blue-500 text-white font-black rounded-2xl hover:bg-blue-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
+                  >
+                    <Shield size={18} /> GENERAR MI FIRMA
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleGenerateRequest}
+                    disabled={loading || !formData.ci || !formData.tomo || !formData.folio || !formData.contract1}
+                    className="w-full py-4 bg-amber-500 text-black font-black rounded-2xl hover:bg-amber-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
+                  >
+                    <FileCode /> GENERAR Y ENVIAR (.SEMANAL)
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1699,7 +1909,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                   <div key={cert.userId} className="p-4 bg-black/30 rounded-xl border border-white/5 hover:border-yellow-500/30 transition-colors flex justify-between items-center gap-4">
                     <div className="text-left space-y-1">
                       <p className="text-white text-xs font-bold">{cert.userData.fullName}</p>
-                      <p className="text-[10px] text-stone-500">CI: {cert.userData.ci} | Tomo: {cert.userData.tomo} Folio: {cert.userData.folio}</p>
+                      <p className="text-[10px] text-stone-500">
+                        CI: {cert.userData.ci} | Tomo: <span className="blur-[4px] select-none text-stone-600 font-sans italic opacity-70">DIFFUSE</span> Folio: <span className="blur-[4px] select-none text-stone-600 font-sans italic opacity-70">DIFFUSE</span>
+                      </p>
                       <div className="flex gap-2">
                         {Object.entries(cert.contracts || {}).map(([s, n]) => (
                           <span key={s} className="text-[8px] bg-[#9E7649]/10 text-yellow-500 rounded px-1">{s}: {String(n)}</span>
@@ -1828,6 +2040,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                                   setView('main');
                                 }
 
+                                // Reset the limit of 3 views in 24 hours for the password when certificate is deleted
+                                localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userCert.userId}`);
+
                                 const updatedUsers = (digitalSignatures.validated_users || []).filter((u: any) => u.userId !== userCert.userId);
                                 saveDigitalSignatures({
                                   ...digitalSignatures,
@@ -1902,12 +2117,50 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               <Award className="text-3xl shrink-0" />
               <h3 className="text-lg font-bold text-white">Firmar Licencia de Equipo</h3>
             </div>
-            <p className="text-xs text-[#E8DCCF]/60 mb-5 leading-relaxed">
-              Está a punto de firmar y autorizar el certificado criptográfico para <strong>{signingCert.userData.fullName}</strong>. Para validar la identidad corporativa, ingrese la contraseña de su firma de Directora:
+            <p className="text-xs text-[#E8DCCF]/60 mb-4 leading-relaxed">
+              Está a punto de firmar y autorizar el certificado criptográfico de su equipo.
             </p>
-            
+
+            {/* PREVIEW OF THE CERTIFICATE FOR THE DIRECTOR */}
+            <div className="bg-black/30 p-4 rounded-xl border border-white/5 space-y-3 mb-5 max-h-[180px] overflow-y-auto text-left">
+              <p className="text-yellow-500 text-[9px] uppercase font-black tracking-wider border-b border-white/5 pb-1 block">
+                Previsualización de Certificado
+              </p>
+              <div className="space-y-1.5 text-xs text-stone-300">
+                <div>
+                  <span className="text-stone-500 text-[9px] uppercase font-bold block">Titular:</span>
+                  <span className="font-bold text-white">{signingCert.userData.fullName}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                   <div>
+                     <span className="text-stone-500 text-[9px] uppercase font-bold block">CI:</span>
+                     <span className="font-mono text-white text-[11px]">{signingCert.userData.ci}</span>
+                   </div>
+                   <div>
+                     <span className="text-stone-500 text-[9px] uppercase font-bold block">Tomo / Folio:</span>
+                     <span className="font-sans select-none blur-[4px] opacity-70 text-stone-400">DIFFUSE</span>
+                   </div>
+                </div>
+                <div>
+                  <span className="text-stone-500 text-[9px] uppercase font-bold block">Contratos Autorizados:</span>
+                  <div className="space-y-0.5">
+                    {Object.entries(signingCert.contracts || {}).map(([s, n]) => (
+                      <div key={s} className="flex justify-between text-[11px]">
+                        <span className="text-stone-400 text-[10px]">{s}:</span>
+                        <span className="text-yellow-500 font-mono">{String(n)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-stone-500 text-[9px] uppercase font-bold block">Contraseña Encriptada:</span>
+                  <span className="font-sans select-none blur-[4px] opacity-70 text-stone-400 block">DIFFUSE</span>
+                </div>
+              </div>
+            </div>
+
             <div className="mb-6">
-              <label className="text-[9px] text-stone-400 uppercase tracking-wilder mb-2 block font-mono">Contraseña de Firma (Directora)</label>
+              <label className="text-[9px] text-stone-400 uppercase tracking-wilder mb-2 block font-mono text-left">Contraseña de Firma (Directora)</label>
               <input 
                 type="password" 
                 value={directorPass}

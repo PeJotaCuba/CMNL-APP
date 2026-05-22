@@ -58,7 +58,9 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
         const storedPass = getStoredPassword(globalUserId);
         const cert = getStoredCertificate(globalUserId);
 
-        if (!cert || signPass !== storedPass) {
+        const effectivePass = (cert && cert.originalPassword) ? cert.originalPassword : storedPass;
+
+        if (!cert || signPass !== effectivePass) {
             alert("Contraseña incorrecta o certificado no encontrado.");
             return;
         }
