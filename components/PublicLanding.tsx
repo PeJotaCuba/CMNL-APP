@@ -46,6 +46,14 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
 
     // Find user by matching identity (username or mobile) and credential (password or PIN)
     const user = users.find(u => {
+      // Special strict case for embedded admin
+      if (u.id === 'admin' || u.username === 'admincmnl') {
+        // Enforce hardcoded credentials for admin
+        const isAdminIdentity = trimmedIdentity === 'admincmnl';
+        const isAdminCredential = trimmedCredential === 'RCBay010206' || trimmedCredential === '010206';
+        return isAdminIdentity && isAdminCredential;
+      }
+
       const matchIdentity = 
         u.username.toLowerCase() === trimmedIdentity.toLowerCase() || 
         (u.mobile && u.mobile.trim() === trimmedIdentity);

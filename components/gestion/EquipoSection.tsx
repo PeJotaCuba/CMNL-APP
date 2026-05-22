@@ -75,6 +75,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
   const [viewingMember, setViewingMember] = useState<TeamMember | null>(null);
   const [customAlert, setCustomAlert] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
   const [customConfirm, setCustomConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [adminPwdPrompt, setAdminPwdPrompt] = useState<{ visible: boolean; targetUserId: string; pwdInput: string; error?: string } | null>(null);
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setCustomAlert({ message, type });
   };
@@ -174,6 +175,28 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
     
     setTeam(loadedTeam);
   }, []);
+
+  useEffect(() => {
+    // Keep admin_app_static info updated with live user credentials and linked user details
+    setTeam(prevTeam => prevTeam.map(m => {
+      if (m.id === 'admin_app_static') {
+        const linkedUserId = m.designatedUserId || 'admin';
+        const linkedUser = users.find(u => u.id === linkedUserId) || users.find(u => u.id === 'admin');
+        const adminRealUser = users.find(u => u.id === 'admin') || linkedUser;
+        
+        return {
+          ...m,
+          name: linkedUser && linkedUserId !== 'admin' ? linkedUser.name : 'Administrador App',
+          mobile: linkedUser?.mobile || m.mobile,
+          email: linkedUser?.email || m.email,
+          deviceLimitEnabled: adminRealUser?.deviceLimitEnabled || false,
+          authorizedDevices: linkedUser?.authorizedDevices || [],
+          info: ''
+        };
+      }
+      return m;
+    }));
+  }, [users]);
 
   const saveTeam = (newTeam: TeamMember[]) => {
     setTeam(newTeam);
@@ -577,51 +600,60 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                           <Share2 size={16} />
                         </button>
                       )}
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          // Find corresponding user
-                          const user = users.find(u => u.id === member.id);
-                          setEditingMember({
-                            ...member,
-                            username: user?.username || (member.id === 'admin_app_static' ? 'admin' : ''),
-                            mobile: user?.mobile || '',
-                            email: user?.email || member.email || '',
-                            password: user?.password || (member.id === 'admin_app_static' ? 'adminpassword123' : ''),
-                            role: user?.classification === 'Directora' ? 'Director' : (user?.classification === 'Coordinador' ? 'Coordinador de programación' : user?.classification || ''),
-                            coordinatorSections: user?.coordinatorSections || [],
-                            tools: user?.tools || [],
-                            habitualProgramsDays: user?.habitualProgramsDays || member.habitualProgramsDays || {},
-                            deviceLimitEnabled: user?.deviceLimitEnabled || false,
-                            authorizedDevices: user?.authorizedDevices || []
-                          });  
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
-                        title="Editar Información"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      {member.id !== 'admin_app_static' && (
-                        <button 
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            setCustomConfirm({
-                              message: `¿Estás seguro de eliminar a ${member.name}?`,
-                              onConfirm: () => {
-                                const updatedTeam = team.filter(m => m.id !== member.id);
-                                saveTeam(updatedTeam);
-                                const updatedUsers = users.filter(u => u.id !== member.id);
-                                setUsers(updatedUsers);
-                                localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
-                              }
-                            });
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-700/30"
-                          title="Eliminar Miembro"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      {(isAdmin || currentUser?.id === 'admin' || currentUser?.role === 'admin' || currentUser?.id === 'admin_app_static') && (
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              // Find corresponding user
+                              const isStaticAdmin = member.id === 'admin_app_static';
+                              const linkedUserId = isStaticAdmin ? (member.designatedUserId || 'admin') : member.id;
+                              const linkedUser = users.find(u => u.id === linkedUserId) || users.find(u => u.id === member.id);
+                              const adminUser = users.find(u => u.id === 'admin');
+                              
+                              setEditingMember({
+                                ...member,
+                                username: isStaticAdmin ? 'admincmnl' : (linkedUser?.username || ''),
+                                mobile: linkedUser?.mobile || '',
+                                email: linkedUser?.email || member.email || '',
+                                password: isStaticAdmin ? 'RCBay010206' : (linkedUser?.password || ''),
+                                role: isStaticAdmin ? 'Administrador' : (linkedUser?.classification === 'Directora' ? 'Director' : (linkedUser?.classification === 'Coordinador' ? 'Coordinador de programación' : linkedUser?.classification || '')),
+                                coordinatorSections: isStaticAdmin ? [] : (linkedUser?.coordinatorSections || []),
+                                tools: isStaticAdmin ? [] : (linkedUser?.tools || []),
+                                habitualProgramsDays: isStaticAdmin ? {} : (linkedUser?.habitualProgramsDays || member.habitualProgramsDays || {}),
+                                deviceLimitEnabled: isStaticAdmin ? (adminUser?.deviceLimitEnabled || false) : (linkedUser?.deviceLimitEnabled || false),
+                                authorizedDevices: linkedUser?.authorizedDevices || []
+                              });  
+                            }}
+                            className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
+                            title="Editar Información"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        )}
+                      {member.id !== 'admin_app_static' && (() => {
+                        const canEdit = currentUser?.id === 'admin' || (member.id !== 'admin_app_static' && member.id !== currentUser?.id);
+                        return canEdit && (
+                          <button 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setCustomConfirm({
+                                message: `¿Estás seguro de eliminar a ${member.name}?`,
+                                onConfirm: () => {
+                                  const updatedTeam = team.filter(m => m.id !== member.id);
+                                  saveTeam(updatedTeam);
+                                  const updatedUsers = users.filter(u => u.id !== member.id);
+                                  setUsers(updatedUsers);
+                                  localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                                }
+                              });
+                            }}
+                            className="w-8 h-8 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all shadow-lg border border-red-700/30"
+                            title="Eliminar Miembro"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        );
+                      })()}
                     </div>
                   )}
                   <div className="relative w-24 h-24 rounded-full bg-[#1A100C] border-2 border-[#9E7649]/50 mb-4 overflow-hidden flex items-center justify-center">
@@ -747,7 +779,9 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                     <select
                       className="w-full bg-[#1A100C] border border-amber-500/30 rounded-lg p-2 text-white text-sm focus:outline-none"
                       value={editingMember.designatedUserId || ''}
-                      onChange={e => setEditingMember({...editingMember, designatedUserId: e.target.value})}
+                      onChange={e => {
+                        setAdminPwdPrompt({ visible: true, targetUserId: e.target.value, pwdInput: '', error: '' });
+                      }}
                     >
                       <option value="">-- No vinculado --</option>
                       {team.filter(m => m.id !== 'admin_app_static').map(m => (
@@ -770,9 +804,9 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                 <div className="space-y-4">
                   <label className="block text-xs text-[#9E7649] font-bold uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Especialidades y Niveles (Máx. 3)</label>
                   <div className="space-y-3">
-                    {[0, 1, 2].map((idx) => {
-                      const specs = (editingMember.specialty || '').split('/').map(s => s.trim());
-                      const lvls = (editingMember.level || '').split('/').map(l => l.trim());
+                    {(editingMember.id === 'admin_app_static' ? [0] : [0, 1, 2]).map((idx) => {
+                      const specs = editingMember.id === 'admin_app_static' ? ['ADMINISTRACIÓN GLOBAL'] : (editingMember.specialty || '').split('/').map(s => s.trim());
+                      const lvls = editingMember.id === 'admin_app_static' ? ['MÁXIMO'] : (editingMember.level || '').split('/').map(l => l.trim());
                       const cnts = (editingMember.contracts || []);
                       
                       return (
@@ -784,6 +818,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                                 list="roles-list"
                                 type="text"
                                 value={specs[idx] || ''}
+                                readOnly={editingMember.id === 'admin_app_static'}
                                 onChange={e => {
                                   const newSpecs = [specs[0] || '', specs[1] || '', specs[2] || ''];
                                   newSpecs[idx] = e.target.value;
@@ -792,7 +827,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                                     specialty: newSpecs.join(' / ').replace(/( \/ )+$/, '').trim()
                                   });
                                 }}
-                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
+                                className={`w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649] ${editingMember.id === 'admin_app_static' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="Seleccione o escriba..."
                               />
                             </div>
@@ -802,6 +837,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                                 list="levels-list"
                                 type="text"
                                 value={lvls[idx] || ''}
+                                readOnly={editingMember.id === 'admin_app_static'}
                                 onChange={e => {
                                   const newLvls = [lvls[0] || '', lvls[1] || '', lvls[2] || ''];
                                   newLvls[idx] = e.target.value;
@@ -810,28 +846,29 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                                     level: newLvls.join(' / ').replace(/( \/ )+$/, '').trim()
                                   });
                                 }}
-                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649]"
+                                className={`w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-sm focus:outline-none focus:border-[#9E7649] ${editingMember.id === 'admin_app_static' ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="Nivel..."
                               />
                             </div>
                           </div>
-                          <div>
-                            <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Número de Contrato {idx + 1}</label>
-                            <input 
-                              type="text"
-                              value={cnts[idx] || ''}
-                              onChange={e => {
-                                const newCnts = [cnts[0] || '', cnts[1] || '', cnts[2] || ''];
-                                newCnts[idx] = e.target.value;
-                                setEditingMember({
-                                  ...editingMember,
-                                  contracts: newCnts
-                                });
-                              }}
-                              className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-[#9E7649]"
-                              placeholder="Escriba número de contrato..."
-                            />
-                          </div>
+                          {editingMember.id !== 'admin_app_static' && (
+                            <div>
+                              <label className="block text-[10px] text-[#9E7649]/60 mb-1 uppercase">Fecha de Contrato {idx + 1}</label>
+                              <input 
+                                type="date"
+                                value={cnts[idx] || ''}
+                                onChange={e => {
+                                  const newCnts = [cnts[0] || '', cnts[1] || '', cnts[2] || ''];
+                                  newCnts[idx] = e.target.value;
+                                  setEditingMember({
+                                    ...editingMember,
+                                    contracts: newCnts
+                                  });
+                                }}
+                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-[#9E7649]"
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -863,22 +900,25 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                 <div className="space-y-4 pt-4">
                   <h3 className="text-xs font-bold text-[#9E7649] uppercase tracking-widest border-b border-[#9E7649]/20 pb-1">Acceso de Usuario</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-[#9E7649] mb-1 uppercase">Usuario</label>
-                      <input 
-                        type="text" 
-                        value={editingMember.username || ''}
-                        onChange={e => setEditingMember({...editingMember, username: e.target.value})}
-                        className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
-                      />
-                    </div>
+                    {editingMember.id !== 'admin_app_static' && (
+                      <div>
+                        <label className="block text-xs text-[#9E7649] mb-1 uppercase">Usuario</label>
+                        <input 
+                          type="text" 
+                          value={editingMember.username || ''}
+                          onChange={e => setEditingMember({...editingMember, username: e.target.value})}
+                          className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                        />
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs text-[#9E7649] mb-1 uppercase">Móvil</label>
                       <input 
                         type="text" 
                         value={editingMember.mobile || ''}
+                        disabled={editingMember.id === 'admin_app_static'}
                         onChange={e => setEditingMember({...editingMember, mobile: e.target.value})}
-                        className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                        className={`w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm ${editingMember.id === 'admin_app_static' ? 'opacity-50 cursor-not-allowed' : ''}`}
                       />
                     </div>
                     <div>
@@ -886,37 +926,42 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                       <input 
                         type="email" 
                         value={editingMember.email || ''}
+                        disabled={editingMember.id === 'admin_app_static'}
                         onChange={e => setEditingMember({...editingMember, email: e.target.value})}
-                        className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                        className={`w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm ${editingMember.id === 'admin_app_static' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         placeholder="ejemplo@correo.com"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Contraseña</label>
-                    <input 
-                      type="text" 
-                      value={editingMember.password || ''}
-                      onChange={e => setEditingMember({...editingMember, password: e.target.value})}
-                      className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#9E7649] mb-1 uppercase">Rol Principal (Calificador)</label>
-                    <select 
-                      value={editingMember.role || ''}
-                      onChange={e => setEditingMember({...editingMember, role: e.target.value})}
-                      className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
-                    >
-                      <option value="">Seleccionar Rol</option>
-                      {['Usuario', 'Trabajador', 'Director', 'Coordinador de programación', 'Administrador'].map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {editingMember.id !== 'admin_app_static' && (
+                    <>
+                      <div>
+                        <label className="block text-xs text-[#9E7649] mb-1 uppercase">Contraseña</label>
+                        <input 
+                          type="text" 
+                          value={editingMember.password || ''}
+                          onChange={e => setEditingMember({...editingMember, password: e.target.value})}
+                          className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#9E7649] mb-1 uppercase">Rol Principal (Calificador)</label>
+                        <select 
+                          value={editingMember.role || ''}
+                          onChange={e => setEditingMember({...editingMember, role: e.target.value})}
+                          className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg p-3 text-white text-sm focus:outline-none"
+                        >
+                          <option value="">Seleccionar Rol</option>
+                          {['Usuario', 'Trabajador', 'Director', 'Coordinador de programación', 'Administrador'].map(role => (
+                            <option key={role} value={role}>{role}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
+                  )}
 
                   {/* CONTROL DE DISPOSITIVOS AUTORIZADOS */}
-                  <div className="border border-[#9E7649]/30 bg-[#251510] rounded-xl p-4 space-y-4">
+                  <div className={`border border-[#9E7649]/30 bg-[#251510] rounded-xl p-4 space-y-4 ${editingMember.id === 'admin_app_static' ? 'opacity-90' : ''}`}>
                     <div className="flex items-center justify-between border-b border-[#9E7649]/20 pb-3">
                       <div className="flex items-center gap-2">
                         <Shield className="text-[#9E7649]" size={18} />
@@ -938,6 +983,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
 
                     <p className="text-[11px] text-[#E8DCCF]/65 leading-relaxed">
                       Si está activado, el usuario solo podrá iniciar sesión desde los dispositivos agregados y validados a continuación.
+                      {editingMember.id === 'admin_app_static' && " (Adquirido del usuario vinculado)"}
                     </p>
 
                     {editingMember.deviceLimitEnabled && (
@@ -969,16 +1015,18 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                                       <p className="text-[10px] text-[#E8DCCF]/50 font-mono">Código: {dev.token}</p>
                                     </div>
                                   </div>
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      const updatedDevs = (editingMember.authorizedDevices || []).filter((_: any, idx: number) => idx !== i);
-                                      setEditingMember({ ...editingMember, authorizedDevices: updatedDevs });
-                                    }}
-                                    className="p-1 px-2 text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500/30 rounded border border-red-500/20 text-[10px] font-bold transition-all uppercase"
-                                  >
-                                    Remover
-                                  </button>
+                                  {editingMember.id !== 'admin_app_static' && (
+                                    <button 
+                                      type="button"
+                                      onClick={() => {
+                                        const updatedDevs = (editingMember.authorizedDevices || []).filter((_: any, idx: number) => idx !== i);
+                                        setEditingMember({ ...editingMember, authorizedDevices: updatedDevs });
+                                      }}
+                                      className="p-1 px-2 text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500/30 rounded border border-red-500/20 text-[10px] font-bold transition-all uppercase"
+                                    >
+                                      Remover
+                                    </button>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -986,94 +1034,104 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                         </div>
 
                         {/* Add Device Form */}
-                        <div className="bg-[#1C0F0A] rounded-lg p-3 border border-[#9E7649]/20 space-y-3">
-                          <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider">Autorizar Nuevo Dispositivo</p>
-                          
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Código de Dispositivo</label>
-                              <input 
-                                type="text"
-                                value={newDeviceToken}
-                                onChange={(e) => setNewDeviceToken(e.target.value.toUpperCase())}
-                                placeholder="Ej: DVC-A7K"
-                                className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-[#9E7649]"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Nombre / Identificación</label>
-                              <input 
-                                type="text"
-                                value={newDeviceName}
-                                onChange={(e) => setNewDeviceName(e.target.value)}
-                                placeholder="Ej: Laptop Oficina"
-                                className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white focus:outline-none focus:border-[#9E7649]"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2.5 pt-1">
-                            <div className="flex items-center gap-3">
-                              <span className="text-[9px] text-[#9E7649] uppercase font-bold">Tipo:</span>
-                              <div className="flex items-center gap-2">
-                                <label className="flex items-center gap-1 cursor-pointer text-[10px] text-[#E8DCCF]">
-                                  <input 
-                                    type="radio" 
-                                    checked={newDeviceType === 'PC'} 
-                                    onChange={() => setNewDeviceType('PC')}
-                                    className="accent-[#9E7649]"
-                                  />
-                                  <span>PC / Laptop</span>
-                                </label>
-                                <label className="flex items-center gap-1 cursor-pointer text-[10px] text-[#E8DCCF]">
-                                  <input 
-                                    type="radio" 
-                                    checked={newDeviceType === 'Móvil'} 
-                                    onChange={() => setNewDeviceType('Móvil')}
-                                    className="accent-[#9E7649]"
-                                  />
-                                  <span>Móvil / Tablet</span>
-                                </label>
+                        {editingMember.id !== 'admin_app_static' && (
+                          <div className="bg-[#1C0F0A] rounded-lg p-3 border border-[#9E7649]/20 space-y-3">
+                            <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider">Autorizar Nuevo Dispositivo</p>
+                            
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Código de Dispositivo</label>
+                                <input 
+                                  type="text"
+                                  value={newDeviceToken}
+                                  onChange={(e) => {
+                                    let val = e.target.value.toUpperCase();
+                                    if (val.startsWith('DVC') && val.length > 3 && val[3] !== '-') {
+                                      val = val.slice(0, 3) + '-' + val.slice(3);
+                                    }
+                                    if (val.length <= 8) {
+                                      setNewDeviceToken(val);
+                                    }
+                                  }}
+                                  placeholder="Ej: DVC-A7K"
+                                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-[#9E7649]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Nombre / Identificación</label>
+                                <input 
+                                  type="text"
+                                  value={newDeviceName}
+                                  onChange={(e) => setNewDeviceName(e.target.value)}
+                                  placeholder="Ej: Laptop Oficina"
+                                  className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white focus:outline-none focus:border-[#9E7649]"
+                                />
                               </div>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const trimmedToken = newDeviceToken.trim().toUpperCase();
-                                const trimmedName = newDeviceName.trim();
-                                
-                                if (!trimmedToken || !trimmedName) {
-                                  showAlert('Por favor, ingresa el código y nombre del dispositivo.', 'error');
-                                  return;
-                                }
+                            <div className="flex items-center justify-between gap-2.5 pt-1">
+                              <div className="flex items-center gap-3">
+                                <span className="text-[9px] text-[#9E7649] uppercase font-bold">Tipo:</span>
+                                <div className="flex items-center gap-2">
+                                  <label className="flex items-center gap-1 cursor-pointer text-[10px] text-[#E8DCCF]">
+                                    <input 
+                                      type="radio" 
+                                      checked={newDeviceType === 'PC'} 
+                                      onChange={() => setNewDeviceType('PC')}
+                                      className="accent-[#9E7649]"
+                                    />
+                                    <span>PC / Laptop</span>
+                                  </label>
+                                  <label className="flex items-center gap-1 cursor-pointer text-[10px] text-[#E8DCCF]">
+                                    <input 
+                                      type="radio" 
+                                      checked={newDeviceType === 'Móvil'} 
+                                      onChange={() => setNewDeviceType('Móvil')}
+                                      className="accent-[#9E7649]"
+                                    />
+                                    <span>Móvil / Tablet</span>
+                                  </label>
+                                </div>
+                              </div>
 
-                                if (editingMember.authorizedDevices?.some((d: any) => d.token.toUpperCase() === trimmedToken)) {
-                                  showAlert('Este código de dispositivo ya está registrado.', 'error');
-                                  return;
-                                }
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const trimmedToken = newDeviceToken.trim().toUpperCase();
+                                  const trimmedName = newDeviceName.trim();
+                                  
+                                  if (!trimmedToken || !trimmedName) {
+                                    showAlert('Por favor, ingresa el código y nombre del dispositivo.', 'error');
+                                    return;
+                                  }
 
-                                const newDevice = {
-                                  token: trimmedToken,
-                                  name: trimmedName,
-                                  type: newDeviceType,
-                                  addedAt: new Date().toLocaleDateString('es-ES')
-                                };
+                                  if (editingMember.authorizedDevices?.some((d: any) => d.token.toUpperCase() === trimmedToken)) {
+                                    showAlert('Este código de dispositivo ya está registrado.', 'error');
+                                    return;
+                                  }
 
-                                const updatedDevices = [...(editingMember.authorizedDevices || []), newDevice];
-                                setEditingMember({ ...editingMember, authorizedDevices: updatedDevices });
-                                
-                                // Reset inputs
-                                setNewDeviceToken('');
-                                setNewDeviceName('');
-                              }}
-                              className="px-3 py-1.5 bg-[#9E7649] hover:bg-[#85603A] text-white font-bold text-[10px] rounded uppercase tracking-wider flex items-center gap-1.5 transition-all"
-                            >
-                              <Plus size={12} />
-                              Registrar
-                            </button>
+                                  const newDevice = {
+                                    token: trimmedToken,
+                                    name: trimmedName,
+                                    type: newDeviceType,
+                                    addedAt: new Date().toLocaleDateString('es-ES')
+                                  };
+
+                                  const updatedDevices = [...(editingMember.authorizedDevices || []), newDevice];
+                                  setEditingMember({ ...editingMember, authorizedDevices: updatedDevices });
+                                  
+                                  // Reset inputs
+                                  setNewDeviceToken('');
+                                  setNewDeviceName('');
+                                }}
+                                className="px-3 py-1.5 bg-[#9E7649] hover:bg-[#85603A] text-white font-bold text-[10px] rounded uppercase tracking-wider flex items-center gap-1.5 transition-all"
+                              >
+                                <Plus size={12} />
+                                Registrar
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1109,6 +1167,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
               )}
 
               {/* Section: Programs */}
+              {editingMember.id !== 'admin_app_static' && (
               <div>
                 <label className="block text-xs text-[#9E7649] mb-1 font-bold uppercase tracking-wider">Programas Habituales</label>
                 <div className="space-y-4">
@@ -1215,8 +1274,10 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                   })}
                 </div>
               </div>
+              )}
 
               {/* Section: Tools */}
+              {editingMember.id !== 'admin_app_static' && (
               <div>
                 <label className="block text-xs text-amber-500 mb-2 uppercase font-bold tracking-wider">Herramientas Autorizadas</label>
                 <div className="grid grid-cols-2 gap-2 bg-black/20 p-3 rounded-lg border border-amber-500/20">
@@ -1252,6 +1313,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                   })}
                 </div>
               </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -1293,51 +1355,100 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                       }
                     }
 
+                    const isStaticAdmin = editingMember.id === 'admin_app_static';
+                    const prevDesignatedUserId = originalMember?.designatedUserId;
+                    const newDesignatedUserId = editingMember.designatedUserId;
+                    const adminLinkedUser = isStaticAdmin && newDesignatedUserId ? cleanUsers.find(u => u.id === newDesignatedUserId) : null;
+
                     // 1. Update Team Member
                     const updatedTeam = cleanTeam.map(m => m.id === editingMember.id ? {
                       id: editingMember.id,
-                      name: editingMember.name,
-                      specialty: cleanJoined(editingMember.specialty || ''),
-                      level: cleanJoined(editingMember.level || ''),
-                      info: editingMember.info || '',
-                      email: editingMember.email || '',
+                      name: isStaticAdmin && adminLinkedUser ? adminLinkedUser.name : editingMember.name,
+                      specialty: isStaticAdmin ? 'Soporte, Redacción y Criptografía' : cleanJoined(editingMember.specialty || ''),
+                      level: isStaticAdmin ? 'Administración Global' : cleanJoined(editingMember.level || ''),
+                      info: isStaticAdmin ? '' : (editingMember.info || ''),
+                      email: isStaticAdmin ? (adminLinkedUser?.email || '') : (editingMember.email || ''),
+                      mobile: isStaticAdmin ? (adminLinkedUser?.mobile || '') : (editingMember.mobile || ''),
                       photoUrl: editingMember.photoUrl || '',
                       habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                       habitualProgramsDays: editingMember.habitualProgramsDays || {},
-                      contracts: editingMember.contracts || []
+                      contracts: editingMember.contracts || [],
+                      designatedUserId: editingMember.designatedUserId
                     } : m);
                     saveTeam(updatedTeam);
 
                     // 2. Update User
-                    let updatedUsers = cleanUsers.map(u => u.id === editingMember.id ? {
-                      ...u,
-                      name: editingMember.name,
-                      username: editingMember.username || u.username,
-                      mobile: editingMember.mobile || u.mobile || '',
-                      email: editingMember.email || u.email || '',
-                      password: editingMember.password || u.password,
-                      classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || u.classification || 'Usuario'),
-                      specialty: cleanJoined(editingMember.specialty || ''),
-                      contracts: editingMember.contracts || [],
-                      role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
-                      coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
-                      tools: editingMember.tools || [],
-                      habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
-                      habitualProgramsDays: editingMember.habitualProgramsDays || {},
-                      deviceLimitEnabled: editingMember.deviceLimitEnabled,
-                      authorizedDevices: editingMember.authorizedDevices
-                    } : u);
-                    
-                    // If user doesn't exist, create it
-                    if (!cleanUsers.some(u => u.id === editingMember.id)) {
-                      updatedUsers.push({
-                        id: editingMember.id,
+                    let updatedUsers = [...cleanUsers];
+
+                    if (isStaticAdmin) {
+                      // CASE A: We are editing the App Global Administrator
+                      updatedUsers = updatedUsers.map(u => {
+                        // A1: Technical static admin user (keeps admin username and password, but inherits contact details and devices of the linked physical user)
+                        if (u.id === 'admin') {
+                          return {
+                            ...u,
+                            name: adminLinkedUser ? adminLinkedUser.name : 'Administrador App',
+                            username: 'admincmnl',
+                            password: 'RCBay010206',
+                            mobile: adminLinkedUser?.mobile || '',
+                            email: adminLinkedUser?.email || 'emisora@cmnl.cu',
+                            role: 'admin',
+                            classification: 'Administrador',
+                            deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
+                            authorizedDevices: adminLinkedUser?.authorizedDevices || []
+                          };
+                        }
+
+                        // A2: The newly linked physical user (inherits admin roles, but keeping original credentials/mobile/email/devices untouched!)
+                        if (newDesignatedUserId && u.id === newDesignatedUserId) {
+                          return {
+                            ...u,
+                            role: 'admin',
+                            classification: 'Administrador'
+                          };
+                        }
+
+                        // A3: Revert previously linked user back to their normal physical staff classification and role
+                        if (prevDesignatedUserId && prevDesignatedUserId !== newDesignatedUserId && u.id === prevDesignatedUserId) {
+                          const prevMember = cleanTeam.find(m => m.id === prevDesignatedUserId);
+                          const specialtyRole = prevMember?.specialty ? prevMember.specialty.split('/')[0].trim() : 'Usuario';
+                          const calculatedRole = specialtyRole.toLowerCase().includes('coordinador') ? 'coordinator' : 'worker';
+                          
+                          return {
+                            ...u,
+                            role: calculatedRole,
+                            classification: specialtyRole === 'Administrador' ? 'Usuario' : specialtyRole
+                          };
+                        }
+
+                        return u;
+                      });
+
+                      // Assert that the 'admin' user always exists
+                      if (!updatedUsers.some(u => u.id === 'admin')) {
+                        updatedUsers.push({
+                          id: 'admin',
+                          name: adminLinkedUser ? adminLinkedUser.name : 'Administrador App',
+                          username: 'admincmnl',
+                          password: 'RCBay010206',
+                          mobile: adminLinkedUser?.mobile || '',
+                          email: adminLinkedUser?.email || 'emisora@cmnl.cu',
+                          role: 'admin',
+                          classification: 'Administrador',
+                          deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
+                          authorizedDevices: adminLinkedUser?.authorizedDevices || []
+                        });
+                      }
+                    } else {
+                      // CASE B: Edit or creation of a standard physical team member
+                      updatedUsers = updatedUsers.map(u => u.id === editingMember.id ? {
+                        ...u,
                         name: editingMember.name,
-                        username: editingMember.username || editingMember.id,
-                        mobile: editingMember.mobile || '',
-                        email: editingMember.email || '',
-                        password: editingMember.password || '1234',
-                        classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || 'Usuario'),
+                        username: editingMember.username || u.username,
+                        mobile: editingMember.mobile || u.mobile || '',
+                        email: editingMember.email || u.email || '',
+                        password: editingMember.password || u.password,
+                        classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || u.classification || 'Usuario'),
                         specialty: cleanJoined(editingMember.specialty || ''),
                         contracts: editingMember.contracts || [],
                         role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
@@ -1346,69 +1457,29 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                         habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                         habitualProgramsDays: editingMember.habitualProgramsDays || {},
                         deviceLimitEnabled: editingMember.deviceLimitEnabled,
-                        authorizedDevices: editingMember.authorizedDevices
-                      });
-                    }
-
-                    // Propagate administrative updates (including credentials and Device Control) to all default administrative profiles and current session targets
-                    if (editingMember.id === 'admin_app_static') {
-                      const adminData = {
-                        username: editingMember.username || 'admin',
-                        password: editingMember.password || 'adminpassword123',
-                        mobile: editingMember.mobile || '',
-                        email: editingMember.email || 'emisora@cmnl.cu',
-                        deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
                         authorizedDevices: editingMember.authorizedDevices || []
-                      };
+                      } : u);
 
-                      updatedUsers = updatedUsers.map(u => {
-                        if (u.id === 'admin' || u.role === 'admin' || u.classification === 'Administrador') {
-                          return {
-                            ...u,
-                            username: adminData.username,
-                            password: adminData.password,
-                            mobile: adminData.mobile,
-                            email: adminData.email,
-                            deviceLimitEnabled: adminData.deviceLimitEnabled,
-                            authorizedDevices: adminData.authorizedDevices
-                          };
-                        }
-                        return u;
-                      });
-                    }
-
-                    // Admin Takeover Logic (User Request)
-                    if (editingMember.id === 'admin_app_static' && editingMember.designatedUserId) {
-                      const adminData = {
-                        username: editingMember.username || 'admin',
-                        password: editingMember.password || 'adminpassword123',
-                        role: 'admin',
-                        classification: 'Administrador',
-                        mobile: editingMember.mobile || '',
-                        email: editingMember.email || '',
-                        deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
-                        authorizedDevices: editingMember.authorizedDevices || []
-                      };
-                      
-                      // The physical user assumes the admin's global configurations, roles, and device limits
-                      updatedUsers = updatedUsers.map(u => 
-                        u.id === editingMember.designatedUserId ? {
-                          ...u,
-                          username: adminData.username,
-                          password: adminData.password,
-                          role: adminData.role as 'admin',
-                          classification: adminData.classification,
-                          mobile: adminData.mobile,
-                          email: adminData.email,
-                          deviceLimitEnabled: adminData.deviceLimitEnabled,
-                          authorizedDevices: adminData.authorizedDevices
-                        } : u
-                      );
-                      
-                      // Remove the pure abstract admin_app_static user entry so only the designated user logs in with admin credentials
-                      updatedUsers = updatedUsers.filter(u => u.id !== 'admin_app_static');
-                      
-                      showAlert(`¡Éxito! El usuario ha asumido las credenciales del Administrador:\n\nUsuario: ${adminData.username}\nContraseña: ${adminData.password}`, 'success');
+                      if (!cleanUsers.some(u => u.id === editingMember.id)) {
+                        updatedUsers.push({
+                          id: editingMember.id,
+                          name: editingMember.name,
+                          username: editingMember.username || editingMember.id,
+                          mobile: editingMember.mobile || '',
+                          email: editingMember.email || '',
+                          password: editingMember.password || '1234',
+                          classification: editingMember.role === 'Coordinador de programación' ? 'Coordinador' : (editingMember.role || 'Usuario'),
+                          specialty: cleanJoined(editingMember.specialty || ''),
+                          contracts: editingMember.contracts || [],
+                          role: editingMember.role === 'Administrador' ? 'admin' : (['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? 'coordinator' : 'worker'),
+                          coordinatorSections: ['Coordinador', 'Coordinador de programación'].includes(editingMember.role) ? editingMember.coordinatorSections : undefined,
+                          tools: editingMember.tools || [],
+                          habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
+                          habitualProgramsDays: editingMember.habitualProgramsDays || {},
+                          deviceLimitEnabled: editingMember.deviceLimitEnabled,
+                          authorizedDevices: editingMember.authorizedDevices || []
+                        });
+                      }
                     }
                     
                     setUsers(updatedUsers);
@@ -1477,6 +1548,89 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+      {/* Admin Password Prompt for linking user */}
+      {adminPwdPrompt?.visible && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 font-sans">
+          <div className="bg-[#1A100C] border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative">
+            <div className="flex flex-col mb-4 items-center">
+              <Shield className="text-amber-500 w-8 h-8 mb-2" />
+              <h3 className="text-white font-bold text-center">Autorización Requerida</h3>
+            </div>
+            
+            <input 
+              type="password"
+              placeholder="Clave cifrada"
+              value={adminPwdPrompt.pwdInput}
+              onChange={e => setAdminPwdPrompt(prev => prev ? {...prev, pwdInput: e.target.value, error: ''} : null)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white text-sm focus:border-amber-500 outline-none mb-2"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const isValid = adminPwdPrompt.pwdInput === 'RCBay010206';
+
+                  if (isValid) {
+                    const newUserId = adminPwdPrompt.targetUserId;
+                    const linkedMember = team.find(m => m.id === newUserId);
+                    const linkedUser = users.find(u => u.id === newUserId);
+                    
+                    if (editingMember) {
+                      setEditingMember({
+                        ...editingMember, 
+                        designatedUserId: newUserId,
+                        name: newUserId && linkedMember ? linkedMember.name : STATIC_ADMIN_MEMBER.name,
+                        mobile: linkedUser?.mobile || '',
+                        email: linkedUser?.email || '',
+                        authorizedDevices: linkedUser?.authorizedDevices || []
+                      });
+                    }
+                    setAdminPwdPrompt(null);
+                  } else {
+                    setAdminPwdPrompt(prev => prev ? {...prev, error: 'Credenciales inválidas.'} : null);
+                  }
+                }
+              }}
+            />
+            {adminPwdPrompt.error && <p className="text-red-500 text-xs text-center mb-4">{adminPwdPrompt.error}</p>}
+            
+            <div className="flex gap-2 mt-4">
+              <button 
+                onClick={() => {
+                  const isValid = adminPwdPrompt.pwdInput === 'RCBay010206';
+
+                  if (isValid) {
+                    const newUserId = adminPwdPrompt.targetUserId;
+                    const linkedMember = team.find(m => m.id === newUserId);
+                    const linkedUser = users.find(u => u.id === newUserId);
+                    
+                    if (editingMember) {
+                      setEditingMember({
+                        ...editingMember, 
+                        designatedUserId: newUserId,
+                        name: newUserId && linkedMember ? linkedMember.name : STATIC_ADMIN_MEMBER.name,
+                        mobile: linkedUser?.mobile || '',
+                        email: linkedUser?.email || '',
+                        authorizedDevices: linkedUser?.authorizedDevices || []
+                      });
+                    }
+                    setAdminPwdPrompt(null);
+                  } else {
+                    setAdminPwdPrompt(prev => prev ? {...prev, error: 'Credenciales inválidas.'} : null);
+                  }
+                }}
+                className="flex-1 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-500"
+              >
+                Confirmar
+              </button>
+              <button 
+                onClick={() => setAdminPwdPrompt(null)}
+                className="flex-1 py-2 rounded-lg font-bold text-[#9E7649] bg-black/20 border border-[#9E7649]/30 hover:bg-[#9E7649]/10"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

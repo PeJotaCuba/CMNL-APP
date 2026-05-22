@@ -96,17 +96,65 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     const nameToUse = user?.fullName || user?.name || '';
     // Sync with team database if available
     if (nameToUse && (!formData.fullName || formData.fullName === '' || formData.fullName === nameToUse)) {
-      setFormData(prev => ({ 
-        ...prev, 
-        fullName: nameToUse,
-        ci: prev.ci || userTeamMember?.ci || '',
-        contract1: prev.contract1 || userTeamMember?.contracts?.[0] || userTeamMember?.contract1 || '',
-        contract2: prev.contract2 || userTeamMember?.contracts?.[1] || userTeamMember?.contract2 || ''
-      }));
+      setFormData(prev => {
+        const currentCi = prev.ci || userTeamMember?.ci || '';
+        return { 
+          ...prev, 
+          fullName: nameToUse,
+          ci: currentCi,
+          contract1: currentCi.length === 11 && userTeamMember?.contracts?.[0] ? calcContract(currentCi, userTeamMember.contracts[0]) : '',
+          contract2: currentCi.length === 11 && userTeamMember?.contracts?.[1] ? calcContract(currentCi, userTeamMember.contracts[1]) : ''
+        };
+      });
     }
   }, [user, userTeamMember]);
 
-  // Admin request processing
+  const calcContract = (ci: string, dateStr: string) => {
+    if (!ci || ci.length < 11 || !dateStr) return '';
+    const last3 = ci.slice(-3);
+    // dateStr format: YYYY-MM-DD
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const yy = parts[0].slice(-2);
+      const mm = parts[1];
+      const dd = parts[2];
+      return `${last3}-${mm}${yy}${dd}`;
+    }
+    return dateStr; // fallback
+  };
+
+  const [ciWarning, setCiWarning] = useState('');
+
+  const handleCiChange = (val: string) => {
+    const rawVal = val.replace(/\D/g, '').slice(0, 11);
+    
+    // Live validation
+    let warning = '';
+    if (rawVal.length >= 4) {
+      const mm = parseInt(rawVal.substring(2, 4), 10);
+      if (mm < 1 || mm > 12) warning = `Mes inválido (${rawVal.substring(2, 4)}). No puede cruzar de 12.`;
+    }
+    if (!warning && rawVal.length >= 6) {
+      const dd = parseInt(rawVal.substring(4, 6), 10);
+      if (dd < 1 || dd > 31) warning = `Día inválido (${rawVal.substring(4, 6)}). No puede cruzar de 31.`;
+    }
+    setCiWarning(warning);
+
+    setFormData(prev => {
+      const updated = { ...prev, ci: rawVal };
+      if (rawVal.length === 11) {
+        if (userTeamMember?.contracts?.[0]) updated.contract1 = calcContract(rawVal, userTeamMember.contracts[0]);
+        if (userTeamMember?.contracts?.[1]) updated.contract2 = calcContract(rawVal, userTeamMember.contracts[1]);
+      } else {
+        // Clear them if ci length is not 11, or should we reset to the raw date? The requirement says:
+        // "el numero de contrato se genera una vez que el usuario coloca el ultimo numero de su carné de identidad."
+        updated.contract1 = '';
+        updated.contract2 = '';
+      }
+      return updated;
+    });
+  };
+
   const [pendingRequest, setPendingRequest] = useState<any>(null);
   const [contractNumbers, setContractNumbers] = useState<Record<string, string>>({});
 
@@ -1428,9 +1476,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 <input 
                   type="text" placeholder="Número de carnet de identidad" 
                   maxLength={11}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono"
-                  value={formData.ci} onChange={e => setFormData({...formData, ci: e.target.value})}
+                  className={`w-full bg-black/40 border rounded-xl p-3 text-white text-sm focus:border-amber-500 outline-none font-mono ${ciWarning ? 'border-red-500/50 focus:border-red-500' : 'border-white/10'}`}
+                  value={formData.ci} onChange={e => handleCiChange(e.target.value)}
                 />
+                {ciWarning && (
+                  <p className="text-red-400 text-[10px] font-bold mt-1 uppercase tracking-wider">{ciWarning}</p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
