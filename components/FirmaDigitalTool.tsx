@@ -10,6 +10,33 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const [certStatus, setCertStatus] = useState<any>(null); // 'none', 'pending', 'active'
   const ADMIN_EMAIL = 'emisora@cmnl.cu'; // Administrator email
   const ADMIN_PHONE = '+53 54321098'; // Direct administrator phone number
+  const [generatedRequest, setGeneratedRequest] = useState<any>(null);
+
+  const getAdminPhone = () => {
+    const adminTeamMember = (equipoData || []).find((m: any) => m.id === 'admin_app_static');
+    if (adminTeamMember) {
+      if (adminTeamMember.designatedUserId) {
+        const linkedMember = (equipoData || []).find((m: any) => m.id === adminTeamMember.designatedUserId);
+        if (linkedMember && linkedMember.mobile) {
+          return linkedMember.mobile;
+        }
+        const linkedUser = (users || []).find((u: any) => u.id === adminTeamMember.designatedUserId);
+        if (linkedUser && linkedUser.mobile) {
+          return linkedUser.mobile;
+        }
+      }
+      if (adminTeamMember.mobile) {
+        return adminTeamMember.mobile;
+      }
+    }
+    
+    // Fallbacks
+    const adminUser = (users || []).find((u: any) => u.id === 'admin' || u.role === 'admin' || u.classification === 'Administrador' || u.username === 'admincmnl');
+    if (adminUser && adminUser.mobile) {
+      return adminUser.mobile;
+    }
+    return '+53 54321098'; // Global hardcoded fallback
+  };
 
   // Check if a string represents the Station Director (e.g., "Director de emisora" or "Directora d emisora")
   const isStationDirector = (classificationStr?: string, specialtyStr?: string) => {
@@ -528,20 +555,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         timestamp: new Date().toISOString()
       };
 
-      // Requirement: Store in synced database instead of downloading
-      const updatedRequests = [...(digitalSignatures.pending_requests || []).filter((r: any) => r.userId !== userId)];
-      updatedRequests.push(requestObj);
-
-      saveDigitalSignatures({
-        ...digitalSignatures,
-        pending_requests: updatedRequests
-      });
-      
-      setCertStatus('pending');
-      showAlert("Solicitud enviada al administrador exitosamente. Puede notificarle vía WhatsApp para agilizar el proceso.", 'success');
-      
-      const msg = `Hola Administrador, he generado mi solicitud de firma digital (.semanal) para el usuario: *${requestObj.userData.fullName}*. Por favor, verifíquela en el panel de Gestión.`;
-      openWhatsApp(msg, ADMIN_PHONE);
+      setGeneratedRequest(requestObj);
+      showAlert("¡Solicitud .semanal generada con éxito! Use los botones inferiores para descargarla y enviarla por WhatsApp.", 'success');
     } catch (err) {
       console.error(err);
       showAlert("Error al generar las claves.", 'error');
@@ -1013,7 +1028,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const handleSendDirectorCertWhatsApp = (cert: any) => {
     if (!cert) return;
     const msg = `Hola Administrador, aquí le envío el certificado (.razon) firmado por la Directora para el usuario: *${cert.userData.fullName}*.\n\nFirma Directora:\n_${cert.directorSignature}_`;
-    openWhatsApp(msg, ADMIN_PHONE);
+    openWhatsApp(msg, getAdminPhone());
   };
 
   // Validate request owner bypass
@@ -1454,8 +1469,91 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
+        {/* VIEW: GENERATED REQUEST DOWNLOAD & SEND TO WHATSAPP */}
+        {!isAdmin && generatedRequest && (
+          <div id="request-download-container" className="bg-[#2C1B15] p-8 rounded-3xl border border-[#9E7649]/30 space-y-6 shadow-xl h-fit col-span-1 lg:col-span-2">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <CheckCircle2 className="text-[#25D366]" size={22} />
+              Solicitud de Firma Digital Generada
+            </h3>
+            <p className="text-xs text-stone-300 leading-relaxed">
+              Se han generado sus claves criptográficas locales. Siga estos pasos para enviar su solicitud al Administrador y activar su firma digital:
+            </p>
+            
+            <div className="space-y-4 bg-black/35 p-4 rounded-xl border border-white/5 text-xs text-stone-350">
+              <div className="flex items-start gap-3">
+                <span className="flex items-center justify-center w-5 h-5 bg-[#9E7649] text-white font-bold rounded-full text-[10px] shrink-0 mt-0.5">1</span>
+                <div>
+                  <p className="font-bold text-white uppercase tracking-wider text-[11px] mb-1">Descargar el archivo de solicitud</p>
+                  <p className="opacity-80">Use el botón para descargar el archivo <span className="font-mono text-amber-400">*.semanal</span>. Debe guardarlo localmente.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-4">
+                <span className="flex items-center justify-center w-5 h-5 bg-[#25D366] text-[#1A100C] font-extrabold rounded-full text-[10px] shrink-0 mt-0.5">2</span>
+                <div>
+                  <p className="font-bold text-white uppercase tracking-wider text-[11px] mb-1 font-sans">Enviar por WhatsApp al Administrador</p>
+                  <p className="opacity-80">Haga clic en el botón de WhatsApp. En el chat que se abre con el administrador, <span className="font-bold text-[#25D366]">adjunte el archivo .semanal descargado</span> y envíe su mensaje.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <button
+                id="btn-download-semanal"
+                onClick={() => {
+                  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(generatedRequest, null, 2));
+                  const downloadAnchor = document.createElement('a');
+                  downloadAnchor.setAttribute("href", dataStr);
+                  downloadAnchor.setAttribute("download", `${user?.username || 'solicitud'}.semanal`);
+                  document.body.appendChild(downloadAnchor);
+                  downloadAnchor.click();
+                  downloadAnchor.remove();
+                  showAlert("Archivo .semanal descargado exitosamente.", "success");
+                }}
+                className="flex-1 py-4 bg-[#9E7649] hover:bg-[#83603c] text-white font-black rounded-2xl transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
+              >
+                <Download size={18} /> DESCARGAR ARCHIVO .SEMANAL
+              </button>
+
+              <button
+                id="btn-whatsapp-send"
+                onClick={() => {
+                  const adminPhone = getAdminPhone();
+                  const msg = `Hola Administrador, le envío mi solicitud de firma digital (.semanal). He adjuntado el archivo *.semanal* correspondiente al usuario: *${generatedRequest.userData.fullName}*. Por favor, verifíquela en el panel de Gestión.`;
+                  openWhatsApp(msg, adminPhone);
+                  
+                  // Store request in sync database and update status to pending
+                  const updatedRequests = [...(digitalSignatures.pending_requests || []).filter((r: any) => r.userId !== userId)];
+                  updatedRequests.push(generatedRequest);
+
+                  saveDigitalSignatures({
+                    ...digitalSignatures,
+                    pending_requests: updatedRequests
+                  });
+                  setCertStatus('pending');
+                  setGeneratedRequest(null);
+                  showAlert("Solicitud registrada correctamente en espera de validación administrativa.", 'success');
+                }}
+                className="flex-1 py-4 bg-[#25D366]/90 hover:bg-[#25D366] text-black font-extrabold rounded-2xl transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-wider shadow-lg"
+              >
+                <Send size={18} /> MANDAR POR WHATSAPP
+              </button>
+            </div>
+            
+            <div className="text-center pt-2">
+              <button
+                onClick={() => setGeneratedRequest(null)}
+                className="text-stone-400 hover:text-white text-xs transition-all uppercase tracking-wider font-bold"
+              >
+                Cancelar y regresar
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* VIEW: REGISTRATION REQUEST FORM */}
-        {((!isAdmin && certStatus === 'none') || (isAdmin && certStatus === 'none')) && (
+        {((!isAdmin && certStatus === 'none' && !generatedRequest) || (isAdmin && certStatus === 'none')) && (
           <div className="bg-[#2C1B15] p-8 rounded-3xl border border-white/5 space-y-6 shadow-xl h-fit">
             <div className="flex items-center gap-3 pb-2 border-b border-white/5">
               <FileText size={20} className={isAdmin ? "text-blue-500" : "text-amber-500"} />
@@ -1576,7 +1674,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <button 
               onClick={() => {
                 const msg = `Hola Administrador, mi solicitud de firma digital está pendiente de validación. ¿Podría revisarla por favor?\n\nUsuario: *${user?.fullName || user?.name}*`;
-                openWhatsApp(msg, ADMIN_PHONE);
+                openWhatsApp(msg, getAdminPhone());
               }}
               className="w-full py-4 bg-[#25D366]/20 border border-[#25D366]/40 text-[#25D366] rounded-2xl flex items-center justify-center gap-3 hover:bg-[#25D366]/30 transition-all font-bold text-sm"
             >

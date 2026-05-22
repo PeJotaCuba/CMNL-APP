@@ -177,21 +177,16 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
   }, []);
 
   useEffect(() => {
-    // Keep admin_app_static info updated with live user credentials and linked user details
+    // Keep admin_app_static details stable and secure on the team roster
     setTeam(prevTeam => prevTeam.map(m => {
       if (m.id === 'admin_app_static') {
-        const linkedUserId = m.designatedUserId || 'admin';
-        const linkedUser = users.find(u => u.id === linkedUserId) || users.find(u => u.id === 'admin');
-        const adminRealUser = users.find(u => u.id === 'admin') || linkedUser;
-        
         return {
           ...m,
-          name: linkedUser && linkedUserId !== 'admin' ? linkedUser.name : 'Administrador App',
-          mobile: linkedUser?.mobile || m.mobile,
-          email: linkedUser?.email || m.email,
-          deviceLimitEnabled: adminRealUser?.deviceLimitEnabled || false,
-          authorizedDevices: linkedUser?.authorizedDevices || [],
-          info: ''
+          name: 'Administrador App',
+          mobile: '+53 54321098',
+          email: 'emisora@cmnl.cu',
+          photoUrl: '',
+          info: 'Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.'
         };
       }
       return m;
@@ -1363,12 +1358,12 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                     // 1. Update Team Member
                     const updatedTeam = cleanTeam.map(m => m.id === editingMember.id ? {
                       id: editingMember.id,
-                      name: isStaticAdmin && adminLinkedUser ? adminLinkedUser.name : editingMember.name,
+                      name: 'Administrador App',
                       specialty: isStaticAdmin ? 'Soporte, Redacción y Criptografía' : cleanJoined(editingMember.specialty || ''),
                       level: isStaticAdmin ? 'Administración Global' : cleanJoined(editingMember.level || ''),
-                      info: isStaticAdmin ? '' : (editingMember.info || ''),
-                      email: isStaticAdmin ? (adminLinkedUser?.email || '') : (editingMember.email || ''),
-                      mobile: isStaticAdmin ? (adminLinkedUser?.mobile || '') : (editingMember.mobile || ''),
+                      info: isStaticAdmin ? 'Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.' : (editingMember.info || ''),
+                      email: 'emisora@cmnl.cu',
+                      mobile: '+53 54321098',
                       photoUrl: editingMember.photoUrl || '',
                       habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                       habitualProgramsDays: editingMember.habitualProgramsDays || {},
@@ -1383,19 +1378,19 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                     if (isStaticAdmin) {
                       // CASE A: We are editing the App Global Administrator
                       updatedUsers = updatedUsers.map(u => {
-                        // A1: Technical static admin user (keeps admin username and password, but inherits contact details and devices of the linked physical user)
+                        // A1: Technical static admin user (keeps its own access details completely independent and static)
                         if (u.id === 'admin') {
                           return {
                             ...u,
-                            name: adminLinkedUser ? adminLinkedUser.name : 'Administrador App',
+                            name: 'Administrador App',
                             username: 'admincmnl',
                             password: 'RCBay010206',
-                            mobile: adminLinkedUser?.mobile || '',
-                            email: adminLinkedUser?.email || 'emisora@cmnl.cu',
+                            mobile: '+53 54321098',
+                            email: 'emisora@cmnl.cu',
                             role: 'admin',
                             classification: 'Administrador',
-                            deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
-                            authorizedDevices: adminLinkedUser?.authorizedDevices || []
+                            deviceLimitEnabled: false,
+                            authorizedDevices: []
                           };
                         }
 
@@ -1428,15 +1423,15 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                       if (!updatedUsers.some(u => u.id === 'admin')) {
                         updatedUsers.push({
                           id: 'admin',
-                          name: adminLinkedUser ? adminLinkedUser.name : 'Administrador App',
+                          name: 'Administrador App',
                           username: 'admincmnl',
                           password: 'RCBay010206',
-                          mobile: adminLinkedUser?.mobile || '',
-                          email: adminLinkedUser?.email || 'emisora@cmnl.cu',
+                          mobile: '+53 54321098',
+                          email: 'emisora@cmnl.cu',
                           role: 'admin',
                           classification: 'Administrador',
-                          deviceLimitEnabled: editingMember.deviceLimitEnabled || false,
-                          authorizedDevices: adminLinkedUser?.authorizedDevices || []
+                          deviceLimitEnabled: false,
+                          authorizedDevices: []
                         });
                       }
                     } else {
