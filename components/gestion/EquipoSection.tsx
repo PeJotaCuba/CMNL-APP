@@ -148,7 +148,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     photoUrl: '',
     email: 'emisora@cmnl.cu',
     info: `DATOS DE LA CUENTA DE ADMINISTRADOR APP:
-• Teléfono Directo: +53 54321098
+• Teléfono Directo: 54413935
 • Correo Electrónico: emisora@cmnl.cu
 • Usuario de Acceso: admin
 • Contraseña de Acceso: adminpassword123
@@ -190,15 +190,22 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
         const linkedUserId = m.designatedUserId || 'pedro';
         const linkedUser = users.find(u => u.id === linkedUserId) || users.find(u => u.id === 'pedro');
         const adminRealUser = users.find(u => u.id === 'pedro') || linkedUser;
+        const phone = linkedUser?.mobile || m.mobile || '54413935';
         
         return {
           ...m,
           name: linkedUser && linkedUserId !== 'pedro' ? linkedUser.name : 'Administrador App',
-          mobile: linkedUser?.mobile || m.mobile,
+          mobile: phone,
           email: linkedUser?.email || m.email,
+          info: `DATOS DE LA CUENTA DE ADMINISTRADOR APP:
+• Teléfono Directo: ${phone}
+• Correo Electrónico: ${linkedUser?.email || m.email}
+• Usuario de Acceso: admin
+• Contraseña de Acceso: adminpassword123
+
+Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`,
           deviceLimitEnabled: adminRealUser?.deviceLimitEnabled || false,
-          authorizedDevices: linkedUser?.authorizedDevices || [],
-          info: ''
+          authorizedDevices: linkedUser?.authorizedDevices || []
         };
       }
       return m;

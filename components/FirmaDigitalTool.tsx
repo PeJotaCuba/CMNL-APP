@@ -38,16 +38,22 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
   const abstractAdminTeamMember = equipoData.find((m: any) => m.id === 'admin_app_static');
   
+  const effectiveAdminPhone = React.useMemo(() => {
+    const linked = abstractAdminTeamMember?.designatedUserId 
+      ? equipoData.find((m: any) => m.id === abstractAdminTeamMember.designatedUserId)
+      : null;
+    return linked?.mobile || linked?.phone || abstractAdminTeamMember?.mobile || abstractAdminTeamMember?.phone || ADMIN_PHONE;
+  }, [abstractAdminTeamMember, equipoData, ADMIN_PHONE]);
+
   // Resolve who the physical person is for the Admin
   const physicalAdminUser = React.useMemo(() => {
     if (!isAdmin) return null;
     if (userTeamMember && userTeamMember.id !== 'admin_app_static') {
       return userTeamMember;
     }
-    if (abstractAdminTeamMember?.designatedUserId) {
-      return equipoData.find((m: any) => m.id === abstractAdminTeamMember.designatedUserId);
-    }
-    return null;
+    return (abstractAdminTeamMember?.designatedUserId) 
+      ? equipoData.find((m: any) => m.id === abstractAdminTeamMember.designatedUserId) 
+      : null;
   }, [isAdmin, userTeamMember, abstractAdminTeamMember, equipoData]);
 
   const physicalAdminUserAuth = React.useMemo(() => {
@@ -1119,7 +1125,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const handleSendDirectorCertWhatsApp = (cert: any) => {
     if (!cert) return;
     const msg = `Hola Administrador, aquí le envío el certificado (.razon) firmado por la Directora para el usuario: *${cert.userData.fullName}*.\n\nFirma Directora:\n_${cert.directorSignature}_`;
-    openWhatsApp(msg, ADMIN_PHONE);
+    openWhatsApp(msg, effectiveAdminPhone);
   };
 
   // Validate request owner bypass
@@ -1161,7 +1167,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                   <p className="text-xs text-stone-500 italic">No se encontraron especialidades registradas en el personal.</p>
                 ) : (
                   pendingRequest.specialties.map((spec: string, idx: number) => (
-                    <div key={spec} className="space-y-1">
+                    <div key={`${spec}-${idx}`} className="space-y-1">
                       <div className="flex justify-between items-center bg-black/40 border border-amber-500/30 rounded-lg p-3">
                          <span className="text-white font-mono text-sm">{spec}: {contractNumbers[spec] ? contractNumbers[spec] : 'No proporcionado'}</span>
                          <CheckCircle2 size={18} className="text-amber-500" />
@@ -1282,8 +1288,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <div className="space-y-2">
               <p className="text-stone-500 text-[10px] uppercase font-bold">Contratos Autorizados</p>
               <div className="space-y-1">
-                {Object.entries(loadedCert.contracts || {}).map(([spec, num]) => (
-                  <div key={spec} className="flex justify-between p-2.5 bg-black/20 rounded-xl border border-white/5">
+                {Object.entries(loadedCert.contracts || {}).map(([spec, num], idx) => (
+                  <div key={`${spec}-${idx}`} className="flex justify-between p-2.5 bg-black/20 rounded-xl border border-white/5">
                     <span className="text-xs text-stone-300">{spec}</span>
                     <span className="text-xs text-blue-400 font-mono font-bold">{num && String(num).trim() !== '' ? num : 'N/A'}</span>
                   </div>
@@ -1905,16 +1911,16 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </div>
             ) : (
               <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
-                {pendingDirectorSigCerts.map((cert: any) => (
-                  <div key={cert.userId} className="p-4 bg-black/30 rounded-xl border border-white/5 hover:border-yellow-500/30 transition-colors flex justify-between items-center gap-4">
+                {pendingDirectorSigCerts.map((cert: any, idx: number) => (
+                  <div key={cert.userId || idx} className="p-4 bg-black/30 rounded-xl border border-white/5 hover:border-yellow-500/30 transition-colors flex justify-between items-center gap-4">
                     <div className="text-left space-y-1">
                       <p className="text-white text-xs font-bold">{cert.userData.fullName}</p>
                       <p className="text-[10px] text-stone-500">
                         CI: {cert.userData.ci} | Tomo: <span className="blur-[4px] select-none text-stone-600 font-sans italic opacity-70">DIFFUSE</span> Folio: <span className="blur-[4px] select-none text-stone-600 font-sans italic opacity-70">DIFFUSE</span>
                       </p>
                       <div className="flex gap-2">
-                        {Object.entries(cert.contracts || {}).map(([s, n]) => (
-                          <span key={s} className="text-[8px] bg-[#9E7649]/10 text-yellow-500 rounded px-1">{s}: {String(n)}</span>
+                        {Object.entries(cert.contracts || {}).map(([s, n], sIdx) => (
+                          <span key={`${s}-${sIdx}`} className="text-[8px] bg-[#9E7649]/10 text-yellow-500 rounded px-1">{s}: {String(n)}</span>
                         ))}
                       </div>
                     </div>
@@ -1998,8 +2004,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 <p className="text-xs text-stone-500 italic">No hay certificados registrados en la Base de Datos.</p>
               ) : (
                 <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {(digitalSignatures.validated_users || []).map((userCert: any) => (
-                    <div key={userCert.userId} className="p-4 bg-black/30 rounded-xl border border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  {(digitalSignatures.validated_users || []).map((userCert: any, idx: number) => (
+                    <div key={userCert.userId || idx} className="p-4 bg-black/30 rounded-xl border border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="text-left space-y-1">
                         <p className="text-white text-xs font-bold">{userCert.userData?.fullName}</p>
                         <p className="text-[10px] text-stone-400 font-mono">CI: {userCert.userData?.ci}</p>
@@ -2144,8 +2150,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 <div>
                   <span className="text-stone-500 text-[9px] uppercase font-bold block">Contratos Autorizados:</span>
                   <div className="space-y-0.5">
-                    {Object.entries(signingCert.contracts || {}).map(([s, n]) => (
-                      <div key={s} className="flex justify-between text-[11px]">
+                    {Object.entries(signingCert.contracts || {}).map(([s, n], sIdx) => (
+                      <div key={`${s}-${sIdx}`} className="flex justify-between text-[11px]">
                         <span className="text-stone-400 text-[10px]">{s}:</span>
                         <span className="text-yellow-500 font-mono">{String(n)}</span>
                       </div>
@@ -2253,7 +2259,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </button>
               <button
                 onClick={() => {
-                  openWhatsApp(redirectDialog.msg, ADMIN_PHONE);
+                  openWhatsApp(redirectDialog.msg, effectiveAdminPhone);
                   setRedirectDialog(null);
                 }}
                 className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-500 transition-all text-xs uppercase"

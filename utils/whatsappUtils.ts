@@ -5,7 +5,12 @@
  */
 export const openWhatsApp = (text: string, phone: string = '') => {
   const encodedText = encodeURIComponent(text);
-  const cleanPhone = phone.replace(/\D/g, '');
+  let cleanPhone = phone.replace(/\D/g, '');
+  
+  // Specific fix for Cuba numbers: if 8 digits starting with 5 or 6, prepend country code 53
+  if (cleanPhone.length === 8 && (cleanPhone.startsWith('5') || cleanPhone.startsWith('6'))) {
+    cleanPhone = '53' + cleanPhone;
+  }
   
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
