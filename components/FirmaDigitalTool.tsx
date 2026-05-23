@@ -12,7 +12,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const [downloadedSemanal, setDownloadedSemanal] = useState<boolean>(false);
   const [redirectDialog, setRedirectDialog] = useState<{ visible: boolean; filename: string; msg: string } | null>(null);
   const ADMIN_EMAIL = 'emisora@cmnl.cu'; // Administrator email
-  const ADMIN_PHONE = '+53 54321098'; // Direct administrator phone number
+  const ADMIN_PHONE = '54413935'; // Direct administrator phone number
 
   // Check if a string represents the Station Director (e.g., "Director de emisora" or "Directora d emisora")
   const isStationDirector = (classificationStr?: string, specialtyStr?: string) => {
@@ -1122,10 +1122,42 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     a.click();
   };
 
-  const handleSendDirectorCertWhatsApp = (cert: any) => {
+  const handleSendDirectorCertWhatsApp = async (cert: any) => {
     if (!cert) return;
     const msg = `Hola Administrador, aquí le envío el certificado (.razon) firmado por la Directora para el usuario: *${cert.userData.fullName}*.\n\nFirma Directora:\n_${cert.directorSignature}_`;
-    openWhatsApp(msg, effectiveAdminPhone);
+    const filename = `razon_firmado_${cert.userData.fullName.replace(/\s+/g, '_')}.razon`;
+    
+    try {
+      const fileContent = JSON.stringify(cert, null, 2);
+      // Use text/plain so mobile browsers accept the file in Web Share API
+      const file = new File([fileContent], filename, { type: 'text/plain' });
+      
+      const shareData = {
+        files: [file],
+        title: 'Certificado .razon firmado',
+        text: msg
+      };
+
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        return;
+      } else if (navigator.share) {
+        // Fallback to try sharing even if canShare is false (some browsers have flawed canShare)
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err: any) {
+      console.log("Share API falló o cancelada", err);
+      if (err.name === 'AbortError') {
+        return;
+      }
+    }
+    
+    setRedirectDialog({
+      visible: true,
+      filename,
+      msg
+    });
   };
 
   // Validate request owner bypass
@@ -1811,8 +1843,51 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             showAlert("¡Archivo .semanal descargado con éxito! Por favor, proceda al Paso 2: compartirlo por WhatsApp.", 'success');
           };
 
-          const handleShareSemanalWhatsApp = () => {
+          const handleShareSemanalWhatsApp = async () => {
             const msg = `Hola Administrador, aquí le envío mi archivo de solicitud .semanal para la firma digital del usuario: *${nameForFile}*.\n\nPor favor, procéselo en su panel de Gestión.`;
+            
+            try {
+              const fileContent = JSON.stringify(reqObj || {
+                type: 'SEMANAL_REQUEST',
+                userId: userId,
+                userData: {
+                  ci: formData.ci || '',
+                  tomo: formData.tomo || '',
+                  folio: formData.folio || '',
+                  contract1: formData.contract1 || '',
+                  contract2: formData.contract2 || '',
+                  fullName: nameForFile
+                },
+                publicKey: '',
+                timestamp: new Date().toISOString()
+              }, null, 2);
+              
+              // Use text/plain so mobile browsers accept the file in Web Share API
+              const file = new File([fileContent], filename, { type: 'text/plain' });
+              
+              const shareData = {
+                files: [file],
+                title: 'Solicitud .semanal',
+                text: msg
+              };
+
+              if (navigator.canShare && navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+                return; // Shared successfully
+              } else if (navigator.share) {
+                // Fallback to try sharing even if canShare is false (some browsers have flawed canShare)
+                await navigator.share(shareData);
+                return;
+              }
+            } catch (err: any) {
+              console.log("Share API falló o fue cancelada", err);
+              // If user cancelled, don't show the fallback dialog
+              if (err.name === 'AbortError') {
+                return;
+              }
+            }
+
+            // Fallback for browsers that don't support file sharing
             setRedirectDialog({
               visible: true,
               filename,
@@ -2246,7 +2321,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Redirección a WhatsApp</h3>
             <p className="text-xs text-stone-300 leading-relaxed font-sans px-2">
               Se le redirigirá al chat con el Administrador. 
-              Por favor, asegúrese de adjuntar manualmente en el chat el archivo punto semanal que descargó anteriormente bajo el nombre exacto: 
+              Por favor, asegúrese de adjuntar manualmente en el chat el archivo {redirectDialog.filename.endsWith('.razon') ? 'punto razon' : 'punto semanal'} que generó o descargó anteriormente bajo el nombre exacto: 
               <br />
               <b className="text-amber-400 font-mono block mt-1 break-all bg-black/30 p-2 rounded border border-white/5">{redirectDialog.filename}</b>
             </p>
