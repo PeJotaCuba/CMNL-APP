@@ -140,6 +140,14 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     return lower;
   };
 
+  const cleanBio = (val: string | undefined): string => {
+    if (!val) return '';
+    if (val.includes('DATOS DE LA CUENTA DE ADMINISTRADOR APP') || val.includes('Contraseña de Acceso:') || val.includes('Usuario de Acceso:')) {
+      return `Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`;
+    }
+    return val.trim();
+  };
+
   const STATIC_ADMIN_MEMBER: TeamMember = {
     id: 'admin_app_static',
     name: 'Administrador App',
@@ -147,13 +155,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     level: 'Administración Global',
     photoUrl: '',
     email: 'emisora@cmnl.cu',
-    info: `DATOS DE LA CUENTA DE ADMINISTRADOR APP:
-• Teléfono Directo: 54413935
-• Correo Electrónico: emisora@cmnl.cu
-• Usuario de Acceso: admin
-• Contraseña de Acceso: adminpassword123
-
-Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`,
+    info: `Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`,
     habitualPrograms: []
   };
 
@@ -176,8 +178,13 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
       loadedTeam = [STATIC_ADMIN_MEMBER, ...loadedTeam];
       localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(loadedTeam));
     } else {
-      // Force update its info and fields to match requirements to avoid stale structures, but preserve administrative modifications
-      loadedTeam = loadedTeam.map(m => m.id === 'admin_app_static' ? { ...STATIC_ADMIN_MEMBER, ...m, designatedUserId: m.designatedUserId } : m);
+      // Force update its info and fields to match requirements, but preserve administrative modifications
+      loadedTeam = loadedTeam.map(m => m.id === 'admin_app_static' ? { 
+        ...STATIC_ADMIN_MEMBER, 
+        ...m, 
+        info: cleanBio(m.info) || STATIC_ADMIN_MEMBER.info,
+        designatedUserId: m.designatedUserId 
+      } : m);
     }
     
     setTeam(loadedTeam);
@@ -197,13 +204,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
           name: linkedUser && linkedUserId !== 'pedro' ? linkedUser.name : 'Administrador App',
           mobile: phone,
           email: linkedUser?.email || m.email,
-          info: `DATOS DE LA CUENTA DE ADMINISTRADOR APP:
-• Teléfono Directo: ${phone}
-• Correo Electrónico: ${linkedUser?.email || m.email}
-• Usuario de Acceso: admin
-• Contraseña de Acceso: adminpassword123
-
-Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`,
+          info: cleanBio(m.info) || `Cuenta técnica permanente del sistema. Ofrece control completo de programaciones y validación criptográfica de identidades.`,
           deviceLimitEnabled: adminRealUser?.deviceLimitEnabled || false,
           authorizedDevices: linkedUser?.authorizedDevices || []
         };
@@ -1397,7 +1398,7 @@ Cuenta técnica permanente del sistema. Ofrece control completo de programacione
                       name: editingMember.name,
                       specialty: isStaticAdmin ? 'Soporte, Redacción y Criptografía' : cleanJoined(editingMember.specialty || ''),
                       level: isStaticAdmin ? 'Administración Global' : cleanJoined(editingMember.level || ''),
-                      info: isStaticAdmin ? '' : (editingMember.info || ''),
+                      info: editingMember.info || '',
                       email: isStaticAdmin ? (adminLinkedUser?.email || '') : (editingMember.email || ''),
                       mobile: isStaticAdmin ? (adminLinkedUser?.mobile || '') : (editingMember.mobile || ''),
                       photoUrl: editingMember.photoUrl || '',
