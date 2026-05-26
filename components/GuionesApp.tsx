@@ -6,6 +6,88 @@ import { StatsView } from './StatsView';
 import * as XLSX from 'xlsx-js-style';
 import { juanaPorDentroData } from '../utils/juanaPorDentroData';
 
+export const isDateStringMatchingMonth = (dateStr: string, monthIdx: number): boolean => {
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    const str = dateStr.toLowerCase().trim();
+    
+    const monthNames = [
+        ["enero", "ene"],
+        ["febrero", "feb"],
+        ["marzo", "mar"],
+        ["abril", "abr"],
+        ["mayo", "may"],
+        ["junio", "jun"],
+        ["julio", "jul"],
+        ["agosto", "ago"],
+        ["septiembre", "sep"],
+        ["octubre", "oct"],
+        ["noviembre", "nov"],
+        ["diciembre", "dic"]
+    ];
+
+    for (let i = 0; i < 12; i++) {
+        if (i !== monthIdx) {
+            if (str.includes(monthNames[i][0])) {
+                return false;
+            }
+            if (i === 4) {
+                if (str.includes("mayo") || str.includes("may")) {
+                    return false;
+                }
+            } else if (i === 2) {
+                if (str.includes("marzo") || str.includes("mar")) {
+                     return false;
+                }
+            } else {
+                if (str.includes(monthNames[i][1])) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    const targetFull = monthNames[monthIdx][0];
+    const targetAbr = monthNames[monthIdx][1];
+    
+    if (str.includes(targetFull)) return true;
+    if (str.includes(targetAbr)) return true;
+
+    const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (ymdMatch) {
+        const monthNum = parseInt(ymdMatch[2], 10);
+        return (monthNum - 1) === monthIdx;
+    }
+
+    const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if (dmyMatch) {
+        const p1 = parseInt(dmyMatch[1], 10);
+        const p2 = parseInt(dmyMatch[2], 10);
+        if (p2 > 12) {
+            return (p1 - 1) === monthIdx;
+        }
+        return (p2 - 1) === monthIdx;
+    }
+
+    const myMatch = str.match(/^(\d{1,2})[\/\-](\d{4})$/);
+    if (myMatch) {
+        const monthNum = parseInt(myMatch[1], 10);
+        return (monthNum - 1) === monthIdx;
+    }
+
+    const targetMonthStr2Digit = (monthIdx + 1).toString().padStart(2, '0');
+    const targetMonthStr1Digit = (monthIdx + 1).toString();
+    
+    const tokens = str.split(/[^\d]+/);
+    const hasMonthToken = tokens.some(tok => tok === targetMonthStr2Digit || tok === targetMonthStr1Digit);
+    
+    if (hasMonthToken) {
+        const parsedDate = parseSpanishDate(dateStr);
+        return parsedDate.getMonth() === monthIdx;
+    }
+
+    return false;
+};
+
 export const parseSpanishDate = (dateStr: string): Date => {
     if (!dateStr || typeof dateStr !== 'string') return new Date();
     
@@ -87,6 +169,140 @@ export const formatSpanishDate = (dateStr: string): string => {
     const d = parseSpanishDate(dateStr);
     if (isNaN(d.getTime())) return dateStr;
     return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+export const getSimilarity = (s1: string, s2: string): number => {
+    const str1 = (s1 || '').trim().toLowerCase();
+    const str2 = (s2 || '').trim().toLowerCase();
+    if (str1 === str2) return 1.0;
+    if (!str1 || !str2) return 0.0;
+    
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const maxLen = Math.max(len1, len2);
+    
+    const matrix: number[][] = [];
+    for (let i = 0; i <= len1; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= len2; j++) {
+        matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= len1; i++) {
+        for (let j = 1; j <= len2; j++) {
+            if (str1[i - 1] === str2[j - 1]) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,    // deletion
+                    matrix[i][j - 1] + 1,    // insertion
+                    matrix[i - 1][j - 1] + 1 // substitution
+                );
+            }
+        }
+    }
+    
+    const distance = matrix[len1][len2];
+    return 1.0 - distance / maxLen;
+};
+
+export const isValidScriptDate = (dateStr: any): boolean => {
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    const str = dateStr.trim().toLowerCase();
+    if (!str) return false;
+
+    // Reject things that are definitely not dates
+    if (
+        str.includes('archivo') || 
+        str.includes('escribe') || 
+        str.includes('sin fecha') || 
+        str.includes('escribir') || 
+        str.includes('director') || 
+        str.includes('coordinador') ||
+        str.includes('locutor') ||
+        str.includes('audio') ||
+        str.includes('grabacion') ||
+        str.includes('grabación') ||
+        str.includes('seccion') ||
+        str.includes('sección')
+    ) {
+        return false;
+    }
+
+    // Must have digits OR Spanish months
+    const SpanishMonths = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre', 'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    
+    const hasMonthWord = SpanishMonths.some(m => str.includes(m));
+    const hasDigits = /\d+/.test(str);
+    
+    if (!hasDigits && !hasMonthWord) {
+        return false;
+    }
+
+    if (str.length > 50) return false;
+    
+    return true;
+};
+
+export const isValidScriptTheme = (theme: any): boolean => {
+    if (!theme) return false;
+    let text = '';
+    if (Array.isArray(theme)) {
+        if (theme.length === 0) return false;
+        text = theme.join('').trim().toLowerCase();
+    } else if (typeof theme === 'string') {
+        text = theme.trim().toLowerCase();
+    } else {
+        return false;
+    }
+    
+    if (!text) return false;
+    if (
+        text === 'general' || 
+        text.includes('no especificado') || 
+        text.includes('sin tema') || 
+        text.includes('desconocido') ||
+        text === 'sin título' ||
+        text === 'sin titulo'
+    ) {
+        return false;
+    }
+    
+    return true;
+};
+
+export const isValidScriptWriter = (writer: any): boolean => {
+    if (!writer || typeof writer !== 'string') return false;
+    const str = writer.trim().toLowerCase();
+    if (!str) return false;
+    if (
+        str === 'desconocido' || 
+        str === 'no especificado' || 
+        str === 'sin escritor' || 
+        str === 'sin autor' ||
+        str.includes('desconocid') ||
+        str.includes('no especificad')
+    ) {
+        return false;
+    }
+    return true;
+};
+
+export const isValidScriptAdvisor = (advisor: any): boolean => {
+    if (!advisor || typeof advisor !== 'string') return false;
+    const str = advisor.trim().toLowerCase();
+    if (!str) return false;
+    if (
+        str === 'desconocido' || 
+        str === 'no especificado' || 
+        str === 'sin asesor' || 
+        str.includes('desconocid') ||
+        str.includes('no especificad')
+    ) {
+        return false;
+    }
+    return true;
 };
 
 export const PROGRAMS = [
@@ -207,6 +423,11 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
     const [balanceSearch, setBalanceSearch] = useState('');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, message: string, onConfirm: () => void} | null>(null);
+    const [importReport, setImportReport] = useState<{ total: number; loaded: number; rejected: { title: string; genre: string; reason: string }[] } | null>(null);
+    const [showHomologar, setShowHomologar] = useState(false);
+    const [homologarField, setHomologarField] = useState<'writer' | 'advisor' | 'both'>('both');
+    const [homologarOriginal, setHomologarOriginal] = useState('');
+    const [homologarSuggestions, setHomologarSuggestions] = useState<{ field: string; s1: string; s2: string; sim: number }[]>([]);
 
     const [showNewScript, setShowNewScript] = useState(false);
     const [editingScript, setEditingScript] = useState<Script | null>(null);
@@ -263,7 +484,14 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         const saved = localStorage.getItem(key);
         if (!saved) return [];
         try {
-            return JSON.parse(saved);
+            const rawScripts: Script[] = JSON.parse(saved);
+            return rawScripts.filter(s => {
+                const hasDate = isValidScriptDate(s.dateAdded);
+                const hasTheme = isValidScriptTheme(s.themes || s.title);
+                const hasWriter = isValidScriptWriter(s.writer);
+                const hasAdvisor = isValidScriptAdvisor(s.advisor);
+                return hasDate && hasTheme && hasWriter && hasAdvisor;
+            });
         } catch (e) {
             return [];
         }
@@ -273,6 +501,17 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         if (!currentUser) return [];
         return PROGRAMS;
     }, [currentUser]);
+
+    const uniquePersonnel = useMemo(() => {
+        if (!selectedProgram) return [];
+        const program = PROGRAMS.find(p => p.name === selectedProgram);
+        if (!program) return [];
+        const scripts = getProgramScripts(program);
+        return Array.from(new Set([
+            ...scripts.map(s => s.writer),
+            ...scripts.map(s => s.advisor)
+        ].filter(Boolean))).sort();
+    }, [selectedProgram, refreshTrigger]);
 
     const filteredPrograms = useMemo(() => {
         let allowed = availablePrograms;
@@ -344,24 +583,70 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
         setIsProcessing(true);
         try {
             const parsedScripts: Script[] = [];
+            const rejectedScripts: { title: string; genre: string; reason: string }[] = [];
+            let totalFound = 0;
 
             for (const file of files) {
                 const text = await file.text();
                 const rawEntries = text.split(/_{4,}/);
 
                 rawEntries.forEach(raw => {
-                    const script = parseRawEntry(raw);
-                    if (script) parsedScripts.push(script);
+                    const trimmed = raw.trim();
+                    if (!trimmed) return;
+                    totalFound++;
+
+                    // Custom extract to check raw text
+                    const extractField = (key: string) => {
+                        const regex = new RegExp(`${key}\\s*(.*?)(?=\\n(?:Programa|Fecha|Escritor|Asesor|Tema|Temas|Título|Titular|Autor):|$)`, 'is');
+                        const match = trimmed.match(regex);
+                        return match ? match[1].trim() : '';
+                    };
+
+                    const valFecha = extractField('Fecha:');
+                    const valTema = extractField('Temas:') || extractField('Tema:') || extractField('Temáticas:') || extractField('Temática:');
+                    const valEscritor = extractField('Escritor:') || extractField('Autor:');
+                    const valAsesor = extractField('Asesor:');
+                    const title = extractField('Título:') || extractField('Titular:') || valTema || 'Sin título';
+                    const matchedGenre = extractField('Programa:') || extractField('Género:') || 'Desconocido';
+
+                    const missing: string[] = [];
+                    if (!valFecha || !isValidScriptDate(valFecha)) missing.push('Fecha');
+                    if (!valTema || !isValidScriptTheme(valTema)) missing.push('Tema / Temáticas');
+                    if (!valEscritor || !isValidScriptWriter(valEscritor)) missing.push('Escritor / Autor');
+                    if (!valAsesor || !isValidScriptAdvisor(valAsesor)) missing.push('Asesor');
+
+                    if (missing.length > 0) {
+                        rejectedScripts.push({
+                            title: title || 'Sin título',
+                            genre: matchedGenre,
+                            reason: `Falta o Inválido: ${missing.join(', ')}`
+                        });
+                    } else {
+                        const script = parseRawEntry(trimmed);
+                        if (script && isValidScriptDate(script.dateAdded) && isValidScriptTheme(script.themes) && isValidScriptWriter(script.writer) && isValidScriptAdvisor(script.advisor)) {
+                            parsedScripts.push(script);
+                        } else {
+                            rejectedScripts.push({
+                                title: title || 'Sin título',
+                                genre: matchedGenre,
+                                reason: 'Falta o Inválido: Datos estructurales incompletos'
+                            });
+                        }
+                    }
                 });
             }
 
-            if (parsedScripts.length === 0) {
-                alert("No se encontraron registros válidos.");
-                return;
+            if (parsedScripts.length > 0) {
+                distributeScripts(parsedScripts, false);
             }
-
-            distributeScripts(parsedScripts, false);
-            alert(`Carga global completada. Se procesaron ${parsedScripts.length} guiones.`);
+            
+            // Set the import report to show it at the end
+            setImportReport({
+                total: totalFound,
+                loaded: parsedScripts.length,
+                rejected: rejectedScripts
+            });
+            
         } catch (error) {
             alert("Error al procesar los archivos.");
         } finally {
@@ -407,6 +692,193 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                 </div>
             </div>
         );
+    };
+
+    const handleOpenHomologar = () => {
+        if (!selectedProgram) return;
+        const program = PROGRAMS.find(p => p.name === selectedProgram);
+        if (!program) return;
+        
+        const scripts = getProgramScripts(program);
+        const writers = Array.from(new Set(scripts.map(s => s.writer).filter(Boolean)));
+        const advisors = Array.from(new Set(scripts.map(s => s.advisor).filter(Boolean)));
+        
+        const found: { field: string; s1: string; s2: string; sim: number }[] = [];
+        
+        // Scan writers
+        for (let i = 0; i < writers.length; i++) {
+            for (let j = i + 1; j < writers.length; j++) {
+                const sim = getSimilarity(writers[i], writers[j]);
+                if (sim >= 0.8 && sim < 1.0) {
+                    found.push({ field: 'Escritor', s1: writers[i], s2: writers[j], sim });
+                }
+            }
+        }
+        
+        // Scan advisors
+        for (let i = 0; i < advisors.length; i++) {
+            for (let j = i + 1; j < advisors.length; j++) {
+                const sim = getSimilarity(advisors[i], advisors[j]);
+                if (sim >= 0.8 && sim < 1.0) {
+                    found.push({ field: 'Asesor', s1: advisors[i], s2: advisors[j], sim });
+                }
+            }
+        }
+        
+        setHomologarSuggestions(found);
+        setHomologarOriginal('');
+        setHomologarField('both');
+        setShowHomologar(true);
+    };
+
+    const getHomologarCandidates = (original: string, field: 'writer' | 'advisor' | 'both') => {
+        if (!original.trim() || !selectedProgram) return [];
+        const program = PROGRAMS.find(p => p.name === selectedProgram);
+        if (!program) return [];
+        
+        const scripts = getProgramScripts(program);
+        const candidates = new Set<string>();
+        
+        scripts.forEach(s => {
+            if ((field === 'writer' || field === 'both') && s.writer) {
+                const sim = getSimilarity(s.writer, original);
+                if (sim >= 0.8 && sim < 1.0) {
+                    candidates.add(s.writer);
+                }
+            }
+            if ((field === 'advisor' || field === 'both') && s.advisor) {
+                const sim = getSimilarity(s.advisor, original);
+                if (sim >= 0.8 && sim < 1.0) {
+                    candidates.add(s.advisor);
+                }
+            }
+        });
+        
+        return Array.from(candidates);
+    };
+
+    const handleApplyHomologation = () => {
+        if (!selectedProgram || !homologarOriginal.trim()) return;
+        const program = PROGRAMS.find(p => p.name === selectedProgram);
+        if (!program) return;
+        
+        if (onDirtyChange) onDirtyChange(true);
+        const scripts = getProgramScripts(program);
+        
+        let count = 0;
+        const updated = scripts.map(s => {
+            const newS = { ...s };
+            let changed = false;
+            
+            if (homologarField === 'writer' || homologarField === 'both') {
+                if (s.writer && getSimilarity(s.writer, homologarOriginal) >= 0.8) {
+                    if (s.writer !== homologarOriginal) {
+                        newS.writer = homologarOriginal;
+                        changed = true;
+                    }
+                }
+            }
+            
+            if (homologarField === 'advisor' || homologarField === 'both') {
+                if (s.advisor && getSimilarity(s.advisor, homologarOriginal) >= 0.8) {
+                    if (s.advisor !== homologarOriginal) {
+                        newS.advisor = homologarOriginal;
+                        changed = true;
+                    }
+                }
+            }
+            
+            if (changed) count++;
+            return newS;
+        });
+        
+        if (count > 0) {
+            localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify(updated));
+            setRefreshTrigger(prev => prev + 1);
+            alert(`Homologación exitosa. Se actualizaron ${count} guiones con el nombre definitivo "${homologarOriginal}".`);
+            setShowHomologar(false);
+        } else {
+            alert('No se encontraron coincidencias para homologar.');
+        }
+    };
+
+    const handleDirectHomologation = (field: 'Escritor' | 'Asesor', targetName: string, obsoleteName: string) => {
+        if (!selectedProgram) return;
+        const program = PROGRAMS.find(p => p.name === selectedProgram);
+        if (!program) return;
+
+        if (onDirtyChange) onDirtyChange(true);
+        const scripts = getProgramScripts(program);
+
+        let count = 0;
+        const updated = scripts.map(s => {
+            const newS = { ...s };
+            let changed = false;
+
+            const isWriterField = field === 'Escritor';
+            const isAdvisorField = field === 'Asesor';
+
+            if (isWriterField) {
+                if (s.writer && (s.writer === obsoleteName || getSimilarity(s.writer, targetName) >= 0.8)) {
+                    if (s.writer !== targetName) {
+                        newS.writer = targetName;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (isAdvisorField) {
+                if (s.advisor && (s.advisor === obsoleteName || getSimilarity(s.advisor, targetName) >= 0.8)) {
+                    if (s.advisor !== targetName) {
+                        newS.advisor = targetName;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed) count++;
+            return newS;
+        });
+
+        if (count > 0) {
+            localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify(updated));
+            setRefreshTrigger(prev => prev + 1);
+            
+            // Re-scan remaining suggestions after applying this homologation
+            const remainingScripts = updated.filter(s => {
+                const hasDate = isValidScriptDate(s.dateAdded);
+                const hasTheme = isValidScriptTheme(s.themes || s.title);
+                const hasWriter = isValidScriptWriter(s.writer);
+                const hasAdvisor = isValidScriptAdvisor(s.advisor);
+                return hasDate && hasTheme && hasWriter && hasAdvisor;
+            });
+            const writers = Array.from(new Set(remainingScripts.map(s => s.writer).filter(Boolean)));
+            const advisors = Array.from(new Set(remainingScripts.map(s => s.advisor).filter(Boolean)));
+            
+            const found: { field: string; s1: string; s2: string; sim: number }[] = [];
+            for (let i = 0; i < writers.length; i++) {
+                for (let j = i + 1; j < writers.length; j++) {
+                    const sim = getSimilarity(writers[i], writers[j]);
+                    if (sim >= 0.8 && sim < 1.0) {
+                        found.push({ field: 'Escritor', s1: writers[i], s2: writers[j], sim });
+                    }
+                }
+            }
+            for (let i = 0; i < advisors.length; i++) {
+                for (let j = i + 1; j < advisors.length; j++) {
+                    const sim = getSimilarity(advisors[i], advisors[j]);
+                    if (sim >= 0.8 && sim < 1.0) {
+                        found.push({ field: 'Asesor', s1: advisors[i], s2: advisors[j], sim });
+                    }
+                }
+            }
+            setHomologarSuggestions(found);
+            setHomologarOriginal('');
+            
+            alert(`Homologación exitosa. Se actualizaron ${count} guiones con el nombre definitivo "${targetName}".`);
+        } else {
+            alert('No se encontraron guiones que requieran homologación.');
+        }
     };
 
     const handleDeleteScript = (id: string) => {
@@ -611,9 +1083,9 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             });
         }
         if (balanceMonth !== 'Todos') {
+            const targetMonthIdx = parseInt(balanceMonth, 10) - 1;
             filtered = filtered.filter(s => {
-                const d = parseSpanishDate(s.dateAdded);
-                return !isNaN(d.getTime()) && (d.getMonth() + 1).toString() === balanceMonth;
+                return isDateStringMatchingMonth(s.dateAdded, targetMonthIdx);
             });
         }
 
@@ -1043,6 +1515,14 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                 <button onClick={() => setShowPulir(true)} className="flex items-center justify-center p-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-colors" title="Pulir">
                                     <Wand2 size={24} />
                                 </button>
+                                <button 
+                                    onClick={handleOpenHomologar} 
+                                    className="flex items-center gap-2 px-4 py-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:text-white transition-all text-sm font-bold" 
+                                    title="Homologar nombres similares (Escritor / Asesor)"
+                                >
+                                    <Wand2 size={18} />
+                                    <span>Homologar</span>
+                                </button>
                                 <button onClick={() => {
                                     setConfirmDialog({
                                         isOpen: true,
@@ -1451,6 +1931,255 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                                     className="flex-1 px-4 py-3 bg-red-600 rounded-xl text-white font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
                                 >
                                     Confirmar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {importReport && (
+                    <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="bg-[#2C1B15] w-full max-w-2xl rounded-3xl border border-[#9E7649]/30 p-6 flex flex-col max-h-[85vh] shadow-[0_0_50px_rgba(158,118,73,0.15)] animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between border-b border-[#9E7649]/20 pb-4 mb-4">
+                                <h3 className="font-bold text-xl text-white flex items-center gap-2">
+                                    <Database size={24} className="text-[#9E7649]" />
+                                    Resultado de Carga Global
+                                </h3>
+                                <button 
+                                    onClick={() => setImportReport(null)}
+                                    className="p-1.5 rounded-full hover:bg-white/10 text-stone-300 transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    <div className="bg-[#1A100C]/60 p-4 rounded-xl border border-[#9E7649]/10 text-center">
+                                        <p className="text-xs text-[#E8DCCF]/50 font-bold uppercase tracking-tight">Total Encontrados</p>
+                                        <p className="text-2xl font-black text-white mt-1">{importReport.total}</p>
+                                    </div>
+                                    <div className="bg-[#1A100C]/60 p-4 rounded-xl border border-[#9E7649]/10 text-center">
+                                        <p className="text-xs text-[#E8DCCF]/50 font-bold uppercase tracking-tight text-emerald-500">Cargados con Éxito</p>
+                                        <p className="text-2xl font-black text-emerald-400 mt-1">{importReport.loaded}</p>
+                                    </div>
+                                    <div className="bg-[#1A100C]/60 p-4 rounded-xl border border-[#9E7649]/10 text-center col-span-2 sm:col-span-1">
+                                        <p className="text-xs text-[#E8DCCF]/50 font-bold uppercase tracking-tight text-red-500">Rechazados</p>
+                                        <p className="text-2xl font-black text-red-400 mt-1">{importReport.rejected.length}</p>
+                                    </div>
+                                </div>
+                                
+                                {importReport.rejected.length > 0 && (
+                                    <div className="space-y-2">
+                                        <h4 className="text-sm font-bold text-red-400 flex items-center gap-1.5 mt-2">
+                                            <AlertTriangle size={16} />
+                                            Detalle de Guiones Rechazados (Excluidos de la carga):
+                                        </h4>
+                                        <p className="text-xs text-[#E8DCCF]/65 leading-relaxed">
+                                            Para mantener la integridad de la base de datos, se excluyen de la carga todos los guiones que no cuenten con fecha, tema/temas, o escritor/autor definidos en el archivo TXT.
+                                        </p>
+                                        <div className="space-y-2 max-h-60 overflow-y-auto border border-red-900/30 rounded-xl bg-red-900/5 p-3">
+                                            {importReport.rejected.map((rej, i) => (
+                                                <div key={i} className="text-xs border-b border-red-900/20 last:border-0 pb-2 last:pb-0 pt-2 first:pt-0 flex justify-between items-start gap-4">
+                                                    <div>
+                                                        <p className="font-bold text-stone-200">{rej.title}</p>
+                                                        {rej.genre && <p className="text-[10px] text-stone-400 mt-0.5">Programa: {rej.genre}</p>}
+                                                    </div>
+                                                    <span className="shrink-0 font-bold text-red-400 bg-red-900/20 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">
+                                                        {rej.reason}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {importReport.rejected.length === 0 && (
+                                    <div className="p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-900/40 text-emerald-400 rounded-xl shrink-0">
+                                            <Wand2 size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-white text-sm">¡Excelente Integridad de Datos!</h4>
+                                            <p className="text-xs text-stone-300 mt-0.5 font-medium">Todos los registros del archivo TXT contaban con fecha, tema y escritor válidos, y fueron ingresados exitosamente.</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="border-t border-[#9E7649]/20 pt-4 mt-4 flex justify-end">
+                                <button
+                                    onClick={() => setImportReport(null)}
+                                    className="px-6 py-2.5 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold transition-colors shadow-md text-sm"
+                                >
+                                    Cerrar Reporte
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {showHomologar && (
+                    <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                        <div className="bg-[#2C1B15] w-full max-w-xl rounded-3xl border border-[#9E7649]/30 p-6 flex flex-col space-y-4 max-h-[90vh] shadow-[0_0_50px_rgba(158,118,73,0.15)] animate-in fade-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between border-b border-[#9E7649]/20 pb-4">
+                                <h3 className="font-bold text-xl text-white flex items-center gap-2">
+                                    <Wand2 size={24} className="text-[#9E7649]" />
+                                    Homologación de Personal
+                                </h3>
+                                <button 
+                                    onClick={() => setShowHomologar(false)}
+                                    className="p-1.5 rounded-full hover:bg-white/10 text-stone-300 transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <p className="text-xs text-[#E8DCCF]/70 leading-relaxed">
+                                Esta herramienta escanea los guiones de <strong>{selectedProgram}</strong> buscando nombres con variaciones ortográficas menores (coincidencia &gt;= 80%). Al aplicar, todos los nombres detectados se reescribirán automáticamente con el <strong>nombre original definitivo</strong>.
+                            </p>
+
+                            {/* Sugerencias Coincidentes */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-bold text-[#9E7649] uppercase tracking-wide">
+                                    Sugerencias Detectadas (Coincidencia &gt;= 80%):
+                                </label>
+                                {homologarSuggestions.length > 0 ? (
+                                    <div className="space-y-1.5 max-h-56 overflow-y-auto border border-[#9E7649]/15 rounded-xl bg-[#1A100C]/40 p-2.5">
+                                        {homologarSuggestions.map((sug, id) => (
+                                            <div key={id} className="text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-[#1A100C]/80 border border-[#9E7649]/10 p-2.5 rounded-lg hover:border-[#9E7649]/40 transition-all">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className="text-[10px] uppercase font-black text-[#9E7649] bg-[#9E7649]/10 px-1.5 py-0.5 rounded inline-block">
+                                                            {sug.field}
+                                                        </span>
+                                                        <span className="text-[10px] font-mono font-bold text-[#E8DCCF]/50">
+                                                            {Math.round(sug.sim * 100)}% similitud
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-stone-300 mt-1 truncate">
+                                                        <strong>{sug.s1}</strong> ↔ <span className="text-stone-400">{sug.s2}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <select
+                                                        id={`select-sug-${id}`}
+                                                        className="bg-[#2C1B15] border border-[#9E7649]/30 text-stone-200 text-[11px] rounded px-2 py-1 font-medium focus:border-[#9E7649] outline-none max-w-[180px]"
+                                                    >
+                                                        <option value={sug.s1}>Usar: {sug.s1}</option>
+                                                        <option value={sug.s2}>Usar: {sug.s2}</option>
+                                                    </select>
+                                                    <button
+                                                        onClick={() => {
+                                                            const selectElem = document.getElementById(`select-sug-${id}`) as HTMLSelectElement;
+                                                            const target = selectElem ? selectElem.value : sug.s1;
+                                                            const obsolete = target === sug.s1 ? sug.s2 : sug.s1;
+                                                            handleDirectHomologation(sug.field as 'Escritor' | 'Asesor', target, obsolete);
+                                                        }}
+                                                        className="px-3 py-1 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded text-xs font-bold transition-colors shadow-sm"
+                                                    >
+                                                        Aplicar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-xs italic text-stone-400 p-3 bg-[#1A100C]/35 border border-[#9E7649]/5 rounded-xl text-center">
+                                        No se encontraron discrepancias automáticas evidentes en este programa (todas tienen nombres unificados al 80%). Puedes forzar una abajo.
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Selección de original */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-bold text-[#9E7649] uppercase tracking-wide">
+                                    Nombre Original / Definitivo:
+                                </label>
+                                <div className="space-y-2">
+                                    <input
+                                        type="text"
+                                        value={homologarOriginal}
+                                        onChange={(e) => setHomologarOriginal(e.target.value)}
+                                        placeholder="Escribe el nombre correcto..."
+                                        className="w-full p-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-white text-sm outline-none focus:border-[#9E7649] transition-colors placeholder:text-stone-600 font-medium"
+                                    />
+                                    {uniquePersonnel.length > 0 && (
+                                        <select
+                                            value={homologarOriginal}
+                                            onChange={(e) => setHomologarOriginal(e.target.value)}
+                                            className="w-full p-3 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-stone-300 text-xs outline-none focus:border-[#9E7649] transition-colors"
+                                        >
+                                            <option value="">O selecciona un nombre existente...</option>
+                                            {uniquePersonnel.map(person => (
+                                                <option key={person} value={person}>{person}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Campo de homologación */}
+                            <div className="space-y-2">
+                                <label className="block text-xs font-bold text-[#9E7649] uppercase tracking-wide font-mono">
+                                    Buscar y Reemplazar en Campo:
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {(['both', 'writer', 'advisor'] as const).map((fieldOption) => (
+                                        <button
+                                            key={fieldOption}
+                                            onClick={() => setHomologarField(fieldOption)}
+                                            className={`py-2 px-3 rounded-lg text-xs font-black border transition-all ${
+                                                homologarField === fieldOption
+                                                    ? 'bg-[#9E7649] text-white border-[#9E7649]'
+                                                    : 'bg-[#1A100C]/60 hover:bg-[#1A100C] text-[#E8DCCF]/60 border-[#9E7649]/20'
+                                            }`}
+                                        >
+                                            {fieldOption === 'both' ? 'Ambos' : fieldOption === 'writer' ? 'Escritor' : 'Asesor'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Preview Dinámico */}
+                            {homologarOriginal.trim() && (
+                                <div className="p-3 bg-red-950/10 border border-red-950/40 rounded-xl space-y-1.5">
+                                    <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wide">
+                                        Nombres Similares que se convertirán a "{homologarOriginal}":
+                                    </p>
+                                    {getHomologarCandidates(homologarOriginal, homologarField).length > 0 ? (
+                                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                                            {getHomologarCandidates(homologarOriginal, homologarField).map((cand, idx) => (
+                                                <div key={idx} className="text-xs text-stone-300 flex justify-between items-center bg-black/10 px-2 py-1 rounded">
+                                                    <span>• {cand}</span>
+                                                    <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                                                        ({Math.round(getSimilarity(cand, homologarOriginal) * 100)}% coincidencia)
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-[#E8DCCF]/55 italic">
+                                            No se hallaron otras variantes con similitud &gt;= 80% para este nombre.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Botones */}
+                            <div className="flex justify-end gap-3 pt-3 border-t border-[#9E7649]/20">
+                                <button
+                                    onClick={() => setShowHomologar(false)}
+                                    className="px-4 py-2.5 bg-[#1A100C] border border-[#9E7649]/30 rounded-xl text-white font-bold hover:bg-[#3E1E16] text-sm transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleApplyHomologation}
+                                    disabled={!homologarOriginal.trim()}
+                                    className="px-6 py-2.5 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold text-sm transition-colors shadow-md disabled:opacity-40 disabled:hover:bg-[#9E7649]"
+                                >
+                                    Aplicar Homologación
                                 </button>
                             </div>
                         </div>

@@ -3,7 +3,7 @@ import { Script, User } from '../types';
 import { 
   FileDown, Calendar, Layers, Repeat, BarChart3, X, Check, Filter, FileText
 } from 'lucide-react';
-import { parseSpanishDate } from './GuionesApp';
+import { parseSpanishDate, isDateStringMatchingMonth } from './GuionesApp';
 
 interface StatsViewProps {
   onClose?: () => void;
@@ -212,7 +212,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onClose, programs, current
 
     selectedScripts = selectedScripts.filter(s => {
         const d = parseSpanishDate(s.dateAdded);
-        return d.getFullYear().toString() === filters.year && (d.getMonth() + 1).toString() === filters.month;
+        const yearMatches = d.getFullYear().toString() === filters.year;
+        const targetMonthIdx = parseInt(filters.month, 10) - 1;
+        return yearMatches && isDateStringMatchingMonth(s.dateAdded, targetMonthIdx);
     });
 
     selectedScripts = selectedScripts.filter(s => {
@@ -360,9 +362,9 @@ export const StatsView: React.FC<StatsViewProps> = ({ onClose, programs, current
         });
 
         if (filters.month !== "") {
+          const targetMonthIdx = parseInt(filters.month, 10) - 1;
           filtered = filtered.filter(s => {
-             const d = parseSpanishDate(s.dateAdded);
-             return (d.getMonth() + 1).toString() === filters.month;
+             return isDateStringMatchingMonth(s.dateAdded, targetMonthIdx);
           });
         }
         

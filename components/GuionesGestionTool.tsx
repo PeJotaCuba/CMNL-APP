@@ -26,7 +26,7 @@ import {
 } from 'recharts';
 import { Script, ProgramFicha, User as UserProfile } from '../types';
 import { Program } from './agenda/types';
-import { parseSpanishDate, formatSpanishDate, PROGRAMS } from './GuionesApp';
+import { parseSpanishDate, formatSpanishDate, PROGRAMS, isValidScriptDate, isValidScriptWriter, isValidScriptAdvisor, isValidScriptTheme, isDateStringMatchingMonth } from './GuionesApp';
 import { getWeeksInMonth } from './agenda/utils/dateUtils';
 
 interface GuionesGestionToolProps {
@@ -74,7 +74,20 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
     const scripts: Record<string, Script[]> = {};
     PROGRAMS.forEach(p => {
       const data = localStorage.getItem(`guionbd_data_${p.file}`);
-      if (data) scripts[p.name] = JSON.parse(data);
+      if (data) {
+        try {
+          const parsed: Script[] = JSON.parse(data);
+          scripts[p.name] = parsed.filter(s => {
+            const hasDate = isValidScriptDate(s.dateAdded);
+            const hasTheme = isValidScriptTheme(s.themes || s.title);
+            const hasWriter = isValidScriptWriter(s.writer);
+            const hasAdvisor = isValidScriptAdvisor(s.advisor);
+            return hasDate && hasTheme && hasWriter && hasAdvisor;
+          });
+        } catch (e) {
+          scripts[p.name] = [];
+        }
+      }
     });
     setAllScripts(scripts);
 
@@ -465,7 +478,8 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
       result[progName] = allScripts[progName]
         .filter(s => {
           const d = parseSpanishDate(s.dateAdded);
-          return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+          const yearMatches = d.getFullYear() === selectedYear;
+          return yearMatches && isDateStringMatchingMonth(s.dateAdded, selectedMonth);
         })
         .map(s => ({
           ...s,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppView, User } from '../types';
 import { Radio, Lock, User as UserIcon, Eye, EyeOff, Smartphone, ArrowLeft } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
+import { DeviceIdentityService } from '../src/services/DeviceIdentityService';
 
 interface Props {
   onNavigate: (view: AppView) => void;
@@ -18,18 +19,19 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   React.useEffect(() => {
-    let token = localStorage.getItem('rcm_device_token');
-    if (!token) {
-      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let randomStr = '';
-      for (let i = 0; i < 4; i++) {
-        randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+    const initDeviceIdentity = async () => {
+      try {
+        const sig = await DeviceIdentityService.getDeviceSignature();
+        setDeviceToken(sig.deviceToken);
+        setIsMobileDevice(sig.platform === 'iOS' || sig.platform === 'Android');
+      } catch (err) {
+        console.error('Failed to init device identity, using sync fallback:', err);
+        const fbToken = DeviceIdentityService.getDeviceTokenSync();
+        setDeviceToken(fbToken);
+        setIsMobileDevice(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
       }
-      token = `DVC-${randomStr}`;
-      localStorage.setItem('rcm_device_token', token);
-    }
-    setDeviceToken(token);
-    setIsMobileDevice(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+    };
+    initDeviceIdentity();
   }, []);
 
   const handleLogin = (e: React.FormEvent) => {

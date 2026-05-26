@@ -297,27 +297,41 @@ const AppContent: React.FC = () => {
   useEffect(() => { localStorage.setItem('rcm_data_news', JSON.stringify(news)); }, [news]);
   useEffect(() => { localStorage.setItem('rcm_data_history', historyContent); }, [historyContent]);
   useEffect(() => { localStorage.setItem('rcm_data_about', aboutContent); }, [aboutContent]);
+  useEffect(() => {
+    if (currentView) {
+      localStorage.setItem('rcm_current_view', currentView);
+    }
+  }, [currentView]);
 
   useEffect(() => {
     // Check for persistent session
     const sessionRole = localStorage.getItem('rcm_user_session');
     const sessionUsername = localStorage.getItem('rcm_user_username');
+    const savedView = localStorage.getItem('rcm_current_view') as AppView | null;
 
     if (sessionRole && sessionUsername) {
       const user = users.find(u => u.username === sessionUsername);
       if (user) {
         setCurrentUser(user);
-        if (sessionRole === 'admin') {
-          setCurrentView(AppView.ADMIN_DASHBOARD);
-        } else if (sessionRole === 'worker' || sessionRole === 'coordinator') {
-          setCurrentView(AppView.WORKER_HOME);
+        if (savedView && Object.values(AppView).includes(savedView) && savedView !== AppView.LANDING) {
+          setCurrentView(savedView);
+        } else {
+          if (sessionRole === 'admin') {
+            setCurrentView(AppView.ADMIN_DASHBOARD);
+          } else if (sessionRole === 'worker' || sessionRole === 'coordinator') {
+            setCurrentView(AppView.WORKER_HOME);
+          }
         }
       } else {
         // User data missing, fallback
         setCurrentView(AppView.LISTENER_HOME);
       }
     } else {
-       setCurrentView(AppView.LISTENER_HOME);
+       if (savedView === AppView.LANDING) {
+         setCurrentView(AppView.LANDING);
+       } else {
+         setCurrentView(AppView.LISTENER_HOME);
+       }
     }
   }, []);
 
@@ -406,6 +420,7 @@ const AppContent: React.FC = () => {
         // 1. Clear session
         localStorage.removeItem('rcm_user_session');
         localStorage.removeItem('rcm_user_username');
+        localStorage.removeItem('rcm_current_view');
         setCurrentUser(null);
         
         // 2. Stop Player
