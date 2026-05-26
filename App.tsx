@@ -35,7 +35,27 @@ const App: React.FC = () => {
 
 const AppContent: React.FC = () => {
   const { user: firebaseUser } = useFirebase();
-  const [currentView, setCurrentView] = useState<AppView>(AppView.LISTENER_HOME);
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    const sessionRole = localStorage.getItem('rcm_user_session');
+    const sessionUsername = localStorage.getItem('rcm_user_username');
+    const savedView = localStorage.getItem('rcm_current_view') as AppView | null;
+
+    if (sessionRole && sessionUsername) {
+      if (savedView && Object.values(AppView).includes(savedView) && savedView !== AppView.LANDING) {
+        return savedView;
+      }
+      if (sessionRole === 'admin') {
+        return AppView.ADMIN_DASHBOARD;
+      } else if (sessionRole === 'worker' || sessionRole === 'coordinator') {
+        return AppView.WORKER_HOME;
+      }
+    }
+
+    if (savedView === AppView.LANDING) {
+      return AppView.LANDING;
+    }
+    return AppView.LISTENER_HOME;
+  });
   const [history, setHistory] = useState<AppView[]>([]);
   const [isDirty, setIsDirty] = useState(false);
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -235,7 +255,46 @@ const AppContent: React.FC = () => {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   
   // Auth State
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const sessionRole = localStorage.getItem('rcm_user_session');
+    const sessionUsername = localStorage.getItem('rcm_user_username');
+    if (sessionRole && sessionUsername) {
+      const saved = localStorage.getItem('rcm_data_users');
+      const latestUsers: User[] = saved ? JSON.parse(saved) : INITIAL_USERS;
+      let user = latestUsers.find(u => u.username === sessionUsername);
+      if (!user && sessionUsername === 'admincmnl') {
+        const savedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+        let designatedUserId = 'pedro';
+        if (savedEquipo) {
+          try {
+            const parsed = JSON.parse(savedEquipo);
+            if (Array.isArray(parsed)) {
+              const adminMember = parsed.find((m: any) => m.id === 'admin_app_static');
+              if (adminMember && adminMember.designatedUserId) {
+                designatedUserId = adminMember.designatedUserId;
+              }
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        const linkedUser = latestUsers.find(u => u.id === designatedUserId);
+        user = {
+          id: 'admin_app_static',
+          username: 'admincmnl',
+          name: 'Administrador Global',
+          mobile: '',
+          password: 'RCBay010206',
+          role: 'admin',
+          classification: 'Administrador',
+          deviceLimitEnabled: false,
+          authorizedDevices: linkedUser ? linkedUser.authorizedDevices : []
+        };
+      }
+      return user || null;
+    }
+    return null;
+  });
 
   // Player State
   const [isPlaying, setIsPlaying] = useState(false);
@@ -310,7 +369,37 @@ const AppContent: React.FC = () => {
     const savedView = localStorage.getItem('rcm_current_view') as AppView | null;
 
     if (sessionRole && sessionUsername) {
-      const user = users.find(u => u.username === sessionUsername);
+      let user = users.find(u => u.username === sessionUsername);
+      if (!user && sessionUsername === 'admincmnl') {
+        const savedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+        let designatedUserId = 'pedro';
+        if (savedEquipo) {
+          try {
+            const parsed = JSON.parse(savedEquipo);
+            if (Array.isArray(parsed)) {
+              const adminMember = parsed.find((m: any) => m.id === 'admin_app_static');
+              if (adminMember && adminMember.designatedUserId) {
+                designatedUserId = adminMember.designatedUserId;
+              }
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        const linkedUser = users.find(u => u.id === designatedUserId);
+        user = {
+          id: 'admin_app_static',
+          username: 'admincmnl',
+          name: 'Administrador Global',
+          mobile: '',
+          password: 'RCBay010206',
+          role: 'admin',
+          classification: 'Administrador',
+          deviceLimitEnabled: false,
+          authorizedDevices: linkedUser ? linkedUser.authorizedDevices : []
+        };
+      }
+
       if (user) {
         setCurrentUser(user);
         if (savedView && Object.values(AppView).includes(savedView) && savedView !== AppView.LANDING) {
