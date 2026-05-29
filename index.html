@@ -118,6 +118,18 @@
         padding-top: calc(env(safe-area-inset-top, 0) + 0.75rem);
       }
       
+      /* Fix mobile/Safari scrolling stripes, grid lines and subpixel aliasing artifacts during touch scroll */
+      .no-scrollbar, .overflow-y-auto, .overflow-x-auto, .scroll-smooth {
+        -webkit-overflow-scrolling: touch;
+      }
+      /* Prevent Safari fine lines and stripes by forcing hardware accelerated painting layers without affecting layout */
+      main, section, .no-scrollbar *, .overflow-x-auto *, .overflow-y-auto * {
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+      }
+      
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }

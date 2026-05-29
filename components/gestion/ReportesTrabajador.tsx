@@ -481,18 +481,56 @@ export const ReportesTrabajador: React.FC<Props> = ({
           } else {
               const roleConfig = userPaymentConfig?.roles.find(r => r.role === role);
               const computedAmount = getProgramRate(programName, role, roleConfig?.level || 'I');
+              const defaultHours = normalize(programName) === 'propaganda' ? 1 : 0;
               setWorkLogs([...workLogs, {
                   id: Date.now().toString(),
                   userId: currentUser.username,
                   date,
                   programName,
                   role,
-                  hours: 0,
+                  hours: defaultHours,
                   type: 'habitual',
                   amount: computedAmount,
                   syncStatus: 'pending'
               }]);
           }
+      }
+  };
+
+  const updatePropagandaQuantity = (date: string, programName: string, role: string, qty: number) => {
+      if (!currentUser) return;
+
+      const existingIndex = workLogs.findIndex(l => 
+          l.userId === currentUser.username && 
+          l.date === date && 
+          l.programName === programName && 
+          l.role === role
+      );
+
+      const roleConfig = userPaymentConfig?.roles.find(r => r.role === role);
+      const computedAmount = getProgramRate(programName, role, roleConfig?.level || 'I');
+
+      if (existingIndex >= 0) {
+          const newLogs = [...workLogs];
+          newLogs[existingIndex] = {
+              ...newLogs[existingIndex],
+              hours: qty,
+              amount: computedAmount,
+              type: newLogs[existingIndex].type === 'manual_delete' ? 'habitual' : newLogs[existingIndex].type
+          };
+          setWorkLogs(newLogs);
+      } else {
+          setWorkLogs([...workLogs, {
+              id: Date.now().toString(),
+              userId: currentUser.username,
+              date,
+              programName,
+              role,
+              hours: qty,
+              type: 'habitual',
+              amount: computedAmount,
+              syncStatus: 'pending'
+          }]);
       }
   };
 
@@ -707,7 +745,14 @@ export const ReportesTrabajador: React.FC<Props> = ({
                      const isWorked = isManual || (isHabitual && !isDeleted);
 
                      if (isWorked) {
-                         income += getProgramRate(prog, role.role, role.level || 'I');
+                         const baseRate = getProgramRate(prog, role.role, role.level || 'I');
+                         if (normalize(prog) === 'propaganda') {
+                             const log = workLogs.find(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr);
+                             const qty = log && log.hours ? log.hours : 1;
+                             income += baseRate * qty;
+                         } else {
+                             income += baseRate;
+                         }
                          count++;
                      }
                  });
@@ -996,12 +1041,34 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                                     
                                                     return (
                                                         <td key={date} className="px-2 py-3 text-center border-r border-[#9E7649]/10 last:border-r-0">
-                                                            <button 
-                                                                onClick={() => toggleWorkLog(date, prog, roleData.role)}
-                                                                className={`w-8 h-8 rounded flex items-center justify-center mx-auto transition-all ${isWorked ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-black/40 text-[#E8DCCF]/20 border border-[#9E7649]/20 hover:border-[#9E7649]/50 hover:text-[#E8DCCF]/50'}`}
-                                                            >
-                                                                {isWorked ? <CheckCircle2 size={18} /> : <div className="w-2 h-2 rounded-full bg-current opacity-50" />}
-                                                            </button>
+                                                            <div className="flex flex-col items-center justify-center gap-1.5 whitespace-nowrap">
+                                                                <button 
+                                                                    onClick={() => toggleWorkLog(date, prog, roleData.role)}
+                                                                    className={`w-8 h-8 rounded flex items-center justify-center mx-auto transition-all ${isWorked ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-black/40 text-[#E8DCCF]/20 border border-[#9E7649]/20 hover:border-[#9E7649]/50 hover:text-[#E8DCCF]/50'}`}
+                                                                >
+                                                                    {isWorked ? <CheckCircle2 size={18} /> : <div className="w-2 h-2 rounded-full bg-current opacity-50" />}
+                                                                </button>
+                                                                {isWorked && normalize(prog) === 'propaganda' && (
+                                                                    <div className="flex items-center gap-1 mt-1 bg-black/40 px-1.5 py-0.5 rounded border border-[#9E7649]/30">
+                                                                        <span className="text-[10px] text-[#E8DCCF]/65 font-bold">Cant:</span>
+                                                                        <select 
+                                                                            value={(() => {
+                                                                                const log = workLogs.find(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date);
+                                                                                return log && log.hours ? log.hours : 1;
+                                                                            })()}
+                                                                            onChange={(e) => {
+                                                                                const qty = parseInt(e.target.value);
+                                                                                updatePropagandaQuantity(date, prog, roleData.role, qty);
+                                                                            }}
+                                                                            className="bg-[#1A100C] text-[#E8DCCF] text-[10px] font-bold rounded px-1 py-0.5 border border-[#9E7649]/20 outline-none focus:border-[#9E7649] cursor-pointer"
+                                                                        >
+                                                                            <option value={1} className="bg-[#1A100C]">1</option>
+                                                                            <option value={2} className="bg-[#1A100C]">2</option>
+                                                                            <option value={3} className="bg-[#1A100C]">3</option>
+                                                                        </select>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     );
                                                 })}

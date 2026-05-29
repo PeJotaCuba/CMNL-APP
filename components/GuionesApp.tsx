@@ -565,8 +565,10 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
             const mergedMap = new Map<string, Script>();
             const generateKey = (s: Script) => {
                 if (useIdAsKey) return s.id;
-                const themeStr = Array.isArray(s.themes) ? s.themes.join('|') : String(s.themes || '');
-                return `${s.dateAdded}|${normalize(themeStr)}`;
+                const writerStr = normalize(s.writer || '');
+                const advisorStr = normalize(s.advisor || '');
+                const progStr = normalize(s.genre || '');
+                return `${s.dateAdded}|${writerStr}|${advisorStr}|${progStr}`;
             };
 
             existing.forEach(s => mergedMap.set(generateKey(s), s));
@@ -922,7 +924,30 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
                 themes: scriptForm.themes || ['General'],
                 genre: selectedProgram,
             };
-            localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify([...scripts, newScript]));
+
+            const newWriterNorm = normalize(newScript.writer);
+            const newAdvisorNorm = normalize(newScript.advisor);
+            const newProgNorm = normalize(newScript.genre);
+            const newDate = newScript.dateAdded;
+
+            const duplicateIndex = scripts.findIndex(s => 
+                s.dateAdded === newDate &&
+                normalize(s.writer || '') === newWriterNorm &&
+                normalize(s.advisor || '') === newAdvisorNorm &&
+                normalize(s.genre || '') === newProgNorm
+            );
+
+            if (duplicateIndex >= 0) {
+                const updated = [...scripts];
+                updated[duplicateIndex] = {
+                    ...updated[duplicateIndex],
+                    ...newScript,
+                    id: updated[duplicateIndex].id
+                };
+                localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify(updated));
+            } else {
+                localStorage.setItem(`guionbd_data_${program.file}`, JSON.stringify([...scripts, newScript]));
+            }
         }
         
         setShowNewScript(false);

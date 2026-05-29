@@ -366,18 +366,37 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       // Map exportItems back to Tracks to preserve edits in the saved selection
       const updatedTracks: Track[] = exportItems.map(item => {
           const original = selectedTracksList.find(t => t.id === item.id);
-          return {
-              ...original!,
-              metadata: {
-                  ...original!.metadata,
-                  title: item.title,
-                  author: item.author,
-                  authorCountry: item.authorCountry,
-                  performer: item.performer,
-                  performerCountry: item.performerCountry,
-                  genre: item.genre
-              }
-          };
+          if (original) {
+              return {
+                  ...original,
+                  metadata: {
+                      ...original.metadata,
+                      title: item.title,
+                      author: item.author,
+                      authorCountry: item.authorCountry,
+                      performer: item.performer,
+                      performerCountry: item.performerCountry,
+                      genre: item.genre
+                  }
+              };
+          } else {
+              return {
+                  id: item.id,
+                  filename: '',
+                  path: 'Manual',
+                  isVerified: false,
+                  metadata: {
+                      title: item.title,
+                      author: item.author,
+                      authorCountry: item.authorCountry,
+                      performer: item.performer,
+                      performerCountry: item.performerCountry,
+                      album: '',
+                      year: '',
+                      genre: item.genre
+                  }
+              };
+          }
       });
 
       if (currentSelectionId) {
@@ -522,6 +541,21 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleRemoveExportItem = (indexToRemove: number) => {
       setExportItems(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleAddNewExportItem = () => {
+      const newItem: ExportItem = {
+          id: 'manual_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 5),
+          title: '',
+          author: '',
+          authorCountry: '',
+          performer: '',
+          performerCountry: '',
+          genre: '',
+          source: 'manual',
+          path: 'Manual'
+      };
+      setExportItems(prev => [newItem, ...prev]);
   };
 
   const handleShareWhatsApp = () => {
@@ -721,8 +755,15 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                               <span className="material-symbols-outlined text-sm">{currentSelectionId ? 'sync' : 'save'}</span> 
                               {currentSelectionId ? 'Actualizar Selección' : 'Guardar Selección'}
                           </button>
-                          <button onClick={handleSelectionAction} className="w-full bg-[#9E7649] text-white py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#8B653D]">
-                             <span className="material-symbols-outlined">ios_share</span> {selectedTracksList.length > 0 ? 'Exportar / Compartir' : (savedSelections.length > 0 ? 'Exportar / Compartir Masivo' : 'Exportar Selección')}
+                          <button onClick={handleOpenExportModal} className="w-full bg-[#9E7649] text-white py-3.5 rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#8B653D]">
+                             <span className="material-symbols-outlined">ios_share</span> {selectedTracksList.length > 0 ? 'Exportar / Compartir' : 'Exportar Selección'}
+                           </button>
+                           {selectedTracksList.length === 0 && savedSelections.length > 0 && (
+                               <button onClick={handleSelectionAction} className="w-full bg-amber-700/80 hover:bg-amber-800 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-colors uppercase tracking-wider">
+                                  <span className="material-symbols-outlined text-sm">dynamic_feed</span> {savedSelections.length === 1 ? 'Exportar Selección Guardada' : 'Exportar Selección Masiva'}
+                               </button>
+                           )}
+                           <button className="hidden" style={{ display: 'none' }}>
                           </button>
                      </div>
                 </div>
@@ -913,6 +954,16 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        <div className="flex justify-end">
+                            <button 
+                                type="button"
+                                onClick={handleAddNewExportItem}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#9E7649] hover:bg-[#8B653D] text-[#E8DCCF] font-bold text-xs rounded-lg shadow-md transition-all uppercase tracking-wider"
+                            >
+                                <span className="material-symbols-outlined text-xs">add_circle</span>
+                                Incluir tema manual
+                            </button>
+                        </div>
                         {exportItems.map((item, idx) => (
                             <div key={item.id} className="relative p-4 border border-[#9E7649]/20 rounded-xl bg-[#1A100C] shadow-sm">
                                 <button 

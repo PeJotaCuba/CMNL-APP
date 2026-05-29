@@ -194,7 +194,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
     
     // Check if it's Guion Técnico
     if (ficha.literarySupport.toLowerCase().includes('guión técnico') || ficha.literarySupport.toLowerCase().includes('guion técnico')) {
-        return { min: 0, max: 0, valid: false };
+        return { min: 0, max: 0, valid: true };
     }
 
     const guionPart = ficha.literarySupport.split('\n').find(l => l.includes('Guión'));
@@ -731,6 +731,29 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
             });
         }
     });
+
+    // Dynamically append any virtual programs present in filteredScripts that did not have a registered ficha
+    Object.keys(filteredScripts).forEach(progName => {
+        if (filteredScripts[progName].length === 0) return;
+        const normProg = normalizeProgramName(progName);
+        const alreadyAdded = list.some(item => normalizeProgramName(item.program) === normProg);
+        if (!alreadyAdded) {
+            let actual = filteredScripts[progName].length;
+            let validated = 0;
+            filteredScripts[progName].forEach(s => {
+                if (validatedScripts[s.id]) validated++;
+            });
+            list.push({
+               program: progName,
+               expected: 0,
+               actual,
+               missing: 0,
+               validated,
+               unvalidated: actual - validated
+            });
+        }
+    });
+
     return list;
   }, [fichas, filteredScripts, validatedScripts, selectedMonth, selectedYear]);
 
