@@ -797,11 +797,11 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     reader.readAsText(file);
   };
 
-  // --- ADMINISTRATOR: VALIDATE WORKER CERTIFICATE (STATUS => "validated") ---
+  // --- ADMINISTRATOR: AUTHORIZE AND EMIT WORKER CERTIFICATE (DIRECT EMISSION) ---
   const validateCertificateByAdmin = () => {
     // Admin must have their own certificate active to sign validation
     if (!loadedCert || (loadedCert.userId !== userId)) {
-      showAlert("Debe cargar su propio certificado administrativo para validar y realizar el estampado digital de validación.", 'error');
+      showAlert("Debe cargar su propio certificado administrativo para validar y realizar el estampado digital de validación y emisión.", 'error');
       return;
     }
 
@@ -818,7 +818,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       issueDate: issueDate.toISOString(),
       issuer: "Administrador CMNL",
       validUntil: validUntil.toISOString(),
-      status: "validated", // Waiting for director signature
+      status: "signed", // Directly signed and operative since Director signature is not required
       adminSignature: generateDigitalSignature(loadedCert),
       adminName: loadedCert.userData?.fullName || "Administrador CMNL",
       adminTimestamp: issueDate.toISOString()
@@ -837,7 +837,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       validated_users: updatedUsers
     });
 
-    showAlert(`Certificado de ${certToValidate.userData.fullName} VALIDADO exitosamente. Se ha almacenado temporalmente en la base de datos de la App. Aparecerá listo en el portal de la Directora para ser firmado.`, 'success');
+    showAlert(`¡Certificado de ${certToValidate.userData.fullName} AUTORIZADO y EMITIDO exitosamente! Se ha firmado localmente y guardado en la base de datos como Firmado y Operativo.`, 'success');
     setView('main');
     setPendingRequest(null);
   };
@@ -1213,11 +1213,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         </div>
 
         <div className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/20 text-xs text-amber-200">
-          {isRequestOwnerAdminOrDirector ? (
-            <p>Al ser un miembro Directivo o de Soporte (Directora/Administrador), se permite emitir directamente el certificado sin pasar por la firma de la directora.</p>
-          ) : (
-            <p>Al validar la solicitud, aplicará su firma administrativa, se guardará en la base de datos sincronizada del sistema y quedará lista para que la Directora la firme digitalmente. Recuerde respaldar con <b>actualcmnl.json</b> para reflejar los cambios.</p>
-          )}
+          <p>La emisión de certificados es autorizada directamente por el Administrador. Al autorizar y emitir, de manera inmediata el certificado quedará guardado como Firmado y Operativo en el sistema, sin requerir la firma de la Directora. Recuerde respaldar con <b>actualcmnl.json</b> tras emitir.</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
@@ -1234,7 +1230,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               disabled={loading}
               className="flex-2 py-4 bg-green-600 text-white font-black rounded-xl hover:bg-green-500 transition-all disabled:opacity-50 uppercase text-xs flex items-center justify-center gap-2"
             >
-              <FileCheck size={16} /> FIRMAR Y EMITIR CERTIFICADO
+              <FileCheck size={16} /> EMITIR DIRECTAMENTE (AUTORIZADO)
             </button>
           ) : (
             <button 
@@ -1242,7 +1238,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               disabled={loading || Object.values(contractNumbers).some(v => !v)}
               className="flex-2 py-4 bg-amber-500 text-black font-black rounded-xl hover:bg-amber-400 transition-all disabled:opacity-50 uppercase text-xs flex items-center justify-center gap-2"
             >
-              <CheckCircle2 size={16} /> VALIDAR SOLICITUD
+              <CheckCircle2 size={16} /> AUTORIZAR Y EMITIR CERTIFICADO
             </button>
           )}
         </div>
@@ -2085,7 +2081,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                         <p className="text-white text-xs font-bold">{userCert.userData?.fullName}</p>
                         <p className="text-[10px] text-stone-400 font-mono">CI: {userCert.userData?.ci}</p>
                         <p className="text-[9px] text-stone-500 font-mono">
-                          Estado: <span className={userCert.status === 'signed' ? 'text-green-500 font-bold' : 'text-amber-400 font-bold'}>{userCert.status === 'signed' ? 'Certificativo Oficial Signed' : 'Validado sin firmar'}</span>
+                          Estado: <span className={userCert.status === 'signed' ? 'text-green-500 font-bold' : 'text-amber-400 font-bold'}>{userCert.status === 'signed' ? 'Certificado Oficial Emitido' : 'Validado sin firmar'}</span>
                         </p>
                       </div>
                       <div className="flex gap-2">
