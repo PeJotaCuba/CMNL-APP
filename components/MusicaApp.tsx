@@ -531,7 +531,20 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       setEditingReportId(null);
       setIsExportingFromSaved(false);
       setReportDate(new Date().toISOString().split('T')[0]);
-      const items: ExportItem[] = selectedTracksList.map(t => ({ id: t.id, title: t.metadata.title, author: t.metadata.author, authorCountry: t.metadata.authorCountry || '', performer: t.metadata.performer, performerCountry: t.metadata.performerCountry || '', genre: t.metadata.genre || '', source: 'db', path: t.path }));
+      let items: ExportItem[] = selectedTracksList.map(t => ({ id: t.id, title: t.metadata.title, author: t.metadata.author, authorCountry: t.metadata.authorCountry || '', performer: t.metadata.performer, performerCountry: t.metadata.performerCountry || '', genre: t.metadata.genre || '', source: 'db', path: t.path }));
+      if (items.length === 0) {
+          items = [{
+              id: 'manual_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 5),
+              title: '',
+              author: '',
+              authorCountry: '',
+              performer: '',
+              performerCountry: '',
+              genre: '',
+              source: 'manual',
+              path: 'Manual'
+          }];
+      }
       setExportItems(items); setShowExportModal(true);
   };
 

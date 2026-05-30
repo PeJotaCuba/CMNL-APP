@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "node server.ts",
-    "build": "vite build",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "start": "node dist/server.cjs",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
   },
@@ -21,7 +21,9 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.344.0",
     "motion": "^12.38.0",
+    "pdf-encrypt": "^1.0.1",
     "pdf-lib": "^1.17.1",
+    "pdfjs": "^2.5.4",
     "pdfjs-dist": "^5.5.207",
     "react": "18.3.1",
     "react-dom": "18.3.1",

@@ -3,6 +3,7 @@ import { Shield, Key, FileUp, FileCheck, Download, AlertTriangle, CheckCircle2, 
 import { cryptoUtils, generateDigitalSignature, getStoredCertificate, getStoredPrivateKey, getStoredPassword, formatDigitalSignatureForDocuments } from '../utils/signatureUtils';
 import jsPDF from 'jspdf';
 import { openWhatsApp } from '../utils/whatsappUtils';
+import { DeviceIdentityService } from '../src/services/DeviceIdentityService';
 
 export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData = [], users = [] }) => {
   const [view, setView] = useState('main'); // main, request, load, admin_process, cert_view
@@ -106,42 +107,67 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     contract2: ''
   });
 
+  // Resilient Real-Time Synchronization with Team Database
   useEffect(() => {
-    const nameToUse = user?.fullName || user?.name || '';
-    // Sync with team database if available
-    if (nameToUse && (!formData.fullName || formData.fullName === '' || formData.fullName === nameToUse)) {
+    const targetMember = isAdmin ? (physicalAdminUser || userTeamMember) : userTeamMember;
+    if (targetMember) {
+      const nameToUse = targetMember.name || '';
+      const targetCi = targetMember.ci || '';
+      const date1 = targetMember.contracts?.[0] || targetMember.contract1 || '';
+      const date2 = targetMember.contracts?.[1] || targetMember.contract2 || '';
+      const specs = targetMember.specialty ? targetMember.specialty.split('/').map((s: string) => s.trim()) : [];
+      const isSpec1Dir = specs[0] ? isStationDirector('', specs[0]) : isDirectorEmisora;
+      const isSpec2Dir = specs[1] ? isStationDirector('', specs[1]) : false;
+
       setFormData(prev => {
-        const currentCi = prev.ci || userTeamMember?.ci || '';
-        const date1 = userTeamMember?.contracts?.[0] || userTeamMember?.contract1 || user?.contracts?.[0] || user?.contract1 || '';
-        const date2 = userTeamMember?.contracts?.[1] || userTeamMember?.contract2 || user?.contracts?.[1] || user?.contract2 || '';
-        const specs = userTeamMember?.specialty ? userTeamMember.specialty.split('/').map((s: string) => s.trim()) : [];
-        const isSpec1Dir = specs[0] ? isStationDirector('', specs[0]) : isDirectorEmisora;
-        const isSpec2Dir = specs[1] ? isStationDirector('', specs[1]) : false;
-        return { 
-          ...prev, 
-          fullName: nameToUse,
-          ci: currentCi,
-          contract1: currentCi.length === 11 && date1 ? calcContract(currentCi, date1, isSpec1Dir) : '',
-          contract2: currentCi.length === 11 && date2 ? calcContract(currentCi, date2, isSpec2Dir) : ''
-        };
+        // Compute resilient and accurate contract numbers
+        const calculatedC1 = targetCi.length === 11 && date1 ? calcContract(targetCi, date1, isSpec1Dir) : '';
+        const calculatedC2 = targetCi.length === 11 && date2 ? calcContract(targetCi, date2, isSpec2Dir) : '';
+        
+        if (
+          prev.fullName !== nameToUse ||
+          prev.ci !== targetCi ||
+          prev.contract1 !== calculatedC1 ||
+          prev.contract2 !== calculatedC2
+        ) {
+          return {
+            ...prev,
+            fullName: nameToUse,
+            ci: targetCi,
+            contract1: calculatedC1,
+            contract2: calculatedC2
+          };
+        }
+        return prev;
       });
     }
-  }, [user, userTeamMember]);
+  }, [user, userTeamMember, physicalAdminUser, isAdmin]);
 
   const calcContract = (ci: string, dateStr: string, isDirector: boolean = false) => {
     if (!ci || ci.length < 11 || !dateStr) return '';
-    if (isDirector) {
-      return dateStr;
+
+    const cleanedDateStr = dateStr.trim();
+
+    // If it already matches the pattern of a finished contract: 3 digits, dash, 6 digits
+    if (/^\d{3}-\d{6}$/.test(cleanedDateStr)) {
+      return cleanedDateStr;
     }
+
     const last3 = ci.slice(-3);
 
-    // If it is already a contract number (e.g. 421-092601), return it as is
-    if (/^\d{3}-\d{6}$/.test(dateStr)) {
-      return dateStr;
+    // If it has 6 digits but lacks the prefix, e.g., "092601" or starts with dash "-092601"
+    const pureNumbers6 = cleanedDateStr.replace(/^-/, '');
+    if (/^\d{6}$/.test(pureNumbers6)) {
+      return `${last3}-${pureNumbers6}`;
+    }
+
+    // If it is a director and NOT a date-like string (contains letters like "Res"), return as is
+    if (isDirector && !/^[0-9\s\-\/]+$/.test(cleanedDateStr)) {
+      return cleanedDateStr;
     }
 
     // Split by dash (-), slash (/), or space
-    const parts = dateStr.trim().split(/[-/\s]+/);
+    const parts = cleanedDateStr.split(/[-/\s]+/);
     if (parts.length === 3) {
       let yy = '';
       let mm = '';
@@ -151,19 +177,19 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       const p1 = parts[1];
       const p2 = parts[2];
 
-      // Format is YYYY-MM-DD (e.g. 2026-09-01) or YYYY-M-D
+      // Format is YYYY-MM-DD or YYYY-M-D
       if (p0.length === 4 || parseInt(p0, 10) > 100) {
         yy = p0.slice(-2);
         mm = p1.padStart(2, '0');
         dd = p2.padStart(2, '0');
       } 
-      // Format is DD-MM-YYYY (e.g. 01-09-2026) or D-M-YYYY
+      // Format is DD-MM-YYYY or D-M-YYYY
       else if (p2.length === 4 || parseInt(p2, 10) > 100) {
         yy = p2.slice(-2);
         mm = p1.padStart(2, '0');
         dd = p0.padStart(2, '0');
       } 
-      // Format uses 2-digit years like DD-MM-YY (e.g. 01-09-26) or YY-MM-DD (e.g. 26-09-01)
+      // Format uses 2-digit years like DD-MM-YY or YY-MM-DD
       else {
         const num0 = parseInt(p0, 10);
         const num2 = parseInt(p2, 10);
@@ -179,11 +205,23 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       }
 
       return `${last3}-${mm}${yy}${dd}`;
+    } else if (parts.length === 1 && /^\d{6}$/.test(cleanedDateStr)) {
+      const pureDigits = cleanedDateStr;
+      const dd = pureDigits.substring(0, 2);
+      const mm = pureDigits.substring(2, 4);
+      const yy = pureDigits.substring(4, 6);
+      return `${last3}-${mm}${yy}${dd}`;
+    } else if (parts.length === 1 && /^\d{8}$/.test(cleanedDateStr)) {
+      const pureDigits = cleanedDateStr;
+      const dd = pureDigits.substring(0, 2);
+      const mm = pureDigits.substring(2, 4);
+      const yy = pureDigits.substring(6, 8);
+      return `${last3}-${mm}${yy}${dd}`;
     }
 
     // Check if we can parse it as a standard native JS date
     try {
-      const d = new Date(dateStr);
+      const d = new Date(cleanedDateStr);
       if (!isNaN(d.getTime())) {
         const yy = d.getFullYear().toString().slice(-2);
         const mm = (d.getMonth() + 1).toString().padStart(2, '0');
@@ -194,7 +232,18 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       // ignore
     }
 
-    return dateStr; // fallback
+    // Fallback: If it starts with a dash, or is a pure number or date, make sure it has the last3- prefix
+    if (!cleanedDateStr.startsWith(last3 + '-')) {
+      if (/^[-0-9]+$/.test(cleanedDateStr)) {
+        const sanitized = cleanedDateStr.replace(/[^0-9]/g, '');
+        if (sanitized.length === 6) {
+          return `${last3}-${sanitized}`;
+        }
+      }
+      return `${last3}-${cleanedDateStr}`;
+    }
+
+    return cleanedDateStr; // fallback
   };
 
   const [ciWarning, setCiWarning] = useState('');
@@ -214,9 +263,10 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     }
     setCiWarning(warning);
 
-    const date1 = userTeamMember?.contracts?.[0] || userTeamMember?.contract1 || user?.contracts?.[0] || user?.contract1 || '';
-    const date2 = userTeamMember?.contracts?.[1] || userTeamMember?.contract2 || user?.contracts?.[1] || user?.contract2 || '';
-    const specs = userTeamMember?.specialty ? userTeamMember.specialty.split('/').map((s: string) => s.trim()) : [];
+    const targetMember = isAdmin ? (physicalAdminUser || userTeamMember) : userTeamMember;
+    const date1 = targetMember?.contracts?.[0] || targetMember?.contract1 || '';
+    const date2 = targetMember?.contracts?.[1] || targetMember?.contract2 || '';
+    const specs = targetMember?.specialty ? targetMember.specialty.split('/').map((s: string) => s.trim()) : [];
     const isSpec1Dir = specs[0] ? isStationDirector('', specs[0]) : isDirectorEmisora;
     const isSpec2Dir = specs[1] ? isStationDirector('', specs[1]) : false;
 
@@ -353,7 +403,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   }, [workerRevealTimer]);
 
   // --- CERTIFICATE PDF BUILDER DOWNLOADER ---
-  const downloadCertificatePDF = (cert: any) => {
+  const downloadCertificatePDF = async (cert: any) => {
     if (!cert) return;
     try {
       const doc = new jsPDF();
@@ -553,7 +603,60 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       doc.setTextColor(110, 110, 110);
       doc.text("Radio Ciudad Monumento - Cripto Identidad Firma Digital Escrow", 105, 280, { align: "center" });
 
-      doc.save(`certificado_cmnl_${cert.userData.fullName.replace(/\s+/g, '_')}.pdf`);
+      // Convert standard jsPDF doc output to base64
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const userPassword = user?.password || currentUserAuth?.password || cert.originalPassword || 'RadioCiudad2726';
+
+      (async () => {
+        try {
+          const response = await fetch('/api/encrypt-pdf', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              pdfBase64,
+              password: userPassword,
+            }),
+          });
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Error al comunicarse con el servidor de cifrado');
+          }
+
+          const { pdfBase64: encryptedBase64 } = await response.json();
+
+          // Convert response encryptedBase64 back to a Blob and save it
+          const sliceSize = 512;
+          const byteCharacters = atob(encryptedBase64);
+          const byteArrays = [];
+
+          for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+            const slice = byteCharacters.slice(offset, offset + sliceSize);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+              byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+          }
+
+          const pdfBlob = new Blob(byteArrays, { type: 'application/pdf' });
+          const pdfUrl = URL.createObjectURL(pdfBlob);
+
+          const downloadLink = document.createElement('a');
+          downloadLink.href = pdfUrl;
+          const cleanName = cert.userData.fullName.replace(/\s+/g, '_');
+          downloadLink.download = `certificado_cmnl_${cleanName}_protegido.pdf`;
+          downloadLink.click();
+
+          showAlert("¡Certificado PDF seguro descargado con éxito! El archivo está protegido directamente con contraseña y la solicitará cada vez que se intente visualizar.", 'success');
+        } catch (e: any) {
+          console.error(e);
+          showAlert("Error al generar el certificado PDF seguro: " + e.message, 'error');
+        }
+      })();
     } catch (e: any) {
       console.error(e);
       showAlert("Error al generar el certificado PDF: " + e.message, 'error');
@@ -611,6 +714,27 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
   // --- GENERATE REQUEST (.semanal) ---
   const handleGenerateRequest = async () => {
+    // Security check: Device restriction for certificate request (.semanal)
+    const clientToken = DeviceIdentityService.getDeviceTokenSync();
+    
+    // Look up user properly in users array to retrieve device settings
+    const resolvedUser = users.find((u: any) => 
+      u.id === userId || 
+      u.username === user?.username || 
+      (userTeamMember && (u.id === userTeamMember.id || u.name?.toLowerCase() === userTeamMember.name?.toLowerCase()))
+    ) || user || currentUserAuth;
+
+    const deviceLimitEnabled = resolvedUser?.deviceLimitEnabled || userTeamMember?.deviceLimitEnabled || false;
+    const authorizedDevices = resolvedUser?.authorizedDevices || userTeamMember?.authorizedDevices || [];
+    const isAuthorizedDevice = authorizedDevices.some(
+      (d: any) => d.token.trim().toUpperCase() === clientToken.trim().toUpperCase()
+    );
+
+    if (deviceLimitEnabled && !isAuthorizedDevice && !isGlobalAdmin) {
+      showAlert(`Dispositivo no autorizado (${clientToken}). Para generar la solicitud (.semanal), este dispositivo debe coincidir con el o los ID autorizados por el Administrador en Equipo.`, 'error');
+      return;
+    }
+
     // Validate CI before proceeding
     if (!isValidCI(formData.ci)) {
       showAlert("El número de Carnet de Identidad es inválido. Debe tener 11 dígitos, con mes (01-12) y día (01-31) correctos.", 'error');
@@ -1180,7 +1304,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <p className="text-amber-500 text-[10px] uppercase font-bold tracking-wider">Perfil Solicitante</p>
             <p className="text-white font-bold text-lg">{pendingRequest.userData.fullName}</p>
             <p className="text-stone-300 text-sm font-mono">CI: {pendingRequest.userData.ci}</p>
-            <p className="text-stone-400 text-xs">Tomo: {pendingRequest.userData.tomo} | Folio: {pendingRequest.userData.folio}</p>
+            <p className="text-stone-400 text-xs flex items-center gap-1">
+              Tomo: <span className="blur-sm select-none pointer-events-none">{pendingRequest.userData.tomo}</span> | Folio: <span className="blur-sm select-none pointer-events-none">{pendingRequest.userData.folio}</span>
+            </p>
           </div>
 
           <div className="space-y-4">
@@ -1298,7 +1424,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               <div>
                 <p className="text-stone-500 text-[10px] uppercase font-bold">Tomo / Folio</p>
                 <p className="text-white text-sm font-mono">
-                  {isGlobalAdmin ? (
+                  {(isGlobalAdmin || (loadedCert?.userId === userId)) ? (
                     `${loadedCert.userData.tomo} / ${loadedCert.userData.folio}`
                   ) : (
                     <span className="blur-[4px] select-none text-stone-500 font-sans italic opacity-65">DIFFUSE</span>
@@ -1351,6 +1477,20 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 </div>
               </div>
             )}
+
+            {/* Premium Download Action Block */}
+            <div className="pt-4 border-t border-white/10 space-y-2.5">
+              <p className="text-[#9E7649] text-[10px] uppercase font-extrabold tracking-wider">Documento Oficial de Identidad</p>
+              <button
+                onClick={() => downloadCertificatePDF(loadedCert)}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-black uppercase text-xs rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
+              >
+                <FileDown size={16} /> Descargar Certificado (.PDF Protegido)
+              </button>
+              <p className="text-[10px] text-stone-400 italic text-center leading-normal">
+                Este PDF se descargará protegido con tu contraseña completa del portal. Ábrelo en cualquier navegador introduciéndola.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-6 bg-black/20 p-6 rounded-2xl border border-white/5 h-fit">

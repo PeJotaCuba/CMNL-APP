@@ -2,16 +2,67 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 import path from "path";
+import fs from "fs";
+import { execFileSync } from "child_process";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: "15mb" }));
 
   // API routes FIRST
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post('/api/encrypt-pdf', async (req, res) => {
+    const { pdfBase64, password } = req.body;
+    if (!pdfBase64 || !password) {
+      res.status(400).json({ error: 'Faltan parámetros requeridos (pdfBase64, password)' });
+      return;
+    }
+
+    const rand = Math.random().toString(36).substring(7);
+    const inputPath = path.join('/tmp', `in_${rand}.pdf`);
+    const outputPath = path.join('/tmp', `out_${rand}.pdf`);
+
+    try {
+      const buffer = Buffer.from(pdfBase64, 'base64');
+      fs.writeFileSync(inputPath, buffer);
+
+      const args = [
+        '-q',
+        '-dNOPAUSE',
+        '-dBATCH',
+        '-sDEVICE=pdfwrite',
+        `-sUserPassword=${password}`,
+        `-sOwnerPassword=${password}`,
+        '-dEncryptionLength=128',
+        `-sOutputFile=${outputPath}`,
+        inputPath
+      ];
+
+      execFileSync('gs', args);
+
+      if (fs.existsSync(outputPath)) {
+        const encryptedBuffer = fs.readFileSync(outputPath);
+        const encryptedBase64 = encryptedBuffer.toString('base64');
+        res.json({ pdfBase64: encryptedBase64 });
+      } else {
+        res.status(500).json({ error: 'Ghostscript falló al generar el archivo cifrado' });
+      }
+    } catch (error: any) {
+      console.error('Error al cifrar PDF:', error.message);
+      res.status(500).json({ error: `Fallo de cifrado: ${error.message}` });
+    } finally {
+      try {
+        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      } catch (e) {
+        // Ignore files not found
+      }
+    }
   });
 
   app.post('/api/news', async (req, res) => {
