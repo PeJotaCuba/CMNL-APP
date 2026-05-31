@@ -102,6 +102,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   }, [tracks, selectedTracksList, savedSelections, customRoots, programs, onDirtyChange]);
 
   const [showWishlist, setShowWishlist] = useState(false);
+  const [showImportSelectionModal, setShowImportSelectionModal] = useState(false);
+  const [importSelectionText, setImportSelectionText] = useState('');
   const [wishlistText, setWishlistText] = useState('');
 
   const [showExportModal, setShowExportModal] = useState(false);
@@ -515,6 +517,90 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       }
   };
 
+  const handleProcessImportSelection = () => {
+      if (!importSelectionText.trim()) return;
+      const lines = importSelectionText.split('\n').map(l => l.trim()).filter(l => l);
+      let pName = '';
+      let pDate = '';
+      const importedTracks: Track[] = [];
+      let tTitle = '';
+      let tAuthor = '';
+      let tPerformer = '';
+
+      for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (line.toLowerCase().startsWith('*programa:*') || line.toLowerCase().startsWith('programa:')) {
+              pName = line.split(':')[1]?.replace(/\*/g, '').trim() || '';
+          } else if (line.toLowerCase().startsWith('*fecha:*') || line.toLowerCase().startsWith('fecha:')) {
+              pDate = line.split(':')[1]?.replace(/\*/g, '').trim() || '';
+          } else if (line.startsWith('🎵')) {
+              const content = line.replace('🎵', '').trim();
+              const parts = content.split(' - ');
+              if (parts.length >= 3) {
+                  tTitle = parts[0].replace(/\*/g, '').trim();
+                  tAuthor = parts[1].trim();
+                  tPerformer = parts.slice(2).join(' - ').trim();
+              } else if (parts.length === 2) {
+                  tTitle = parts[0].replace(/\*/g, '').trim();
+                  tAuthor = 'Desconocido';
+                  tPerformer = parts[1].trim();
+              } else {
+                  tTitle = content.replace(/\*/g, '').trim();
+              }
+          } else if (line.startsWith('📂')) {
+              const pathMatch = line.match(/_([^_]+)_/);
+              const pathContent = pathMatch ? pathMatch[1] : line.replace('📂', '').replace(/_/g, '').trim();
+              
+              let foundTrack = tracks.find(t => 
+                  (t.path || '').toLowerCase() === pathContent.toLowerCase() && 
+                  t.metadata.title.toLowerCase().includes(tTitle.toLowerCase())
+              );
+
+              if (!foundTrack && tTitle) {
+                   foundTrack = tracks.find(t => 
+                      t.metadata.title.toLowerCase().includes(tTitle.toLowerCase()) && 
+                      (t.metadata.performer || '').toLowerCase().includes(tPerformer.toLowerCase())
+                   );
+              }
+
+              if (foundTrack) {
+                  importedTracks.push(foundTrack);
+              } else {
+                  const dummyTrack: Track = {
+                      id: 'manual_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 5),
+                      filename: tTitle + '.mp3',
+                      path: pathContent,
+                      isVerified: false,
+                      metadata: { title: tTitle, author: tAuthor, performer: tPerformer, album: '', year: '' }
+                  };
+                  importedTracks.push(dummyTrack);
+              }
+              tTitle = ''; tAuthor = ''; tPerformer = '';
+          }
+      }
+
+      if (importedTracks.length > 0) {
+          if (!pName) pName = 'Importada';
+          const newSelection: SavedSelection = {
+              id: `sel-imp-${Date.now()}`,
+              name: `${pName}`,
+              date: pDate || new Date().toISOString().split('T')[0],
+              tracks: importedTracks,
+              program: pName
+          };
+          setSavedSelections(prev => {
+              const updated = [newSelection, ...prev];
+              saveSavedSelectionsListToDB(updated);
+              return updated;
+          });
+          alert(`Selección importada con ${importedTracks.length} temas.`);
+      } else {
+          alert("No se pudieron extraer temas.");
+      }
+      setShowImportSelectionModal(false);
+      setImportSelectionText('');
+  };
+
   const handleProcessWishlist = () => {
       if (!wishlistText.trim()) return;
       const queries = wishlistText.split('\n').map(l => l.trim()).filter(l => l);
@@ -728,6 +814,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                               )}
                           </div>
                           <div className="flex gap-2">
+                              {authMode === 'director' && (
+                                  <button onClick={() => setShowImportSelectionModal(true)} className="text-[9px] font-bold uppercase bg-blue-900/20 text-blue-400 px-3 py-1.5 rounded-lg flex items-center gap-1">Importar</button>
+                              )}
                               <button onClick={() => setShowWishlist(true)} className="text-[9px] font-bold uppercase bg-[#9E7649]/10 text-[#9E7649] px-3 py-1.5 rounded-lg flex items-center gap-1">Deseos</button>
                               <button onClick={handleClearSelectionClick} className="text-[9px] font-bold uppercase bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg flex items-center gap-1">Limpiar</button>
                           </div>
@@ -936,6 +1025,19 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                     <div className="flex gap-3 mt-4">
                         <button onClick={() => setShowWishlist(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cerrar</button>
                         <button onClick={handleProcessWishlist} className="flex-1 py-3 bg-[#9E7649] text-white rounded-xl font-bold shadow-lg hover:bg-[#8B653D]">Buscar</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {showImportSelectionModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowImportSelectionModal(false)}>
+                <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-bold text-lg mb-2 text-white">Importar Selección</h3>
+                    <textarea className="w-full h-40 p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-sm outline-none focus:border-[#9E7649]" placeholder="Pegue la selección aquí..." value={importSelectionText} onChange={e => setImportSelectionText(e.target.value)} />
+                    <div className="flex gap-3 mt-4">
+                        <button onClick={() => setShowImportSelectionModal(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cerrar</button>
+                        <button onClick={handleProcessImportSelection} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700">Procesar</button>
                     </div>
                 </div>
             </div>

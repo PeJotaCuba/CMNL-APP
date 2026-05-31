@@ -26,7 +26,7 @@ import {
 } from 'recharts';
 import { Script, ProgramFicha, User as UserProfile } from '../types';
 import { Program } from './agenda/types';
-import { parseSpanishDate, formatSpanishDate, PROGRAMS, isValidScriptDate, isValidScriptWriter, isValidScriptAdvisor, isValidScriptTheme, isDateStringMatchingMonth } from './GuionesApp';
+import { parseSpanishDate, formatSpanishDate, PROGRAMS, isValidScriptDate, isValidScriptWriter, isValidScriptAdvisor, isValidScriptTheme, isDateStringMatchingMonth, getProgramScriptsStandalone } from './GuionesApp';
 import { getWeeksInMonth } from './agenda/utils/dateUtils';
 import { StatsView } from './StatsView';
 
@@ -57,6 +57,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
   const [filterWriter, setFilterWriter] = useState('');
+  const [filterPaymentProgram, setFilterPaymentProgram] = useState('');
   const [filterCompareProgram, setFilterCompareProgram] = useState('');
   const [filterCompareBalance, setFilterCompareBalance] = useState<'all' | 'Positivo' | 'Negativo'>('all');
   const [validatedScripts, setValidatedScripts] = useState<Record<string, boolean>>({});
@@ -71,18 +72,10 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
   const COLORS = ['#9E7649', '#E8DCCF', '#6B4F31', '#1A100C', '#4A3728'];
 
   useEffect(() => {
-    // Load Scripts
+    // Load Scripts using getProgramScriptsStandalone for perfect sync with GuionesApp
     const scripts: Record<string, Script[]> = {};
     PROGRAMS.forEach(p => {
-      const data = localStorage.getItem(`guionbd_data_${p.file}`);
-      if (data) {
-        try {
-          const parsed: Script[] = JSON.parse(data);
-          scripts[p.name] = parsed;
-        } catch (e) {
-          scripts[p.name] = [];
-        }
-      }
+      scripts[p.name] = getProgramScriptsStandalone(p.file);
     });
     setAllScripts(scripts);
 
@@ -145,8 +138,8 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
       .join(' ');
   };
 
-  const getExpectedEmissions = (ficha: ProgramFicha, year: number, month: number) => {
-    let count = 0;
+  const getExpectedDatesList = (ficha: ProgramFicha, year: number, month: number) => {
+    const dates: number[] = [];
     const d = new Date(year, month, 1);
     const freq = (ficha.frequency || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -176,10 +169,14 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
       // Handle weird combo logic: if "lunes a viernes" was matched it overrides specific days check unless it says something specific, but for simplicity this works.
       if (freq === "diario") match = true;
 
-      if (match) count++;
+      if (match) dates.push(d.getDate());
       d.setDate(d.getDate() + 1);
     }
-    return count;
+    return dates;
+  };
+
+  const getExpectedEmissions = (ficha: ProgramFicha, year: number, month: number) => {
+    return getExpectedDatesList(ficha, year, month).length;
   };
 
   const getFichaRates = (progName: string) => {
@@ -209,11 +206,19 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
     localStorage.setItem('cmnl_payment_rates', JSON.stringify(rates));
   };
 
+  const isScriptProgram = (progName: string) => {
+    const name = progName.toLowerCase();
+    return !name.includes("cumbancha") && !name.includes("rcm noticias");
+  };
+
   const exportXlsx = (writerOnly = false) => {
     const list: any[] = [];
 
     // Calculate the data synchronously to bypass ui filters if requested
     Object.keys(filteredScripts).forEach(progName => {
+      if (!isScriptProgram(progName)) return;
+      if (filterPaymentProgram && normalizeProgramName(progName) !== normalizeProgramName(filterPaymentProgram)) return;
+      
       const scripts = filteredScripts[progName];
       const normProg = normalizeProgramName(progName);
       const rateInfo = paymentRates.find(r => normalizeProgramName(r.programName) === normProg);
@@ -514,6 +519,8 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
       list = list.filter(item => item.balance === filterCompareBalance);
     }
 
+    list.sort((a, b) => parseSpanishDate(b.date).getTime() - parseSpanishDate(a.date).getTime());
+
     return list;
   }, [filteredScripts, agendaThemes, agendaPrograms, filterCompareProgram, filterCompareBalance]);
 
@@ -627,6 +634,9 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
   const paymentData = useMemo(() => {
     const list: any[] = [];
     Object.keys(filteredScripts).forEach(progName => {
+      if (!isScriptProgram(progName)) return;
+      if (filterPaymentProgram && normalizeProgramName(progName) !== normalizeProgramName(filterPaymentProgram)) return;
+      
       const scripts = filteredScripts[progName];
       const normProg = normalizeProgramName(progName);
       const rateInfo = paymentRates.find(r => normalizeProgramName(r.programName) === normProg);
@@ -658,8 +668,11 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
         });
       });
     });
+    
+    list.sort((a, b) => parseSpanishDate(b.date).getTime() - parseSpanishDate(a.date).getTime());
+    
     return list;
-  }, [filteredScripts, paymentRates, filterWriter, manualPrices, fichas]);
+  }, [filteredScripts, paymentRates, filterWriter, filterPaymentProgram, manualPrices, fichas, selectedProgramBatch]);
 
   const handleBatchEdit = () => {
     if (!selectedProgramBatch || !filterWriter) return;
@@ -702,18 +715,25 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
     const list: any[] = [];
     fichas.filter(f => getFichaRates(f.name).valid).forEach(ficha => {
         const normName = normalizeProgramName(ficha.name);
-        let expected = getExpectedEmissions(ficha, selectedYear, selectedMonth);
+        const expectedDatesList = getExpectedDatesList(ficha, selectedYear, selectedMonth);
+        let expected = expectedDatesList.length;
         let actual = 0;
         let validated = 0;
+        const actualDatesSet = new Set<number>();
 
         Object.keys(filteredScripts).forEach(k => {
            if (normalizeProgramName(k) === normName) {
                actual += filteredScripts[k].length;
                filteredScripts[k].forEach(s => {
                    if (validatedScripts[s.id]) validated++;
+                   const d = parseSpanishDate(s.dateAdded);
+                   if (d && !isNaN(d.getTime())) actualDatesSet.add(d.getDate());
                })
            }
         });
+
+        const missingDates = expectedDatesList.filter(d => !actualDatesSet.has(d));
+        let missingDatesString = missingDates.join(', ');
 
         if (expected > 0 || actual > 0) {
             list.push({
@@ -721,6 +741,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
                expected,
                actual,
                missing: expected - actual,
+               missingDatesString,
                validated,
                unvalidated: actual - validated
             });
@@ -743,6 +764,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
                expected: 0,
                actual,
                missing: 0,
+               missingDatesString: '',
                validated,
                unvalidated: actual - validated
             });
@@ -755,7 +777,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
 
   const programsWithGuion = fichas.filter(f => {
       const rates = getFichaRates(f.name);
-      return rates.valid;
+      return rates.valid && isScriptProgram(f.name);
   });
 
   return (
@@ -1072,6 +1094,18 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
                             {allScriptwriters.map(w => <option key={w} value={w}>{w}</option>)}
                         </select>
                       </div>
+
+                      <div className="flex-1 min-w-[200px]">
+                        <label className="block text-[10px] text-[#9E7649] uppercase mb-1 font-bold">Filtrar por Programa</label>
+                        <select 
+                            value={filterPaymentProgram}
+                            onChange={e => setFilterPaymentProgram(e.target.value)}
+                            className="w-full bg-black/20 border border-stone-800 rounded-lg px-4 py-2 text-xs text-white"
+                        >
+                            <option value="">Todos los programas</option>
+                            {programsWithGuion.map(f => <option key={f.name} value={f.name}>{f.name}</option>)}
+                        </select>
+                      </div>
                       
                       {filterWriter && (
                         <div className="flex gap-2">
@@ -1286,7 +1320,14 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
                                       <td className="py-3 font-medium text-white">{b.program}</td>
                                       <td className="py-3 text-center">{b.expected}</td>
                                       <td className="py-3 text-center text-stone-300">{b.actual}</td>
-                                      <td className="py-3 text-center font-bold text-red-400">{b.missing > 0 ? b.missing : '-'}</td>
+                                      <td className="py-3 text-center font-bold text-red-400">
+                                          {b.missing > 0 ? (
+                                              <div className="flex flex-col items-center">
+                                                  <span>{b.missing}</span>
+                                                  {b.missingDatesString && <span className="text-[9px] font-normal leading-tight opacity-70">Días: {b.missingDatesString}</span>}
+                                              </div>
+                                          ) : '-'}
+                                      </td>
                                       <td className="py-3 text-center text-emerald-400 font-bold">{b.validated > 0 ? b.validated : '-'}</td>
                                       <td className="py-3 text-center text-yellow-500 font-bold">{b.unvalidated > 0 ? b.unvalidated : '-'}</td>
                                   </tr>
@@ -1304,7 +1345,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
                                 .filter(b => b.missing > 0 || b.unvalidated > 0)
                                 .map(b => {
                                    let str = `*${b.program}*:\n`;
-                                   if (b.missing > 0) str += `- Faltan ${b.missing} guiones en la BD.\n`;
+                                   if (b.missing > 0) str += `- Faltan ${b.missing} guiones en la BD.\n  Días faltantes: ${b.missingDatesString}\n`;
                                    
                                    const normP = normalizeProgramName(b.program);
                                    let unvalidatedList: string[] = [];
