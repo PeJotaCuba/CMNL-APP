@@ -9,6 +9,7 @@ interface StatsViewProps {
   onClose?: () => void;
   programs: Array<{ name: string; file: string }>;
   currentUser: User;
+  hideHeader?: boolean;
 }
 
 type ReportType = 'month' | 'repeated' | 'program' | 'year_ago' | 'monthly_txt' | null;
@@ -21,7 +22,7 @@ interface FilterConfig {
   week: string;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ onClose, programs, currentUser }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ onClose, programs, currentUser, hideHeader }) => {
   const [allScripts, setAllScripts] = useState<Script[]>([]);
   const [activeReport, setActiveReport] = useState<ReportType>(null);
   
@@ -631,10 +632,12 @@ export const StatsView: React.FC<StatsViewProps> = ({ onClose, programs, current
 
   return (
     <div className="max-w-5xl mx-auto px-4 pb-20 animate-in fade-in duration-300">
-      <div className="text-center mb-10 space-y-2">
-        <h2 className="text-3xl font-bold text-white tracking-tight">Centro de Informes Globales</h2>
-        <p className="text-[#E8DCCF]/60">Genera documentos detallados de toda la programación.</p>
-      </div>
+      {!hideHeader && (
+        <div className="text-center mb-10 space-y-2">
+          <h2 className="text-3xl font-bold text-white tracking-tight">Centro de Informes Globales</h2>
+          <p className="text-[#E8DCCF]/60">Genera documentos detallados de toda la programación.</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {canAccessMonthlyReport && (

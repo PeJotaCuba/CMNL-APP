@@ -1785,14 +1785,6 @@ const GuionesApp: React.FC<GuionesAppProps> = ({ currentUser, onBack, onMenuClic
 
                                 {/* Botones de Acción */}
                                 <div className="flex flex-wrap gap-3 justify-center">
-                                    <button
-                                        onClick={() => setShowStats(true)}
-                                        className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl text-[#9E7649] hover:bg-[#3E1E16] hover:text-white transition-all shadow-sm"
-                                    >
-                                        <FileText size={18} />
-                                        <span className="text-sm font-bold">Informes</span>
-                                    </button>
-
                                     {canModify && (
                                         <label className="flex items-center gap-2 px-4 md:px-5 py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold cursor-pointer transition-all shadow-lg">
                                             <Upload size={18} />

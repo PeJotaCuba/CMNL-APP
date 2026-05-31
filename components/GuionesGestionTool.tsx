@@ -28,6 +28,7 @@ import { Script, ProgramFicha, User as UserProfile } from '../types';
 import { Program } from './agenda/types';
 import { parseSpanishDate, formatSpanishDate, PROGRAMS, isValidScriptDate, isValidScriptWriter, isValidScriptAdvisor, isValidScriptTheme, isDateStringMatchingMonth } from './GuionesApp';
 import { getWeeksInMonth } from './agenda/utils/dateUtils';
+import { StatsView } from './StatsView';
 
 interface GuionesGestionToolProps {
   onBack: () => void;
@@ -77,13 +78,7 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
       if (data) {
         try {
           const parsed: Script[] = JSON.parse(data);
-          scripts[p.name] = parsed.filter(s => {
-            const hasDate = isValidScriptDate(s.dateAdded);
-            const hasTheme = isValidScriptTheme(s.themes || s.title);
-            const hasWriter = isValidScriptWriter(s.writer);
-            const hasAdvisor = isValidScriptAdvisor(s.advisor);
-            return hasDate && hasTheme && hasWriter && hasAdvisor;
-          });
+          scripts[p.name] = parsed;
         } catch (e) {
           scripts[p.name] = [];
         }
@@ -810,8 +805,8 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
               <FileText size={20} />
             </div>
             <div className="text-left">
-              <span className="block font-bold">Informe DOCX Mensual</span>
-              <span className="text-[10px] opacity-70">Extracción temática de la Agenda</span>
+              <span className="block font-bold">Informes</span>
+              <span className="text-[10px] opacity-70">Centro de Informes de Guiones</span>
             </div>
           </button>
 
@@ -844,30 +839,14 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
 
         {/* Content Area */}
         <div className="lg:col-span-2">
-          <div className="bg-[#2C1B15] rounded-3xl border border-stone-800 overflow-hidden shadow-2xl">
-            {activeTab === 'A' && (
-              <div className="p-8 text-center space-y-6">
-                <div className="w-20 h-20 bg-[#9E7649]/10 rounded-full flex items-center justify-center mx-auto">
-                  <FileText size={40} className="text-[#9E7649]" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold">Informe DOCX Mensual</h3>
-                  <p className="text-stone-400 mt-2 max-w-md mx-auto italic">
-                    Genera un documento consolidado con todos los temas generales programados en la agenda editorial para el mes de {months[selectedMonth]}.
-                  </p>
-                </div>
-                <button 
-                  onClick={generateMonthlyReport}
-                  className="bg-[#9E7649] text-[#1A100C] px-8 py-3 rounded-xl font-bold flex items-center gap-2 mx-auto active:scale-95 transition-all shadow-xl shadow-amber-900/20"
-                >
-                  <Download size={20} />
-                  Descargar DOCX
-                </button>
-              </div>
-            )}
-
-            {activeTab === 'B' && (
-              <div className="flex flex-col h-full max-h-[700px]">
+          {activeTab === 'A' ? (
+            <div className="p-4 bg-[#2C1B15] rounded-3xl border border-stone-800 shadow-2xl">
+              <StatsView programs={PROGRAMS} currentUser={currentUser as any} hideHeader={true} />
+            </div>
+          ) : (
+            <div className="bg-[#2C1B15] rounded-3xl border border-stone-800 overflow-hidden shadow-2xl">
+              {activeTab === 'B' && (
+                <div className="flex flex-col h-full max-h-[700px]">
                 <div className="p-6 border-b border-stone-800 flex justify-between items-center bg-[#2C1B15] sticky top-0 z-10">
                    <div>
                       <h3 className="font-bold">Control de Calidad</h3>
@@ -1219,7 +1198,8 @@ const GuionesGestionTool: React.FC<GuionesGestionToolProps> = ({ onBack, isAdmin
               </div>
             )}
           </div>
-        </div>
+        )}
+      </div>
       </div>
 
       {showEditDialog && (
