@@ -32,6 +32,8 @@ interface TrackListProps {
   setActiveRoot: (root: string) => void;
   currentPath: string;
   setCurrentPath: (path: string) => void;
+
+  onMoveItem?: (fromIndex: number, toIndex: number) => void;
 }
 
 const FIXED_ROOTS = ['Música 1', 'Música 2', 'Música 3', 'Música 4', 'Música 5'];
@@ -46,7 +48,8 @@ const TrackList: React.FC<TrackListProps> = ({
     customRoots, onAddCustomRoot, onRenameRoot,
     onOpenWishlist, missingQueries, onClearMissing,
     onOpenExportPreview,
-    activeRoot, setActiveRoot, currentPath, setCurrentPath
+    activeRoot, setActiveRoot, currentPath, setCurrentPath,
+    onMoveItem
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +67,41 @@ const TrackList: React.FC<TrackListProps> = ({
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const allRoots = useMemo(() => [...FIXED_ROOTS, ...customRoots], [customRoots]);
+
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+      setDraggedIndex(index);
+      e.dataTransfer.effectAllowed = 'move';
+      // Slight delay to allow UI to update class before actual browser drag image capture
+      setTimeout(() => setDraggedIndex(index), 0);
+  };
+
+  const handleDragEnter = (index: number) => {
+      if (draggedIndex !== null && draggedIndex !== index) {
+          setDragOverIndex(index);
+      }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault(); // Necessary to allow dropping
+      e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+      e.preventDefault();
+      if (draggedIndex !== null && onMoveItem && draggedIndex !== index) {
+          onMoveItem(draggedIndex, index);
+      }
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+  };
 
   useEffect(() => {
       try {
@@ -179,7 +217,7 @@ const TrackList: React.FC<TrackListProps> = ({
               const cleanQuery = normalizeStr(searchQuery.trim());
               list = list.filter(t => normalizeStr(t.filename).includes(cleanQuery) || normalizeStr(t.metadata.title).includes(cleanQuery));
           }
-          return list.map(t => ({ type: 'track' as const, data: t, key: t.id })).sort((a,b) => a.data.filename.localeCompare(b.data.filename));
+          return list.map(t => ({ type: 'track' as const, data: t, key: t.id }));
       }
 
       const targetPath = currentPath || activeRoot;
@@ -454,10 +492,47 @@ const TrackList: React.FC<TrackListProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto divide-y divide-[#9E7649]/10 pb-24 bg-[#1A100C]">
-        {visibleItems.map(item => (
-          <div key={item.key} className="flex items-center gap-3 px-4 py-3 hover:bg-[#2C1B15] transition-colors group cursor-pointer">
+        {visibleItems.map((item, index) => {
+          const isDraggable = isSelectionView && onMoveItem && !searchQuery.trim();
+          const isDragged = draggedIndex === index;
+          const isDragOver = dragOverIndex === index;
+          
+          return (
+          <div 
+              key={item.key} 
+              draggable={isDraggable}
+              onDragStart={isDraggable ? (e) => handleDragStart(e, index) : undefined}
+              onDragEnter={isDraggable ? () => handleDragEnter(index) : undefined}
+              onDragOver={isDraggable ? handleDragOver : undefined}
+              onDrop={isDraggable ? (e) => handleDrop(e, index) : undefined}
+              onDragEnd={isDraggable ? handleDragEnd : undefined}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors group cursor-pointer 
+                  ${isDragged ? 'opacity-50 bg-[#3E1E16]' : 'hover:bg-[#2C1B15]'} 
+                  ${isDragOver ? 'border-t-2 border-[#9E7649]' : ''}`}
+          >
+            {isDraggable && (
+                <div className="flex flex-col items-center mr-1 text-[#E8DCCF]/40 hover:text-white" title="Arrastrar para mover">
+                    <button 
+                         onClick={(e) => { e.stopPropagation(); if (index > 0) onMoveItem?.(index, index - 1); }}
+                         className="hover:text-[#9E7649] transition-colors"
+                         title="Subir"
+                         disabled={index === 0}
+                    >
+                         <span className="material-symbols-outlined text-sm leading-none block">expand_less</span>
+                    </button>
+                    <span className="material-symbols-outlined text-sm cursor-grab active:cursor-grabbing">drag_indicator</span>
+                    <button 
+                         onClick={(e) => { e.stopPropagation(); if (index < visibleItems.length - 1) onMoveItem?.(index, index + 1); }}
+                         className="hover:text-[#9E7649] transition-colors"
+                         title="Bajar"
+                         disabled={index === visibleItems.length - 1}
+                    >
+                         <span className="material-symbols-outlined text-sm leading-none block">expand_more</span>
+                    </button>
+                </div>
+            )}
             <div className={`flex items-center justify-center rounded-lg size-10 shrink-0 ${item.type === 'track' ? 'bg-[#9E7649]/10 text-[#9E7649]' : 'bg-blue-900/20 text-blue-400'}`} onClick={() => handleNavigate(item)}>
-              <span className="material-symbols-outlined">{item.type === 'folder' ? 'folder' : 'music_note'}</span>
+              <span className="text-xs font-bold leading-none">{isSelectionView && !searchQuery.trim() ? `${index + 1}` : <span className="material-symbols-outlined text-[1.2rem]">{item.type === 'folder' ? 'folder' : 'music_note'}</span>}</span>
             </div>
             <div className="flex flex-col flex-1 min-w-0" onClick={() => handleNavigate(item)}>
                 <p className="text-sm font-bold text-white truncate">{item.type === 'track' ? item.data.metadata.title : item.name}</p>
@@ -473,7 +548,7 @@ const TrackList: React.FC<TrackListProps> = ({
                 </button>
             )}
           </div>
-        ))}
+        )})}
 
         {visibleItems.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-[#E8DCCF]/40 gap-2">

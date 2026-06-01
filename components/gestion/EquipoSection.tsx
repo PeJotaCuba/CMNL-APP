@@ -1077,17 +1077,17 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                 <label className="block text-[9px] text-[#9E7649] uppercase font-bold mb-1">Código de Dispositivo</label>
                                 <input 
                                   type="text"
-                                  value={newDeviceToken}
+                                  value={newDeviceToken || 'DVC-'}
                                   onChange={(e) => {
-                                    let val = e.target.value.toUpperCase();
-                                    if (val.startsWith('DVC') && val.length > 3 && val[3] !== '-') {
-                                      val = val.slice(0, 3) + '-' + val.slice(3);
+                                    let raw = e.target.value.toUpperCase();
+                                    if (!raw.startsWith('DVC-')) {
+                                        raw = 'DVC-' + raw.replace(/^DVC-?/, '');
                                     }
-                                    if (val.length <= 8) {
-                                      setNewDeviceToken(val);
+                                    if (raw.length <= 8) {
+                                      setNewDeviceToken(raw);
                                     }
                                   }}
-                                  placeholder="Ej: DVC-A7K"
+                                  placeholder="Ej: DVC-XXXX"
                                   className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-[#9E7649]"
                                 />
                               </div>
@@ -1131,11 +1131,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const trimmedToken = newDeviceToken.trim().toUpperCase();
+                                  const trimmedToken = (newDeviceToken || 'DVC-').trim().toUpperCase();
                                   const trimmedName = newDeviceName.trim();
                                   
-                                  if (!trimmedToken || !trimmedName) {
-                                    showAlert('Por favor, ingresa el código y nombre del dispositivo.', 'error');
+                                  if (!trimmedToken || trimmedToken === 'DVC-' || trimmedToken.length < 5 || !trimmedName) {
+                                    showAlert('Por favor, ingresa el código completo (Ej: DVC-XXXX) y el nombre del dispositivo.', 'error');
                                     return;
                                   }
 
@@ -1217,8 +1217,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                           {catalogo.length > 0 ? (
                             catalogo.map(prog => {
                               const isHabitual = roleHabitual.includes(prog.name);
-                              const isGuionista = roleName.toLowerCase().includes('guionista');
-                              const progDays = isGuionista && isHabitual ? getProgramDays(prog.name) : [];
+                              const progDays = isHabitual ? getProgramDays(prog.name) : [];
                               const selectedDays = editingMember.habitualProgramsDays?.[roleName]?.[prog.name] || [];
 
                               return (
@@ -1240,8 +1239,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                         const updatedRoleDaysMap = { ...currentRoleDaysMap };
                                         if (!e.target.checked) {
                                           delete updatedRoleDaysMap[prog.name];
-                                        } else if (isGuionista) {
-                                          // Default: all program days if it's a guionista
+                                        } else {
+                                          // Default: all program days
                                           updatedRoleDaysMap[prog.name] = getProgramDays(prog.name);
                                         }
 
@@ -1262,7 +1261,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                     <span className="text-xs text-white/90">{prog.name}</span>
                                   </label>
 
-                                  {isGuionista && isHabitual && progDays.length > 0 && (
+                                  {isHabitual && progDays.length > 0 && (
                                     <div className="ml-6 mt-2 flex flex-wrap gap-2">
                                       {progDays.map(day => (
                                         <label key={day} className="flex items-center gap-1 cursor-pointer">

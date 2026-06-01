@@ -1,4 +1,5 @@
 import { User } from '../types';
+import { DeviceIdentityService } from '../src/services/DeviceIdentityService';
 
 export const cryptoUtils = {
   // Generar par de claves ECDSA
@@ -149,23 +150,27 @@ export const generateDigitalSignature = (certData: any) => {
   const HH = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
   const dateStrContinuous = `${YYYY}${MM}${DD}${HH}${mm}`;
+  const dvcId = DeviceIdentityService.getDeviceTokenSync();
 
   // Assemble according to exact order:
-  // [First name]-[4 chars spec][Tomo][6 chars/last 5 chars spec][Folio]%[Second Apellido]#[CI-6]@[Contracts]%[First Apellido]&[DateTime Continuous]
-  return `${firstName}-${part4Spec}${tomoClean}${part6Spec}${folioClean}%${secondApellido}#${ci6}@${contractNums}%${firstApellido}&${dateStrContinuous}`;
+  // [First name]-[4 chars spec][Tomo][6 chars/last 5 chars spec][Folio]%[Second Apellido]#[CI-6]@[Contracts]%[First Apellido]&[DateTime Continuous]%ID:[DVC]
+  return `${firstName}-${part4Spec}${tomoClean}${part6Spec}${folioClean}%${secondApellido}#${ci6}@${contractNums}%${firstApellido}&${dateStrContinuous}%ID:${dvcId}`;
 };
 
 export const formatDigitalSignatureForDocuments = (signatureString: string): string[] => {
   if (!signatureString) return [];
   
-  // Try to locate the % symbols to split exactly into 3 lines
-  // Example string: LISSELL-ASES123DIRECT435%DANTA#856789@0408%FONTELO&202605201050
+  // Try to locate the % symbols to split exactly into lines
   const parts = signatureString.split('%');
   if (parts.length >= 3) {
     const line1 = parts[0] + '%';
     const line2 = parts[1] + '%';
-    const line3 = parts.slice(2).join('%'); // in case of extra %
-    return [line1, line2, line3];
+    const line3 = parts[2];
+    const lines = [line1, line2, line3];
+    if (parts.length > 3) {
+      lines.push(parts.slice(3).join('%'));
+    }
+    return lines;
   }
   
   // Safe chunking fallback

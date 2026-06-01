@@ -518,7 +518,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         doc.setFontSize(6.5);
         doc.setTextColor(158, 118, 73);
         const aLines = formatDigitalSignatureForDocuments(cert.adminSignature);
-        aLines.slice(0, 3).forEach((line, idx) => {
+        aLines.forEach((line, idx) => {
           doc.text(line.toLowerCase(), 75, sigY + (idx * 2.5));
         });
         sigY += 12;
@@ -538,7 +538,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         doc.setFontSize(6.5);
         doc.setTextColor(158, 118, 73);
         const dLines = formatDigitalSignatureForDocuments(cert.directorSignature);
-        dLines.slice(0, 3).forEach((line, idx) => {
+        dLines.forEach((line, idx) => {
           doc.text(line.toLowerCase(), 75, sigY + (idx * 2.5));
         });
         sigY += 12;

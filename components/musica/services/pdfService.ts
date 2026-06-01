@@ -103,6 +103,7 @@ export const generateReportPDF = (data: ReportData): Blob => {
         doc.text(`Firma Digital: ${sigLines[0]}`, 190, y + 6, { align: "right" });
         if (sigLines[1]) doc.text(sigLines[1], 190, y + 10, { align: "right" });
         if (sigLines[2]) doc.text(sigLines[2], 190, y + 14, { align: "right" });
+        if (sigLines[3]) doc.text(sigLines[3], 190, y + 18, { align: "right" });
     }
 
     return doc.output('blob');

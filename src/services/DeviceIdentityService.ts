@@ -126,13 +126,13 @@ function generateDeviceToken(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Avoid ambiguous chars
   let token = '';
   if (typeof window !== 'undefined' && window.crypto) {
-    const array = new Uint8Array(5);
+    const array = new Uint8Array(4);
     window.crypto.getRandomValues(array);
     for (let i = 0; i < array.length; i++) {
       token += chars.charAt(array[i] % chars.length);
     }
   } else {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
   }

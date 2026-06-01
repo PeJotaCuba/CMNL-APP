@@ -239,6 +239,17 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                             color: rgb(0, 0, 0),
                         });
                     }
+
+                    if (sigLines[3]) {
+                        const fourthLineWidth = sigLines[3].length * 4.8;
+                        lastPage.drawText(sigLines[3], {
+                            x: lineEndX - fourthLineWidth,
+                            y: currentY - 22,
+                            size: 8,
+                            font: courierFont,
+                            color: rgb(0, 0, 0),
+                        });
+                    }
                 }
 
                 const pdfBytes = await pdfDoc.save();

@@ -318,6 +318,15 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       onDirtyChange(true);
       setSelectedTracksList(prev => prev.find(t => t.id === track.id) ? prev.filter(t => t.id !== track.id) : [...prev, track]); 
   };
+  const handleMoveSelectionTrack = (fromIndex: number, toIndex: number) => {
+      onDirtyChange(true);
+      setSelectedTracksList(prev => {
+          const list = [...prev];
+          const [moved] = list.splice(fromIndex, 1);
+          list.splice(toIndex, 0, moved);
+          return list;
+      });
+  };
 
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -537,15 +546,15 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
               const content = line.replace('🎵', '').trim();
               const parts = content.split(' - ');
               if (parts.length >= 3) {
-                  tTitle = parts[0].replace(/\*/g, '').trim();
+                  tTitle = parts[0].replace(/\*/g, '').replace(/^\d+\.\s*/, '').trim();
                   tAuthor = parts[1].trim();
                   tPerformer = parts.slice(2).join(' - ').trim();
               } else if (parts.length === 2) {
-                  tTitle = parts[0].replace(/\*/g, '').trim();
+                  tTitle = parts[0].replace(/\*/g, '').replace(/^\d+\.\s*/, '').trim();
                   tAuthor = 'Desconocido';
                   tPerformer = parts[1].trim();
               } else {
-                  tTitle = content.replace(/\*/g, '').trim();
+                  tTitle = content.replace(/\*/g, '').replace(/^\d+\.\s*/, '').trim();
               }
           } else if (line.startsWith('📂')) {
               const pathMatch = line.match(/_([^_]+)_/);
@@ -659,7 +668,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleShareWhatsApp = () => {
       let message = `*CRÉDITOS RCM*\n*Programa:* ${programName}\n*Fecha:* ${reportDate}\n\n`;
-      exportItems.forEach(item => { message += `🎵 *${item.title}* - ${item.author} - ${item.performer}\n📂 _${item.path || 'Manual'}_\n\n`; });
+      exportItems.forEach((item, index) => { message += `🎵 ${index + 1}. *${item.title}* - ${item.author} - ${item.performer}\n📂 _${item.path || 'Manual'}_\n\n`; });
       openWhatsApp(message);
   };
 
@@ -850,6 +859,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                             onSyncRoot={() => {}} onExportRoot={() => {}} onClearRoot={() => {}} 
                             isSelectionView={true} customRoots={[]} onAddCustomRoot={() => {}} onRenameRoot={() => {}}
                             onToggleSelection={handleToggleSelection} selectedTrackIds={new Set(selectedTracksList.map(t => t.id))}
+                            onMoveItem={authMode === 'director' ? handleMoveSelectionTrack : undefined}
                         />
                      </div>
                      <div className="p-4 bg-[#2C1B15] border-t border-[#9E7649]/20 flex flex-col gap-2">
