@@ -543,8 +543,6 @@ const AppContent: React.FC = () => {
           const freshSrc = `${baseSrc}?t=${Date.now()}`;
           
           audioRef.current.pause();
-          audioRef.current.src = "";
-          audioRef.current.load();
           
           // Re-assign and play
           audioRef.current.src = freshSrc;

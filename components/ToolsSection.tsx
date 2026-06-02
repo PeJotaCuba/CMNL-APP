@@ -18,6 +18,7 @@ import DataExtractionTool from './DataExtractionTool';
 import GenericTool from './GenericTool';
 import GuionesGestionTool from './GuionesGestionTool';
 import FirmaDigitalTool from './FirmaDigitalTool';
+import GuionFormatTool from './GuionFormatTool';
 
 interface ToolsSectionProps {
   onBack: () => void;
@@ -178,6 +179,22 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
                localStorage.setItem('cmnl_digital_signatures', JSON.stringify(data));
             }}
           />
+        </main>
+      </div>
+    );
+  }
+
+  if (activeTool === 'script-format') {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          user={currentUser}
+          sectionTitle="Formato de Guion" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <GuionFormatTool onBack={() => setActiveTool(null)} />
         </main>
       </div>
     );
