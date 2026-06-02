@@ -8,6 +8,7 @@ import { normalizeScriptNumbering } from '../utils/normalizeService';
 import { EditorBlock } from './scriptFormat/EditorBlock';
 import { EditorToolbar } from './scriptFormat/EditorToolbar';
 import { InformeModal } from './scriptFormat/InformeModal';
+import CMNLHeader from './CMNLHeader';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -117,7 +118,15 @@ function scriptDataToHtml(script: RadioScript, formatMode: 'all' | 'numbering' |
    return html;
 }
 
-export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
+export default function GuionFormatTool({ 
+  onBack, 
+  currentUser, 
+  onMenuClick 
+}: { 
+  onBack: () => void;
+  currentUser?: { name: string; role: string; photo?: string } | null;
+  onMenuClick?: () => void;
+}) {
   const [docs, setDocs] = useState<DocumentItem[]>(() => {
     const saved = localStorage.getItem('radio_scripts_docs');
     return saved ? JSON.parse(saved) : [];
@@ -193,7 +202,9 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
   
   const [isClearingStock, setIsClearingStock] = useState(false);
   const [activeTab, setActiveTab] = useState<'input' | 'preview' | 'docs'>('input');
+  const [layoutMode, setLayoutMode] = useState<'config' | 'edit'>('config');
   
+  const [pageSize, setPageSize] = useState<'letter' | 'legal' | 'A4'>('letter');
   const [fontSize, setFontSize] = useState<number>(13);
   const [lineSpacing, setLineSpacing] = useState<number>(1.15);
   const [paragraphSpacing, setParagraphSpacing] = useState<number>(6);
@@ -503,7 +514,7 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
   const handleDownload = async () => {
     if (!editorHtml) return;
     try {
-      const blob = await generateDocxFromHtml(editorHtml, { fontSize, lineSpacing, paragraphSpacing });
+      const blob = await generateDocxFromHtml(editorHtml, { fontSize, lineSpacing, paragraphSpacing, pageSize });
       const url = URL.createObjectURL(blob);
       const fileName = getFileName(scriptData);
       
@@ -533,7 +544,7 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
       
       for (const doc of docs) {
          if (!doc.editorHtml) continue;
-         const blob = await generateDocxFromHtml(doc.editorHtml, { fontSize, lineSpacing, paragraphSpacing });
+         const blob = await generateDocxFromHtml(doc.editorHtml, { fontSize, lineSpacing, paragraphSpacing, pageSize });
          const resolvedFileName = getFileName(doc.scriptData);
          
          let uniqueName = resolvedFileName;
@@ -658,68 +669,70 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="bg-[#1A0F0A] flex flex-col h-[calc(100vh-140px)] overflow-hidden text-[#E8DCCF] font-sans border-t border-stone-800 rounded-lg">
-      <div className="bg-[#2A1810] border-b border-stone-700 px-4 sm:px-6 py-3 flex flex-col items-center sm:items-stretch shadow-sm shrink-0 z-20 gap-3">
-        <div className="flex flex-col sm:flex-row justify-between w-full items-center gap-3">
-          <div className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto justify-center sm:justify-start shrink-0">
-            <div className="bg-blue-600/20 text-blue-400 p-1.5 sm:p-2 rounded-lg shrink-0 border border-blue-500/30">
-              <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <h1 className="text-sm sm:text-lg font-bold tracking-tight uppercase text-center sm:text-left shrink-0">Formato de Guion</h1>
-          </div>
-          <div className="flex items-center w-full justify-center sm:justify-end gap-3 flex-wrap sm:flex-nowrap">
-            {scriptData && (
-              <>
-                <span className="text-[10px] sm:text-xs font-semibold text-stone-400 uppercase tracking-widest bg-black/30 px-3 py-1.5 rounded border border-stone-800">
-                    <span>Documento: </span><span className="font-bold text-stone-200">{getFileName(scriptData)}</span>
-                </span>
-                
-                <div className="flex gap-2">
+    <div className="bg-[#1A0F0A] flex flex-col flex-1 h-full overflow-hidden text-[#E8DCCF] font-sans">
+      <CMNLHeader 
+        user={currentUser || null}
+        sectionTitle="Formato de Guion" 
+        onBack={onBack}
+        onMenuClick={onMenuClick}
+      >
+        <div className="flex items-center gap-3">
+          {scriptData && (
+            <>
+              <span className="hidden xl:inline text-[9px] font-semibold text-[#9E7649] uppercase tracking-widest bg-black/60 px-3 py-1.5 rounded border border-[#9E7649]/20 truncate max-w-[200px]">
+                  {getFileName(scriptData)}
+              </span>
+              
+              <div className="flex gap-2">
+                  <button 
+                    onClick={() => requireSaveBeforeAction(handleDownload)}
+                    className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5 sm:mr-1 shrink-0" />
+                    <span className="hidden md:inline">DESC.</span>
+                  </button>
+                  {docs.length > 1 && (
                     <button 
-                      onClick={() => requireSaveBeforeAction(handleDownload)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
+                      onClick={() => requireSaveBeforeAction(handleDownloadAll)}
+                      className="bg-blue-800/30 hover:bg-blue-800/50 text-blue-300 border border-blue-700/30 px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
                     >
-                      <Download className="w-3 h-3 sm:mr-1 shrink-0" />
-                      <span className="hidden sm:inline">DESCARGAR</span>
+                      <Download className="w-3.5 h-3.5 sm:mr-1 shrink-0" />
+                      <span className="hidden xl:inline">ZIP</span>
                     </button>
-                    {docs.length > 1 && (
-                      <button 
-                        onClick={() => requireSaveBeforeAction(handleDownloadAll)}
-                        className="bg-blue-800 hover:bg-blue-900 text-white px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
-                      >
-                        <Download className="w-3 h-3 sm:mr-1 shrink-0" />
-                        <span className="hidden sm:inline">TODOS (ZIP)</span>
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => requireSaveBeforeAction(() => window.print())}
-                      className="bg-stone-700 hover:bg-stone-600 text-white px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
-                    >
-                      <Printer className="w-3 h-3 sm:mr-1 shrink-0" />
-                      <span className="hidden sm:inline">IMPRIMIR</span>
-                    </button>
-                    <button 
-                      onClick={() => requireSaveBeforeAction(() => window.open(`https://wa.me/?text=${encodeURIComponent('Revisa el guion generado en la plataforma de GuionFormat.')}`, '_blank'))}
-                      className="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
-                    >
-                      <Share2 className="w-3 h-3 sm:mr-1 shrink-0" />
-                      <span className="hidden sm:inline">COMPARTIR</span>
-                    </button>
-                    <button 
-                      onClick={() => requireSaveBeforeAction(() => setShowInforme(true))}
-                      className="bg-stone-700 hover:bg-stone-600 text-white px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
-                    >
-                      <ClipboardList className="w-3 h-3 sm:mr-1 shrink-0" />
-                      <span className="hidden sm:inline">INFORME</span>
-                    </button>
-                </div>
-              </>
-            )}
-          </div>
+                  )}
+                  <button 
+                    onClick={() => requireSaveBeforeAction(() => window.print())}
+                    className="bg-stone-700/50 hover:bg-stone-600/50 text-stone-300 border border-stone-600/30 px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
+                  >
+                    <Printer className="w-3.5 h-3.5 sm:mr-1 shrink-0" />
+                    <span className="hidden md:inline">IMPR.</span>
+                  </button>
+                  <button 
+                    onClick={() => requireSaveBeforeAction(() => window.open(`https://wa.me/?text=${encodeURIComponent('Revisa el guion generado en la plataforma de GuionFormat.')}`, '_blank'))}
+                    className="bg-green-700/30 hover:bg-green-600/40 text-green-400 border border-green-500/30 px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5 sm:mr-1 shrink-0" />
+                    <span className="hidden md:inline">COMP.</span>
+                  </button>
+                  <button 
+                    onClick={() => requireSaveBeforeAction(() => setShowInforme(true))}
+                    className="bg-amber-700/30 hover:bg-amber-600/40 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded font-bold text-[10px] sm:text-xs flex items-center justify-center shadow-sm transition-colors"
+                  >
+                    <ClipboardList className="w-3.5 h-3.5 sm:mr-1 shrink-0" />
+                    <span className="hidden lg:inline">INFORME</span>
+                  </button>
+              </div>
+            </>
+          )}
         </div>
+      </CMNLHeader>
+
+      <div className="hidden md:flex bg-[#1A0F0A] border-b border-stone-800 p-2 shrink-0 space-x-2 z-20">
+        <button onClick={() => setLayoutMode('config')} className={`px-4 py-2 text-xs font-bold uppercase rounded transition-colors ${layoutMode === 'config' ? 'bg-blue-600 text-white' : 'bg-stone-800 text-stone-400 hover:bg-stone-700 hover:text-stone-300'}`}>Entrada & Configuración</button>
+        <button onClick={() => setLayoutMode('edit')} className={`px-4 py-2 text-xs font-bold uppercase rounded transition-colors ${layoutMode === 'edit' ? 'bg-blue-600 text-white' : 'bg-stone-800 text-stone-400 hover:bg-stone-700 hover:text-stone-300'}`}>Editar Docx</button>
       </div>
 
-      <main className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0 bg-[#2A1810]">
         
         {/* Mobile Tabs */}
         <div className="md:hidden flex bg-[#1A0F0A] border-b border-stone-800 p-2 shrink-0 space-x-2 z-20">
@@ -729,24 +742,21 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
         </div>
 
         {/* Input Area */}
-        <section className={`w-full md:w-[28%] md:min-w-[280px] md:max-w-[360px] border-b md:border-b-0 md:border-r border-stone-800 bg-[#2A1810] flex-col z-10 overflow-hidden ${activeTab === 'input' ? 'flex' : 'hidden md:flex'}`}>
-          <div className="p-4 border-b border-stone-800 bg-[#1A0F0A] flex justify-between items-center shrink-0">
-            <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Entrada & Configuración</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-            <div className="flex items-center justify-between">
+        <section className={`w-full md:w-[28%] md:min-w-[280px] md:max-w-[360px] border-b md:border-b-0 md:border-r border-stone-800 bg-[#2A1810] flex-col z-10 overflow-hidden ${activeTab === 'input' ? 'flex' : (layoutMode === 'config' ? 'hidden md:flex' : 'hidden')}`}>
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between shrink-0">
                 <div className="w-full">
                     <input type="file" multiple accept=".docx,.txt" ref={fileInputRef} onChange={handleFileUpload} className="hidden" id="docx-upload" />
-                    <label htmlFor="docx-upload" className="cursor-pointer w-full bg-[#1A0F0A] border border-dashed border-stone-700 hover:border-blue-500 hover:bg-stone-900/50 text-stone-400 px-4 py-8 rounded-xl text-[10px] font-bold uppercase tracking-wider flex flex-col items-center justify-center transition-all group">
-                      <Upload className="w-8 h-8 mb-3 text-blue-500 group-hover:scale-110 transition-transform" />
-                      <span className="text-center">Cargar Documentos<br/>(.docx, .txt)</span>
+                    <label htmlFor="docx-upload" className="cursor-pointer w-full bg-[#1A0F0A] border border-dashed border-stone-700 hover:border-blue-500 hover:bg-stone-900/50 text-stone-400 px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider flex flex-row items-center justify-center gap-3 transition-all group">
+                      <Upload className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" />
+                      <span className="text-center">Cargar Documentos (.docx, .txt)</span>
                     </label>
                 </div>
             </div>
 
-            {error && <div className="p-4 bg-red-900/30 border border-red-500/50 text-red-400 rounded-lg text-xs font-medium">{error}</div>}
+            {error && <div className="p-3 bg-red-900/30 border border-red-500/50 text-red-400 rounded-lg text-xs font-medium shrink-0">{error}</div>}
             
-            <div className="flex-1 flex flex-col min-h-[250px]">
+            <div className="flex-1 flex flex-col min-h-[150px]">
               <div className="flex justify-between items-center mb-1.5 ml-1">
                 <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Texto a Formatear</label>
                 <button onClick={handleClear} className="text-blue-400 hover:text-blue-300 flex items-center transition-colors text-[10px] font-bold uppercase tracking-wider">
@@ -799,10 +809,18 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
                             <option value={1}>1.0</option><option value={1.15}>1.15</option><option value={1.5}>1.5</option>
                         </select>
                     </div>
-                    <div className="space-y-1 col-span-2">
-                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Espacio Párrafos</label>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Espacios</label>
                         <select value={paragraphSpacing} onChange={(e) => setParagraphSpacing(Number(e.target.value))} className="w-full bg-[#2A1810] border border-stone-800 rounded px-2 py-1.5 text-sm text-stone-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
                             <option value={3}>3 pt</option><option value={6}>6 pt</option><option value={10}>10 pt</option>
+                        </select>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Tipo de Hoja</label>
+                        <select value={pageSize} onChange={(e) => setPageSize(e.target.value as 'letter' | 'legal' | 'A4')} className="w-full bg-[#2A1810] border border-stone-800 rounded px-2 py-1.5 text-sm text-stone-300 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            <option value="letter">Carta</option>
+                            <option value="legal">Oficio</option>
+                            <option value="A4">A4</option>
                         </select>
                     </div>
                 </div>
@@ -828,7 +846,13 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
             onMouseUp={handleSelection} onKeyUp={handleSelection}
           >
             {(originalScriptData || editorHtml !== '') ? (
-                <div className="w-full max-w-[21.5cm] min-h-[27.9cm] h-auto bg-white text-black shadow-2xl relative mb-12 flex flex-col shrink-0">
+                <div 
+                  className={`w-full h-auto bg-white text-black shadow-2xl relative mb-12 flex flex-col shrink-0 ${
+                    pageSize === 'legal' ? 'max-w-[21.59cm] min-h-[35.56cm]' : 
+                    pageSize === 'A4' ? 'max-w-[21.0cm] min-h-[29.7cm]' : 
+                    'max-w-[21.59cm] min-h-[27.94cm]'
+                  }`}
+                >
                      <EditorBlock 
                         key={activeDocId || 'none'}
                         className="p-8 sm:p-[1.5cm] sm:pt-[2cm] sm:pb-[2.5cm] flex-1 min-h-full block w-full outline-none focus:outline-none focus:ring-0"
@@ -851,7 +875,7 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
         </section>
 
         {/* Document List Sidebar */}
-        <section className={`w-full md:w-[22%] md:min-w-[240px] md:max-w-[300px] border-l border-stone-800 bg-[#2A1810] flex-col z-10 overflow-hidden ${activeTab === 'docs' ? 'flex' : 'hidden md:flex'}`}>
+        <section className={`w-full md:w-[22%] md:min-w-[240px] md:max-w-[300px] border-l border-stone-800 bg-[#2A1810] flex-col z-10 overflow-hidden ${activeTab === 'docs' ? 'flex' : (layoutMode === 'config' ? 'hidden md:flex' : 'hidden')}`}>
             <div className="p-4 border-b border-stone-800 bg-[#1A0F0A] flex justify-between items-center shrink-0">
                 <span className="text-xs font-bold text-stone-400 uppercase tracking-wider">Documentos ({docs.length})</span>
             </div>
@@ -886,12 +910,12 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
             </div>
             
             {docs.length > 0 && (
-                <div className="p-3 border-t border-stone-800 bg-[#1A0F0A] flex flex-col gap-2 shrink-0">
-                    <div className="flex gap-2">
-                         <button onClick={handleExportBackup} className="flex-1 bg-[#2A1810] hover:bg-stone-800 text-stone-300 py-2 rounded-lg text-[10px] font-bold flex items-center justify-center transition-colors border border-stone-700">
+                <div className="p-2 border-t border-stone-800 bg-[#1A0F0A] flex flex-col gap-1.5 shrink-0">
+                    <div className="flex gap-1.5">
+                         <button onClick={handleExportBackup} className="flex-1 bg-[#2A1810] hover:bg-stone-800 text-stone-300 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center transition-colors border border-stone-700">
                             <Download className="w-3 h-3 mr-1" /> <span>RESPALDO</span>
                         </button>
-                        <label className="flex-1 bg-[#2A1810] hover:bg-stone-800 text-stone-300 py-2 rounded-lg text-[10px] font-bold flex items-center justify-center transition-colors border border-stone-700 cursor-pointer">
+                        <label className="flex-1 bg-[#2A1810] hover:bg-stone-800 text-stone-300 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center transition-colors border border-stone-700 cursor-pointer">
                             <Upload className="w-3 h-3 mr-1" /> <span>CARGAR</span>
                             <input type="file" accept=".json" onChange={handleImportBackup} className="hidden" />
                         </label>
@@ -907,14 +931,14 @@ export default function GuionFormatTool({ onBack }: { onBack: () => void }) {
                                 setTimeout(() => setIsClearingStock(false), 3000);
                             }
                         }}
-                        className={`w-full py-2 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all border ${
+                        className={`w-full py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center transition-all border ${
                             isClearingStock 
                             ? 'bg-red-900/60 text-red-100 border-red-500/50 animate-pulse' 
                             : 'bg-[#2A1810] hover:bg-red-900/20 hover:text-red-400 text-stone-400 border-stone-800 hover:border-red-900/50'
                         }`}
                     >
                         <Trash2 className="w-3.5 h-3.5 mr-1.5" /> 
-                        <span>{isClearingStock ? '¿ESTÁS SEGURO? CLIC DE NUEVO' : 'LIMPIAR STOCK'}</span>
+                        <span>{isClearingStock ? '¿SEGURO? CLIC DE NUEVO' : 'LIMPIAR STOCK'}</span>
                     </button>
                 </div>
             )}

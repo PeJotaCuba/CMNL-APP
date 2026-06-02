@@ -186,16 +186,12 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
 
   if (activeTool === 'script-format') {
     return (
-      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
-        <CMNLHeader 
-          user={currentUser}
-          sectionTitle="Formato de Guion" 
-          onBack={() => setActiveTool(null)}
-          onMenuClick={onMenuClick}
+      <div className="h-screen flex flex-col bg-[#1A0F0A] text-[#E8DCCF] font-sans">
+        <GuionFormatTool 
+          onBack={() => setActiveTool(null)} 
+          currentUser={currentUser} 
+          onMenuClick={onMenuClick} 
         />
-        <main className="max-w-7xl mx-auto px-4 py-8">
-          <GuionFormatTool onBack={() => setActiveTool(null)} />
-        </main>
       </div>
     );
   }

@@ -5,6 +5,7 @@ export interface DocxSettings {
     fontSize: number;
     lineSpacing: number; // 1, 1.15, 1.5
     paragraphSpacing: number; // 3, 6, 10
+    pageSize?: 'letter' | 'legal' | 'A4';
 }
 
 function parseHtmlToTextRuns(htmlString: string, defaultProps: { bold?: boolean, italics?: boolean, underline?: boolean } = {}): TextRun[] {
@@ -139,6 +140,12 @@ export async function generateRadioScriptDocx(scriptData: RadioScript, settings:
     const lineSpacingTwips = Math.round(settings.lineSpacing * 240);
     const afterSpacingTwips = settings.paragraphSpacing * 20;
 
+    const getPageSize = (size?: string) => {
+        if (size === 'legal') return { width: 12240, height: 20160 }; // 8.5 x 14 in
+        if (size === 'A4') return { width: 11906, height: 16838 };    // 8.27 x 11.69 in
+        return { width: 12240, height: 15840 };                       // 8.5 x 11 in (letter)
+    };
+
     const doc = new Document({
         styles: {
             default: {
@@ -160,7 +167,7 @@ export async function generateRadioScriptDocx(scriptData: RadioScript, settings:
             {
                 properties: {
                     page: {
-                        size: { width: 12240, height: 15840 },
+                        size: getPageSize(settings.pageSize),
                         margin: { top: 720, right: 720, bottom: 720, left: 720 },
                     },
                 },
@@ -198,6 +205,12 @@ export async function generateDocxFromHtml(htmlString: string, settings: DocxSet
 
     const lineSpacingTwips = Math.round(settings.lineSpacing * 240);
     const afterSpacingTwips = settings.paragraphSpacing * 20;
+
+    const getPageSize = (size?: string) => {
+        if (size === 'legal') return { width: 12240, height: 20160 };
+        if (size === 'A4') return { width: 11906, height: 16838 };
+        return { width: 12240, height: 15840 };
+    };
 
     // Traverse the top level elements
     temp.childNodes.forEach(node => {
@@ -283,7 +296,7 @@ export async function generateDocxFromHtml(htmlString: string, settings: DocxSet
             {
                 properties: {
                     page: {
-                        size: { width: 12240, height: 15840 },
+                        size: getPageSize(settings.pageSize),
                         margin: { top: 720, right: 720, bottom: 720, left: 720 },
                     },
                 },
