@@ -406,7 +406,15 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const downloadCertificatePDF = async (cert: any) => {
     if (!cert) return;
     try {
-      const doc = new jsPDF();
+      const userPassword = user?.password || currentUserAuth?.password || cert.originalPassword || 'RadioCiudad2726';
+      
+      const doc = new jsPDF({
+        encryption: {
+          userPassword: userPassword,
+          ownerPassword: userPassword,
+          userPermissions: ["print", "modify", "copy", "annot-forms"]
+        }
+      });
       
       // Margins and theme background
       doc.setFillColor(44, 27, 21); // Dark brown-cream theme matching the app #2C1B15
@@ -603,60 +611,11 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       doc.setTextColor(110, 110, 110);
       doc.text("Radio Ciudad Monumento - Cripto Identidad Firma Digital Escrow", 105, 280, { align: "center" });
 
-      // Convert standard jsPDF doc output to base64
-      const pdfBase64 = doc.output('datauristring').split(',')[1];
-      const userPassword = user?.password || currentUserAuth?.password || cert.originalPassword || 'RadioCiudad2726';
+      const cleanName = cert.userData.fullName.replace(/\s+/g, '_');
+      doc.save(`certificado_cmnl_${cleanName}_protegido.pdf`);
 
-      (async () => {
-        try {
-          const response = await fetch('/api/encrypt-pdf', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              pdfBase64,
-              password: userPassword,
-            }),
-          });
+      showAlert("¡Certificado PDF seguro descargado con éxito! El archivo está protegido directamente con contraseña y la solicitará cada vez que se intente visualizar.", 'success');
 
-          if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Error al comunicarse con el servidor de cifrado');
-          }
-
-          const { pdfBase64: encryptedBase64 } = await response.json();
-
-          // Convert response encryptedBase64 back to a Blob and save it
-          const sliceSize = 512;
-          const byteCharacters = atob(encryptedBase64);
-          const byteArrays = [];
-
-          for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-            const slice = byteCharacters.slice(offset, offset + sliceSize);
-            const byteNumbers = new Array(slice.length);
-            for (let i = 0; i < slice.length; i++) {
-              byteNumbers[i] = slice.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            byteArrays.push(byteArray);
-          }
-
-          const pdfBlob = new Blob(byteArrays, { type: 'application/pdf' });
-          const pdfUrl = URL.createObjectURL(pdfBlob);
-
-          const downloadLink = document.createElement('a');
-          downloadLink.href = pdfUrl;
-          const cleanName = cert.userData.fullName.replace(/\s+/g, '_');
-          downloadLink.download = `certificado_cmnl_${cleanName}_protegido.pdf`;
-          downloadLink.click();
-
-          showAlert("¡Certificado PDF seguro descargado con éxito! El archivo está protegido directamente con contraseña y la solicitará cada vez que se intente visualizar.", 'success');
-        } catch (e: any) {
-          console.error(e);
-          showAlert("Error al generar el certificado PDF seguro: " + e.message, 'error');
-        }
-      })();
     } catch (e: any) {
       console.error(e);
       showAlert("Error al generar el certificado PDF: " + e.message, 'error');
