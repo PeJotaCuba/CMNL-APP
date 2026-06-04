@@ -136,114 +136,6 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         setSignPass('');
     };
 
-    const handleSendAll = async () => {
-        // Encontrar reportes firmados
-        const signedReports = reports.filter(r => r.status?.signed);
-        
-        if (signedReports.length === 0) {
-            alert("No hay ningún reporte firmado para enviar. Firme al menos un reporte primero.");
-            return;
-        }
-
-        const pendingReports = signedReports.filter(r => !r.status?.sent);
-        let toSend = pendingReports;
-
-        if (toSend.length === 0) {
-            if (window.confirm("Todos los reportes firmados ya fueron enviados anteriormente. ¿Desea volver a enviarlos todos?")) {
-                toSend = signedReports;
-            } else {
-                return;
-            }
-        }
-
-        const adminUser = users.find(u => u.role === 'admin' || u.classification === 'Administrador');
-        let phone = adminUser?.phone || adminUser?.mobile || '54413935';
-        
-        if (!phone) {
-            alert('No se encontró el número de teléfono del administrador.');
-            return;
-        }
-
-        if (!phone.startsWith('53')) {
-            phone = '53' + phone;
-        }
-
-        // Construir el texto acumulado
-        let text = `Hola Administrador, adjunto los reportes musicales firmados para su revisión.\n\n`;
-        const files: File[] = [];
-
-        toSend.forEach((report, index) => {
-            const datePart = report.date.split('T')[0];
-            const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
-            const fileName = `PM-${safeProgram}-${datePart}.pdf`;
-
-            text += `*${index + 1}. ${report.program}* (${datePart})\n`;
-            text += `Firmado por: ${report.generatedBy}\n`;
-            if (report.items && report.items.length > 0) {
-                text += `Créditos (${report.items.length}):\n`;
-                report.items.forEach((item, itemIndex) => {
-                    text += `  • ${item.title} - ${item.performer}\n`;
-                });
-            }
-            text += `\n`;
-
-            if (report.pdfBlob) {
-                const file = new File([report.pdfBlob], fileName, { type: 'application/pdf' });
-                files.push(file);
-            }
-        });
-
-        // Intentar compartir los archivos si la API de compartir está disponible y soporta envío de archivos
-        if (files.length > 0 && navigator.share) {
-            try {
-                if (navigator.canShare && navigator.canShare({ files })) {
-                    await navigator.share({
-                        files: files,
-                        title: 'Reportes Musicales Firmados',
-                        text: text
-                    });
-
-                    // Actualizar estado de envío en la base de datos
-                    for (const r of toSend) {
-                        await updateReportStatus(r.id, { sent: true });
-                    }
-                    
-                    setReports(prev => prev.map(r => {
-                        const found = toSend.find(ts => ts.id === r.id);
-                        if (found) {
-                            return { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } };
-                        }
-                        return r;
-                    }));
-                    return;
-                }
-            } catch (shareError: any) {
-                if (shareError.name !== 'AbortError') {
-                    console.warn("Fallo compartición nativa de múltiples archivos, usando fallback:", shareError);
-                } else {
-                    // El usuario canceló la opción de compartir
-                    return;
-                }
-            }
-        }
-
-        // Fallback directo a WhatsApp
-        openWhatsApp(text, phone);
-
-        // Actualizar estado de envío en la base de datos
-        for (const r of toSend) {
-            await updateReportStatus(r.id, { sent: true });
-        }
-        
-        setReports(prev => prev.map(r => {
-            const found = toSend.find(ts => ts.id === r.id);
-            if (found) {
-                return { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } };
-            }
-            return r;
-        }));
-    };
-
     const loadData = async () => {
         setIsLoading(true);
         const filterUser = currentUser ? currentUser.username : undefined;
@@ -342,62 +234,47 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 )}
             </div>
 
-            {/* Contenedor de Botones de Acción (Reacomodados debajo del título y con Enviar todo) */}
-            <div className="flex gap-2 w-full mb-6 bg-[#2C1B15]/30 p-2 rounded-2xl border border-[#9E7649]/15">
-                {/* Firmar Todo */}
-                {currentUser?.role === 'director' && (
+            {/* Contenedor de Botones de Acción (Reacomodados debajo del título, solo con acciones de firma y limpieza) */}
+            {reports.length > 0 && (
+                <div className="flex gap-3 w-full mb-6 bg-[#2C1B15]/30 p-2.5 rounded-2xl border border-[#9E7649]/15">
+                    {/* Firmar Todo */}
+                    {currentUser?.role === 'director' && (
+                        <button 
+                            onClick={handleSignAllClick}
+                            disabled={!reports.some(r => !r.status?.signed)}
+                            className={`flex-[1.5] h-12 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-md ${
+                                reports.some(r => !r.status?.signed) 
+                                    ? 'bg-yellow-600 text-white hover:bg-yellow-500 hover:scale-[1.01] cursor-pointer' 
+                                    : 'bg-yellow-900/10 text-yellow-600/40 border border-yellow-950/20 cursor-not-allowed'
+                            }`}
+                            title={reports.some(r => !r.status?.signed) ? "Firmar todos los reportes pendientes" : "No hay reportes pendientes de firma"}
+                        >
+                            <span className="material-symbols-outlined text-xl">draw</span>
+                            <span className="hidden sm:inline">Firmar todo</span>
+                        </button>
+                    )}
+
+                    {/* Firma Por Carga */}
                     <button 
-                        onClick={handleSignAllClick}
-                        disabled={!reports.some(r => !r.status?.signed)}
-                        className={`flex-1 min-w-[48px] py-3 px-1 rounded-xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs font-bold transition-all shadow-md ${
-                            reports.some(r => !r.status?.signed) 
-                                ? 'bg-yellow-600 text-white hover:bg-yellow-500 hover:scale-[1.01] cursor-pointer' 
-                                : 'bg-yellow-900/10 text-yellow-600/40 border border-yellow-950/20 cursor-not-allowed'
-                        }`}
-                        title={reports.some(r => !r.status?.signed) ? "Firmar todos los reportes pendientes" : "No hay reportes pendientes de firma"}
+                        onClick={() => setShowBatchSigner(true)}
+                        className="flex-[1.5] h-12 bg-[#9E7649] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B653D] hover:scale-[1.01] transition-all shadow-md"
+                        title="Cargar firmas en lote"
                     >
-                        <span className="material-symbols-outlined text-lg">draw</span>
-                        <span className="hidden sm:inline">Firmar todo</span>
+                        <span className="material-symbols-outlined text-xl">upload_file</span>
+                        <span className="hidden sm:inline">Firma por carga</span>
                     </button>
-                )}
 
-                {/* Firma Por Carga */}
-                <button 
-                    onClick={() => setShowBatchSigner(true)}
-                    className="flex-1 min-w-[48px] py-3 px-1 bg-[#9E7649] text-white text-xs font-bold rounded-xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 hover:bg-[#8B653D] hover:scale-[1.01] transition-all shadow-md"
-                    title="Cargar firmas en lote"
-                >
-                    <span className="material-symbols-outlined text-lg">upload_file</span>
-                    <span className="hidden sm:inline">Firma por carga</span>
-                </button>
-
-                {/* Enviar Todo */}
-                <button 
-                    onClick={handleSendAll}
-                    disabled={!reports.some(r => r.status?.signed)}
-                    className={`flex-1 min-w-[48px] py-3 px-1 rounded-xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 text-xs font-bold transition-all shadow-md ${
-                        reports.some(r => r.status?.signed)
-                            ? 'bg-[#25D366] text-white hover:bg-[#20ba5a] hover:scale-[1.01] cursor-pointer'
-                            : 'bg-green-950/10 text-green-600/30 border border-green-950/25 cursor-not-allowed'
-                    }`}
-                    title={reports.some(r => r.status?.signed) ? "Enviar todos los reportes firmados a WhatsApp" : "Firme al menos un reporte antes de enviar"}
-                >
-                    <span className="material-symbols-outlined text-lg">send</span>
-                    <span className="hidden sm:inline">Enviar todo</span>
-                </button>
-
-                {/* Limpiar */}
-                {reports.length > 0 && (
+                    {/* Limpiar */}
                     <button 
                         onClick={handleClearAll}
-                        className="flex-1 min-w-[48px] py-3 px-1 bg-red-950/20 text-red-400 border border-red-900/10 text-xs font-bold rounded-xl flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 hover:bg-red-900/20 hover:scale-[1.01] transition-all shadow-md"
+                        className="flex-1 h-12 bg-red-950/20 text-red-400 border border-red-900/15 text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-900/20 hover:scale-[1.01] transition-all shadow-md"
                         title="Borrar TODOS los reportes"
                     >
-                        <span className="material-symbols-outlined text-lg">delete_sweep</span>
-                        <span className="hidden sm:inline">Limpiar</span>
+                        <span className="material-symbols-outlined text-xl">delete_sweep</span>
+                        <span className="hidden sm:inline">Limpiar todo</span>
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {showTutorial && (
                  <div className="bg-[#2C1B15] border border-[#9E7649]/30 p-4 rounded-xl mb-6 flex gap-3 animate-fade-in relative">
@@ -514,33 +391,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                             });
                                         }
                                         
-                                        // Attempt to share the PDF file if available
-                                        if (report.pdfBlob && navigator.share) {
-                                            try {
-                                                const file = new File([report.pdfBlob], fileName, { type: 'application/pdf' });
-                                                
-                                                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                                                    await navigator.share({
-                                                        files: [file],
-                                                        title: `Reporte Musical: ${report.program}`,
-                                                        text: text
-                                                    });
-                                                    
-                                                    await updateReportStatus(report.id, { sent: true });
-                                                    setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
-                                                    return;
-                                                }
-                                            } catch (shareError: any) {
-                                                if (shareError.name !== 'AbortError') {
-                                                    console.warn("Error share API:", shareError);
-                                                } else {
-                                                    // User cancelled
-                                                    return;
-                                                }
-                                            }
-                                        }
-
-                                        // Direct fallback redirect to WhatsApp if share API fails or not supported
+                                        // Direct redirect to WhatsApp to open the contact's chat immediately as requested
                                         openWhatsApp(text, phone);
                                         
                                         await updateReportStatus(report.id, { sent: true });
