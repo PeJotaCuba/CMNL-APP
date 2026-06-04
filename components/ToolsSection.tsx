@@ -118,9 +118,18 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const userTools = currentUser?.tools || [];
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador';
   
+  const equipoMember = equipoData?.find(m => m.id === currentUser?.id || m.id === currentUser?.username || m.name === currentUser?.fullName);
+  const specialtyStr = (currentUser?.specialty || equipoMember?.specialty || '').toLowerCase();
+  const isGuionista = specialtyStr.includes('guionista');
+  
   // Admins see all tools, workers see assigned tools
   // Requirement: Institutional Documents and Digital Signature are enabled for everyone by default
-  const tools = isAdmin ? allTools : allTools.filter(t => userTools.includes(t.id) || t.id === 'inst-docs' || t.id === 'digital-signature');
+  const tools = isAdmin ? allTools : allTools.filter(t => 
+    userTools.includes(t.id) || 
+    t.id === 'inst-docs' || 
+    t.id === 'digital-signature' ||
+    (t.id === 'script-format' && isGuionista)
+  );
 
   // If a tool is active, render it
   const currentTool = allTools.find(t => t.id === activeTool);

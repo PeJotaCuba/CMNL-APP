@@ -1201,7 +1201,24 @@ const AppContent: React.FC = () => {
             isAdmin={currentUser?.role === 'admin'}
             onClose={() => {
                 setUpdateDetails(null);
-                window.location.reload();
+                
+                // Consolidar la actualización de la app (Service Worker y Caché)
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.getRegistrations().then((registrations) => {
+                        for (let registration of registrations) {
+                            registration.update();
+                        }
+                    });
+                }
+                if ('caches' in window) {
+                    caches.keys().then((names) => {
+                        for (let name of names) {
+                            caches.delete(name);
+                        }
+                    });
+                }
+                
+                setTimeout(() => window.location.reload(), 150);
             }}
         />
 

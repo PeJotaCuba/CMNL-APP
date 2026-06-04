@@ -233,8 +233,18 @@ const WorkerHome: React.FC<Props> = ({
                 });
             }
 
-            alert('Sincronización completada con éxito. La aplicación se recargará.');
-            window.location.reload();
+            alert('Sincronización completada con éxito. La aplicación se recargará para aplicar los cambios.');
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then((registrations) => {
+                    for (let registration of registrations) registration.update();
+                });
+            }
+            if ('caches' in window) {
+                caches.keys().then((names) => {
+                    for (let name of names) caches.delete(name);
+                });
+            }
+            setTimeout(() => window.location.reload(), 150);
         } catch (error) {
             console.error("Error parsing backup file:", error);
             alert("Error al leer el archivo de respaldo. Asegúrate de que sea un archivo JSON válido y pertenezca a tu usuario.");
