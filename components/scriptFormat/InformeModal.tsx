@@ -158,11 +158,23 @@ export function InformeModal({ original, currentHtml, originalHtml, onClose }: I
           // Try to get some context
           let contextLabel = "Contexto general";
           let contextDiv = m.closest('div');
+          
           if (contextDiv) {
+             // Check if it's inside script-credits
+             const isCredit = contextDiv.closest('#script-credits');
+             
              let clone = contextDiv.cloneNode(true) as HTMLElement;
              clone.querySelectorAll('mark.comment-mark').forEach(x => x.replaceWith(x.textContent || ''));
-             contextLabel = clone.textContent?.replace(/\s+/g, ' ').substring(0, 50) + "..." || "Párrafo";
+             
+             const rawContext = clone.textContent?.replace(/\s+/g, ' ').trim();
+             
+             if (isCredit) {
+                contextLabel = `CRÉDITO: ${rawContext?.substring(0, 50) || "Dato"}`;
+             } else {
+                contextLabel = rawContext?.substring(0, 50) + "..." || "Párrafo";
+             }
           }
+          
           comments.push({
               context: contextLabel,
               selectedText: m.textContent,

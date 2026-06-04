@@ -19,17 +19,18 @@ interface DocumentItem {
   scriptData: RadioScript | null;
   originalScriptData: RadioScript | null;
   editorHtml: string;
+  lastFormattedHtml: string;
   externalVersion: number;
   history: string[];
   isDirty: boolean;
 }
 
 function replaceMarkdownBold(text: string): string {
-    if (!text) return '';
-    let res = text.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-    res = res.replace(/\*([^*]+)\*/g, '<b>$1</b>');
-    res = res.replace(/\*/g, '');
-    return res;
+  if (!text) return '';
+  let res = text.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  res = res.replace(/\*([^*]+)\*/g, '<b>$1</b>');
+  res = res.replace(/\*/g, '');
+  return res;
 }
 
 function scriptDataToHtml(script: RadioScript, formatMode: 'all' | 'numbering' | 'credits' = 'all'): string {
@@ -162,6 +163,7 @@ export default function GuionFormatTool({
               scriptData: null,
               originalScriptData: null,
               editorHtml: '',
+              lastFormattedHtml: '',
               externalVersion: 0,
               history: [],
               isDirty: false
@@ -310,6 +312,7 @@ export default function GuionFormatTool({
               scriptData: normalized,
               originalScriptData: JSON.parse(JSON.stringify(normalized)),
               editorHtml: newHtml,
+              lastFormattedHtml: newHtml,
               history: [newHtml],
               externalVersion: d.externalVersion + 1,
               inputText: textToProcess
@@ -416,6 +419,7 @@ export default function GuionFormatTool({
                    scriptData: null,
                    originalScriptData: null,
                    editorHtml: '',
+                   lastFormattedHtml: '',
                    externalVersion: 0,
                    history: [],
                    isDirty: false
@@ -647,73 +651,74 @@ export default function GuionFormatTool({
   };
 
   const handleConfirmComment = (text: string) => {
-     if (commentModal.range && text.trim()) {
-         const selection = window.getSelection();
-         selection?.removeAllRanges();
-         selection?.addRange(commentModal.range);
+    if (commentModal.range && text.trim()) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(commentModal.range);
 
-         const safeText = text.replace(/"/g, '&quot;');
+      const safeText = text.replace(/"/g, '&quot;');
 
-         try {
-             const range = commentModal.range;
+      // Try to insert using a more robust method
+      try {
+        const range = commentModal.range;
+        
+        // Ensure the range is not collapsed and we have a valid selection
+        if (range.collapsed) {
              const markEl = document.createElement('mark');
-             markEl.className = "bg-yellow-200 cursor-help comment-mark rounded px-1 text-black";
+             markEl.className = "bg-yellow-200 cursor-help comment-mark rounded px-1 text-black font-medium border-b-2 border-yellow-500";
+             markEl.setAttribute('data-comment', safeText);
+             markEl.textContent = "[Comentario]";
+             range.insertNode(markEl);
+        } else {
+             const markEl = document.createElement('mark');
+             markEl.className = "bg-yellow-200 cursor-help comment-mark rounded px-1 text-black font-medium border-b-2 border-yellow-500";
              markEl.setAttribute('data-comment', safeText);
 
              const frag = range.extractContents();
              markEl.appendChild(frag);
              range.insertNode(markEl);
+        }
 
-             selection?.removeAllRanges();
-             const newRange = document.createRange();
-             newRange.selectNodeContents(markEl);
-             selection?.addRange(newRange);
-
-             const editorEl = document.querySelector('[contenteditable="true"]');
-             if (editorEl) {
-                 const newHtml = editorEl.innerHTML;
-                 setEditorHtml(newHtml);
-                 setHistory(prev => {
-                     const last = prev[prev.length - 1];
-                     if (last !== newHtml) {
-                         return [...prev, newHtml].slice(-50);
-                     }
-                     return prev;
-                 });
-             }
-         } catch (e) {
-             console.warn("Fallo inserción nativa de comentario, reintentando con fallback:", e);
-             try {
-                 const frag = commentModal.range.cloneContents();
-                 const div = document.createElement('div');
-                 div.appendChild(frag);
-                 const inner = div.innerHTML;
-
-                 document.execCommand('insertHTML', false, `<mark class="bg-yellow-200 cursor-help comment-mark rounded px-1 text-black" data-comment="${safeText}">${inner}</mark>`);
-
-                 const editorEl = document.querySelector('[contenteditable="true"]');
-                 if (editorEl) {
-                     const newHtml = editorEl.innerHTML;
-                     setEditorHtml(newHtml);
-                     setHistory(prev => {
-                         const last = prev[prev.length - 1];
-                         if (last !== newHtml) {
-                             return [...prev, newHtml].slice(-50);
-                         }
-                         return prev;
-                     });
-                 }
-             } catch (err) {
-                 console.error("Fallo definitivo insertando comentario:", err);
-             }
-         }
-         setIsDirty(true);
-     }
-     setCommentModal({ active: false, range: null });
+        selection?.removeAllRanges();
+        
+        const editorEl = document.querySelector('[contenteditable="true"]');
+        if (editorEl) {
+            const newHtml = editorEl.innerHTML;
+            setEditorHtml(newHtml);
+            setIsDirty(true);
+        }
+      } catch (e) {
+        console.warn("Fallo inserción manual de comentario, usando execCommand:", e);
+        document.execCommand('insertHTML', false, `<mark class="bg-yellow-200 cursor-help comment-mark rounded px-1 text-black font-medium border-b-2 border-yellow-500" data-comment="${safeText}">${selection?.toString() || '...'}</mark>`);
+        
+        const editorEl = document.querySelector('[contenteditable="true"]');
+        if (editorEl) {
+            setEditorHtml(editorEl.innerHTML);
+            setIsDirty(true);
+        }
+      }
+    }
+    setCommentModal({ active: false, range: null });
   };
 
   return (
     <div className="bg-[#1A0F0A] flex flex-col flex-1 h-full overflow-hidden text-[#E8DCCF] font-sans">
+      <style>{`
+        .comment-mark {
+          background-color: #fef08a !important;
+          color: #1c1917 !important;
+          border-bottom: 2px solid #eab308 !important;
+          border-radius: 2px !important;
+          padding: 0 2px !important;
+          cursor: help !important;
+          display: inline !important;
+          font-weight: 500 !important;
+        }
+        #script-credits mark.comment-mark {
+           z-index: 10;
+           position: relative;
+        }
+      `}</style>
       <CMNLHeader 
         user={currentUser || null}
         sectionTitle="Formato de Guion" 
@@ -1009,7 +1014,7 @@ export default function GuionFormatTool({
         </div>
       </footer>
 
-      {showInforme && <InformeModal original={originalScriptData} currentHtml={editorHtml} originalHtml={activeDoc?.history?.[0] || ""} onClose={() => setShowInforme(false)} />}
+      {showInforme && <InformeModal original={originalScriptData} currentHtml={editorHtml} originalHtml={activeDoc?.lastFormattedHtml || ""} onClose={() => setShowInforme(false)} />}
       
       {isProcessing && (
          <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
