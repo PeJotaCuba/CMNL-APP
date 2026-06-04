@@ -145,14 +145,6 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const handleDownload = async (report: Report) => {
-        if (!report.status?.signed) {
-            alert("Debe firmar digitalmente el reporte antes de descargarlo.");
-            setSigningMode('single');
-            setSigningReport(report);
-            setShowSignDialog(true);
-            return;
-        }
-
         const datePart = report.date.split('T')[0];
         const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
         const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
@@ -333,7 +325,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                     <span className="material-symbols-outlined text-sm">edit_document</span> Editar
                                 </button>
 
-                                {(!report.status?.signed) ? (
+                                {false ? (
                                     <button 
                                         onClick={() => {
                                             setSigningMode('single');
@@ -346,14 +338,14 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                         <span className="material-symbols-outlined text-sm">draw</span>
                                     </button>
                                 ) : (
-                                    <div className="size-8 rounded-full bg-yellow-500/20 text-yellow-400 flex items-center justify-center" title="Reporte Firmado">
+                                    <div className="size-8 rounded-full hidden" title="Reporte Firmado">
                                         <span className="material-symbols-outlined text-sm">verified</span>
                                     </div>
                                 )}
 
                                 <button 
                                     onClick={async () => {
-                                        if (!report.status?.signed) {
+                                        if (false) {
                                             alert("Debe firmar digitalmente el reporte antes de enviarlo por WhatsApp.");
                                             setSigningMode('single');
                                             setSigningReport(report);
@@ -392,10 +384,48 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                         }
                                         
                                         // Direct redirect to WhatsApp to open the contact's chat immediately as requested
+                                         // Intentar compartir usando API Web Share nativa si está disponible (adjuntar PDF)
+                                         if (report.pdfBlob && typeof navigator !== 'undefined' && navigator.share) {
+                                             try {
+                                                 const file = new File([report.pdfBlob], fileName, { type: 'application/pdf' });
+                                                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                                     await navigator.share({
+                                                         files: [file],
+                                                         title: `Reporte Musical - ${report.program}`,
+                                                         text: text
+                                                     });
+                                                     await updateReportStatus(report.id, { sent: true, downloaded: true });
+                                                     setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: true } } : r));
+                                                     return; // Compartido con éxito; salimos para evitar la redirección por fallback
+                                                 }
+                                             } catch (shareErrAny: any) {
+                                                 if (shareErrAny && shareErrAny.name !== 'AbortError') {
+                                                     console.error("Fallo compartición nativa:", shareErrAny);
+                                                 } else {
+                                                     return; // El usuario canceló la caja de compartir nativa
+                                                 }
+                                             }
+                                         }
+                                         // Si no está soportado, procedemos a descargar el archivo de respaldo:
+                                        if (report.pdfBlob) {
+                                            try {
+                                                const url = URL.createObjectURL(report.pdfBlob);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = fileName;
+                                                document.body.appendChild(a);
+                                                a.click();
+                                                URL.revokeObjectURL(url);
+                                                a.remove();
+                                            } catch (downloadErr) {
+                                                console.error("Error download automatically:", downloadErr);
+                                            }
+                                        }
+
                                         openWhatsApp(text, phone);
                                         
-                                        await updateReportStatus(report.id, { sent: true });
-                                        setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: r.status?.downloaded || false } } : r));
+                                        await updateReportStatus(report.id, { sent: true, downloaded: true });
+                                        setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: true } } : r));
                                     }}
                                     className="size-8 rounded-full bg-[#1A100C] text-[#25D366] hover:bg-[#25D366] hover:text-white transition-colors flex items-center justify-center"
                                     title="Enviar por WhatsApp"
