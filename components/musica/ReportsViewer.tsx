@@ -50,90 +50,101 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const confirmSignReport = async () => {
-        if (!currentUser) return;
-        if (signingMode === 'single' && !signingReport) return;
-        
-        const globalUserId = (currentUser as any).id || currentUser.username;
-        const storedPass = getStoredPassword(globalUserId);
-        const cert = getStoredCertificate(globalUserId);
-        
-        if (!cert) {
-            alert("No tiene un certificado de firma digital cargado en este equipo.");
-            return;
-        }
-
-        const effectivePass = (cert && cert.originalPassword) ? cert.originalPassword : storedPass;
-
-        if (cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
-            alert("Su certificado ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
-            return;
-        }
-
-        if (signPass !== effectivePass) {
-            alert("Contraseña original incorrecta o equipo no certificado.");
-            return;
-        }
-
-        const signature = generateDigitalSignature(cert);
-        const userFullName = currentUser.fullName || currentUser.username;
-        
-        if (signingMode === 'single' && signingReport) {
-            const newPdfBlob = generateReportPDF({
-                userFullName,
-                userUniqueId: signature,
-                program: signingReport.program,
-                date: signingReport.date,
-                items: signingReport.items || []
-            });
-
-            const updatedReport: Report = {
-                ...signingReport,
-                pdfBlob: newPdfBlob,
-                status: { ...signingReport.status, downloaded: signingReport.status?.downloaded || false, sent: signingReport.status?.sent || false, signed: true }
-            };
-
-            await saveReportToDB(updatedReport);
-            setReports(prev => prev.map(r => r.id === signingReport.id ? updatedReport : r));
-            alert("Reporte firmado correctamente con su certificado digital.");
-        } else if (signingMode === 'all') {
-            const unsigned = reports.filter(r => !r.status?.signed);
-            let successCount = 0;
-            const newReports = [...reports];
-
-            for (const r of unsigned) {
-                try {
-                    const newPdfBlob = generateReportPDF({
-                        userFullName,
-                        userUniqueId: signature,
-                        program: r.program,
-                        date: r.date,
-                        items: r.items || []
-                    });
-                    
-                    const updatedReport: Report = {
-                        ...r,
-                        pdfBlob: newPdfBlob,
-                        status: { ...r.status, downloaded: r.status?.downloaded || false, sent: r.status?.sent || false, signed: true }
-                    };
-                    await saveReportToDB(updatedReport);
-                    
-                    const index = newReports.findIndex(rep => rep.id === r.id);
-                    if (index !== -1) {
-                        newReports[index] = updatedReport;
-                    }
-                    successCount++;
-                } catch(e) {
-                    console.error("Error signing report", r.id, e);
-                }
+        try {
+            if (!currentUser) {
+                alert("Error: No se encontró ningún usuario autenticado.");
+                return;
+            }
+            if (signingMode === 'single' && !signingReport) {
+                alert("Error: No se seleccionó ningún reporte para firmar.");
+                return;
             }
             
-            setReports(newReports);
-            alert(`Se firmaron correctamente ${successCount} reportes.`);
+            const globalUserId = (currentUser as any).id || currentUser.username;
+            const storedPass = getStoredPassword(globalUserId);
+            const cert = getStoredCertificate(globalUserId);
+            
+            if (!cert) {
+                alert("No tiene un certificado de firma digital cargado en este equipo. Por favor, asegúrese de haber generado o cargado su firma digital en la sección de Firma Digital.");
+                return;
+            }
+
+            const effectivePass = cert.originalPassword || storedPass || '';
+
+            if (cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
+                alert("Su certificado ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
+                return;
+            }
+
+            if (signPass.trim() !== effectivePass.trim()) {
+                alert("Contraseña original incorrecta o equipo no certificado.");
+                return;
+            }
+
+            const signature = generateDigitalSignature(cert);
+            const userFullName = currentUser.fullName || currentUser.username;
+            
+            if (signingMode === 'single' && signingReport) {
+                const newPdfBlob = generateReportPDF({
+                    userFullName,
+                    userUniqueId: signature,
+                    program: signingReport.program,
+                    date: signingReport.date,
+                    items: signingReport.items || []
+                });
+
+                const updatedReport: Report = {
+                    ...signingReport,
+                    pdfBlob: newPdfBlob,
+                    status: { ...signingReport.status, downloaded: signingReport.status?.downloaded || false, sent: signingReport.status?.sent || false, signed: true }
+                };
+
+                await saveReportToDB(updatedReport);
+                setReports(prev => prev.map(r => r.id === signingReport.id ? updatedReport : r));
+                alert("Reporte firmado correctamente con su certificado digital.");
+            } else if (signingMode === 'all') {
+                const unsigned = reports.filter(r => !r.status?.signed);
+                let successCount = 0;
+                const newReports = [...reports];
+
+                for (const r of unsigned) {
+                    try {
+                        const newPdfBlob = generateReportPDF({
+                            userFullName,
+                            userUniqueId: signature,
+                            program: r.program,
+                            date: r.date,
+                            items: r.items || []
+                        });
+                        
+                        const updatedReport: Report = {
+                            ...r,
+                            pdfBlob: newPdfBlob,
+                            status: { ...r.status, downloaded: r.status?.downloaded || false, sent: r.status?.sent || false, signed: true }
+                        };
+                        await saveReportToDB(updatedReport);
+                        
+                        const index = newReports.findIndex(rep => rep.id === r.id);
+                        if (index !== -1) {
+                            newReports[index] = updatedReport;
+                        }
+                        successCount++;
+                    } catch(e: any) {
+                        console.error("Error signing report", r.id, e);
+                    }
+                }
+                
+                setReports(newReports);
+                alert(`Se firmaron correctamente ${successCount} reportes.`);
+            }
+            
+            setShowSignDialog(false);
+            setSigningReport(null);
+            setSignPass('');
+        } catch (error: any) {
+            console.error("Error crítico al firmar:", error);
+            alert("Error crítico al firmar: " + (error?.message || error || "Desconocido"));
         }
-        
-        setShowSignDialog(false);
-        setSigningReport(null);
-        setSignPass('');
     };
 
     const loadData = async () => {
@@ -145,6 +156,14 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const handleDownload = async (report: Report) => {
+        if (!report.status?.signed) {
+            alert("No se puede descargar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
+            setSigningMode('single');
+            setSigningReport(report);
+            setShowSignDialog(true);
+            return;
+        }
+
         const datePart = report.date.split('T')[0];
         const safeProgram = report.program.replace(/[^a-zA-Z0-9]/g, '-');
         const downloadName = `PM-${safeProgram}-${datePart}.pdf`;
@@ -345,8 +364,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
                                 <button 
                                     onClick={async () => {
-                                        if (false) {
-                                            alert("Debe firmar digitalmente el reporte antes de enviarlo por WhatsApp.");
+                                        if (!report.status?.signed) {
+                                            alert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
                                             setSigningMode('single');
                                             setSigningReport(report);
                                             setShowSignDialog(true);
@@ -385,7 +404,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                         
                                         // Direct redirect to WhatsApp to open the contact's chat immediately as requested
                                          // Intentar compartir usando API Web Share nativa si está disponible (adjuntar PDF)
-                                         if (report.pdfBlob && typeof navigator !== 'undefined' && navigator.share) {
+                                         if (false) {
                                              try {
                                                  const file = new File([report.pdfBlob], fileName, { type: 'application/pdf' });
                                                  if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -421,6 +440,9 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                                 console.error("Error download automatically:", downloadErr);
                                             }
                                         }
+
+                                        // Informar al usuario y enviarlo directo al chat de WhatsApp del administrador
+                                        alert(`La firma digital se ha verificado con éxito y el archivo PDF se ha descargado a su dispositivo.\n\nA continuación, abriremos el chat directo de WhatsApp con el Administrador para que pueda adjuntar este archivo PDF recién descargado y enviarle el reporte.`);
 
                                         openWhatsApp(text, phone);
                                         

@@ -50,7 +50,11 @@ export const cryptoUtils = {
 
 export const generateDigitalSignature = (certData: any) => {
   if (!certData) return "NO_CERT";
-  const { userData = {}, contracts = {} } = certData;
+  
+  // Safe fallbacks for objects to prevent null reference crashes when destructured
+  const userData = certData.userData || {};
+  const contracts = certData.contracts || {};
+  
   const fullName = userData.fullName || "";
   const ci = userData.ci || "";
   const tomo = userData.tomo || "";
