@@ -120,7 +120,10 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   
   const equipoMember = equipoData?.find(m => m.id === currentUser?.id || m.id === currentUser?.username || m.name === currentUser?.fullName);
   const specialtyStr = (currentUser?.specialty || equipoMember?.specialty || '').toLowerCase();
-  const isGuionista = specialtyStr.includes('guionista');
+  const classificationStr = (currentUser?.classification || '').toLowerCase();
+  
+  const isGuionista = specialtyStr.includes('guionista') || classificationStr.includes('guionista');
+  const isAsesor = specialtyStr.includes('asesor') || classificationStr.includes('asesor');
   
   // Admins see all tools, workers see assigned tools
   // Requirement: Institutional Documents and Digital Signature are enabled for everyone by default
@@ -128,7 +131,7 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     userTools.includes(t.id) || 
     t.id === 'inst-docs' || 
     t.id === 'digital-signature' ||
-    (t.id === 'script-format' && isGuionista)
+    (t.id === 'script-format' && (isGuionista || isAsesor))
   );
 
   // If a tool is active, render it

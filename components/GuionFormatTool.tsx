@@ -652,16 +652,60 @@ export default function GuionFormatTool({
          selection?.removeAllRanges();
          selection?.addRange(commentModal.range);
 
-         try {
-             const frag = commentModal.range.cloneContents();
-             const div = document.createElement('div');
-             div.appendChild(frag);
-             const inner = div.innerHTML;
+         const safeText = text.replace(/"/g, '&quot;');
 
-             const safeText = text.replace(/"/g, '&quot;');
-             document.execCommand('insertHTML', false, `<mark class="bg-yellow-200 cursor-help comment-mark rounded px-1" data-comment="${safeText}">${inner}</mark>`);
+         try {
+             const range = commentModal.range;
+             const markEl = document.createElement('mark');
+             markEl.className = "bg-yellow-200 cursor-help comment-mark rounded px-1 text-black";
+             markEl.setAttribute('data-comment', safeText);
+
+             const frag = range.extractContents();
+             markEl.appendChild(frag);
+             range.insertNode(markEl);
+
+             selection?.removeAllRanges();
+             const newRange = document.createRange();
+             newRange.selectNodeContents(markEl);
+             selection?.addRange(newRange);
+
+             const editorEl = document.querySelector('[contenteditable="true"]');
+             if (editorEl) {
+                 const newHtml = editorEl.innerHTML;
+                 setEditorHtml(newHtml);
+                 setHistory(prev => {
+                     const last = prev[prev.length - 1];
+                     if (last !== newHtml) {
+                         return [...prev, newHtml].slice(-50);
+                     }
+                     return prev;
+                 });
+             }
          } catch (e) {
-             console.warn(e);
+             console.warn("Fallo inserción nativa de comentario, reintentando con fallback:", e);
+             try {
+                 const frag = commentModal.range.cloneContents();
+                 const div = document.createElement('div');
+                 div.appendChild(frag);
+                 const inner = div.innerHTML;
+
+                 document.execCommand('insertHTML', false, `<mark class="bg-yellow-200 cursor-help comment-mark rounded px-1 text-black" data-comment="${safeText}">${inner}</mark>`);
+
+                 const editorEl = document.querySelector('[contenteditable="true"]');
+                 if (editorEl) {
+                     const newHtml = editorEl.innerHTML;
+                     setEditorHtml(newHtml);
+                     setHistory(prev => {
+                         const last = prev[prev.length - 1];
+                         if (last !== newHtml) {
+                             return [...prev, newHtml].slice(-50);
+                         }
+                         return prev;
+                     });
+                 }
+             } catch (err) {
+                 console.error("Fallo definitivo insertando comentario:", err);
+             }
          }
          setIsDirty(true);
      }
@@ -965,7 +1009,7 @@ export default function GuionFormatTool({
         </div>
       </footer>
 
-      {showInforme && <InformeModal original={originalScriptData} current={scriptData} onClose={() => setShowInforme(false)} />}
+      {showInforme && <InformeModal original={originalScriptData} currentHtml={editorHtml} originalHtml={activeDoc?.history?.[0] || ""} onClose={() => setShowInforme(false)} />}
       
       {isProcessing && (
          <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
