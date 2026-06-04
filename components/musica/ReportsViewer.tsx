@@ -24,6 +24,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const [signingReport, setSigningReport] = useState<Report | null>(null);
     const [signPass, setSignPass] = useState('');
     const [showSignDialog, setShowSignDialog] = useState(false);
+    const [signingMode, setSigningMode] = useState<'single' | 'all'>('single');
 
     useEffect(() => {
         const seen = localStorage.getItem('rcm_tut_reports');
@@ -38,8 +39,19 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         setShowTutorial(false);
     };
 
+    const handleSignAllClick = () => {
+        const unsigned = reports.filter(r => !r.status?.signed);
+        if (unsigned.length === 0) {
+            alert("No hay reportes pendientes de firma.");
+            return;
+        }
+        setSigningMode('all');
+        setShowSignDialog(true);
+    };
+
     const confirmSignReport = async () => {
-        if (!signingReport || !currentUser) return;
+        if (!currentUser) return;
+        if (signingMode === 'single' && !signingReport) return;
         
         const globalUserId = (currentUser as any).id || currentUser.username;
         const storedPass = getStoredPassword(globalUserId);
@@ -63,30 +75,65 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
 
         const signature = generateDigitalSignature(cert);
-        
-        // Regenerate the PDF Blob
         const userFullName = currentUser.fullName || currentUser.username;
-        const newPdfBlob = generateReportPDF({
-            userFullName,
-            userUniqueId: signature,
-            program: signingReport.program,
-            date: signingReport.date,
-            items: signingReport.items || []
-        });
+        
+        if (signingMode === 'single' && signingReport) {
+            const newPdfBlob = generateReportPDF({
+                userFullName,
+                userUniqueId: signature,
+                program: signingReport.program,
+                date: signingReport.date,
+                items: signingReport.items || []
+            });
 
-        const updatedReport: Report = {
-            ...signingReport,
-            pdfBlob: newPdfBlob,
-            status: { ...signingReport.status, downloaded: signingReport.status?.downloaded || false, sent: signingReport.status?.sent || false, signed: true }
-        };
+            const updatedReport: Report = {
+                ...signingReport,
+                pdfBlob: newPdfBlob,
+                status: { ...signingReport.status, downloaded: signingReport.status?.downloaded || false, sent: signingReport.status?.sent || false, signed: true }
+            };
 
-        await saveReportToDB(updatedReport);
-        setReports(prev => prev.map(r => r.id === signingReport.id ? updatedReport : r));
+            await saveReportToDB(updatedReport);
+            setReports(prev => prev.map(r => r.id === signingReport.id ? updatedReport : r));
+            alert("Reporte firmado correctamente con su certificado digital.");
+        } else if (signingMode === 'all') {
+            const unsigned = reports.filter(r => !r.status?.signed);
+            let successCount = 0;
+            const newReports = [...reports];
+
+            for (const r of unsigned) {
+                try {
+                    const newPdfBlob = generateReportPDF({
+                        userFullName,
+                        userUniqueId: signature,
+                        program: r.program,
+                        date: r.date,
+                        items: r.items || []
+                    });
+                    
+                    const updatedReport: Report = {
+                        ...r,
+                        pdfBlob: newPdfBlob,
+                        status: { ...r.status, downloaded: r.status?.downloaded || false, sent: r.status?.sent || false, signed: true }
+                    };
+                    await saveReportToDB(updatedReport);
+                    
+                    const index = newReports.findIndex(rep => rep.id === r.id);
+                    if (index !== -1) {
+                        newReports[index] = updatedReport;
+                    }
+                    successCount++;
+                } catch(e) {
+                    console.error("Error signing report", r.id, e);
+                }
+            }
+            
+            setReports(newReports);
+            alert(`Se firmaron correctamente ${successCount} reportes.`);
+        }
         
         setShowSignDialog(false);
         setSigningReport(null);
         setSignPass('');
-        alert("Reporte firmado correctamente con su certificado digital.");
     };
 
     const loadData = async () => {
@@ -100,6 +147,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const handleDownload = async (report: Report) => {
         if (!report.status?.signed) {
             alert("Debe firmar digitalmente el reporte antes de descargarlo.");
+            setSigningMode('single');
             setSigningReport(report);
             setShowSignDialog(true);
             return;
@@ -175,6 +223,22 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                     Reportes
                 </h2>
                 <div className="flex gap-2">
+                    {currentUser?.role === 'director' && reports.some(r => !r.status?.signed) && (
+                         <button 
+                             onClick={handleSignAllClick}
+                             className="bg-yellow-600 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-yellow-500 shadow-sm"
+                         >
+                             <span className="material-symbols-outlined text-sm">draw</span>
+                             Firmar todo
+                         </button>
+                    )}
+                    <button 
+                        onClick={() => setShowBatchSigner(true)}
+                        className="bg-[#9E7649] text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-[#8B653D] shadow-sm"
+                    >
+                        <span className="material-symbols-outlined text-sm">upload_file</span>
+                        Firma por carga
+                    </button>
                     {reports.length > 0 && (
                         <button 
                             onClick={handleClearAll}
@@ -184,13 +248,6 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                             Limpiar
                         </button>
                     )}
-                    <button 
-                        onClick={() => setShowBatchSigner(true)}
-                        className="bg-[#9E7649] text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1 hover:bg-[#8B653D] shadow-sm"
-                    >
-                        <span className="material-symbols-outlined text-sm">upload_file</span>
-                        Firma por carga
-                    </button>
                 </div>
             </div>
 
@@ -254,6 +311,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 {(!report.status?.signed) ? (
                                     <button 
                                         onClick={() => {
+                                            setSigningMode('single');
                                             setSigningReport(report);
                                             setShowSignDialog(true);
                                         }}
@@ -272,6 +330,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                     onClick={async () => {
                                         if (!report.status?.signed) {
                                             alert("Debe firmar digitalmente el reporte antes de enviarlo por WhatsApp.");
+                                            setSigningMode('single');
                                             setSigningReport(report);
                                             setShowSignDialog(true);
                                             return;
@@ -372,15 +431,21 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 </div>
             )}
 
-            {showSignDialog && signingReport && (
+            {showSignDialog && (signingMode === 'all' || signingReport) && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSignDialog(false)}>
                     <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3 text-yellow-500 mb-4">
                             <span className="material-symbols-outlined text-3xl">draw</span>
-                            <h3 className="text-xl font-bold text-white">Firmar Reporte</h3>
+                            <h3 className="text-xl font-bold text-white">
+                                {signingMode === 'all' ? `Firmar ${reports.filter(r => !r.status?.signed).length} Reportes` : 'Firmar Reporte'}
+                            </h3>
                         </div>
                         <p className="text-xs text-[#E8DCCF]/60 mb-6">
-                            Para estampar su firma digital en el reporte <strong>{signingReport.program}</strong> del día <strong>{signingReport.date.split('T')[0]}</strong>, por favor ingrese su contraseña de certificado:
+                            {signingMode === 'all' ? (
+                                <>Para estampar su firma digital en <strong>{reports.filter(r => !r.status?.signed).length} reportes pendientes</strong>, por favor ingrese su contraseña de certificado:</>
+                            ) : (
+                                <>Para estampar su firma digital en el reporte <strong>{signingReport?.program}</strong> del día <strong>{signingReport?.date.split('T')[0]}</strong>, por favor ingrese su contraseña de certificado:</>
+                            )}
                         </p>
                         
                         <div className="mb-6">
@@ -396,7 +461,9 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
                         <div className="flex gap-2">
                             <button onClick={() => setShowSignDialog(false)} className="flex-1 py-3 rounded-xl border border-white/5 text-white text-xs font-bold hover:bg-white/5 transition-colors">CANCELAR</button>
-                            <button onClick={confirmSignReport} className="flex-1 py-3 rounded-xl bg-yellow-600 text-white text-xs font-bold hover:bg-yellow-500 transition-colors">FIRMAR</button>
+                            <button onClick={confirmSignReport} className="flex-1 py-3 rounded-xl bg-yellow-600 text-white text-xs font-bold hover:bg-yellow-500 transition-colors">
+                                {signingMode === 'all' ? 'FIRMAR TODOS' : 'FIRMAR'}
+                            </button>
                         </div>
                     </div>
                 </div>
