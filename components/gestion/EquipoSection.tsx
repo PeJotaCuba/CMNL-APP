@@ -98,7 +98,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     'Coordinador', 
     'Director de emisora', 
     'Jefe de Programación', 
-    'Especialista', 
+    'Especialista en Comunicación',
+    'Especialista en Gestión de Contenido', 
     'Auxiliar general', 
     'Asistente de dirección', 
     'Recepcionista'
@@ -518,7 +519,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
   };
 
   return (
-    <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+    <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col relative">
       <CMNLHeader 
         user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
         sectionTitle="Equipo CMNL"
@@ -744,9 +745,9 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       </div>
 
       {/* Viewing Modal */}
-      {viewingMember && createPortal(
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewingMember(null)}>
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
+      {viewingMember && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-20" onClick={() => setViewingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative mt-10 animate-fade-in" onClick={e => e.stopPropagation()}>
             <button onClick={() => setViewingMember(null)} className="absolute top-4 right-4 text-[#E8DCCF]/50 hover:text-white">
               ✕
             </button>
@@ -790,14 +791,13 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </p>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Editing Modal - Unified Team & User */}
-      {editingMember && isAdmin && createPortal(
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setEditingMember(null)}>
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-lg w-full relative my-auto" onClick={e => e.stopPropagation()}>
+      {editingMember && isAdmin && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-20 overflow-y-auto" onClick={() => setEditingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-lg w-full relative mt-10 mb-10 animate-fade-in" onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-white mb-4">Gestión de Personal: {editingMember.name}</h2>
             
             <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -1480,14 +1480,13 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Custom Confirm Modal */}
-      {customConfirm && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+      {customConfirm && (
+        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomConfirm(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
               <AlertTriangle className="text-4xl animate-pulse" />
             </div>
@@ -1513,34 +1512,33 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Custom Alert Modal */}
-      {customAlert && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+      {customAlert && (
+        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomAlert(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className={`flex justify-center ${customAlert.type === 'error' ? 'text-red-500' : 'text-[#9E7649]'}`}>
               {customAlert.type === 'error' ? <AlertTriangle className="text-4xl" /> : <div className="text-4xl">ℹ️</div>}
             </div>
-            <p className="text-sm font-bold text-white text-center leading-relaxed">
+            <p className="text-xs text-stone-200 font-semibold leading-relaxed text-left bg-black/20 p-4 rounded-xl border border-white/5">
               {customAlert.message}
             </p>
             <button
               onClick={() => setCustomAlert(null)}
-              className="w-full py-3 bg-[#9E7649] text-white font-bold rounded-xl hover:bg-[#8B653D] transition-all text-xs uppercase mt-4"
+              className="w-full py-3 bg-[#9E7649] text-white font-bold rounded-xl hover:bg-[#8B653D] transition-all text-xs uppercase"
             >
-              OK
+              Aceptar
             </button>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
+
       {/* Admin Password Prompt for linking user */}
-      {adminPwdPrompt?.visible && createPortal(
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 font-sans">
-          <div className="bg-[#1A100C] border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative">
+      {adminPwdPrompt?.visible && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-[70] p-4 pt-20 font-sans animate-fade-in">
+          <div className="bg-[#1A100C] border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative mt-10">
             <div className="flex flex-col mb-4 items-center">
               <Shield className="text-amber-500 w-8 h-8 mb-2" />
               <h3 className="text-white font-bold text-center">Autorización Requerida</h3>
@@ -1618,8 +1616,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

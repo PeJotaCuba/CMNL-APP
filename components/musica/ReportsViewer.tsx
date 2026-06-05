@@ -27,6 +27,12 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const [showSignDialog, setShowSignDialog] = useState(false);
     const [signingMode, setSigningMode] = useState<'single' | 'all'>('single');
     const [postSignAction, setPostSignAction] = useState<{ type: 'download' | 'whatsapp'; reportId: string } | null>(null);
+    
+    // Custom non-blocking modal alert replacement for sandboxed iframe viewport
+    const [customAlert, setCustomAlert] = useState<string | null>(null);
+    const showAlert = (message: string) => {
+        setCustomAlert(message);
+    };
 
     useEffect(() => {
         const seen = localStorage.getItem('rcm_tut_reports');
@@ -44,7 +50,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const handleSignAllClick = () => {
         const unsigned = reports.filter(r => !r.status?.signed);
         if (unsigned.length === 0) {
-            alert("No hay reportes pendientes de firma.");
+            showAlert("No hay reportes pendientes de firma.");
             return;
         }
         setSigningMode('all');
@@ -53,7 +59,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
     const triggerDownload = async (report: Report) => {
         if (!report.pdfBlob) {
-            alert("El reporte no contiene un archivo PDF generado.");
+            showAlert("El reporte no contiene un archivo PDF generado.");
             return;
         }
         const datePart = report.date.split('T')[0];
@@ -78,7 +84,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         let phone = adminUser?.phone || adminUser?.mobile || '54413935';
         
         if (!phone) {
-            alert('No se encontró el número de teléfono del administrador.');
+            showAlert('No se encontró el número de teléfono del administrador.');
             return;
         }
 
@@ -144,7 +150,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
 
         // Informar al usuario y enviarlo directo al chat de WhatsApp del administrador
-        alert(`Su firma digital se ha verificado con éxito.\nDado que este navegador no soporta adjuntar archivos directamente a WhatsApp (por regulaciones de sandbox), el PDF se ha descargado a su dispositivo.\n\nA continuación abriremos el chat directo de WhatsApp con el Administrador. Registre el archivo PDF que acabamos de descargar en dicho chat.`);
+        showAlert(`Su firma digital se ha verificado con éxito.\nDado que este navegador no soporta adjuntar archivos directamente a WhatsApp (por regulaciones de sandbox), el PDF se ha descargado a su dispositivo.\n\nA continuación abriremos el chat directo de WhatsApp con el Administrador. Registre el archivo PDF que acabamos de descargar en dicho chat.`);
 
         openWhatsApp(text, phone);
         
@@ -155,11 +161,11 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const confirmSignReport = async () => {
         try {
             if (!currentUser) {
-                alert("Error: No se encontró ningún usuario autenticado.");
+                showAlert("Error: No se encontró ningún usuario autenticado.");
                 return;
             }
             if (signingMode === 'single' && !signingReport) {
-                alert("Error: No se seleccionó ningún reporte para firmar.");
+                showAlert("Error: No se seleccionó ningún reporte para firmar.");
                 return;
             }
             
@@ -168,7 +174,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             // Core Security Authorization Check (72-hour and 30-day rules)
             const authCheck = checkSigningAuthorization(globalUserId);
             if (!authCheck.authorized) {
-                alert(authCheck.reason);
+                showAlert(authCheck.reason);
                 return;
             }
 
@@ -176,14 +182,14 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             const cert = getStoredCertificate(globalUserId);
             
             if (!cert) {
-                alert("No tiene un certificado de firma digital cargado en este equipo. Por favor, asegúrese de haber generado o cargado su firma digital en la sección de Firma Digital.");
+                showAlert("No tiene un certificado de firma digital cargado en este equipo. Por favor, asegúrese de haber generado o cargado su firma digital en la sección de Firma Digital.");
                 return;
             }
 
             const effectivePass = storedPass || cert.originalPassword || '';
 
             if (signPass.trim() !== effectivePass.trim()) {
-                alert("Contraseña de firma incorrecta.");
+                showAlert("Contraseña de firma incorrecta.");
                 return;
             }
 
@@ -218,7 +224,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                         await triggerSendWhatsApp(updatedReport);
                     }
                 } else {
-                    alert("Reporte firmado correctamente con su certificado digital.");
+                    showAlert("Reporte firmado correctamente con su certificado digital.");
                 }
             } else if (signingMode === 'all') {
                 const unsigned = reports.filter(r => !r.status?.signed);
@@ -253,7 +259,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 }
                 
                 setReports(newReports);
-                alert(`Se firmaron correctamente ${successCount} reportes.`);
+                showAlert(`Se firmaron correctamente ${successCount} reportes.`);
             }
             
             setShowSignDialog(false);
@@ -261,7 +267,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             setSignPass('');
         } catch (error: any) {
             console.error("Error crítico al firmar:", error);
-            alert("Error crítico al firmar: " + (error?.message || error || "Desconocido"));
+            showAlert("Error crítico al firmar: " + (error?.message || error || "Desconocido"));
         }
     };
 
@@ -275,7 +281,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
     const handleDownload = async (report: Report) => {
         if (!report.status?.signed) {
-            alert("No se puede descargar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
+            showAlert("No se puede descargar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
             setPostSignAction({ type: 'download', reportId: report.id });
             setSigningMode('single');
             setSigningReport(report);
@@ -471,7 +477,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 <button 
                                     onClick={async () => {
                                         if (!report.status?.signed) {
-                                            alert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
+                                            showAlert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
                                             setPostSignAction({ type: 'whatsapp', reportId: report.id });
                                             setSigningMode('single');
                                             setSigningReport(report);
@@ -507,9 +513,9 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 </div>
             )}
 
-            {showSummary && createPortal(
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSummary(false)}>
-                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+            {showSummary && (
+                <div className="absolute inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setShowSummary(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30 mt-10" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
                              <h3 className="text-lg font-bold text-white">Resumen Estadístico</h3>
                              <button onClick={() => setShowSummary(false)} className="text-[#E8DCCF]/40 hover:text-white"><span className="material-symbols-outlined">close</span></button>
@@ -539,20 +545,19 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                             </table>
                         </div>
                     </div>
-                </div>,
-                document.body
+                </div>
             )}
 
-            {showSignDialog && (signingMode === 'all' || signingReport) && createPortal(
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSignDialog(false)}>
-                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+            {showSignDialog && (signingMode === 'all' || signingReport) && (
+                <div className="absolute inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setShowSignDialog(false)}>
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 mt-10 font-sans" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3 text-yellow-500 mb-4">
                             <span className="material-symbols-outlined text-3xl">draw</span>
                             <h3 className="text-xl font-bold text-white">
                                 {signingMode === 'all' ? `Firmar ${reports.filter(r => !r.status?.signed).length} Reportes` : 'Firmar Reporte'}
                             </h3>
                         </div>
-                        <p className="text-xs text-[#E8DCCF]/60 mb-6">
+                        <p className="text-xs text-[#E8DCCF]/60 mb-6 font-semibold leading-relaxed">
                              {signingMode === 'all' ? (
                                  <>Para estampar su firma digital en <strong>{reports.filter(r => !r.status?.signed).length} reportes pendientes</strong>, por favor ingrese su contraseña de certificado:</>
                              ) : (
@@ -561,25 +566,45 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                         </p>
                         
                         <div className="mb-6">
-                            <label className="text-[10px] text-[#E8DCCF]/40 uppercase tracking-wider mb-2 block">Contraseña de Certificado</label>
+                            <label className="text-[10px] text-[#E8DCCF]/40 uppercase tracking-wider mb-2 block font-bold">Contraseña de Certificado</label>
                             <input 
                                 type="password" 
                                 value={signPass}
                                 onChange={(e) => setSignPass(e.target.value)}
-                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-xl p-3 text-white text-center tracking-[0.5em] font-mono focus:border-yellow-500/50 outline-none transition-colors"
+                                className="w-full bg-[#1A100C] border border-[#9E7649]/20 rounded-xl p-3 text-white text-center tracking-[0.5em] font-mono focus:border-yellow-500/50 outline-none transition-colors text-sm"
                                 autoFocus
                             />
                         </div>
 
-                        <div className="flex gap-2">
-                            <button onClick={() => setShowSignDialog(false)} className="flex-1 py-3 rounded-xl border border-white/5 text-white text-xs font-bold hover:bg-white/5 transition-colors">CANCELAR</button>
-                            <button onClick={confirmSignReport} className="flex-1 py-3 rounded-xl bg-yellow-600 text-white text-xs font-bold hover:bg-yellow-500 transition-colors">
+                        <div className="flex gap-2 font-bold text-xs uppercase">
+                            <button onClick={() => setShowSignDialog(false)} className="flex-1 py-3 rounded-xl border border-white/5 text-white hover:bg-white/5 transition-colors">CANCELAR</button>
+                            <button onClick={confirmSignReport} className="flex-1 py-3 rounded-xl bg-yellow-600 text-white hover:bg-yellow-500 transition-colors">
                                 {signingMode === 'all' ? 'FIRMAR TODOS' : 'FIRMAR'}
                             </button>
                         </div>
                     </div>
-                </div>,
-                document.body
+                </div>
+            )}
+
+            {/* Custom Alert Overlay Modal perfectly aligned to the director's screen view */}
+            {customAlert && (
+                <div className="absolute inset-0 z-55 flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomAlert(null)}>
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 mt-10 font-sans" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-center text-[#9E7649]">
+                            <span className="material-symbols-outlined text-4xl animate-bounce">verified_user</span>
+                        </div>
+                        <h3 className="text-white text-sm font-bold uppercase tracking-wider">Centro de Notificaciones</h3>
+                        <p className="text-xs text-stone-200 font-semibold leading-relaxed whitespace-pre-line text-left bg-black/30 p-4 rounded-xl border border-[#9E7649]/10">
+                            {customAlert}
+                        </p>
+                        <button
+                            onClick={() => setCustomAlert(null)}
+                            className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold rounded-xl transition-all text-xs uppercase"
+                        >
+                            Aceptar
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

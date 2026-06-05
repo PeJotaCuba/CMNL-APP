@@ -69,11 +69,73 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       return id;
   };
 
+  const getIsMusicAdmin = () => {
+    if (!globalUser) return false;
+    
+    // 1. Administrador Global
+    if (globalUser.classification === 'Administrador' || globalUser.username === 'admincmnl') {
+      return true;
+    }
+    
+    // 2. Usuario vinculado to admin_app_static
+    let designatedUserId = 'pedro';
+    const savedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+    if (savedEquipo) {
+      try {
+        const equipo = JSON.parse(savedEquipo);
+        if (Array.isArray(equipo)) {
+          const adminMember = equipo.find((m: any) => m.id === 'admin_app_static');
+          if (adminMember && adminMember.designatedUserId) {
+            designatedUserId = adminMember.designatedUserId;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (globalUser.id === designatedUserId || globalUser.username === designatedUserId) {
+      return true;
+    }
+    
+    // 3. Coordinator / Specialist in Content Management (Especialista en Gestión de Contenido)
+    const userClass = (globalUser.classification || '').toLowerCase();
+    if (userClass.includes('especialista en gestion de contenido') || 
+        userClass.includes('especialista en gestión de contenido') || 
+        userClass.includes('especialista en gestion de contenidos') || 
+        userClass.includes('especialista en gestión de contenidos')) {
+      return true;
+    }
+    
+    if (savedEquipo) {
+      try {
+        const equipo = JSON.parse(savedEquipo);
+        if (Array.isArray(equipo)) {
+          const matchedMember = equipo.find((m: any) => {
+            const spec = (m.specialty || '').toLowerCase();
+            const matchesSpec = spec.includes('especialista en gestion de contenido') || 
+                                spec.includes('especialista en gestión de contenido') || 
+                                spec.includes('especialista en gestion de contenidos') || 
+                                spec.includes('especialista en gestión de contenidos');
+            if (!matchesSpec) return false;
+            return m.id === globalUser.id || m.id === globalUser.username || m.designatedUserId === globalUser.id || m.designatedUserId === globalUser.username;
+          });
+          if (matchedMember) {
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    
+    return false;
+  };
+
   // Map global user to music app user
   const currentUser: User | null = globalUser ? {
       username: globalUser.username,
       password: globalUser.password || '',
-      role: (globalUser.classification === 'Administrador' || (globalUser.role === 'admin' && globalUser.classification !== 'Coordinador') || (globalUser.classification === 'Coordinador' && (globalUser.coordinatorSections || []).includes('Música'))) ? 'admin' : (globalUser.classification === 'Director' ? 'director' : 'user'),
+      role: getIsMusicAdmin() ? 'admin' : (globalUser.classification === 'Director' ? 'director' : 'user'),
       fullName: globalUser.name,
       phone: globalUser.mobile || '',
       uniqueId: getUniqueId(globalUser)

@@ -74,7 +74,7 @@ const AppContent: React.FC = () => {
           'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 
           'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'
       ];
-      const isActiveRole = activeRoles.includes(classification);
+      const isActiveRole = activeRoles.some(role => classification.includes(role));
       
       const isSensitiveView = currentView === AppView.APP_MUSICA || currentView === AppView.APP_PROGRAMACION || currentView === AppView.APP_EQUIPO;
 
@@ -336,7 +336,8 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       const isExcluded = currentUser.classification === 'Administrador' || currentUser.classification === 'Coordinador' || currentUser.role === 'admin' || currentUser.role === 'coordinator';
-      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].includes(currentUser.classification || '');
+      const classificationLower = (currentUser.classification || '').toLowerCase();
+      const isActiveRole = ['director', 'asesor', 'realizador', 'locutor', 'guionista', 'periodista', 'coordinador', 'director de emisora', 'jefe de programación', 'especialista', 'auxiliar general', 'asistente de dirección', 'recepcionista'].some(role => classificationLower.includes(role));
       
       if (!isExcluded && isActiveRole) {
         const lastBackup = localStorage.getItem(`last_backup_${currentUser.username}`);

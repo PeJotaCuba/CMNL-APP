@@ -2457,9 +2457,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     )}
 
       {/* MODAL: ADMIN CONFIRM SIGNING FOR DIRECT EMISSION */}
-      {showAdminSignConfirmDialog && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#2C1B15] border border-amber-500/30 p-8 rounded-3xl max-w-sm w-full shadow-2xl space-y-6 animate-in zoom-in-95">
+      {showAdminSignConfirmDialog && (
+        <div className="absolute inset-0 z-[100] flex items-start justify-center p-4 pt-20 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#2C1B15] border border-amber-500/30 p-8 rounded-3xl max-w-sm w-full shadow-2xl space-y-6 mt-10 animate-in zoom-in-95">
             <div className="text-center space-y-2">
               <div className="size-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-2 border border-amber-500/20">
                 <Key className="text-amber-500" size={32} />
@@ -2477,30 +2477,29 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 onChange={e => setAdminSignPassInput(e.target.value)}
               />
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 text-[10px] font-bold">
                 <button 
                   onClick={() => { setShowAdminSignConfirmDialog(false); setAdminSignPassInput(''); }}
-                  className="flex-1 py-3 bg-stone-800 text-stone-400 font-bold rounded-xl hover:bg-stone-700 transition-all uppercase text-[10px]"
+                  className="flex-1 py-3 bg-stone-800 text-stone-400 font-bold rounded-xl hover:bg-stone-700 transition-all uppercase"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={handleAdminConfirmSignAndEmit}
-                  className="flex-1 py-3 bg-amber-600 text-black font-black rounded-xl hover:bg-amber-500 transition-all uppercase text-[10px]"
+                  className="flex-1 py-3 bg-amber-600 text-black font-black rounded-xl hover:bg-amber-500 transition-all uppercase"
                 >
                   Confirmar Firma
                 </button>
               </div>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* DIALOG BOX: DIRECTOR PASSWORDS AND SIGNATURE */}
-      {showDirectorSignDialog && signingCert && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowDirectorSignDialog(false)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+      {showDirectorSignDialog && signingCert && (
+        <div className="absolute inset-0 z-50 flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setShowDirectorSignDialog(false)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 mt-10" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 text-yellow-500 mb-4">
               <Award className="text-3xl shrink-0" />
               <h3 className="text-lg font-bold text-white">Firmar Licencia de Equipo</h3>
@@ -2534,8 +2533,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                   <div className="space-y-0.5">
                     {Object.entries(signingCert.contracts || {}).map(([s, n], sIdx) => (
                       <div key={`${s}-${sIdx}`} className="flex justify-between text-[11px]">
-                        <span className="text-stone-400 text-[10px]">{s}:</span>
-                        <span className="text-yellow-500 font-mono">{String(n)}</span>
+                         <span className="text-stone-400 text-[10px]">{s}:</span>
+                         <span className="text-yellow-500 font-mono">{String(n)}</span>
                       </div>
                     ))}
                   </div>
@@ -2563,18 +2562,17 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               <button onClick={handleDirectorSignCertificate} className="flex-1 py-3 rounded-lg bg-yellow-600 text-white text-xs font-bold hover:bg-yellow-500 transition-colors uppercase">FIRMADO OK</button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Custom Alert Modal */}
-      {customAlert && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4" onClick={e => e.stopPropagation()}>
+      {customAlert && (
+        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomAlert(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 mt-10" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-amber-500">
               <Shield className="text-4xl animate-bounce" />
             </div>
-            <p className="text-xs text-stone-200 font-semibold leading-relaxed">
+            <p className="text-xs text-stone-200 font-semibold leading-relaxed text-left bg-black/20 p-4 rounded-xl border border-white/5">
               {customAlert.message}
             </p>
             <button
@@ -2584,14 +2582,13 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               Aceptar
             </button>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* Custom Confirm Modal */}
-      {customConfirm && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+      {customConfirm && (
+        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomConfirm(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
               <AlertTriangle className="text-4xl animate-pulse" />
             </div>
@@ -2611,20 +2608,19 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                   customConfirm.onConfirm();
                   setCustomConfirm(null);
                 }}
-                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition-all text-xs uppercase"
+                className="flex-1 py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold rounded-xl transition-all text-xs uppercase"
               >
                 Confirmar
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
 
       {/* WhatsApp Redirect Explanation Dialog */}
-      {redirectDialog?.visible && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setRedirectDialog(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-green-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
+      {redirectDialog?.visible && (
+        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setRedirectDialog(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-green-500/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-green-400">
               <Send className="text-4xl animate-pulse" />
             </div>
@@ -2653,8 +2649,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

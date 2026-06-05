@@ -6,6 +6,7 @@ import { ProgramFicha } from '../../types';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { saveProductionToDB, loadProductionsFromDB, deleteProductionFromDB, bulkUpdateProductions } from './services/db';
+import { ReportsModal } from './ReportsModal';
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType, HeadingLevel } from "docx";
 import { ChevronDown, FileText, Database, Upload, Archive, Trash2, Activity, X, Download, Plus, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -97,6 +98,9 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [importedProductions, setImportedProductions] = useState<Production[]>([]);
 
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showReportsMenu, setShowReportsMenu] = useState(false);
+  const [showReportsModal, setShowReportsModal] = useState(false);
+  const [selectedReportTypeForModal, setSelectedReportTypeForModal] = useState<'mensual' | 'economia' | 'incidental'>('mensual');
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [selectedBalanceProgram, setSelectedBalanceProgram] = useState<string | null>(null);
   const [showAddProgramModal, setShowAddProgramModal] = useState(false);
@@ -627,12 +631,35 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const getYearMonth = (dateStr?: string) => {
       if (!dateStr || typeof dateStr !== 'string') return { year: 0, month: 0, key: 'Desconocido' };
-      const parts = dateStr.split('-');
-      if (parts.length >= 2) {
-          const year = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10);
-          return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+      
+      // Support dash split: YYYY-MM-DD or DD-MM-YYYY
+      if (dateStr.includes('-')) {
+          const parts = dateStr.split('-');
+          if (parts[0].length === 4) { // YYYY-MM-DD
+              const year = parseInt(parts[0], 10);
+              const month = parseInt(parts[1], 10);
+              return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+          } else if (parts[2] && parts[2].length === 4) { // DD-MM-YYYY
+              const year = parseInt(parts[2], 10);
+              const month = parseInt(parts[1], 10);
+              return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+          }
       }
+      
+      // Support slash split: DD/MM/YYYY or YYYY/MM/DD
+      if (dateStr.includes('/')) {
+          const parts = dateStr.split('/');
+          if (parts[2] && parts[2].length === 4) { // DD/MM/YYYY
+              const year = parseInt(parts[2], 10);
+              const month = parseInt(parts[1], 10);
+              return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+          } else if (parts[0].length === 4) { // YYYY/MM/DD
+              const year = parseInt(parts[0], 10);
+              const month = parseInt(parts[1], 10);
+              return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
+          }
+      }
+      
       return { year: 0, month: 0, key: 'Desconocido' };
   };
 
@@ -659,8 +686,27 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
 
   const handleExportDB = async () => {
       const history = await loadProductionsFromDB();
-      if (history.length === 0) return alert("No hay producciones para exportar.");
-      const dataStr = JSON.stringify(history, null, 2);
+      if (history.length === 0) {
+          alert("No hay producciones para exportar.");
+          return;
+      }
+      
+      const reportsConfig = {
+          incidentalWorks: JSON.parse(localStorage.getItem('rcm_incidental_works_catalogue') || '[]'),
+          costoPorObra: localStorage.getItem('rcm_costo_por_obra') ? Number(localStorage.getItem('rcm_costo_por_obra')) : undefined,
+          montoFijoBase: localStorage.getItem('rcm_monto_fijo_base') ? Number(localStorage.getItem('rcm_monto_fijo_base')) : undefined,
+          coordinadorMusical: localStorage.getItem('rcm_coordinador_musical_override') || undefined,
+          jefeProgramacion: localStorage.getItem('rcm_jefe_programacion_override') || undefined
+      };
+      
+      const backupObject = {
+          backupType: "RCM_PRODUCTIONS_FULL_BACKUP",
+          version: 1,
+          productions: history,
+          reportsConfig: reportsConfig
+      };
+      
+      const dataStr = JSON.stringify(backupObject, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
       saveAs(blob, `RCM_Producciones_BD_${selectedMonthStr}.json`);
       setShowActionsMenu(false);
@@ -671,13 +717,41 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
       const file = e.target.files[0];
       const text = await file.text();
       try {
-          const parsed = JSON.parse(text) as Production[];
-          if (!Array.isArray(parsed)) throw new Error("Invalid format");
-          for (const prod of parsed) {
+          const parsedData = JSON.parse(text);
+          let productionsToLoad: Production[] = [];
+
+          if (parsedData && parsedData.backupType === "RCM_PRODUCTIONS_FULL_BACKUP") {
+              // Extract productions list
+              productionsToLoad = parsedData.productions || [];
+              
+              // Load reports settings
+              const config = parsedData.reportsConfig || {};
+              if (config.incidentalWorks) {
+                  localStorage.setItem('rcm_incidental_works_catalogue', JSON.stringify(config.incidentalWorks));
+              }
+              if (config.costoPorObra !== undefined) {
+                  localStorage.setItem('rcm_costo_por_obra', String(config.costoPorObra));
+              }
+              if (config.montoFijoBase !== undefined) {
+                  localStorage.setItem('rcm_monto_fijo_base', String(config.montoFijoBase));
+              }
+              if (config.coordinadorMusical) {
+                  localStorage.setItem('rcm_coordinador_musical_override', config.coordinadorMusical);
+              }
+              if (config.jefeProgramacion) {
+                  localStorage.setItem('rcm_jefe_programacion_override', config.jefeProgramacion);
+              }
+          } else if (Array.isArray(parsedData)) {
+              productionsToLoad = parsedData;
+          } else {
+              throw new Error("Invalid format");
+          }
+
+          for (const prod of productionsToLoad) {
               await saveProductionToDB(prod);
           }
           await fetchProductions();
-          alert("Base de datos cargada correctamente.");
+          alert("Base de datos y configuraciones cargadas correctamente.");
       } catch (err) {
           alert("Error al cargar la base de datos. Asegúrese de que sea un archivo JSON válido.");
       }
@@ -1044,29 +1118,37 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                     </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-6 mb-6 border-b border-[#9E7649]/20 pb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-6 mb-6 border-b border-[#9E7649]/20 pb-6 relative z-[35]">
                     <h3 className="font-bold text-white text-xs uppercase tracking-widest hidden sm:block">En Stock</h3>
                     <div className="flex gap-4 w-full sm:w-auto justify-center px-2">
                         <button 
                             onClick={() => setShowBalanceModal(true)} 
-                            className="flex-1 sm:flex-none bg-[#9E7649] text-white font-bold py-3 px-6 rounded-xl hover:bg-[#8B653D] flex items-center justify-center gap-2 text-xs shadow-lg transition-all active:scale-95"
+                            className="flex-1 sm:flex-none sm:w-[130px] h-[46px] bg-[#9E7649] text-white font-bold rounded-xl hover:bg-[#8B653D] flex items-center justify-center gap-2 text-[13px] shadow-lg transition-all active:scale-95 whitespace-nowrap"
                         >
                             <Activity size={18} /> Balance
                         </button>
+
+                        {/* Informes Direct Action Button */}
+                        <button 
+                            onClick={() => { setSelectedReportTypeForModal('mensual'); setShowReportsModal(true); setShowActionsMenu(false); }} 
+                            className="flex-1 sm:flex-none sm:w-[130px] h-[46px] bg-[#6B4423] border border-[#7A4B27] text-white font-bold rounded-xl hover:bg-[#5A381A] flex items-center justify-center gap-2 text-[13px] shadow-lg transition-all active:scale-95 whitespace-nowrap"
+                            id="reports-dropdown-toggle"
+                        >
+                            <span className="material-symbols-outlined text-[#E8DCCF] text-base">analytics</span>
+                            Informes
+                        </button>
                         
-                        <div className="relative flex-1 sm:flex-none">
+                        <div className="relative flex-1 sm:flex-none sm:w-[130px] h-[46px]">
                             <button 
-                                onClick={() => setShowActionsMenu(!showActionsMenu)} 
-                                className="w-full bg-[#2C1B15] border border-[#9E7649]/30 text-white font-bold py-3 px-6 rounded-xl hover:bg-[#3E1E16] flex items-center justify-center gap-2 text-xs transition-all active:scale-95"
+                                onClick={() => { setShowActionsMenu(!showActionsMenu); setShowReportsMenu(false); }} 
+                                className="w-full h-full bg-[#4A2E1B] border border-[#5E3921] text-white font-bold rounded-xl hover:bg-[#3E1A0F] flex items-center justify-center gap-2 text-[13px] shadow-lg transition-all active:scale-95 whitespace-nowrap"
+                                id="actions-dropdown-toggle"
                             >
                                 Acciones <ChevronDown size={18} />
                             </button>
                             
                             {showActionsMenu && (
-                                <div className="absolute right-0 mt-2 w-48 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl shadow-xl z-50 overflow-hidden">
-                                    <button onClick={() => { handleGenerateDetailedStatsDOCX(); setShowActionsMenu(false); }} className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-[#3E1E16] flex items-center gap-2">
-                                        <FileText size={14} className="text-blue-400" /> Informe
-                                    </button>
+                                <div className="absolute right-0 mt-2 w-48 bg-[#2C1B15] border border-[#9E7649]/30 rounded-xl shadow-xl z-[60] overflow-hidden">
                                     <button onClick={handleExportDB} className="w-full text-left px-4 py-2.5 text-xs text-white hover:bg-[#3E1E16] flex items-center gap-2">
                                         <Database size={14} className="text-green-400" /> Exportar BD
                                     </button>
@@ -1309,6 +1391,17 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                 </div>
             </div>
         )}
+
+        {/* Global Reports Hub Modal */}
+        <ReportsModal 
+            isOpen={showReportsModal} 
+            onClose={() => setShowReportsModal(false)} 
+            selectedMonthStr={selectedMonthStr} 
+            onMonthChange={setSelectedMonthStr}
+            stockMensual={stockMensual} 
+            allProductions={dbProductions}
+            initialReportType={selectedReportTypeForModal}
+        />
     </div>
   );
 };
