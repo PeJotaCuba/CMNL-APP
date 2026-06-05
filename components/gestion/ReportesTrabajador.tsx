@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search, PenTool, Share2, Mail, Lock } from 'lucide-react';
 import { User, FP02Report, ProgramFicha, ConsolidatedPayment, ProgramCatalog, WorkLog } from '../../types';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getStoredCertificate, getStoredPassword, generateDigitalSignature } from '../../utils/signatureUtils';
+import { getStoredCertificate, getStoredPassword, generateDigitalSignature, checkSigningAuthorization } from '../../utils/signatureUtils';
 
 interface Props {
   currentUser: User | null;
@@ -156,12 +157,16 @@ export const ReportesTrabajador: React.FC<Props> = ({
 
     const storedPass = getStoredPassword(currentUser.id);
     const cert = getStoredCertificate(currentUser.id);
-    const effectivePass = (cert && cert.originalPassword) ? cert.originalPassword : storedPass;
 
-    if (cert && cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
-        alert("Su certificado de firma digital ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar.");
-        return;
+    if (cert) {
+        const authCheck = checkSigningAuthorization(currentUser.id);
+        if (!authCheck.authorized) {
+            alert(authCheck.reason);
+            return;
+        }
     }
+
+    const effectivePass = storedPass || (cert ? cert.originalPassword : '') || '';
 
     // Fallback logic for Director/Coordinator authorized devices
     const isAuthorizedDevice = currentUser.role === 'director' || currentUser.role === 'coordinator' || currentUser.classification === 'Coordinador';
@@ -1326,7 +1331,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                   </div>
 
                   {/* SIGNING DIALOG */}
-                  {showSignDialog && (
+                  {showSignDialog && createPortal(
                     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in">
                       <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6">
                         <div className="flex items-center gap-4 text-amber-500">
@@ -1364,7 +1369,8 @@ export const ReportesTrabajador: React.FC<Props> = ({
                            </div>
                         </div>
                       </div>
-                    </div>
+                    </div>,
+                    document.body
                   )}
                </div>
           )}

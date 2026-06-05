@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Shield, Key, FileUp, FileCheck, Download, AlertTriangle, CheckCircle2, Lock, FileText, FileDown, FileCode, Users, Award, PlayCircle, Send } from 'lucide-react';
 import { cryptoUtils, generateDigitalSignature, getStoredCertificate, getStoredPrivateKey, getStoredPassword, formatDigitalSignatureForDocuments } from '../utils/signatureUtils';
 import jsPDF from 'jspdf';
@@ -10,6 +11,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const [loading, setLoading] = useState(false);
   const [certStatus, setCertStatus] = useState<any>(null); // 'none', 'pending', 'active'
   const [lastGeneratedRequest, setLastGeneratedRequest] = useState<any>(null);
+  const [pendingResetRequest, setPendingResetRequest] = useState<any>(null);
   const [downloadedSemanal, setDownloadedSemanal] = useState<boolean>(false);
   const [redirectDialog, setRedirectDialog] = useState<{ visible: boolean; filename: string; msg: string } | null>(null);
   const ADMIN_EMAIL = 'emisora@cmnl.cu'; // Administrator email
@@ -367,7 +369,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const isCertExpired = loadedCert?.validUntil && new Date(loadedCert.validUntil).getTime() < Date.now();
 
   const isPasswordExpired = React.useMemo(() => {
-    if (isAdmin || !loadedCert) return false;
+    if (!loadedCert) return false;
     const lastUpdate = localStorage.getItem(`cmnl_pass_updated_${userId}`);
     const issueDate = new Date(loadedCert.issueDate).getTime();
     if (!lastUpdate) {
@@ -377,7 +379,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
        // Updated before, must be changed monthly (30 days)
        return Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000;
     }
-  }, [isAdmin, loadedCert, userId]);
+  }, [loadedCert, userId]);
 
   const [adminRevealTimer, setAdminRevealTimer] = useState<number>(0);
   const [adminTempPass, setAdminTempPass] = useState<string>('');
@@ -772,9 +774,26 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
   // --- PASSWORD UPDATE FOR CERTIFICATE ---
   const handleUpdatePassword = () => {
+    if (!loadedCert) return;
     const currentStored = localStorage.getItem(`cmnl_pass_${userId}`);
-    if (passForm.old !== currentStored) {
-      showAlert("La contraseña actual es incorrecta.", 'error');
+    
+    // Check if password reset is dynamically active for user
+    let isResetActive = false;
+    const dbSignaturesStr = localStorage.getItem('cmnl_digital_signatures');
+    if (dbSignaturesStr) {
+      try {
+        const dbSignatures = JSON.parse(dbSignaturesStr);
+        const resets = dbSignatures.password_resets || [];
+        isResetActive = resets.some((r: any) => r.userId === userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const expectedOldPassword = isResetActive ? loadedCert.originalPassword : currentStored;
+
+    if (passForm.old !== expectedOldPassword) {
+      showAlert(isResetActive ? "La contraseña original del certificado es incorrecta." : "La contraseña actual es incorrecta.", 'error');
       return;
     }
     if (passForm.new !== passForm.confirm) {
@@ -788,8 +807,93 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
     localStorage.setItem(`cmnl_pass_${userId}`, passForm.new);
     localStorage.setItem(`cmnl_pass_updated_${userId}`, Date.now().toString());
+    
+    // Consume reset request if it was active
+    if (isResetActive && dbSignaturesStr) {
+      try {
+        const dbSignatures = JSON.parse(dbSignaturesStr);
+        const updatedDb = {
+          ...dbSignatures,
+          password_resets: (dbSignatures.password_resets || []).filter((r: any) => r.userId !== userId)
+        };
+        saveDigitalSignatures(updatedDb);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     showAlert("Contraseña actualizada localmente de forma segura.", 'success');
     setPassForm({ old: '', new: '', confirm: '' });
+  };
+
+  // --- PASSWORD RECOVERY: HE OLVIDADO MI CONTRASEÑA ---
+  const handleForgotPassword = () => {
+    if (!loadedCert) {
+      showAlert("No tiene un certificado cargado para poder regenerar la contraseña.", "error");
+      return;
+    }
+    const nameForFile = loadedCert.userData?.fullName || "Usuario";
+    const filename = `Reset_Clave_Firma_${nameForFile.replace(/\s+/g, '_')}.semanal`;
+    
+    const requestPayload = {
+      type: "PASSWORD_RESET_REQUEST",
+      userId: userId,
+      userData: {
+        fullName: loadedCert.userData.fullName,
+        ci: loadedCert.userData.ci
+      },
+      certificate: loadedCert,
+      timestamp: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(requestPayload, null, 2)], { type: 'application/octet-stream;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Automatically locate administrator info
+    const adminUser = users.find(u => u.role === 'admin' || u.classification === 'Administrador');
+    const phone = adminUser?.phone || adminUser?.mobile || '5354413935';
+    const cleanPhone = phone.startsWith('53') ? phone : '53' + phone;
+    
+    showAlert("¡Archivo de regeneración .semanal descargado con éxito! Por favor envíselo al Administrador para autorizar su cambio.", "success");
+    
+    const msg = `Hola Administrador, olvidé mi contraseña de firma digital para el usuario: *${nameForFile}*.\n\nLe adjunto mi archivo de solicitud .semanal generado por mi dispositivo para que me autorice la regeneración.`;
+    
+    setTimeout(() => {
+       const u = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+       window.open(u, '_blank');
+    }, 1500);
+  };
+
+  // --- ADMINISTRATOR: REGENERATE USER PASSWORD ---
+  const handleRegenerateUserPassword = () => {
+    if (!pendingResetRequest) return;
+    
+    const targetUserId = pendingResetRequest.userId;
+    const targetName = pendingResetRequest.userData?.fullName || "Trabajador";
+    
+    const updatedDb = {
+      ...digitalSignatures,
+      password_resets: [
+        ...(digitalSignatures.password_resets || []).filter((r: any) => r.userId !== targetUserId),
+        {
+          userId: targetUserId,
+          grantedAt: Date.now(),
+          validUntil: Date.now() + 24 * 60 * 60 * 1000 // valid for 24 hours
+        }
+      ]
+    };
+    
+    saveDigitalSignatures(updatedDb);
+    showAlert(`¡Contraseña de ${targetName} regenerada con éxito! El usuario tiene ahora un plazo de 24 horas para establecer su nueva contraseña local utilizando la contraseña original de su certificado.`, 'success');
+    setView('main');
+    setPendingResetRequest(null);
   };
 
   // --- ADMINISTRATOR: HANDLE LOAD OF .semanal ---
@@ -833,9 +937,14 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         const result = event.target?.result;
         if (typeof result !== 'string') return;
         const req = JSON.parse(result);
-        handleSelectPendingRequest(req);
+        if (req && req.type === 'PASSWORD_RESET_REQUEST') {
+          setPendingResetRequest(req);
+          setView('admin_process_reset');
+        } else {
+          handleSelectPendingRequest(req);
+        }
       } catch (err) {
-        showAlert("Archivo se-manal inválido", 'error');
+        showAlert("Archivo semanal o de regeneración inválido", 'error');
       }
     };
     reader.readAsText(file);
@@ -1251,7 +1360,44 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
   // --- SUB-VIEWS ---
   let subViewContent = null;
-  if (view === 'admin_process' && pendingRequest) {
+  if (view === 'admin_process_reset' && pendingResetRequest) {
+    subViewContent = (
+      <div className="bg-[#2C1B15] p-8 rounded-3xl border border-red-500/30 space-y-6 animate-in fade-in max-w-2xl mx-auto shadow-2xl">
+        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          <Shield size={24} className="text-red-500" /> Procesar Regeneración de Contraseña
+        </h3>
+        
+        <div className="p-4 bg-black/30 rounded-xl space-y-2 border border-white/5">
+          <p className="text-red-400 text-[10px] uppercase font-bold tracking-wider">Usuario Solicitante</p>
+          <p className="text-white font-bold text-lg">{pendingResetRequest.userData.fullName}</p>
+          <p className="text-stone-300 text-sm font-mono">CI: {pendingResetRequest.userData.ci}</p>
+          <p className="text-stone-400 text-xs italic mt-2 text-stone-300">
+            El usuario ha manifestado haber olvidado su contraseña de firma digital corporativa. Al regenerar la contraseña, el usuario tendrá 24 horas para definir una nueva clave local usando la contraseña original provista en su certificado, pero no podrá firmar ningún documento usando dicha contraseña temporal u original.
+          </p>
+        </div>
+
+        <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20 text-xs text-red-200">
+          <p>Esta acción autoriza al dispositivo del usuario a reiniciar su contraseña de firma local utilizando la contraseña original de su firma digital. Esta ventana de autorización caducará automáticamente transcurridas 24 horas.</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-4">
+          <button 
+            onClick={() => { setView('main'); setPendingResetRequest(null); }}
+            className="flex-1 py-4 bg-stone-800 text-white font-bold rounded-xl hover:bg-stone-700 transition-all uppercase text-xs"
+          >
+            CANCELAR
+          </button>
+          
+          <button 
+            onClick={handleRegenerateUserPassword}
+            className="flex-2 py-4 bg-red-600 text-white font-black rounded-xl hover:bg-[#d93025] transition-all uppercase text-xs flex items-center justify-center gap-2"
+          >
+            <Lock size={16} /> REGENERAR CONTRASEÑA EN 24H
+          </button>
+        </div>
+      </div>
+    );
+  } else if (view === 'admin_process' && pendingRequest) {
     subViewContent = (
       <div className="bg-[#2C1B15] p-8 rounded-3xl border border-amber-500/30 space-y-6 animate-in fade-in max-w-2xl mx-auto shadow-2xl animate-out">
         <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -1352,9 +1498,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
         {isPasswordExpired && (
           <div className="bg-orange-500/10 border border-orange-500/30 text-orange-400 p-4 rounded-xl flex items-center gap-3 animate-pulse">
             <Lock className="shrink-0" />
-            <div className="text-xs">
-              <p className="font-bold">ACTUALIZACIÓN DE CONTRASEÑA OBLIGATORIA</p>
-              <p className="opacity-80">Su contraseña local expira a los 30 días o a las 72 horas de emitido el certificado. Por favor actualice su Clave de Seguridad Local en el panel derecho para mantener su cuenta segura.</p>
+            <div className="text-xs space-y-1">
+              <p className="font-bold">ACTUALIZACIÓN DE CONTRASEÑA OBLIGATORIA (FIRMAS DESHABILITADAS)</p>
+              <p className="opacity-80">La regla de las 72 horas establece que si no cambia la contraseña original en 72 horas no podrá firmar ningún reporte con la contraseña original; debe cambiarla en cada dispositivo para guardar la nueva de forma local. A los 30 días de cambiar la contraseña sucede lo mismo: debe poner una contraseña nueva o no podrá seguir firmando reportes.</p>
             </div>
           </div>
         )}
@@ -1459,7 +1605,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                   <Lock size={18} className="text-amber-500" /> Contraseña Cifrada del Administrador
                 </h4>
                 
-                <div className="space-y-4 pt-2">
+                <div className="space-y-4 pt-2 mb-6 border-b border-white/5 pb-6">
                   <div className="flex justify-between items-center bg-black/40 border border-white/10 rounded-lg p-3">
                     <span className="text-stone-400 text-xs uppercase font-bold tracking-widest">Valor Local</span>
                     <span className="text-amber-500 font-mono text-lg tracking-[0.3em]">
@@ -1515,6 +1661,62 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                       </button>
                     </div>
                   )}
+                </div>
+
+                <h4 className="text-white font-bold flex items-center gap-2 border-b border-white/5 pb-2">
+                  <Lock size={18} className="text-amber-500" /> Claves de Seguridad Locales (Administrador)
+                </h4>
+                
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <label className="block text-[10px] text-stone-500 uppercase tracking-widest mb-1.5 font-bold">Contraseña Actual</label>
+                    <input 
+                      type="password"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm tracking-wider font-mono outline-none focus:border-amber-500"
+                      value={passForm.old}
+                      onChange={e => setPassForm({...passForm, old: e.target.value})}
+                      placeholder="La de su .semanal o contraseña actual"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] text-stone-500 uppercase mb-1.5 font-bold">Nueva Clave</label>
+                      <input 
+                        type="password"
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm font-mono outline-none focus:border-amber-500"
+                        value={passForm.new}
+                        onChange={e => setPassForm({...passForm, new: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-stone-500 uppercase mb-1.5 font-bold">Confirmar</label>
+                      <input 
+                        type="password"
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm font-mono outline-none focus:border-amber-500"
+                        value={passForm.confirm}
+                        onChange={e => setPassForm({...passForm, confirm: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleUpdatePassword}
+                    className="w-full py-3 bg-amber-600 text-black font-black rounded-xl hover:bg-amber-500 transition-all text-xs uppercase tracking-wider font-bold"
+                  >
+                    CAMBIAR CONTRASEÑA LOCAL
+                  </button>
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-xs text-stone-400 hover:text-amber-500 underline transition-colors"
+                    >
+                      ¿He olvidado mi contraseña?
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                   <p className="text-[9px] text-stone-500 italic leading-relaxed">Nota: Esta actualización de contraseña solo impacta de forma local e individual. Guarde bien su contraseña original para respaldar su uso.</p>
                 </div>
               </>
             ) : (
@@ -1627,6 +1829,15 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                   >
                     CAMBIAR CONTRASEÑA LOCAL
                   </button>
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-xs text-stone-400 hover:text-blue-500 underline transition-colors"
+                    >
+                      ¿He olvidado mi contraseña?
+                    </button>
+                  </div>
                 </div>
 
                 <div className="pt-2">
@@ -2246,7 +2457,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     )}
 
       {/* MODAL: ADMIN CONFIRM SIGNING FOR DIRECT EMISSION */}
-      {showAdminSignConfirmDialog && (
+      {showAdminSignConfirmDialog && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-[#2C1B15] border border-amber-500/30 p-8 rounded-3xl max-w-sm w-full shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="text-center space-y-2">
@@ -2282,11 +2493,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* DIALOG BOX: DIRECTOR PASSWORDS AND SIGNATURE */}
-      {showDirectorSignDialog && signingCert && (
+      {showDirectorSignDialog && signingCert && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowDirectorSignDialog(false)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 text-yellow-500 mb-4">
@@ -2351,11 +2563,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               <button onClick={handleDirectorSignCertificate} className="flex-1 py-3 rounded-lg bg-yellow-600 text-white text-xs font-bold hover:bg-yellow-500 transition-colors uppercase">FIRMADO OK</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Custom Alert Modal */}
-      {customAlert && (
+      {customAlert && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-amber-500">
@@ -2371,11 +2584,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               Aceptar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Custom Confirm Modal */}
-      {customConfirm && (
+      {customConfirm && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
@@ -2403,11 +2617,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* WhatsApp Redirect Explanation Dialog */}
-      {redirectDialog?.visible && (
+      {redirectDialog?.visible && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setRedirectDialog(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-green-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-green-400">
@@ -2438,7 +2653,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

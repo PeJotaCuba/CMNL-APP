@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Users, Upload, Download, RefreshCw, Edit2, Camera, Trash2, Share2, Search, FileText, AlertTriangle, Plus, Smartphone, Monitor, Shield } from 'lucide-react';
 import CMNLHeader from '../CMNLHeader';
 import ContentManagementSection from './ContentManagementSection';
@@ -743,7 +744,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
       </div>
 
       {/* Viewing Modal */}
-      {viewingMember && (
+      {viewingMember && createPortal(
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewingMember(null)}>
           <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setViewingMember(null)} className="absolute top-4 right-4 text-[#E8DCCF]/50 hover:text-white">
@@ -789,11 +790,12 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Editing Modal - Unified Team & User */}
-      {editingMember && isAdmin && (
+      {editingMember && isAdmin && createPortal(
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setEditingMember(null)}>
           <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-lg w-full relative my-auto" onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-white mb-4">Gestión de Personal: {editingMember.name}</h2>
@@ -1478,11 +1480,12 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Custom Confirm Modal */}
-      {customConfirm && (
+      {customConfirm && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
@@ -1510,11 +1513,12 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Custom Alert Modal */}
-      {customAlert && (
+      {customAlert && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className={`flex justify-center ${customAlert.type === 'error' ? 'text-red-500' : 'text-[#9E7649]'}`}>
@@ -1530,10 +1534,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               OK
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Admin Password Prompt for linking user */}
-      {adminPwdPrompt?.visible && (
+      {adminPwdPrompt?.visible && createPortal(
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 font-sans">
           <div className="bg-[#1A100C] border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative">
             <div className="flex flex-col mb-4 items-center">
@@ -1613,7 +1618,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

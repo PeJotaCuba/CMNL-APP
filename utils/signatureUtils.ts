@@ -200,3 +200,60 @@ export const getStoredPrivateKey = (userId: string) => {
 export const getStoredPassword = (userId: string) => {
     return localStorage.getItem(`cmnl_pass_${userId}`);
 };
+
+export const checkSigningAuthorization = (userId: string) => {
+    const certStr = localStorage.getItem(`cmnl_cert_${userId}`);
+    if (!certStr) {
+        return { authorized: false, reason: "No tiene un certificado de firma digital cargado en este equipo. Por favor, asegúrese de haber generado o cargado su firma digital en la sección de Firma Digital." };
+    }
+    
+    try {
+        const cert = JSON.parse(certStr);
+        if (cert.validUntil && new Date(cert.validUntil).getTime() < Date.now()) {
+            return { authorized: false, reason: "Su certificado de firma digital ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar." };
+        }
+        
+        const lastUpdate = localStorage.getItem(`cmnl_pass_updated_${userId}`);
+        const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
+        
+        // 1. Password Reset state is Checked first:
+        const dbSignaturesStr = localStorage.getItem('cmnl_digital_signatures');
+        if (dbSignaturesStr) {
+            try {
+                const dbSignatures = JSON.parse(dbSignaturesStr);
+                const resets = dbSignatures.password_resets || [];
+                const activeReset = resets.find((r: any) => r.userId === userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
+                if (activeReset) {
+                    return {
+                        authorized: false,
+                        reason: "Su contraseña de firma se encuentra en estado de REGENERACIÓN por olvido. Tiene una autorización temporal de 24 horas para definir una nueva contraseña local en la sección Firma Digital. No se le permite firmar reportes usando la contraseña original hasta completar el cambio."
+                    };
+                }
+            } catch (e) {
+                console.error("Error reading password_resets", e);
+            }
+        }
+
+        // 2. 72-hour rule: If they are using original password and 72 hours passed since issue
+        if (!lastUpdate) {
+            if (Date.now() - issueDate > 72 * 60 * 60 * 1000) {
+                return { 
+                    authorized: false, 
+                    reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 72 horas desde la emisión del certificado sin cambiar la contraseña original. No podrá firmar ningún reporte con la contraseña original; debe cambiarla en cada dispositivo para guardar la nueva de forma local." 
+                };
+            }
+        } else {
+            // 3. 30-day rule: If 30 days passed since last password update
+            if (Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000) {
+                return { 
+                    authorized: false, 
+                    reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 30 días desde la última actualización de su contraseña. Debe establecer una nueva contraseña local en la sección Firma Digital o no podrá seguir firmando reportes." 
+                };
+            }
+        }
+        
+        return { authorized: true };
+    } catch(e) {
+        return { authorized: false, reason: "Error al validar la contraseña y fecha del certificado." };
+    }
+};

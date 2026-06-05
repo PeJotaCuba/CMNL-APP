@@ -300,8 +300,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       localStorage.setItem('rcm_equipo_cmnl', JSON.stringify(data));
                   }
               }
-          } catch (error) {
-              console.error("Error fetching team data:", error);
+          } catch (error: any) {
+              const errorMsg = error?.message || String(error);
+              if (errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+                  console.warn("Could not fetch team data due to connection restrictions:", errorMsg);
+              } else {
+                  console.error("Error fetching team data:", error);
+              }
           }
       };
 
@@ -328,8 +333,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       localStorage.setItem('rcm_data_catalogo', JSON.stringify(data.catalogo));
                   }
               }
-          } catch (error) {
-              console.error("Error fetching catalog data:", error);
+          } catch (error: any) {
+              const errorMsg = error?.message || String(error);
+              if (errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+                  console.warn("Could not fetch catalog data due to connection restrictions:", errorMsg);
+              } else {
+                  console.error("Error fetching catalog data:", error);
+              }
           }
       };
       

@@ -847,8 +847,13 @@ const AppContent: React.FC = () => {
                                   setLocal('rcm_equipo_last_update', Date.now().toString());
                               }
                           }
-                      } catch (equipoError) {
-                          console.error("Error fetching equipo data during sync:", equipoError);
+                      } catch (equipoError: any) {
+                          const errorMsg = equipoError?.message || String(equipoError);
+                          if (errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+                              console.warn("Could not fetch remote sync equipo data:", errorMsg);
+                          } else {
+                              console.error("Error fetching equipo data during sync:", equipoError);
+                          }
                       }
                   }
 
@@ -939,8 +944,13 @@ const AppContent: React.FC = () => {
 
                   // Only set the modal state, the component will handle the acceptance and reload
                   setUpdateDetails({ show: true, content: detailsContent });
-              } catch (error) {
-                  console.error("Sync Error:", error);
+              } catch (error: any) {
+                  const errorMsg = error?.message || String(error);
+                  if (errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
+                      console.warn("Sync handled gracefully (Failed to fetch):", errorMsg);
+                  } else {
+                      console.error("Sync Error:", error);
+                  }
                   setConfirmAction({
                       title: "Error",
                       message: "Error de conexión. No se pudieron obtener los datos más recientes.",

@@ -3,7 +3,7 @@ import { User } from './types';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { getStoredPassword, getStoredCertificate, generateDigitalSignature, formatDigitalSignatureForDocuments } from '../../utils/signatureUtils';
+import { getStoredPassword, getStoredCertificate, generateDigitalSignature, formatDigitalSignatureForDocuments, checkSigningAuthorization } from '../../utils/signatureUtils';
 import { extractTextFromPDF } from './services/pdfService';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -55,13 +55,19 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
         }
 
         const globalUserId = (currentUser as any).id || currentUser.username;
+        const authCheck = checkSigningAuthorization(globalUserId);
+        if (!authCheck.authorized) {
+            alert(authCheck.reason);
+            return;
+        }
+
         const storedPass = getStoredPassword(globalUserId);
         const cert = getStoredCertificate(globalUserId);
 
-        const effectivePass = (cert && cert.originalPassword) ? cert.originalPassword : storedPass;
+        const effectivePass = storedPass || (cert ? cert.originalPassword : '') || '';
 
         if (!cert || signPass !== effectivePass) {
-            alert("Contraseña incorrecta o certificado no encontrado.");
+            alert("Contraseña de firma incorrecta.");
             return;
         }
 
