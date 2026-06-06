@@ -161,7 +161,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 }) => {
   const [activeReportType, setActiveReportType] = useState<'mensual' | 'economia' | 'incidental'>('mensual');
   const [activePeriod, setActivePeriod] = useState<'mensual' | 'trimestral' | 'semestral' | 'anual'>('mensual');
-  const [calculationMethod, setCalculationMethod] = useState<'system' | 'upload'>('system');
 
   // Archive States
   const [archiveMensual, setArchiveMensual] = useState<Record<string, any>>({});
@@ -169,6 +168,11 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   const [archiveIncidental, setArchiveIncidental] = useState<Record<string, any>>({});
   const [showArchiveManager, setShowArchiveManager] = useState<boolean>(false);
   const [archiveManagerType, setArchiveManagerType] = useState<'mensual' | 'economia' | 'incidental'>('mensual');
+
+  // Preview Uploaded Data
+  const [previewUploadedData, setPreviewUploadedData] = useState<any>(null);
+  const [previewMonthKey, setPreviewMonthKey] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<'mensual' | 'economia' | 'incidental' | null>(null);
 
   const handlePrevMonth = () => {
     const [year, month] = selectedMonthStr.split('-').map(Number);
@@ -339,33 +343,39 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
   const deleteFromArchive = (type: 'mensual' | 'economia' | 'incidental', monthKey: string) => {
     if (type === 'mensual') {
-      const updated = { ...archiveMensual };
-      delete updated[monthKey];
-      setArchiveMensual(updated);
-      localStorage.setItem('rcm_archive_mensual', JSON.stringify(updated));
+      setArchiveMensual(prev => {
+        const updated = { ...prev };
+        delete updated[monthKey];
+        localStorage.setItem('rcm_archive_mensual', JSON.stringify(updated));
+        return updated;
+      });
     } else if (type === 'economia') {
-      const updated = { ...archiveEconomia };
-      delete updated[monthKey];
-      setArchiveEconomia(updated);
-      localStorage.setItem('rcm_archive_economia', JSON.stringify(updated));
+      setArchiveEconomia(prev => {
+        const updated = { ...prev };
+        delete updated[monthKey];
+        localStorage.setItem('rcm_archive_economia', JSON.stringify(updated));
+        return updated;
+      });
     } else if (type === 'incidental') {
-      const updated = { ...archiveIncidental };
-      delete updated[monthKey];
-      setArchiveIncidental(updated);
-      localStorage.setItem('rcm_archive_incidental', JSON.stringify(updated));
+      setArchiveIncidental(prev => {
+        const updated = { ...prev };
+        delete updated[monthKey];
+        localStorage.setItem('rcm_archive_incidental', JSON.stringify(updated));
+        return updated;
+      });
     }
   };
 
   const getPeriodName = (mNum: number, yr: number, pType: string) => {
     if (pType === 'mensual') return `${MONTH_NAMES_SPANISH[mNum - 1].toUpperCase()} / ${yr}`;
     if (pType === 'trimestral') {
-      if (mNum <= 3) return `ENERO-MARZO / ${yr}`;
-      if (mNum <= 6) return `ABRIL-JUNIO / ${yr}`;
-      if (mNum <= 9) return `JULIO-SEPTIEMBRE / ${yr}`;
-      return `OCTUBRE-DICIEMBRE / ${yr}`;
+      if (mNum <= 3) return `1er TRIMESTRE (ENERO-MARZO) / ${yr}`;
+      if (mNum <= 6) return `2do TRIMESTRE (ABRIL-JUNIO) / ${yr}`;
+      if (mNum <= 9) return `3er TRIMESTRE (JULIO-SEPTIEMBRE) / ${yr}`;
+      return `4to TRIMESTRE (OCTUBRE-DICIEMBRE) / ${yr}`;
     }
     if (pType === 'semestral') {
-      return mNum <= 6 ? `1ER SEMESTRE / ${yr}` : `2DO SEMESTRE / ${yr}`;
+      return mNum <= 6 ? `1er SEMESTRE (ENERO-JUNIO) / ${yr}` : `2do SEMESTRE (JULIO-DICIEMBRE) / ${yr}`;
     }
     return `AÑO ${yr}`;
   };
@@ -375,65 +385,139 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     const doc = parser.parseFromString(html, 'text/html');
     const tables = doc.querySelectorAll('table');
     const dataSnap = {
-      totalWorks: 0,
-      cubaWorks: 0,
-      foreignWorks: 0,
-      totalAuthors: 0,
-      cubaAuthors: 0,
-      foreignAuthors: 0,
-      totalPerformers: 0,
-      cubaPerformers: 0,
-      foreignPerformers: 0
+      totalWorks: 0, cubaWorks: 0, foreignWorks: 0,
+      totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0,
+      totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0,
+      regions: {
+        'Latinoam. y del Caribe': { works: 0, authors: 0, performers: 0 },
+        'Norteamericana': { works: 0, authors: 0, performers: 0 },
+        'Europa': { works: 0, authors: 0, performers: 0 },
+        'Asia': { works: 0, authors: 0, performers: 0 },
+        'Africa': { works: 0, authors: 0, performers: 0 },
+        'Otras zonas': { works: 0, authors: 0, performers: 0 }
+      } as Record<string, any>,
+      topSongs: [] as any[],
+      topAuthors: [] as any[],
+      topPerformers: [] as any[],
+      topGenres: [] as any[]
     };
+
+    const clean = (val: string) => {
+      if (!val) return 0;
+      const num = val.replace(/[^\d]/g, '');
+      return parseInt(num) || 0;
+    };
+
+    let currentSection: 'stats' | 'songs' | 'authors' | 'performers' | 'genres' = 'stats';
 
     for (const table of Array.from(tables)) {
       const rows = Array.from(table.querySelectorAll('tr'));
-      let tableValid = false;
+      
       rows.forEach(row => {
-        const text = (row.textContent || '').toLowerCase().trim();
-        if (text.includes('obras') && text.includes('autores')) tableValid = true;
-      });
+        const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
+        const rowText = (row.textContent || '').toLowerCase();
+        
+        // Section detection based on row text
+        if (rowText.includes('obras musicales') && (rowText.includes('difundidas') || rowText.includes('difundidos'))) {
+          currentSection = 'songs';
+          return;
+        }
+        if ((rowText.includes('autores') || rowText.includes('autor')) && rowText.includes('difundidos') && !rowText.includes('obras')) {
+          currentSection = 'authors';
+          return;
+        }
+        if ((rowText.includes('intérpretes') || rowText.includes('interpretes')) && rowText.includes('difundidos')) {
+          currentSection = 'performers';
+          return;
+        }
+        if ((rowText.includes('géneros') || rowText.includes('generos')) && rowText.includes('difundidos')) {
+          currentSection = 'genres';
+          return;
+        }
+        if ((rowText.includes('zona') || rowText.includes('geográfica')) && (rowText.includes('obra') || rowText.includes('autor') || rowText.includes('interprete'))) {
+          currentSection = 'stats';
+          return;
+        }
 
-      if (tableValid) {
-        rows.forEach(row => {
-          const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
-          const rowText = (row.textContent || '').toLowerCase();
-          
-          if (cells.length >= 2) {
-            // Find which columns correspond to Works, Authors, Performers by looking at the header or just typical positions
-            // In 8-column layout: 1=Zona, 2=Works, 4=Authors, 6=Perf
-            // In 4-column layout: 0=Zona, 1=Works, 2=Authors, 3=Perf
-            let vIdx = -1, aIdx = -1, pIdx = -1;
-            
-            if (cells.length >= 8) { vIdx=2; aIdx=4; pIdx=6; }
-            else if (cells.length >= 7) { vIdx=2; aIdx=4; pIdx=6; }
-            else if (cells.length >= 4) { vIdx=1; aIdx=2; pIdx=3; }
-            else if (cells.length >= 3) { vIdx=1; aIdx=2; pIdx=-1; }
+        if (cells.length < 2) return;
 
-            const clean = (val: string) => parseInt(val?.replace(/\D/g, '') || '0') || 0;
+        if (currentSection === 'stats') {
+          let vIdx = -1, aIdx = -1, pIdx = -1;
+          if (cells.length >= 8) { vIdx=2; aIdx=4; pIdx=6; }
+          else if (cells.length === 7) { vIdx=1; aIdx=3; pIdx=5; } 
+          else if (cells.length === 6) { vIdx=1; aIdx=2; pIdx=3; }
+          else if (cells.length === 4) { vIdx=1; aIdx=2; pIdx=3; }
 
-            if (rowText.includes('cuba') && !rowText.includes('general')) {
-               if (vIdx !== -1) dataSnap.cubaWorks = clean(cells[vIdx]);
-               if (aIdx !== -1) dataSnap.cubaAuthors = clean(cells[aIdx]);
-               if (pIdx !== -1) dataSnap.cubaPerformers = clean(cells[pIdx]);
-            } else if ((rowText.includes('extranj') || rowText.includes('foreign')) && !rowText.includes('latam') && !rowText.includes('latino')) {
-               if (vIdx !== -1) dataSnap.foreignWorks = clean(cells[vIdx]);
-               if (aIdx !== -1) dataSnap.foreignAuthors = clean(cells[aIdx]);
-               if (pIdx !== -1) dataSnap.foreignPerformers = clean(cells[pIdx]);
-            } else if (rowText.includes('total general') || (cells.length < 5 && rowText.includes('total'))) {
-               if (vIdx !== -1) dataSnap.totalWorks = clean(cells[vIdx]);
-               if (aIdx !== -1) dataSnap.totalAuthors = clean(cells[aIdx]);
-               if (pIdx !== -1) dataSnap.totalPerformers = clean(cells[pIdx]);
-            }
+          if (vIdx === -1) return;
+
+          if (rowText.includes('cuban') || (rowText.includes('cuba') && !rowText.includes('norteamerica'))) {
+             dataSnap.cubaWorks = Math.max(dataSnap.cubaWorks, clean(cells[vIdx]));
+             if (aIdx !== -1 && aIdx < cells.length) dataSnap.cubaAuthors = Math.max(dataSnap.cubaAuthors, clean(cells[aIdx]));
+             if (pIdx !== -1 && pIdx < cells.length) dataSnap.cubaPerformers = Math.max(dataSnap.cubaPerformers, clean(cells[pIdx]));
+          } else if (rowText.includes('extranjer') || rowText.includes('foreign')) {
+             dataSnap.foreignWorks = Math.max(dataSnap.foreignWorks, clean(cells[vIdx]));
+             if (aIdx !== -1 && aIdx < cells.length) dataSnap.foreignAuthors = Math.max(dataSnap.foreignAuthors, clean(cells[aIdx]));
+             if (pIdx !== -1 && pIdx < cells.length) dataSnap.foreignPerformers = Math.max(dataSnap.foreignPerformers, clean(cells[pIdx]));
+          } else if (rowText.includes('total general')) {
+             dataSnap.totalWorks = Math.max(dataSnap.totalWorks, clean(cells[vIdx]));
+             if (aIdx !== -1 && aIdx < cells.length) dataSnap.totalAuthors = Math.max(dataSnap.totalAuthors, clean(cells[aIdx]));
+             if (pIdx !== -1 && pIdx < cells.length) dataSnap.totalPerformers = Math.max(dataSnap.totalPerformers, clean(cells[pIdx]));
+          } else {
+             // Regional rows
+             Object.keys(dataSnap.regions).forEach(reg => {
+               const rKey = reg.toLowerCase().substring(0, 8);
+               if (rowText.includes(rKey)) {
+                  dataSnap.regions[reg].works = clean(cells[vIdx]);
+                  if (aIdx !== -1 && aIdx < cells.length) dataSnap.regions[reg].authors = clean(cells[aIdx]);
+                  if (pIdx !== -1 && pIdx < cells.length) dataSnap.regions[reg].performers = clean(cells[pIdx]);
+               }
+             });
           }
-        });
-        if (dataSnap.cubaWorks || dataSnap.foreignWorks) break;
-      }
+        } else if (currentSection === 'songs') {
+           if (cells.length >= 6 && !isNaN(parseInt(cells[0]))) {
+              // No, Titulo, Interprete, Nac, Autor, Nac, Exec
+              dataSnap.topSongs.push({
+                track: {
+                  title: cells[1],
+                  performer: cells[2],
+                  performerCountry: cells[3],
+                  author: cells[4],
+                  authorCountry: cells[5]
+                },
+                count: clean(cells[cells.length - 1])
+              });
+           }
+        } else if (currentSection === 'authors') {
+           if (cells.length >= 4 && !isNaN(parseInt(cells[0]))) {
+             dataSnap.topAuthors.push({
+               name: cells[1],
+               nac: cells[2],
+               execs: clean(cells[cells.length - 1])
+             });
+           }
+        } else if (currentSection === 'performers') {
+           if (cells.length >= 4 && !isNaN(parseInt(cells[0]))) {
+             dataSnap.topPerformers.push({
+               name: cells[1],
+               nac: cells[2],
+               execs: clean(cells[cells.length - 1])
+             });
+           }
+        } else if (currentSection === 'genres') {
+           if (cells.length >= 4 && !isNaN(parseInt(cells[0]))) {
+             dataSnap.topGenres.push({
+               name: cells[1],
+               execs: clean(cells[cells.length - 1])
+             });
+           }
+        }
+      });
     }
     
     if (!dataSnap.totalWorks) dataSnap.totalWorks = dataSnap.cubaWorks + dataSnap.foreignWorks;
     if (!dataSnap.totalAuthors) dataSnap.totalAuthors = dataSnap.cubaAuthors + dataSnap.foreignAuthors;
     if (!dataSnap.totalPerformers) dataSnap.totalPerformers = dataSnap.cubaPerformers + dataSnap.foreignPerformers;
+    
     return dataSnap;
   };
 
@@ -453,40 +537,66 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       incidentalesTotal: 0
     };
 
-    const clean = (val: string) => parseInt(val?.replace(/\D/g, '') || '0') || 0;
+    const clean = (val: string) => {
+      if (!val || val === '-') return 0;
+      const num = val.replace(/[^\d]/g, '');
+      return parseInt(num) || 0;
+    };
 
+    // 1. Try tables
     for (const table of Array.from(tables)) {
-      const rows = table.querySelectorAll('tr');
-      let looksLikeEco = false;
+      const rows = Array.from(table.querySelectorAll('tr'));
       rows.forEach(row => {
-        const text = (row.textContent || '').toLowerCase();
-        if (text.includes('obras completa') || text.includes('instrumental') || text.includes('incidental')) looksLikeEco = true;
-      });
-
-      if (looksLikeEco) {
-        rows.forEach(row => {
-          const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
-          const title = (cells[0] || '').toLowerCase();
-          
-          if (cells.length >= 2) {
-            if (title.includes('completa')) {
-              dataSnap.completasCubana = clean(cells[1]);
-              dataSnap.completasExtranjera = cells[2] ? clean(cells[2]) : 0;
-              dataSnap.completasTotal = cells[3] ? clean(cells[3]) : (dataSnap.completasCubana + dataSnap.completasExtranjera);
-            } else if (title.includes('instrumental')) {
-              dataSnap.instrumentalesCubana = clean(cells[1]);
-              dataSnap.instrumentalesExtranjera = (cells[2] && !cells[2].includes('-')) ? clean(cells[2]) : 0;
-              dataSnap.instrumentalesTotal = cells[3] ? clean(cells[3]) : (dataSnap.instrumentalesCubana + dataSnap.instrumentalesExtranjera);
-            } else if (title.includes('incidental')) {
-              dataSnap.incidentalesCubana = clean(cells[1]);
-              dataSnap.incidentalesExtranjera = (cells[2] && !cells[2].includes('-')) ? clean(cells[2]) : 0;
-              dataSnap.incidentalesTotal = cells[3] ? clean(cells[3]) : (dataSnap.incidentalesCubana + dataSnap.incidentalesExtranjera);
-            }
+        const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
+        const title = (cells[0] || '').toLowerCase();
+        
+        if (cells.length >= 2) {
+          if (title.includes('completa')) {
+            dataSnap.completasCubana = clean(cells[1]);
+            dataSnap.completasExtranjera = (cells.length > 2) ? clean(cells[2]) : 0;
+            dataSnap.completasTotal = (cells.length > 3) ? clean(cells[3]) : (dataSnap.completasCubana + dataSnap.completasExtranjera);
+          } else if (title.includes('instrumental')) {
+            dataSnap.instrumentalesCubana = clean(cells[1]);
+            dataSnap.instrumentalesExtranjera = (cells.length > 2) ? clean(cells[2]) : 0;
+            dataSnap.instrumentalesTotal = (cells.length > 3) ? clean(cells[3]) : (dataSnap.instrumentalesCubana + dataSnap.instrumentalesExtranjera);
+          } else if (title.includes('incidental')) {
+            dataSnap.incidentalesCubana = clean(cells[1]);
+            dataSnap.incidentalesExtranjera = (cells.length > 2) ? clean(cells[2]) : 0;
+            dataSnap.incidentalesTotal = (cells.length > 3) ? clean(cells[3]) : (dataSnap.incidentalesCubana + dataSnap.incidentalesExtranjera);
           }
-        });
-        if (dataSnap.completasTotal || dataSnap.instrumentalesTotal) break;
-      }
+        }
+      });
     }
+
+    // 2. Try text regex if tables are empty
+    if (!dataSnap.completasTotal) {
+      const lines = doc.body.innerText.split('\n').map(l => l.trim()).filter(Boolean);
+      lines.forEach(line => {
+        const lower = line.toLowerCase();
+        const parts = line.split(/\s+/).filter(p => !isNaN(clean(p)) || p === '-').map(p => clean(p));
+        
+        if (lower.includes('completas')) {
+          if (parts.length >= 2) {
+            dataSnap.completasCubana = parts[0];
+            dataSnap.completasExtranjera = parts[1];
+            dataSnap.completasTotal = parts[2] || (parts[0] + parts[1]);
+          }
+        } else if (lower.includes('instrumentales')) {
+          if (parts.length >= 2) {
+            dataSnap.instrumentalesCubana = parts[0];
+            dataSnap.instrumentalesExtranjera = parts[1];
+            dataSnap.instrumentalesTotal = parts[2] || (parts[0] + parts[1]);
+          }
+        } else if (lower.includes('incidentales')) {
+          if (parts.length >= 2) {
+            dataSnap.incidentalesCubana = parts[0];
+            dataSnap.incidentalesExtranjera = parts[1];
+            dataSnap.incidentalesTotal = parts[2] || (parts[0] + parts[1]);
+          }
+        }
+      });
+    }
+
     return dataSnap;
   };
 
@@ -513,61 +623,63 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       }
     };
 
-    const clean = (val: string) => parseInt(val?.replace(/\D/g, '') || '0') || 0;
+    const clean = (val: string) => {
+      if (!val) return 0;
+      const num = val.replace(/[^\d]/g, '');
+      return parseInt(num) || 0;
+    };
 
     for (const table of Array.from(tables)) {
-      const rows = table.querySelectorAll('tr');
-      let hasIncidentalSignature = false;
+      const rows = Array.from(table.querySelectorAll('tr'));
       rows.forEach(row => {
-        const text = row.textContent || '';
-        if (text.toLowerCase().includes('latinoamérica') || text.toLowerCase().includes('europa') || text.toLowerCase().includes('obras, autores e intérpretes')) {
-          hasIncidentalSignature = true;
-        }
-      });
+        const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
+        const rowText = (row.textContent || '').toLowerCase();
+        
+        if (cells.length >= 4) {
+          // Columns: No (0), Zonas (1), Cant. Obras (2), % (3), Cant. Autores (4), % (5)
+          const wIdx = cells.length >= 6 ? 2 : 1;
+          const wPctIdx = wIdx + 1;
+          const aIdx = wPctIdx + 1;
+          const aPctIdx = aIdx + 1;
 
-      if (hasIncidentalSignature) {
-        rows.forEach(row => {
-          const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
-          if (cells.length >= 6) {
-            const zona = cells[1].toLowerCase();
-            if (zona.includes('cuba')) {
-              dataSnap.cubaWorksCount = clean(cells[2]);
-              dataSnap.cubaPct = cells[3];
-              dataSnap.cubaAuthors = clean(cells[4]);
-              dataSnap.cubaAuthorsPct = cells[5];
-            } else if (zona.includes('extranjera')) {
-              dataSnap.foreignWorksCount = clean(cells[2]);
-              dataSnap.foreignPct = cells[3];
-              dataSnap.foreignAuthors = clean(cells[4]);
-              dataSnap.foreignAuthorsPct = cells[5];
-            } else if (zona.includes('total general')) {
-              dataSnap.totalWorks = clean(cells[2]);
-              dataSnap.totalAuthors = clean(cells[4]);
-            } else if (zona.includes('latinoamérica')) {
-              dataSnap.regions.latam.works = clean(cells[2]);
-              dataSnap.regions.latam.pct = cells[3];
-              dataSnap.regions.latam.authors = clean(cells[4]);
-              dataSnap.regions.latam.authorsPct = cells[5];
-            } else if (zona.includes('norteamerica') || zona.includes('norteamérica')) {
-              dataSnap.regions.norte.works = clean(cells[2]);
-              dataSnap.regions.norte.pct = cells[3];
-              dataSnap.regions.norte.authors = clean(cells[4]);
-              dataSnap.regions.norte.authorsPct = cells[5];
-            } else if (zona.includes('europa')) {
-              dataSnap.regions.europa.works = clean(cells[2]);
-              dataSnap.regions.europa.pct = cells[3];
-              dataSnap.regions.europa.authors = clean(cells[4]);
-              dataSnap.regions.europa.authorsPct = cells[5];
-            } else if (zona.includes('otras') || zona.includes('otras zonas')) {
-              dataSnap.regions.otras.works = clean(cells[2]);
-              dataSnap.regions.otras.pct = cells[3];
-              dataSnap.regions.otras.authors = clean(cells[4]);
-              dataSnap.regions.otras.authorsPct = cells[5];
+          if (rowText.includes('cuban') || (rowText.includes('cuba') && !rowText.includes('norteamerica'))) {
+            dataSnap.cubaWorksCount = clean(cells[wIdx]);
+            dataSnap.cubaPct = cells[wPctIdx] || '0';
+            dataSnap.cubaAuthors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+            dataSnap.cubaAuthorsPct = (cells.length > aPctIdx) ? cells[aPctIdx] : '0';
+          } else if (rowText.includes('extranjer') || rowText.includes('foreign')) {
+            dataSnap.foreignWorksCount = clean(cells[wIdx]);
+            dataSnap.foreignPct = cells[wPctIdx] || '0';
+            dataSnap.foreignAuthors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+            dataSnap.foreignAuthorsPct = (cells.length > aPctIdx) ? cells[aPctIdx] : '0';
+          } else if (rowText.includes('total general')) {
+            dataSnap.totalWorks = clean(cells[wIdx]);
+            dataSnap.totalAuthors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+          } else if (rowText.includes('latinoam') || rowText.includes('caribe')) {
+            dataSnap.regions.latam.works = clean(cells[wIdx]);
+            dataSnap.regions.latam.pct = cells[wPctIdx] || '0';
+            dataSnap.regions.latam.authors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+            dataSnap.regions.latam.authorsPct = (cells.length > aPctIdx) ? cells[aPctIdx] : '0';
+          } else if (rowText.includes('norteameri')) {
+            dataSnap.regions.norte.works = clean(cells[wIdx]);
+            dataSnap.regions.norte.pct = cells[wPctIdx] || '0';
+            dataSnap.regions.norte.authors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+            dataSnap.regions.norte.authorsPct = (cells.length > aPctIdx) ? cells[aPctIdx] : '0';
+          } else if (rowText.includes('europa')) {
+            dataSnap.regions.europa.works = clean(cells[wIdx]);
+            dataSnap.regions.europa.pct = cells[wPctIdx] || '0';
+            dataSnap.regions.europa.authors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+            dataSnap.regions.europa.authorsPct = (cells.length > aPctIdx) ? cells[aPctIdx] : '0';
+          } else if (rowText.includes('otras') || rowText.includes('zona')) {
+            if (rowText.includes('otras')) {
+              dataSnap.regions.otras.works = clean(cells[wIdx]);
+              dataSnap.regions.otras.pct = cells[wPctIdx] || '0';
+              dataSnap.regions.otras.authors = (cells.length > aIdx) ? clean(cells[aIdx]) : 0;
+              dataSnap.regions.otras.authorsPct = (cells.length > aPctIdx) ? cells[aPctIdx] : '0';
             }
           }
-        });
-        break;
-      }
+        }
+      });
     }
     return dataSnap;
   };
@@ -662,13 +774,13 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     }
   };
 
-  const handleUploadDocxForMonth = (monthStr: string, file: File, type: 'mensual' | 'economia' | 'incidental') => {
+  const handleUploadDocxForPreview = (mKey: string, file: File, type: 'mensual' | 'economia' | 'incidental') => {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const arrayBuffer = e.target?.result as ArrayBuffer;
       if (!arrayBuffer) return;
       try {
-        const result = await mammoth.convertToHtml({ arrayBuffer }); console.log("MAMMOTH DUMP:", result.value);
+        const result = await mammoth.convertToHtml({ arrayBuffer });
         const html = result.value;
         let finalParsed = {};
         if (type === "mensual") {
@@ -678,8 +790,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         } else if (type === "incidental") {
           finalParsed = parseIncidentalDocx(html);
         }
-        saveToArchive(type, monthStr, finalParsed);
-        alert(`Informe cargado para ${monthStr}.\nDatos detectados: ` + JSON.stringify(finalParsed, null, 2));
+        
+        setPreviewUploadedData(finalParsed);
+        setPreviewMonthKey(mKey);
+        setPreviewType(type);
       } catch (err) {
         console.error(err);
         alert("Error al procesar el archivo: " + (err?.message || err));
@@ -906,31 +1020,36 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   };
 
   // STATS CALCULATIONS FOR MONTHLY MUSIC REPORT
-  const totalWorksCount = allTracks.length;
-  const cubanWorks = allTracks.filter(isCubaWork);
-  const foreignWorks = allTracks.filter(t => !isCubaWork(t));
+  const archivedMensualData = (activePeriod === 'mensual') ? archiveMensual[selectedMonthStr] : null;
 
-  const totalWorksCuba = cubanWorks.length;
-  const totalWorksForeign = foreignWorks.length;
+  const totalWorksCount = archivedMensualData ? archivedMensualData.totalWorks : allTracks.length;
+  const cubanWorks = archivedMensualData ? [] : allTracks.filter(isCubaWork);
+  const foreignWorks = archivedMensualData ? [] : allTracks.filter(t => !isCubaWork(t));
+
+  const totalWorksCuba = archivedMensualData ? archivedMensualData.cubaWorks : cubanWorks.length;
+  const totalWorksForeign = archivedMensualData ? archivedMensualData.foreignWorks : foreignWorks.length;
 
   // Unique authors
   const uniqueAuthorsList = Array.from(new Set(allTracks.map(t => t.author).filter(Boolean)));
-  const cubanAuthorsCount = uniqueAuthorsList.filter(name => {
+  const cubanAuthorsCount = archivedMensualData ? archivedMensualData.cubaAuthors : uniqueAuthorsList.filter(name => {
     const matchingTracks = allTracks.filter(t => t.author === name);
     return matchingTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
   }).length;
-  const foreignAuthorsCount = uniqueAuthorsList.length - cubanAuthorsCount;
+  const foreignAuthorsCount = archivedMensualData ? archivedMensualData.foreignAuthors : (uniqueAuthorsList.length - cubanAuthorsCount);
 
   // Unique performers
   const uniquePerformersList = Array.from(new Set(allTracks.map(t => t.performer).filter(Boolean)));
-  const cubanPerformersCount = uniquePerformersList.filter(name => {
+  const cubanPerformersCount = archivedMensualData ? archivedMensualData.cubaPerformers : uniquePerformersList.filter(name => {
     const matchingTracks = allTracks.filter(t => t.performer === name);
     return matchingTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
   }).length;
-  const foreignPerformersCount = uniquePerformersList.length - cubanPerformersCount;
+  const foreignPerformersCount = archivedMensualData ? archivedMensualData.foreignPerformers : (uniquePerformersList.length - cubanPerformersCount);
 
   // PERIOD CALCULATION METHODS & ARCHIVES CONSOLIDATOR
   const calculateLiveMensualForMonth = (mStr: string) => {
+    // Priority: Archive
+    if (archiveMensual[mStr]) return archiveMensual[mStr];
+
     const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mStr));
     const tracks = prods.flatMap(p => p.tracks || []).filter(Boolean);
     const totalWorks = tracks.length;
@@ -966,6 +1085,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   };
 
   const getIncidentalStatsForMonth = (y: number, m: number) => {
+    const mStr = `${y}-${String(m).padStart(2, '0')}`;
+    if (archiveIncidental[mStr]) return archiveIncidental[mStr];
+
     let cubaWorksCount = 0;
     let cubaAuthors = new Set<string>();
     let foreignWorksCount = 0;
@@ -1058,15 +1180,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     const economiaAgg = { completasCubana: 0, completasExtranjera: 0, completasTotal: 0, instrumentalesCubana: 0, instrumentalesExtranjera: 0, instrumentalesTotal: 0, incidentalesCubana: 0, incidentalesExtranjera: 0, incidentalesTotal: 0 };
     const incidentalAgg = { cubaWorksCount: 0, cubaAuthors: 0, cubaPct: 0, cubaAuthorsPct: 0, foreignWorksCount: 0, foreignAuthors: 0, foreignPct: 0, foreignAuthorsPct: 0, totalWorks: 0, totalAuthors: 0, regions: { latam: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, norte: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, europa: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, otras: { works: 0, pct: 0, authors: 0, authorsPct: 0 } } };
 
-    let anyUploaded = false;
-
     months.forEach(mKey => {
       // 1. Mensual
       let mData = archiveMensual[mKey];
-      if (mData) {
-        anyUploaded = true;
-      }
-      if (!mData && calculationMethod === 'system') mData = calculateLiveMensualForMonth(mKey);
+      if (!mData && activePeriod === 'mensual') mData = calculateLiveMensualForMonth(mKey);
       if (mData) {
         mensalAgg.totalWorks += mData.totalWorks || 0;
         mensalAgg.cubaWorks += mData.cubaWorks || 0;
@@ -1081,10 +1198,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
       // 2. Economia
       let eData = archiveEconomia[mKey];
-      if (eData) {
-        anyUploaded = true;
-      }
-      if (!eData && calculationMethod === 'system') {
+      if (!eData && activePeriod === 'mensual') {
         const [yr, mn] = mKey.split('-').map(Number);
         const weekdays = countDaysInMonth(yr, mn, [1, 2, 3, 4, 5]);
         const mVal = mData || calculateLiveMensualForMonth(mKey);
@@ -1115,10 +1229,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
       // 3. Incidental
       let iData = archiveIncidental[mKey];
-      if (iData) {
-        anyUploaded = true;
-      }
-      if (!iData && calculationMethod === 'system') {
+      if (!iData && activePeriod === 'mensual') {
         const [yr, mn] = mKey.split('-').map(Number);
         iData = getIncidentalStatsForMonth(yr, mn);
       }
@@ -1160,73 +1271,64 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     const liveInc = getIncidentalStatsForMonth(selectedYear, selectedMonthNum);
 
-    // If calculationMethod is upload and no files are uploaded, return zeroes
-    if (calculationMethod === 'upload' && !anyUploaded) {
-      return {
-        mensual: { totalWorks: 0, cubaWorks: 0, foreignWorks: 0, totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0, totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0 },
-        economia: { completasCubana: 0, completasExtranjera: 0, completasTotal: 0, instrumentalesCubana: 0, instrumentalesExtranjera: 0, instrumentalesTotal: 0, incidentalesCubana: 0, incidentalesExtranjera: 0, incidentalesTotal: 0 },
-        incidental: { cubaWorksCount: 0, cubaPct: 0, cubaAuthors: 0, cubaAuthorsPct: 0, foreignWorksCount: 0, foreignPct: 0, foreignAuthors: 0, foreignAuthorsPct: 0, totalWorks: 0, totalAuthors: 0, regions: { latam: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, norte: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, europa: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, otras: { works: 0, pct: 0, authors: 0, authorsPct: 0 } } }
-      };
-    }
-
     return {
       mensual: {
-        totalWorks: mensalAgg.totalWorks || (calculationMethod === 'system' ? totalWorksCount : 0),
-        cubaWorks: mensalAgg.cubaWorks || (calculationMethod === 'system' ? totalWorksCuba : 0),
-        foreignWorks: mensalAgg.foreignWorks || (calculationMethod === 'system' ? totalWorksForeign : 0),
-        totalAuthors: mensalAgg.totalAuthors || (calculationMethod === 'system' ? uniqueAuthorsList.length : 0),
-        cubaAuthors: mensalAgg.cubaAuthors || (calculationMethod === 'system' ? cubanAuthorsCount : 0),
-        foreignAuthors: mensalAgg.foreignAuthors || (calculationMethod === 'system' ? foreignAuthorsCount : 0),
-        totalPerformers: mensalAgg.totalPerformers || (calculationMethod === 'system' ? uniquePerformersList.length : 0),
-        cubaPerformers: mensalAgg.cubaPerformers || (calculationMethod === 'system' ? cubanPerformersCount : 0),
-        foreignPerformers: mensalAgg.foreignPerformers || (calculationMethod === 'system' ? foreignPerformersCount : 0),
+        totalWorks: mensalAgg.totalWorks || totalWorksCount,
+        cubaWorks: mensalAgg.cubaWorks || totalWorksCuba,
+        foreignWorks: mensalAgg.foreignWorks || totalWorksForeign,
+        totalAuthors: mensalAgg.totalAuthors || uniqueAuthorsList.length,
+        cubaAuthors: mensalAgg.cubaAuthors || cubanAuthorsCount,
+        foreignAuthors: mensalAgg.foreignAuthors || foreignAuthorsCount,
+        totalPerformers: mensalAgg.totalPerformers || uniquePerformersList.length,
+        cubaPerformers: mensalAgg.cubaPerformers || cubanPerformersCount,
+        foreignPerformers: mensalAgg.foreignPerformers || foreignPerformersCount,
       },
       economia: {
-        completasCubana: economiaAgg.completasCubana || (calculationMethod === 'system' ? totalWorksCuba : 0),
-        completasExtranjera: economiaAgg.completasExtranjera || (calculationMethod === 'system' ? totalWorksForeign : 0),
-        completasTotal: economiaAgg.completasTotal || (calculationMethod === 'system' ? totalWorksCount : 0),
-        instrumentalesCubana: calculationMethod === 'system' ? (economiaAgg.instrumentalesCubana || intCubanaCount()) : economiaAgg.instrumentalesCubana,
-        instrumentalesExtranjera: 0,
-        instrumentalesTotal: calculationMethod === 'system' ? (economiaAgg.instrumentalesTotal || intCubanaCount()) : economiaAgg.instrumentalesTotal,
-        incidentalesCubana: economiaAgg.incidentalesCubana || (calculationMethod === 'system' ? liveInc.totalWorks : 0),
-        incidentalesExtranjera: 0,
-        incidentalesTotal: economiaAgg.incidentalesTotal || (calculationMethod === 'system' ? liveInc.totalWorks : 0)
+        completasCubana: economiaAgg.completasCubana || totalWorksCuba,
+        completasExtranjera: economiaAgg.completasExtranjera || totalWorksForeign,
+        completasTotal: economiaAgg.completasTotal || totalWorksCount,
+        instrumentalesCubana: economiaAgg.instrumentalesCubana || intCubanaCount(),
+        instrumentalesExtranjera: economiaAgg.instrumentalesExtranjera || 0,
+        instrumentalesTotal: economiaAgg.instrumentalesTotal || intCubanaCount(),
+        incidentalesCubana: economiaAgg.incidentalesCubana || liveInc.totalWorks,
+        incidentalesExtranjera: economiaAgg.incidentalesExtranjera || 0,
+        incidentalesTotal: economiaAgg.incidentalesTotal || liveInc.totalWorks
       },
       incidental: {
-        cubaWorksCount: incidentalAgg.cubaWorksCount || (calculationMethod === 'system' ? liveInc.cubaWorksCount : 0),
-        cubaPct: incidentalAgg.cubaPct || (calculationMethod === 'system' ? liveInc.cubaPct : 0),
-        cubaAuthors: incidentalAgg.cubaAuthors || (calculationMethod === 'system' ? liveInc.cubaAuthors : 0),
-        cubaAuthorsPct: incidentalAgg.cubaAuthorsPct || (calculationMethod === 'system' ? liveInc.cubaAuthorsPct : 0),
-        foreignWorksCount: incidentalAgg.foreignWorksCount || (calculationMethod === 'system' ? liveInc.foreignWorksCount : 0),
-        foreignPct: incidentalAgg.foreignPct || (calculationMethod === 'system' ? liveInc.foreignPct : 0),
-        foreignAuthors: incidentalAgg.foreignAuthors || (calculationMethod === 'system' ? liveInc.foreignAuthors : 0),
-        foreignAuthorsPct: incidentalAgg.foreignAuthorsPct || (calculationMethod === 'system' ? liveInc.foreignAuthorsPct : 0),
-        totalWorks: incidentalAgg.totalWorks || (calculationMethod === 'system' ? liveInc.totalWorks : 0),
-        totalAuthors: incidentalAgg.totalAuthors || (calculationMethod === 'system' ? liveInc.totalAuthors : 0),
+        cubaWorksCount: incidentalAgg.cubaWorksCount || liveInc.cubaWorksCount,
+        cubaPct: incidentalAgg.cubaPct || liveInc.cubaPct,
+        cubaAuthors: incidentalAgg.cubaAuthors || liveInc.cubaAuthors,
+        cubaAuthorsPct: incidentalAgg.cubaAuthorsPct || liveInc.cubaAuthorsPct,
+        foreignWorksCount: incidentalAgg.foreignWorksCount || liveInc.foreignWorksCount,
+        foreignPct: incidentalAgg.foreignPct || liveInc.foreignPct,
+        foreignAuthors: incidentalAgg.foreignAuthors || liveInc.foreignAuthors,
+        foreignAuthorsPct: incidentalAgg.foreignAuthorsPct || liveInc.foreignAuthorsPct,
+        totalWorks: incidentalAgg.totalWorks || liveInc.totalWorks,
+        totalAuthors: incidentalAgg.totalAuthors || liveInc.totalAuthors,
         regions: {
           latam: {
-            works: incidentalAgg.regions.latam.works || (calculationMethod === 'system' ? liveInc.regions.latam.works : 0),
-            pct: incidentalAgg.regions.latam.pct || (calculationMethod === 'system' ? liveInc.regions.latam.pct : 0),
-            authors: incidentalAgg.regions.latam.authors || (calculationMethod === 'system' ? liveInc.regions.latam.authors : 0),
-            authorsPct: incidentalAgg.regions.latam.authorsPct || (calculationMethod === 'system' ? liveInc.regions.latam.authorsPct : 0)
+            works: incidentalAgg.regions.latam.works || liveInc.regions.latam.works,
+            pct: incidentalAgg.regions.latam.pct || liveInc.regions.latam.pct,
+            authors: incidentalAgg.regions.latam.authors || liveInc.regions.latam.authors,
+            authorsPct: incidentalAgg.regions.latam.authorsPct || liveInc.regions.latam.authorsPct
           },
           norte: {
-            works: incidentalAgg.regions.norte.works || (calculationMethod === 'system' ? liveInc.regions.norte.works : 0),
-            pct: incidentalAgg.regions.norte.pct || (calculationMethod === 'system' ? liveInc.regions.norte.pct : 0),
-            authors: incidentalAgg.regions.norte.authors || (calculationMethod === 'system' ? liveInc.regions.norte.authors : 0),
-            authorsPct: incidentalAgg.regions.norte.authorsPct || (calculationMethod === 'system' ? liveInc.regions.norte.authorsPct : 0)
+            works: incidentalAgg.regions.norte.works || liveInc.regions.norte.works,
+            pct: incidentalAgg.regions.norte.pct || liveInc.regions.norte.pct,
+            authors: incidentalAgg.regions.norte.authors || liveInc.regions.norte.authors,
+            authorsPct: incidentalAgg.regions.norte.authorsPct || liveInc.regions.norte.authorsPct
           },
           europa: {
-            works: incidentalAgg.regions.europa.works || (calculationMethod === 'system' ? liveInc.regions.europa.works : 0),
-            pct: incidentalAgg.regions.europa.pct || (calculationMethod === 'system' ? liveInc.regions.europa.pct : 0),
-            authors: incidentalAgg.regions.europa.authors || (calculationMethod === 'system' ? liveInc.regions.europa.authors : 0),
-            authorsPct: incidentalAgg.regions.europa.authorsPct || (calculationMethod === 'system' ? liveInc.regions.europa.authorsPct : 0)
+            works: incidentalAgg.regions.europa.works || liveInc.regions.europa.works,
+            pct: incidentalAgg.regions.europa.pct || liveInc.regions.europa.pct,
+            authors: incidentalAgg.regions.europa.authors || liveInc.regions.europa.authors,
+            authorsPct: incidentalAgg.regions.europa.authorsPct || liveInc.regions.europa.authorsPct
           },
           otras: {
-            works: incidentalAgg.regions.otras.works || (calculationMethod === 'system' ? liveInc.regions.otras.works : 0),
-            pct: incidentalAgg.regions.otras.pct || (calculationMethod === 'system' ? liveInc.regions.otras.pct : 0),
-            authors: incidentalAgg.regions.otras.authors || (calculationMethod === 'system' ? liveInc.regions.otras.authors : 0),
-            authorsPct: incidentalAgg.regions.otras.authorsPct || (calculationMethod === 'system' ? liveInc.regions.otras.authorsPct : 0)
+            works: incidentalAgg.regions.otras.works || liveInc.regions.otras.works,
+            pct: incidentalAgg.regions.otras.pct || liveInc.regions.otras.pct,
+            authors: incidentalAgg.regions.otras.authors || liveInc.regions.otras.authors,
+            authorsPct: incidentalAgg.regions.otras.authorsPct || liveInc.regions.otras.authorsPct
           }
         }
       }
@@ -1265,73 +1367,106 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
   };
 
-  foreignWorks.forEach(t => {
-    const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStats;
-    if (regionStats[region]) {
-      regionStats[region].works++;
-      if (t.author) regionStats[region].authors.add(t.author);
-      if (t.performer) regionStats[region].performers.add(t.performer);
-    }
-  });
+  if (archivedMensualData && archivedMensualData.regions) {
+     Object.keys(regionStats).forEach(reg => {
+       if (archivedMensualData.regions[reg]) {
+         const r = archivedMensualData.regions[reg];
+         regionStats[reg as keyof typeof regionStats] = {
+           works: r.works || 0,
+           authors: { size: r.authors || 0 } as any,
+           performers: { size: r.performers || 0 } as any
+         };
+       }
+     });
+  } else {
+    foreignWorks.forEach(t => {
+      const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStats;
+      if (regionStats[region]) {
+        regionStats[region].works++;
+        if (t.author) regionStats[region].authors.add(t.author);
+        if (t.performer) regionStats[region].performers.add(t.performer);
+      }
+    });
+  }
 
   // Top 5 Songs
-  const songFrequencies: Record<string, { track: ProductionTrack; count: number }> = {};
-  allTracks.forEach(t => {
-    const key = `${t.title?.toUpperCase()} - ${t.performer?.toUpperCase()}`;
-    if (!songFrequencies[key]) {
-      songFrequencies[key] = { track: t, count: 0 };
-    }
-    songFrequencies[key].count++;
-  });
-  const topSongs = Object.values(songFrequencies)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  let topSongs = [];
+  if (archivedMensualData && archivedMensualData.topSongs) {
+    topSongs = archivedMensualData.topSongs;
+  } else {
+    const songFrequencies: Record<string, { track: ProductionTrack; count: number }> = {};
+    allTracks.forEach(t => {
+      const key = `${t.title?.toUpperCase()} - ${t.performer?.toUpperCase()}`;
+      if (!songFrequencies[key]) {
+        songFrequencies[key] = { track: t, count: 0 };
+      }
+      songFrequencies[key].count++;
+    });
+    topSongs = Object.values(songFrequencies)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }
 
   // Top 5 Authors
-  const authorFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
-  allTracks.forEach(t => {
-    if (!t.author) return;
-    const key = t.author.toUpperCase();
-    const nac = isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry) ? 'CUBA' : (t.authorCountry?.toUpperCase() || 'EXTRANJERO');
-    if (!authorFrequencies[key]) {
-      authorFrequencies[key] = { name: t.author, nac, songs: new Set(), execs: 0 };
-    }
-    authorFrequencies[key].songs.add(t.title?.toUpperCase() || '');
-    authorFrequencies[key].execs++;
-  });
-  const topAuthors = Object.values(authorFrequencies)
-    .sort((a, b) => b.execs - a.execs)
-    .slice(0, 5);
+  let topAuthors = [];
+  if (archivedMensualData && archivedMensualData.topAuthors) {
+    topAuthors = archivedMensualData.topAuthors;
+  } else {
+    const authorFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
+    allTracks.forEach(t => {
+      if (!t.author) return;
+      const key = t.author.toUpperCase();
+      const nac = isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry) ? 'CUBA' : (t.authorCountry?.toUpperCase() || 'EXTRANJERO');
+      if (!authorFrequencies[key]) {
+        authorFrequencies[key] = { name: t.author, nac, songs: new Set(), execs: 0 };
+      }
+      authorFrequencies[key].songs.add(t.title?.toUpperCase() || '');
+      authorFrequencies[key].execs++;
+    });
+    topAuthors = Object.values(authorFrequencies)
+      .sort((a, b) => b.execs - a.execs)
+      .slice(0, 5);
+  }
 
   // Top 5 Performers
-  const performerFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
-  allTracks.forEach(t => {
-    if (!t.performer) return;
-    const key = t.performer.toUpperCase();
-    const nac = isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry) ? 'CUBA' : (t.performerCountry?.toUpperCase() || 'EXTRANJERO');
-    if (!performerFrequencies[key]) {
-      performerFrequencies[key] = { name: t.performer, nac, songs: new Set(), execs: 0 };
-    }
-    performerFrequencies[key].songs.add(t.title?.toUpperCase() || '');
-    performerFrequencies[key].execs++;
-  });
-  const topPerformers = Object.values(performerFrequencies)
-    .sort((a, b) => b.execs - a.execs)
-    .slice(0, 5);
+  let topPerformers = [];
+  if (archivedMensualData && archivedMensualData.topPerformers) {
+    topPerformers = archivedMensualData.topPerformers;
+  } else {
+    const performerFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
+    allTracks.forEach(t => {
+      if (!t.performer) return;
+      const key = t.performer.toUpperCase();
+      const nac = isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry) ? 'CUBA' : (t.performerCountry?.toUpperCase() || 'EXTRANJERO');
+      if (!performerFrequencies[key]) {
+        performerFrequencies[key] = { name: t.performer, nac, songs: new Set(), execs: 0 };
+      }
+      performerFrequencies[key].songs.add(t.title?.toUpperCase() || '');
+      performerFrequencies[key].execs++;
+    });
+    topPerformers = Object.values(performerFrequencies)
+      .sort((a, b) => b.execs - a.execs)
+      .slice(0, 5);
+  }
 
   // Top 5 Genres
-  const genreFrequencies: Record<string, { name: string; songs: Set<string>; execs: number }> = {};
-  allTracks.forEach(t => {
-    const genreName = (t.genre || 'SIN GENERO').toUpperCase();
-    if (!genreFrequencies[genreName]) {
-      genreFrequencies[genreName] = { name: genreName, songs: new Set(), execs: 0 };
-    }
-    genreFrequencies[genreName].songs.add(t.title?.toUpperCase() || '');
-    genreFrequencies[genreName].execs++;
-  });
-  const topGenres = Object.values(genreFrequencies)
-    .sort((a, b) => b.execs - a.execs)
-    .slice(0, 5);
+  let topGenres = [];
+  if (archivedMensualData && archivedMensualData.topGenres) {
+    topGenres = archivedMensualData.topGenres;
+  } else {
+    const genreFrequencies: Record<string, { name: string; songs: Set<string>; execs: number }> = {};
+    allTracks.forEach(t => {
+      const genreName = (t.genre || 'SIN GENERO').toUpperCase();
+      if (!genreFrequencies[genreName]) {
+        genreFrequencies[genreName] = { name: genreName, songs: new Set(), execs: 0 };
+      }
+      genreFrequencies[genreName].songs.add(t.title?.toUpperCase() || '');
+      genreFrequencies[genreName].execs++;
+    });
+    topGenres = Object.values(genreFrequencies)
+      .sort((a, b) => b.execs - a.execs)
+      .slice(0, 5);
+  }
 
   // Formatting percentages safely (only numbers, without % symbol)
   const pct = (num: number, denom: number) => {
@@ -1509,6 +1644,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   };
 
   const getActiveRegionStats = () => {
+    if (activePeriod === 'mensual') return regionStats;
+    
     const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
     const aggRegions = {
       'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
@@ -1538,6 +1675,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   };
 
   const getActiveTopLists = () => {
+    if (activePeriod === 'mensual') {
+      return { topSongs, topAuthors, topPerformers, topGenres };
+    }
     const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
     const aggTracks: ProductionTrack[] = [];
 
@@ -1624,8 +1764,24 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         foreignAuthors: foreignAuthorsCount,
         totalPerformers: uniquePerformersList.length,
         cubaPerformers: cubanPerformersCount,
-        foreignPerformers: foreignPerformersCount
+        foreignPerformers: foreignPerformersCount,
+        regions: {} as any,
+        topSongs,
+        topAuthors,
+        topPerformers,
+        topGenres
       };
+      
+      // Save region counts
+      Object.keys(regionStats).forEach(reg => {
+        const s = regionStats[reg as keyof typeof regionStats];
+        currentLiveM.regions[reg] = {
+          works: s.works,
+          authors: s.authors.size,
+          performers: s.performers.size
+        };
+      });
+
       saveToArchive('mensual', monthKey, currentLiveM);
       alert('Informe Mensual guardado en Archivo.');
     } else if (activeReportType === 'economia') {
@@ -2323,9 +2479,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         </div>
 
         {/* Period Selector and Archive Manager Header */}
-        <div className="flex bg-[#2C1B15] p-3 gap-3 items-center justify-between border-b border-[#9E7649]/20 shadow-inner">
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[#E8DCCF]/60 uppercase font-bold tracking-wider">Período Analizado:</span>
+        <div className="flex flex-col sm:flex-row bg-[#2C1B15] p-3 gap-4 items-start sm:items-center justify-between border-b border-[#9E7649]/20 shadow-inner">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <span className="text-xs text-[#E8DCCF]/60 uppercase font-bold tracking-wider whitespace-nowrap">Período Analizado:</span>
             <select 
               value={activePeriod} 
               onChange={e => setActivePeriod(e.target.value as any)}
@@ -2352,38 +2508,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 <option value="10">4to Trimestre (Octubre-Diciembre)</option>
               </select>
             )}
-            
-            {activePeriod !== 'mensual' && (
-              <div className="flex items-center gap-3 ml-4 border-l border-[#9E7649]/20 pl-4">
-                 <span className="text-xs text-[#E8DCCF]/60 uppercase font-bold tracking-wider">Método de Cálculo:</span>
-                 <select 
-                   value={calculationMethod} 
-                   onChange={e => setCalculationMethod(e.target.value as any)}
-                   className="bg-[#1A100C] border border-[#9E7649]/30 rounded-lg text-white text-xs p-1.5 outline-none focus:border-[#9E7649] transition-colors"
-                 >
-                   <option value="system">App / Archivo Interno</option>
-                   <option value="upload">Suma de Archivos Word (.docx)</option>
-                 </select>
-
-                 {calculationMethod === 'upload' && (
-                   <label className="bg-[#9E7649] hover:bg-[#9E7649]/80 text-white text-[10px] px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-2 font-bold transition-all shadow-sm">
-                     <Upload size={14} /> Cargar Archivos para Suma
-                     <input 
-                       type="file" 
-                       multiple 
-                       accept=".docx" 
-                       className="hidden" 
-                       onChange={e => {
-                         if (e.target.files && e.target.files.length > 0) {
-                           handleBulkUploadDocx(e.target.files);
-                         }
-                         e.target.value = "";
-                       }}
-                     />
-                   </label>
-                 )}
-              </div>
-            )}
           </div>
           
           <button 
@@ -2392,7 +2516,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
               setArchiveManagerType(activeReportType);
               setShowArchiveManager(true);
             }}
-            className="bg-[#9E7649]/10 hover:bg-[#9E7649]/30 border border-[#9E7649]/40 text-white text-xs px-4 py-1.5 rounded-lg transition-colors flex items-center gap-2 font-medium"
+            className="w-full sm:w-auto bg-[#9E7649]/10 hover:bg-[#9E7649]/30 border border-[#9E7649]/40 text-white text-xs px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium"
           >
             <Folder size={16} /> Abrir Archivo
           </button>
@@ -2400,6 +2524,88 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
         {/* Modal body (analysis and tables preview) */}
         <div className="flex-1 p-6 overflow-y-auto space-y-6 max-h-[60vh]">
+          {previewUploadedData && (
+            <div className="bg-[#1A100C] p-5 rounded-2xl border border-[#9E7649]/40 animate-fade-in shadow-2xl ring-4 ring-[#9E7649]/10 max-w-4xl mx-auto mb-8">
+              <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
+                 <h5 className="text-white font-bold text-sm flex items-center gap-2 uppercase tracking-wide">
+                   <div className="bg-green-500/20 p-1 rounded-full"><Check size={16} className="text-green-500" /></div>
+                   Previsualizando Informe: <span className="text-[#9E7649]">{previewMonthKey}</span>
+                 </h5>
+                 <button onClick={() => setPreviewUploadedData(null)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition-colors">Cancelar</button>
+              </div>
+
+              <div className="bg-[#FBF8F5] text-black p-6 rounded shadow-2xl max-h-[400px] overflow-auto mb-6 border border-black/20 text-[11px] font-sans">
+                 {previewType === 'mensual' && (
+                   <div className="space-y-4">
+                     <h3 className="text-center font-bold uppercase border-b border-black pb-2 text-[13px]">Previsualización Música Mensual</h3>
+                     <table className="w-full border-collapse border border-black/30 text-center">
+                       <thead><tr className="bg-black/5 font-bold"><th>Zona</th><th>Obras</th><th>Autores</th><th>Intérpretes</th></tr></thead>
+                       <tbody>
+                         <tr className="border-b border-black/10"><td>Cuba</td><td>{previewUploadedData.cubaWorks || 0}</td><td>{previewUploadedData.cubaAuthors || 0}</td><td>{previewUploadedData.cubaPerformers || 0}</td></tr>
+                         <tr className="border-b border-black/10"><td>Extranjera</td><td>{previewUploadedData.foreignWorks || 0}</td><td>{previewUploadedData.foreignAuthors || 0}</td><td>{previewUploadedData.foreignPerformers || 0}</td></tr>
+                         <tr className="font-bold bg-black/5"><td>Total</td><td>{(previewUploadedData.cubaWorks||0)+(previewUploadedData.foreignWorks||0)}</td><td>{(previewUploadedData.cubaAuthors||0)+(previewUploadedData.foreignAuthors||0)}</td><td>{(previewUploadedData.cubaPerformers||0)+(previewUploadedData.foreignPerformers||0)}</td></tr>
+                       </tbody>
+                     </table>
+                   </div>
+                 )}
+                 {previewType === 'economia' && (
+                    <div className="space-y-4">
+                      <h3 className="text-center font-bold uppercase border-b border-black pb-2 text-[13px]">Previsualización Economía</h3>
+                      <table className="w-full border-collapse border border-black/30 text-center">
+                        <thead><tr className="bg-black/5 font-bold"><th>Categoría</th><th>Cubana</th><th>Extranjera</th><th>Total</th></tr></thead>
+                        <tbody>
+                          <tr className="border-b border-black/10"><td className="text-left font-bold pl-1">Obras Completas</td><td>{previewUploadedData.completasCubana || 0}</td><td>{previewUploadedData.completasExtranjera || 0}</td><td>{previewUploadedData.completasTotal || 0}</td></tr>
+                          <tr className="border-b border-black/10"><td className="text-left font-bold pl-1">Incidental</td><td>{previewUploadedData.incidentalesCubana || 0}</td><td>{previewUploadedData.incidentalesExtranjera || 0}</td><td>{previewUploadedData.incidentalesTotal || 0}</td></tr>
+                          <tr className="border-b border-black/10"><td className="text-left font-bold pl-1">Instrumental</td><td>{previewUploadedData.instrumentalesCubana || 0}</td><td>{previewUploadedData.instrumentalesExtranjera || 0}</td><td>{previewUploadedData.instrumentalesTotal || 0}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                 )}
+                 {previewType === 'incidental' && (
+                    <div className="space-y-4">
+                      <h3 className="text-center font-bold uppercase border-b border-black pb-2 text-[13px]">Previsualización Incidental</h3>
+                      <table className="w-full border-collapse border border-black/30 text-center">
+                        <thead><tr className="bg-gray-100 font-bold"><th>Zona</th><th>Obras</th><th>Autores</th></tr></thead>
+                        <tbody>
+                          <tr className="border-b border-black/10"><td>Cuba</td><td>{previewUploadedData.cubaWorksCount || 0}</td><td>{previewUploadedData.cubaAuthors || 0}</td></tr>
+                          <tr className="border-b border-black/10"><td>Extranjera</td><td>{previewUploadedData.foreignWorksCount || 0}</td><td>{previewUploadedData.foreignAuthors || 0}</td></tr>
+                          <tr className="font-bold bg-black/5 border-t border-black"><td>Total</td><td>{previewUploadedData.totalWorks || 0}</td><td>{previewUploadedData.totalAuthors || 0}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                 )}
+              </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <button 
+                       onClick={() => {
+                         saveToArchive(previewType!, previewMonthKey!, previewUploadedData);
+                         
+                         // Switch current view to the month we just saved so the user sees the data
+                         if (onMonthChange && previewMonthKey) {
+                            onMonthChange(previewMonthKey);
+                         }
+                         if (previewType) {
+                            setActiveReportType(previewType);
+                         }
+                         
+                         setPreviewUploadedData(null);
+                         alert("Mes guardado en el archivo correctamente.");
+                         setShowArchiveManager(false);
+                       }}
+                       className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 md:py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl text-xs md:text-sm order-2 md:order-1"
+                     >
+                       <Check size={20} /> Guardar Mes en Archivo
+                     </button>
+                 <button 
+                   onClick={() => setPreviewUploadedData(null)}
+                   className="bg-[#2C1B15] hover:bg-white/5 text-[#E8DCCF] border border-[#9E7649]/30 rounded-xl transition-colors font-bold text-[10px] md:text-[11px] py-3 md:py-4 uppercase order-1 md:order-2"
+                 >
+                   Cancelar Previsualización
+                 </button>
+              </div>
+            </div>
+          )}
           
           {/* Metadata coordinator inputs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#2C1B15]/40 p-4 rounded-xl border border-[#9E7649]/20">
@@ -3133,21 +3339,21 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
               </div>
 
               {/* Action button bar */}
-              <div className="flex justify-end pr-4 text-[12px] font-bold gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row justify-end px-4 text-[12px] font-bold gap-3 pt-4 sm:pt-2">
                 <button
                   type="button"
                   onClick={handleArchivar}
-                  className="bg-[#2C1B15] border border-[#9E7649]/40 hover:bg-[#3E1A0F] text-white py-3 px-6 rounded-xl transition-colors flex items-center gap-2 shadow-lg"
+                  className="w-full sm:w-auto bg-[#2C1B15] border border-[#9E7649]/40 hover:bg-[#3E1A0F] text-white py-3 px-6 rounded-xl transition-colors font-bold flex items-center justify-center gap-2 shadow-lg"
                 >
                   <Folder size={18} /> Mandar a Archivo
                 </button>
                 <button 
                   type="button"
                   onClick={handleGenerateDOCX_Incidental}
-                  className="bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl transition-colors flex items-center gap-2 shadow-lg"
+                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl transition-colors font-bold flex items-center justify-center gap-2 shadow-lg"
                   id="download-incidental-docx-btn"
                 >
-                  <FileDown size={18} /> Descargar Informe de Música Incidental (.docx)
+                  <FileDown size={18} /> Descargar (.docx)
                 </button>
               </div>
 
@@ -3222,7 +3428,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                          const file = e.target.files?.[0];
                          const mSelect = document.getElementById('archive-month-select') as HTMLSelectElement;
                          if (file && mSelect) {
-                           handleUploadDocxForMonth(mSelect.value, file, archiveManagerType);
+                           handleUploadDocxForPreview(mSelect.value, file, archiveManagerType);
                          }
                        }}
                      />
@@ -3256,7 +3462,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                              if(onMonthChange) onMonthChange(mStr);
                               setActivePeriod("mensual");
                               setActiveReportType(archiveManagerType);
-                              setCalculationMethod("system");
                               setShowArchiveManager(false);
                            }}
                            className="bg-[#2C1B15] border border-[#9E7649]/30 hover:bg-[#3E1A0F] text-white text-[10px] px-3 py-1.5 rounded-lg flex justify-center items-center gap-1 font-bold w-full"
@@ -3265,7 +3470,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                          </button>
                          <button
                            onClick={() => {
-                             if(confirm(`¿Está seguro que desea eliminar del archivo el mes ${mStr}?`)) {
+                              if (window.confirm(`¿Está seguro que desea eliminar del archivo el mes ${mStr}?`)) {
                                 deleteFromArchive(archiveManagerType, mStr);
                              }
                            }}
