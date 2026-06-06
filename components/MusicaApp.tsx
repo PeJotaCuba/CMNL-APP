@@ -594,60 +594,135 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       let pName = '';
       let pDate = '';
       const importedTracks: Track[] = [];
-      let tTitle = '';
-      let tAuthor = '';
-      let tPerformer = '';
+
+      interface TempTrack {
+          title: string;
+          author?: string;
+          authorCountry?: string;
+          performer?: string;
+          performerCountry?: string;
+          genre?: string;
+          path?: string;
+      }
+
+      let currentTrack: TempTrack | null = null;
+
+      const processAndPushCurrentTrack = (item: TempTrack) => {
+          const tTitle = (item.title || "Tema Desconocido")
+              .replace(/\*/g, '')
+              .replace(/^\d+\s*[\.\-]?\s*/, '')
+              .trim();
+          
+          const tAuthor = (item.author || "Desconocido").trim();
+          const tAuthorCountry = (item.authorCountry || "Cuba").trim();
+          const tPerformer = (item.performer || "Desconocido").trim();
+          const tPerformerCountry = (item.performerCountry || "Cuba").trim();
+          const tGenre = (item.genre || "Desconocido").trim();
+          const tPath = (item.path || "Manual").trim();
+
+          // Try database match
+          let foundTrack = tracks.find(t => 
+              (t.path || '').toLowerCase() === tPath.toLowerCase() && 
+              t.metadata.title.toLowerCase().includes(tTitle.toLowerCase())
+          );
+
+          if (!foundTrack && tTitle) {
+              foundTrack = tracks.find(t => 
+                  t.metadata.title.toLowerCase().includes(tTitle.toLowerCase()) && 
+                  (t.metadata.performer || '').toLowerCase().includes(tPerformer.toLowerCase())
+              );
+          }
+
+          if (foundTrack) {
+              importedTracks.push(foundTrack);
+          } else {
+              const dummyTrack: Track = {
+                  id: 'manual_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 5) + '_' + Math.random().toString(36).substring(2, 5),
+                  filename: tTitle + '.mp3',
+                  path: tPath,
+                  isVerified: false,
+                  metadata: { 
+                      title: tTitle, 
+                      author: tAuthor, 
+                      authorCountry: tAuthorCountry, 
+                      performer: tPerformer, 
+                      performerCountry: tPerformerCountry, 
+                      genre: tGenre, 
+                      album: '', 
+                      year: new Date().getFullYear().toString() 
+                  }
+              };
+              importedTracks.push(dummyTrack);
+          }
+      };
 
       for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
-          if (line.toLowerCase().startsWith('*programa:*') || line.toLowerCase().startsWith('programa:')) {
+          const lowerLine = line.toLowerCase();
+
+          if (lowerLine.startsWith('*programa:*') || lowerLine.startsWith('programa:')) {
               pName = line.split(':')[1]?.replace(/\*/g, '').trim() || '';
-          } else if (line.toLowerCase().startsWith('*fecha:*') || line.toLowerCase().startsWith('fecha:')) {
+          } else if (lowerLine.startsWith('*fecha:*') || lowerLine.startsWith('fecha:')) {
               pDate = line.split(':')[1]?.replace(/\*/g, '').trim() || '';
           } else if (line.startsWith('🎵')) {
+              if (currentTrack) {
+                  processAndPushCurrentTrack(currentTrack);
+              }
               const content = line.replace('🎵', '').trim();
               const parts = content.split(' - ');
               if (parts.length >= 3) {
-                  tTitle = parts[0].replace(/\*/g, '').replace(/^\d+\.\s*/, '').trim();
-                  tAuthor = parts[1].trim();
-                  tPerformer = parts.slice(2).join(' - ').trim();
-              } else if (parts.length === 2) {
-                  tTitle = parts[0].replace(/\*/g, '').replace(/^\d+\.\s*/, '').trim();
-                  tAuthor = 'Desconocido';
-                  tPerformer = parts[1].trim();
-              } else {
-                  tTitle = content.replace(/\*/g, '').replace(/^\d+\.\s*/, '').trim();
-              }
-          } else if (line.startsWith('📂')) {
-              const pathMatch = line.match(/_([^_]+)_/);
-              const pathContent = pathMatch ? pathMatch[1] : line.replace('📂', '').replace(/_/g, '').trim();
-              
-              let foundTrack = tracks.find(t => 
-                  (t.path || '').toLowerCase() === pathContent.toLowerCase() && 
-                  t.metadata.title.toLowerCase().includes(tTitle.toLowerCase())
-              );
-
-              if (!foundTrack && tTitle) {
-                   foundTrack = tracks.find(t => 
-                      t.metadata.title.toLowerCase().includes(tTitle.toLowerCase()) && 
-                      (t.metadata.performer || '').toLowerCase().includes(tPerformer.toLowerCase())
-                   );
-              }
-
-              if (foundTrack) {
-                  importedTracks.push(foundTrack);
-              } else {
-                  const dummyTrack: Track = {
-                      id: 'manual_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 5),
-                      filename: tTitle + '.mp3',
-                      path: pathContent,
-                      isVerified: false,
-                      metadata: { title: tTitle, author: tAuthor, performer: tPerformer, album: '', year: '' }
+                  const titleRaw = parts[0];
+                  const authorRaw = parts[1];
+                  const performerRaw = parts.slice(2).join(' - ');
+                  currentTrack = {
+                      title: titleRaw,
+                      author: authorRaw,
+                      performer: performerRaw
                   };
-                  importedTracks.push(dummyTrack);
+              } else if (parts.length === 2) {
+                  const titleRaw = parts[0];
+                  const performerRaw = parts[1];
+                  currentTrack = {
+                      title: titleRaw,
+                      author: 'Desconocido',
+                      performer: performerRaw
+                  };
+              } else {
+                  currentTrack = {
+                      title: content
+                  };
               }
-              tTitle = ''; tAuthor = ''; tPerformer = '';
+          } else if (currentTrack) {
+              if (lowerLine.startsWith('autor:')) {
+                  const rawAuthor = line.replace(/^autor:\s*/i, '').trim();
+                  const matchCountry = rawAuthor.match(/^(.*?)\s*\(([^)]+)\)$/);
+                  if (matchCountry) {
+                      currentTrack.author = matchCountry[1].trim();
+                      currentTrack.authorCountry = matchCountry[2].trim();
+                  } else {
+                      currentTrack.author = rawAuthor;
+                  }
+              } else if (lowerLine.startsWith('intérprete:') || lowerLine.startsWith('interprete:')) {
+                  const rawPerformer = line.replace(/^(intérprete:|interprete:)\s*/i, '').trim();
+                  const matchCountry = rawPerformer.match(/^(.*?)\s*\(([^)]+)\)$/);
+                  if (matchCountry) {
+                      currentTrack.performer = matchCountry[1].trim();
+                      currentTrack.performerCountry = matchCountry[2].trim();
+                  } else {
+                      currentTrack.performer = rawPerformer;
+                  }
+              } else if (lowerLine.startsWith('género:') || lowerLine.startsWith('genero:')) {
+                  currentTrack.genre = line.replace(/^(género:|genero:)\s*/i, '').trim();
+              } else if (line.startsWith('📂')) {
+                  const pathMatch = line.match(/_([^_]+)_/);
+                  const pathContent = pathMatch ? pathMatch[1] : line.replace('📂', '').replace(/_/g, '').trim();
+                  currentTrack.path = pathContent;
+              }
           }
+      }
+
+      if (currentTrack) {
+          processAndPushCurrentTrack(currentTrack);
       }
 
       if (importedTracks.length > 0) {
@@ -672,16 +747,124 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       setImportSelectionText('');
   };
 
+  const parsePlaylistText = (text: string) => {
+      const lines = text.split('\n');
+      const parsedTracks: {
+          title?: string;
+          author?: string;
+          authorCountry?: string;
+          performer?: string;
+          performerCountry?: string;
+          genre?: string;
+      }[] = [];
+      let currentTrack: {
+          title?: string;
+          author?: string;
+          authorCountry?: string;
+          performer?: string;
+          performerCountry?: string;
+          genre?: string;
+      } | null = null;
+      let countryContext: 'author' | 'performer' | null = null;
+
+      for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          const lowerTrimmed = trimmed.toLowerCase();
+          
+          if (lowerTrimmed.startsWith('título:') || lowerTrimmed.startsWith('titulo:')) {
+              if (currentTrack) {
+                  parsedTracks.push(currentTrack);
+              }
+              const val = trimmed.replace(/^(título:|titulo:)\s*/i, '').trim();
+              currentTrack = { title: val };
+              countryContext = null;
+          } else if (currentTrack) {
+              if (lowerTrimmed.startsWith('autor:')) {
+                  currentTrack.author = trimmed.replace(/^autor:\s*/i, '').trim();
+                  countryContext = 'author';
+              } else if (lowerTrimmed.startsWith('intérprete:') || lowerTrimmed.startsWith('interprete:')) {
+                  currentTrack.performer = trimmed.replace(/^(intérprete:|interprete:)\s*/i, '').trim();
+                  countryContext = 'performer';
+              } else if (lowerTrimmed.startsWith('país:') || lowerTrimmed.startsWith('pais:')) {
+                  const countryVal = trimmed.replace(/^(país:|pais:)\s*/i, '').trim();
+                  if (countryContext === 'author') {
+                      currentTrack.authorCountry = countryVal;
+                  } else if (countryContext === 'performer') {
+                      currentTrack.performerCountry = countryVal;
+                  }
+              } else if (lowerTrimmed.startsWith('género:') || lowerTrimmed.startsWith('genero:')) {
+                  currentTrack.genre = trimmed.replace(/^(género:|genero:)\s*/i, '').trim();
+              }
+          }
+      }
+      if (currentTrack) {
+          parsedTracks.push(currentTrack);
+      }
+      return parsedTracks;
+  };
+
   const handleProcessWishlist = () => {
       if (!wishlistText.trim()) return;
-      const queries = wishlistText.split('\n').map(l => l.trim()).filter(l => l);
-      const found: Track[] = [];
-      queries.forEach(q => {
-          const match = tracks.find(t => t.metadata.title.toLowerCase().includes(q.toLowerCase()) || t.filename.toLowerCase().includes(q.toLowerCase()));
-          if (match && !selectedTracksList.find(s => s.id === match.id)) found.push(match);
+      const parsedList = parsePlaylistText(wishlistText);
+      const resolvedTracks: Track[] = [];
+
+      parsedList.forEach((item, idx) => {
+          const cleanTitle = (item.title || "").trim().toLowerCase();
+          const cleanAuthor = (item.author || "").trim().toLowerCase();
+
+          // Try database match by title and author
+          let matchedDbTrack = tracks.find(t => {
+              const tTitle = t.metadata.title.toLowerCase();
+              const tAuthor = t.metadata.author.toLowerCase();
+              return tTitle === cleanTitle && (!cleanAuthor || tAuthor.includes(cleanAuthor) || cleanAuthor.includes(tAuthor));
+          });
+
+          // Fallback to title-only match
+          if (!matchedDbTrack) {
+              matchedDbTrack = tracks.find(t => t.metadata.title.toLowerCase() === cleanTitle);
+          }
+
+          if (matchedDbTrack) {
+              if (!resolvedTracks.some(r => r.id === matchedDbTrack!.id)) {
+                  resolvedTracks.push(matchedDbTrack);
+              }
+          } else {
+              // Create virtual Track to grant the same capabilities (export/play list visualizer/actions)
+              const virtualId = `track-virtual-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`;
+              const virtualTrack: Track = {
+                  id: virtualId,
+                  filename: `${item.title || 'Desconocido'}.mp3`,
+                  path: 'Carga Externa',
+                  isVerified: true,
+                  metadata: {
+                      title: item.title || 'Tema Desconocido',
+                      author: item.author || 'Autor Desconocido',
+                      authorCountry: item.authorCountry || 'Cuba',
+                      performer: item.performer || 'Intérprete Desconocido',
+                      performerCountry: item.performerCountry || 'Cuba',
+                      genre: item.genre || 'Changüí',
+                      album: 'Carga Externa',
+                      year: new Date().getFullYear().toString()
+                  }
+              };
+              resolvedTracks.push(virtualTrack);
+          }
       });
-      if (found.length > 0) { setSelectedTracksList(prev => [...prev, ...found]); alert(`${found.length} añadidos.`); } else { alert("Sin coincidencias."); }
-      setShowWishlist(false); setWishlistText('');
+
+      if (resolvedTracks.length > 0) {
+          setSelectedTracksList(prev => {
+              const existingIds = new Set(prev.map(t => t.id));
+              const newTracks = resolvedTracks.filter(t => !existingIds.has(t.id));
+              return [...prev, ...newTracks];
+          });
+          alert(`Lista cargada con éxito: se agregaron y generaron ${resolvedTracks.length} temas.`);
+      } else {
+          alert("No se pudieron extraer temas válidos con el formato requerido en la lista.");
+      }
+      setShowWishlist(false);
+      setWishlistText('');
   };
 
   const handleOpenExportModal = () => {
@@ -730,7 +913,18 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
   const handleShareWhatsApp = () => {
       let message = `*CRÉDITOS RCM*\n*Programa:* ${programName}\n*Fecha:* ${reportDate}\n\n`;
-      exportItems.forEach((item, index) => { message += `🎵 ${index + 1}. *${item.title}* - ${item.author} - ${item.performer}\n📂 _${item.path || 'Manual'}_\n\n`; });
+      exportItems.forEach((item, index) => {
+          message += `🎵 ${index + 1}. *${item.title}*\n`;
+          message += `Autor: ${item.author || 'Desconocido'} (${item.authorCountry || 'Cuba'})\n`;
+          message += `Intérprete: ${item.performer || 'Desconocido'} (${item.performerCountry || 'Cuba'})\n`;
+          message += `Género: ${item.genre || 'Desconocido'}\n`;
+          if (item.path && item.path !== 'Manual' && item.path !== 'Carga Externa') {
+              message += `📂 _${item.path}_\n`;
+          } else {
+              message += `📂 _Manual_\n`;
+          }
+          message += `\n`;
+      });
       openWhatsApp(message);
   };
 
@@ -888,7 +1082,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                               {authMode === 'director' && (
                                   <button onClick={() => setShowImportSelectionModal(true)} className="text-[9px] font-bold uppercase bg-blue-900/20 text-blue-400 px-3 py-1.5 rounded-lg flex items-center gap-1">Importar</button>
                               )}
-                              <button onClick={() => setShowWishlist(true)} className="text-[9px] font-bold uppercase bg-[#9E7649]/10 text-[#9E7649] px-3 py-1.5 rounded-lg flex items-center gap-1">Deseos</button>
+                              <button onClick={() => setShowWishlist(true)} className="text-[9px] font-bold uppercase bg-[#9E7649]/10 text-[#9E7649] px-3 py-1.5 rounded-lg flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[10px]">playlist_add</span> Cargar Lista
+                              </button>
                               <button onClick={handleClearSelectionClick} className="text-[9px] font-bold uppercase bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg flex items-center gap-1">Limpiar</button>
                           </div>
                      </div>
@@ -1092,11 +1288,19 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
         {showWishlist && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowWishlist(false)}>
                 <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
-                    <h3 className="font-bold text-lg mb-2 text-white">Lista de Deseos</h3>
-                    <textarea className="w-full h-40 p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-sm outline-none focus:border-[#9E7649]" placeholder="Títulos..." value={wishlistText} onChange={e => setWishlistText(e.target.value)} />
+                    <h3 className="font-bold text-lg mb-1 text-white">Cargar Lista de Reproducción</h3>
+                    <p className="text-[11px] text-[#E8DCCF]/60 mb-3 leading-snug">
+                        Pegue una lista estructurada con Título, Autor, País, Intérprete, País, Género para generar la selección con todas las capacidades nativas.
+                    </p>
+                    <textarea 
+                        className="w-full h-48 p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-xs outline-none focus:border-[#9E7649] font-mono leading-relaxed" 
+                        placeholder={`Título: SABROSO CHANGÜÍ\nAutor: Ernesto "El Gato" Gatell\nPaís: Cuba\nIntérprete: Agrupación Changüí Asere\nPaís: Cuba\nGénero: Changüí`} 
+                        value={wishlistText} 
+                        onChange={e => setWishlistText(e.target.value)} 
+                    />
                     <div className="flex gap-3 mt-4">
-                        <button onClick={() => setShowWishlist(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cerrar</button>
-                        <button onClick={handleProcessWishlist} className="flex-1 py-3 bg-[#9E7649] text-white rounded-xl font-bold shadow-lg hover:bg-[#8B653D]">Buscar</button>
+                        <button onClick={() => setShowWishlist(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white transition-colors text-sm">Cerrar</button>
+                        <button onClick={handleProcessWishlist} className="flex-1 py-3 bg-[#9E7649] text-white rounded-xl font-bold shadow-lg hover:bg-[#8B653D] transition-colors text-sm">Cargar</button>
                     </div>
                 </div>
             </div>

@@ -17,9 +17,9 @@ const GUIDE_SECTIONS = [
         content: "Una vez tengas tu selección lista, ve a 'Exportar'. El Director puede generar un reporte PDF oficial que se guardará automáticamente en su sesión. Los usuarios pueden exportar a TXT o compartir por WhatsApp."
     },
     {
-        title: "Lista de Deseos",
-        icon: "list_alt",
-        content: "Si tienes una lista de temas en texto (ej. bloc de notas), puedes copiarla y pegarla en la 'Lista de Deseos' dentro de la sección Selección para buscar todos los temas automáticamente."
+        title: "Cargar Lista",
+        icon: "playlist_add",
+        content: "Si tienes una lista de reproducción externa en texto estructurado (con Título, Autor, País, Intérprete, País, Género), puedes copiarla y pegarla en 'Cargar Lista' dentro de la sección Selección para generar la selección de temas de forma automática."
     },
     {
         title: "Sincronización",
