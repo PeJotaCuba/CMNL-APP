@@ -124,6 +124,8 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
             6: ['sabado', 'sabatina']
         };
 
+        if (isNaN(day) || !daysMap[day]) return false;
+
         return daysMap[day].some(d => freq.includes(d));
     };
 

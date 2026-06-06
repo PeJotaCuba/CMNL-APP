@@ -791,6 +791,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
           5: ['viernes'],
           6: ['sabado']
       };
+      if (isNaN(day) || !daysMap[day]) return false;
       return daysMap[day].some(d => freq.includes(d));
   };
 

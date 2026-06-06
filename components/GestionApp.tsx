@@ -606,6 +606,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           6: ['sabado', 'sabatina']
       };
 
+      if (isNaN(day) || !daysMap[day]) return false;
+
       const freqWords = freq.split(/[\s,y-]+/);
       return daysMap[day].some(d => freqWords.some(w => w.includes(d) || (d.includes(w) && w.length >= 3)));
   };
