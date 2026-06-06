@@ -168,6 +168,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   const [archiveIncidental, setArchiveIncidental] = useState<Record<string, any>>({});
   const [showArchiveManager, setShowArchiveManager] = useState<boolean>(false);
   const [archiveManagerType, setArchiveManagerType] = useState<'mensual' | 'economia' | 'incidental'>('mensual');
+  const [deletingMonth, setDeletingMonth] = useState<string | null>(null);
 
   // Preview Uploaded Data
   const [previewUploadedData, setPreviewUploadedData] = useState<any>(null);
@@ -404,8 +405,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     const clean = (val: string) => {
       if (!val) return 0;
-      const num = val.replace(/[^\d]/g, '');
-      return parseInt(num) || 0;
+      const match = val.match(/\d+/);
+      if (!match) return 0;
+      return parseInt(match[0]) || 0;
     };
 
     let currentSection: 'stats' | 'songs' | 'authors' | 'performers' | 'genres' = 'stats';
@@ -417,6 +419,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         const cells = Array.from(row.querySelectorAll('td')).map(td => (td.textContent || '').trim());
         const rowText = (row.textContent || '').toLowerCase();
         
+        // Skip header rows for rankings more robustly
+        if (cells.some(c => c.toLowerCase() === 'no') && cells.length > 2) return;
+
         // Section detection based on row text
         if (rowText.includes('obras musicales') && (rowText.includes('difundidas') || rowText.includes('difundidos'))) {
           currentSection = 'songs';
@@ -442,34 +447,34 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         if (cells.length < 2) return;
 
         if (currentSection === 'stats') {
-          let vIdx = -1, aIdx = -1, pIdx = -1;
-          if (cells.length >= 8) { vIdx=2; aIdx=4; pIdx=6; }
-          else if (cells.length === 7) { vIdx=1; aIdx=3; pIdx=5; } 
-          else if (cells.length === 6) { vIdx=1; aIdx=2; pIdx=3; }
-          else if (cells.length === 4) { vIdx=1; aIdx=2; pIdx=3; }
-
-          if (vIdx === -1) return;
+          const numericValues = cells.filter(c => /\d+/.test(c)).map(c => clean(c));
+          
+          if (numericValues.length < 6) return;
+          
+          const vCount = numericValues[0];
+          const aCount = numericValues[2];
+          const pCount = numericValues[4];
 
           if (rowText.includes('cuban') || (rowText.includes('cuba') && !rowText.includes('norteamerica'))) {
-             dataSnap.cubaWorks = Math.max(dataSnap.cubaWorks, clean(cells[vIdx]));
-             if (aIdx !== -1 && aIdx < cells.length) dataSnap.cubaAuthors = Math.max(dataSnap.cubaAuthors, clean(cells[aIdx]));
-             if (pIdx !== -1 && pIdx < cells.length) dataSnap.cubaPerformers = Math.max(dataSnap.cubaPerformers, clean(cells[pIdx]));
+             dataSnap.cubaWorks = Math.max(dataSnap.cubaWorks, vCount);
+             dataSnap.cubaAuthors = Math.max(dataSnap.cubaAuthors, aCount);
+             dataSnap.cubaPerformers = Math.max(dataSnap.cubaPerformers, pCount);
           } else if (rowText.includes('extranjer') || rowText.includes('foreign')) {
-             dataSnap.foreignWorks = Math.max(dataSnap.foreignWorks, clean(cells[vIdx]));
-             if (aIdx !== -1 && aIdx < cells.length) dataSnap.foreignAuthors = Math.max(dataSnap.foreignAuthors, clean(cells[aIdx]));
-             if (pIdx !== -1 && pIdx < cells.length) dataSnap.foreignPerformers = Math.max(dataSnap.foreignPerformers, clean(cells[pIdx]));
+             dataSnap.foreignWorks = Math.max(dataSnap.foreignWorks, vCount);
+             dataSnap.foreignAuthors = Math.max(dataSnap.foreignAuthors, aCount);
+             dataSnap.foreignPerformers = Math.max(dataSnap.foreignPerformers, pCount);
           } else if (rowText.includes('total general')) {
-             dataSnap.totalWorks = Math.max(dataSnap.totalWorks, clean(cells[vIdx]));
-             if (aIdx !== -1 && aIdx < cells.length) dataSnap.totalAuthors = Math.max(dataSnap.totalAuthors, clean(cells[aIdx]));
-             if (pIdx !== -1 && pIdx < cells.length) dataSnap.totalPerformers = Math.max(dataSnap.totalPerformers, clean(cells[pIdx]));
+             dataSnap.totalWorks = Math.max(dataSnap.totalWorks, vCount);
+             dataSnap.totalAuthors = Math.max(dataSnap.totalAuthors, aCount);
+             dataSnap.totalPerformers = Math.max(dataSnap.totalPerformers, pCount);
           } else {
              // Regional rows
              Object.keys(dataSnap.regions).forEach(reg => {
                const rKey = reg.toLowerCase().substring(0, 8);
                if (rowText.includes(rKey)) {
-                  dataSnap.regions[reg].works = clean(cells[vIdx]);
-                  if (aIdx !== -1 && aIdx < cells.length) dataSnap.regions[reg].authors = clean(cells[aIdx]);
-                  if (pIdx !== -1 && pIdx < cells.length) dataSnap.regions[reg].performers = clean(cells[pIdx]);
+                  dataSnap.regions[reg].works = vCount;
+                  dataSnap.regions[reg].authors = aCount;
+                  dataSnap.regions[reg].performers = pCount;
                }
              });
           }
@@ -488,23 +493,27 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
               });
            }
         } else if (currentSection === 'authors') {
-           if (cells.length >= 4 && !isNaN(parseInt(cells[0]))) {
+           const numericIndices = cells.map((c, i) => /\d+/.test(c) ? i : -1).filter(i => i !== -1);
+           if (numericIndices.length >= 2) {
              dataSnap.topAuthors.push({
                name: cells[1],
                nac: cells[2],
-               execs: clean(cells[cells.length - 1])
+               execs: clean(cells[numericIndices[numericIndices.length - 2]]),
+               frec: clean(cells[numericIndices[numericIndices.length - 1]])
              });
            }
         } else if (currentSection === 'performers') {
-           if (cells.length >= 4 && !isNaN(parseInt(cells[0]))) {
+           const numericIndices = cells.map((c, i) => /\d+/.test(c) ? i : -1).filter(i => i !== -1);
+           if (numericIndices.length >= 2) {
              dataSnap.topPerformers.push({
                name: cells[1],
                nac: cells[2],
-               execs: clean(cells[cells.length - 1])
+               execs: clean(cells[numericIndices[numericIndices.length - 2]]),
+               frec: clean(cells[numericIndices[numericIndices.length - 1]])
              });
            }
         } else if (currentSection === 'genres') {
-           if (cells.length >= 4 && !isNaN(parseInt(cells[0]))) {
+           if (cells.length >= 2 && !isNaN(parseInt(cells[0]))) {
              dataSnap.topGenres.push({
                name: cells[1],
                execs: clean(cells[cells.length - 1])
@@ -684,16 +693,27 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     return dataSnap;
   };
 
-  const detectMonthFromHtml = (html: string) => {
+  const detectMonthFromHtml = (html: string, filename: string) => {
     const text = html.toLowerCase();
+    
+    // 1. Try content patterns like "MES: MAYO" or "MES : MAYO"
     for (let i = 0; i < MONTH_NAMES_SPANISH.length; i++) {
         const mName = MONTH_NAMES_SPANISH[i].toLowerCase();
-        // Look for typical header formats in the HTML
-        if (text.includes(`mes: ${mName}`) || text.includes(`mes : ${mName}`) || text.includes(`mes:${mName}`) || text.includes(`mes: <strong>${mName}</strong>`) || text.includes(`mes:<strong>${mName}</strong>`)) {
-            return i + 1;
-        }
+        const patterns = [
+          `mes: ${mName}`, `mes : ${mName}`, `mes:${mName}`, 
+          `mes: <strong>${mName}</strong>`, `mes:<strong>${mName}</strong>`,
+          `para el mes de ${mName}`
+        ];
+        if (patterns.some(p => text.includes(p))) return i + 1;
     }
-    // Try just finding the month name if it seems like a header
+    
+    // 2. Try filename patterns
+    const cleanFile = filename.toLowerCase();
+    for (let i = 0; i < MONTH_NAMES_SPANISH.length; i++) {
+      if (cleanFile.includes(MONTH_NAMES_SPANISH[i].toLowerCase())) return i + 1;
+    }
+
+    // 3. Fallback: try just finding the month name in a likely-heading HTML spot
     for (let i = 0; i < MONTH_NAMES_SPANISH.length; i++) {
        const mName = MONTH_NAMES_SPANISH[i].toLowerCase();
        if (text.includes(`>${mName.toUpperCase()}<`) || text.includes(`> ${mName.toUpperCase()} <`)) {
@@ -703,92 +723,141 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     return null;
   };
 
-  const detectYearFromHtml = (html: string) => {
+  const detectYearFromHtml = (html: string, filename: string) => {
     const text = html.toLowerCase();
+    const cleanFile = filename.toLowerCase();
+
+    // 1. Try content regex
     const match = text.match(/año:\s*(\d{4})/i) || text.match(/año\s*:\s*(\d{4})/i) || text.match(/año:\s*<strong>(\d{4})<\/strong>/i);
     if (match) return parseInt(match[1]);
+
+    // 2. Try filename regex
+    const yearMatch = cleanFile.match(/\b(20\d{2})\b/);
+    if (yearMatch) return parseInt(yearMatch[1]);
+
     return new Date().getFullYear();
   };
 
-  const handleBulkUploadDocx = async (files: FileList) => {
+  const handleBulkUploadFiles = async (files: FileList) => {
     const fileArray = Array.from(files);
     let successCount = 0;
+    let lastUploaded: { type: 'mensual' | 'economia' | 'incidental', mStr: string } | null = null;
     
     for (const file of fileArray) {
-      await new Promise<void>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const arrayBuffer = e.target?.result as ArrayBuffer;
-          if (!arrayBuffer) { resolve(); return; }
-          try {
-            const result = await mammoth.convertToHtml({ arrayBuffer });
-            const html = result.value;
+        await new Promise<void>((resolve) => {
+            const isTxt = file.name.toLowerCase().endsWith('.txt');
             
-            const detectedMonth = detectMonthFromHtml(html);
-            const detectedYear = detectYearFromHtml(html);
-            
-            if (!detectedMonth) {
-               console.warn(`Could not detect month for file: ${file.name}`);
-               resolve();
-               return;
+            if (isTxt) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const text = e.target?.result as string;
+                    if (!text) { resolve(); return; }
+                    
+                    const mStr = extractMonthYearFromText(text); // Need to implement this helper or adapt detection
+                    if (!mStr) { console.warn('Could not detect date'); resolve(); return; }
+                    
+                    const parsed = parseMensualTxt(text);
+                    if (parsed && Object.keys(parsed).length > 0) {
+                        saveToArchive('mensual', mStr, parsed);
+                        successCount++;
+                        lastUploaded = { type: 'mensual', mStr };
+                    }
+                    resolve();
+                };
+                reader.readAsText(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const arrayBuffer = e.target?.result as ArrayBuffer;
+                    if (!arrayBuffer) { resolve(); return; }
+                    try {
+                        const result = await mammoth.convertToHtml({ arrayBuffer });
+                        const html = result.value;
+                        
+                        const detectedMonth = detectMonthFromHtml(html, file.name);
+                        const detectedYear = detectYearFromHtml(html, file.name);
+                        
+                        if (!detectedMonth) {
+                            console.warn(`Could not detect month for file: ${file.name}`);
+                            resolve();
+                            return;
+                        }
+                        
+                        const mStr = `${detectedYear}-${String(detectedMonth).padStart(2, '0')}`;
+                        
+                        let type: 'mensual' | 'economia' | 'incidental' | null = null;
+                        let parsed = {};
+                        
+                        const lowHtml = html.toLowerCase();
+                        if (lowHtml.includes('indicadores de música incidental') || lowHtml.includes('informativo música incidental')) {
+                            type = 'incidental';
+                            parsed = parseIncidentalDocx(html);
+                        } else if (lowHtml.includes('indicadores de economía') || lowHtml.includes('aspectos económicos')) {
+                            type = 'economia';
+                            parsed = parseEconomiaDocx(html);
+                        } else {
+                            if (lowHtml.includes('obras musicales más difundidas') || lowHtml.includes('distribución geográfica')) {
+                                type = 'mensual';
+                                parsed = parseMensualDocx(html);
+                            } else if (file.name.toLowerCase().includes('mensual')) {
+                                type = 'mensual';
+                                parsed = parseMensualDocx(html);
+                            } else if (file.name.toLowerCase().includes('economia')) {
+                                type = 'economia';
+                                parsed = parseEconomiaDocx(html);
+                            } else if (file.name.toLowerCase().includes('incidental')) {
+                                type = 'incidental';
+                                parsed = parseIncidentalDocx(html);
+                            }
+                        }
+                        
+                        if (type && parsed && Object.keys(parsed).length > 0) {
+                            saveToArchive(type, mStr, parsed);
+                            successCount++;
+                            lastUploaded = { type, mStr };
+                        }
+                    } catch (err) {
+                        console.error(`Error processing ${file.name}:`, err);
+                    }
+                    resolve();
+                };
+                reader.readAsArrayBuffer(file);
             }
-            
-            const mStr = `${detectedYear}-${String(detectedMonth).padStart(2, '0')}`;
-            
-            let type: 'mensual' | 'economia' | 'incidental' | null = null;
-            let parsed = {};
-            
-            // Check for Economia signatures
-            if (html.toLowerCase().includes('obras completas') || html.toLowerCase().includes('obras instrumentales')) {
-                type = 'economia';
-                parsed = parseEconomiaDocx(html);
-            } 
-            // Check for Incidental signatures
-            else if (html.toLowerCase().includes('latinoamérica') || html.toLowerCase().includes('indicadores de música incidental')) {
-                type = 'incidental';
-                parsed = parseIncidentalDocx(html);
-            }
-            // Fallback to Mensual
-            else if (html.toLowerCase().includes('zonas') && html.toLowerCase().includes('cuba')) {
-                type = 'mensual';
-                parsed = parseMensualDocx(html);
-            }
-            
-            if (type && parsed && Object.keys(parsed).length > 0) {
-                saveToArchive(type, mStr, parsed);
-                successCount++;
-            }
-          } catch (err) {
-            console.error(`Error processing ${file.name}:`, err);
-          }
-          resolve();
-        };
-        reader.readAsArrayBuffer(file);
-      });
+        });
     }
     
     if (successCount > 0) {
-      alert(`Se procesaron y guardaron ${successCount} archivos en el archivo interno.`);
+      if (lastUploaded && onMonthChange) {
+        onMonthChange(lastUploaded.mStr);
+        setActiveReportType(lastUploaded.type);
+        setActivePeriod("mensual");
+        setShowArchiveManager(false);
+      }
+      alert(`Se procesaron y guardaron ${successCount} informe(s) automáticamente.`);
     } else {
-      alert("No se pudieron procesar los archivos. Verifique que sean documentos .docx válidos generados por la aplicación.");
+      alert("No se pudieron procesar los archivos. Verifique el formato.");
     }
   };
 
-  const handleUploadDocxForPreview = (mKey: string, file: File, type: 'mensual' | 'economia' | 'incidental') => {
+  const handleUploadFileForPreview = (mKey: string, file: File, type: 'mensual' | 'economia' | 'incidental') => {
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const arrayBuffer = e.target?.result as ArrayBuffer;
-      if (!arrayBuffer) return;
+      const result = e.target?.result;
+      if (!result) return;
       try {
-        const result = await mammoth.convertToHtml({ arrayBuffer });
-        const html = result.value;
         let finalParsed = {};
-        if (type === "mensual") {
-          finalParsed = parseMensualDocx(html);
-        } else if (type === "economia") {
-          finalParsed = parseEconomiaDocx(html);
-        } else if (type === "incidental") {
-          finalParsed = parseIncidentalDocx(html);
+        if (file.name.toLowerCase().endsWith('.txt')) {
+             finalParsed = parseMensualTxt(result as string);
+        } else {
+            const resultHtml = await mammoth.convertToHtml({ arrayBuffer: result as ArrayBuffer });
+            const html = resultHtml.value;
+            if (type === "mensual") {
+              finalParsed = parseMensualDocx(html);
+            } else if (type === "economia") {
+              finalParsed = parseEconomiaDocx(html);
+            } else if (type === "incidental") {
+              finalParsed = parseIncidentalDocx(html);
+            }
         }
         
         setPreviewUploadedData(finalParsed);
@@ -799,7 +868,11 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         alert("Error al procesar el archivo: " + (err?.message || err));
       }
     };
-    reader.readAsArrayBuffer(file);
+    if (file.name.toLowerCase().endsWith('.txt')) {
+        reader.readAsText(file);
+    } else {
+        reader.readAsArrayBuffer(file);
+    }
   };
 
   // Period ranges getter
@@ -1028,6 +1101,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
   const totalWorksCuba = archivedMensualData ? archivedMensualData.cubaWorks : cubanWorks.length;
   const totalWorksForeign = archivedMensualData ? archivedMensualData.foreignWorks : foreignWorks.length;
+
+  // Unique counts that respect archives for proper percentage calculation
+  const totalAuthorsCount = archivedMensualData ? archivedMensualData.totalAuthors : Array.from(new Set(allTracks.map(t => t.author).filter(Boolean))).length;
+  const totalPerformersCount = archivedMensualData ? archivedMensualData.totalPerformers : Array.from(new Set(allTracks.map(t => t.performer).filter(Boolean))).length;
 
   // Unique authors
   const uniqueAuthorsList = Array.from(new Set(allTracks.map(t => t.author).filter(Boolean)));
@@ -1702,7 +1779,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       }
       songFrequencies[key].count++;
     });
-    const topSongs = Object.values(songFrequencies)
+    const songsAgg = Object.values(songFrequencies)
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
@@ -1717,7 +1794,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       authorFrequencies[key].songs.add(t.title?.toUpperCase() || '');
       authorFrequencies[key].execs++;
     });
-    const topAuthors = Object.values(authorFrequencies)
+    const authorsAgg = Object.values(authorFrequencies)
       .sort((a, b) => b.execs - a.execs)
       .slice(0, 5);
 
@@ -1732,7 +1809,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       performerFrequencies[key].songs.add(t.title?.toUpperCase() || '');
       performerFrequencies[key].execs++;
     });
-    const topPerformers = Object.values(performerFrequencies)
+    const performersAgg = Object.values(performerFrequencies)
       .sort((a, b) => b.execs - a.execs)
       .slice(0, 5);
 
@@ -1745,11 +1822,147 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       genreFrequencies[genreName].songs.add(t.title?.toUpperCase() || '');
       genreFrequencies[genreName].execs++;
     });
-    const topGenres = Object.values(genreFrequencies)
+    const genresAgg = Object.values(genreFrequencies)
       .sort((a, b) => b.execs - a.execs)
       .slice(0, 5);
 
-    return { topSongs, topAuthors, topPerformers, topGenres, totalAnalyzeCount: tracksToAnalyze.length };
+    return { topSongs: songsAgg, topAuthors: authorsAgg, topPerformers: performersAgg, topGenres: genresAgg, totalAnalyzeCount: tracksToAnalyze.length };
+  };
+
+  const parseMensualTxt = (text: string) => {
+    const dataSnap = {
+        totalWorks: 0, cubaWorks: 0, foreignWorks: 0,
+        totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0,
+        totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0,
+        regions: {
+            'Latinoam. y del Caribe': { works: 0, authors: 0, performers: 0 },
+            'Norteamericana': { works: 0, authors: 0, performers: 0 },
+            'Europa': { works: 0, authors: 0, performers: 0 },
+            'Asia': { works: 0, authors: 0, performers: 0 },
+            'África': { works: 0, authors: 0, performers: 0 },
+            'Otras zonas': { works: 0, authors: 0, performers: 0 }
+        } as Record<string, any>,
+        topSongs: [] as any[], topAuthors: [] as any[],
+        topPerformers: [] as any[], topGenres: [] as any[]
+    };
+
+    const lines = text.split('\n');
+    let currentSection = '';
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.startsWith('===') && trimmed.endsWith('===')) {
+            currentSection = trimmed;
+            continue;
+        }
+
+        const regionMap: Record<string, string> = {
+            'Latinoamérica y Caribe': 'Latinoam. y del Caribe',
+            'Norteamericana': 'Norteamericana',
+            'Europa': 'Europa',
+            'Asia': 'Asia',
+            'África': 'África',
+            'Otras zonas': 'Otras zonas'
+        };
+
+        if (currentSection === '=== Estadísticas por zonas geográficas ===') {
+            const worksMatch = trimmed.match(/Obras:\s*(\d+)/);
+            const authorsMatch = trimmed.match(/Autores:\s*(\d+)/);
+            const perfMatch = trimmed.match(/Intérpretes:\s*(\d+)/);
+            
+            if (worksMatch && authorsMatch && perfMatch) {
+                const w = parseInt(worksMatch[1]);
+                const a = parseInt(authorsMatch[1]);
+                const p = parseInt(perfMatch[1]);
+                
+                if (trimmed.includes('Total general')) {
+                    dataSnap.totalWorks = w; dataSnap.totalAuthors = a; dataSnap.totalPerformers = p;
+                } else if (trimmed.includes('Zona: Cuba')) {
+                    dataSnap.cubaWorks = w; dataSnap.cubaAuthors = a; dataSnap.cubaPerformers = p;
+                } else if (trimmed.includes('Zona: Extranjera')) {
+                    dataSnap.foreignWorks = w; dataSnap.foreignAuthors = a; dataSnap.foreignPerformers = p;
+                } else {
+                    for (const regText in regionMap) {
+                        if (trimmed.includes(regText)) {
+                            dataSnap.regions[regionMap[regText]] = { works: w, authors: a, performers: p };
+                        }
+                    }
+                }
+            }
+        } else if (currentSection === '=== Obras musicales más difundidas ===') {
+            const parts = trimmed.split(';');
+            if (parts.length >= 5) {
+                dataSnap.topSongs.push({
+                    track: {
+                        title: parts[1].replace('Título:', '').trim() || 'Desconocido',
+                        performer: parts[2].replace('Intérprete:', '').split('(')[0].trim() || 'Desconocido',
+                        performerCountry: parts[2].includes('(Cuba)') ? 'CUBA' : 'EXTRANJERO',
+                        author: parts[3].replace('Autor:', '').split('(')[0].trim() || 'Desconocido',
+                        authorCountry: parts[3].includes('(Cuba)') ? 'CUBA' : 'EXTRANJERO'
+                    },
+                    count: parseInt(parts[4].replace('Frecuencia:', '').trim()) || 0
+                });
+            }
+        } else if (currentSection === '=== Autores más difundidos ===') {
+            const parts = trimmed.split(';');
+            if (parts.length >= 4) {
+                 dataSnap.topAuthors.push({
+                    name: parts[1].replace('Autor:', '').split('(')[0].trim(),
+                    nac: parts[1].includes('(Cuba)') ? 'CUBA' : 'EXTRANJERO',
+                    execs: parseInt(parts[2].replace('Cantidad de obras:', '').trim()),
+                    frec: parseInt(parts[3].replace('Frecuencia:', '').trim())
+                 });
+            }
+        } else if (currentSection === '=== Intérpretes más difundidos ===') {
+            const parts = trimmed.split(';');
+            if (parts.length >= 4) {
+                 dataSnap.topPerformers.push({
+                    name: parts[1].replace('Intérprete:', '').split('(')[0].trim(),
+                    nac: parts[1].includes('(Cuba)') ? 'CUBA' : 'EXTRANJERO',
+                    execs: parseInt(parts[2].replace('Cantidad de obras:', '').trim()),
+                    frec: parseInt(parts[3].replace('Frecuencia:', '').trim())
+                 });
+            }
+        } else if (currentSection === '=== Géneros musicales más difundidos ===') {
+            const parts = trimmed.split(';');
+            if (parts.length >= 4) {
+                 dataSnap.topGenres.push({
+                    name: parts[1].replace('Género:', '').trim(),
+                    execs: parseInt(parts[2].match(/\d+/)?.[0] || '0'),
+                    frec: parseInt(parts[3].match(/\d+/)?.[0] || '0')
+                 });
+            }
+        }
+    }
+    return dataSnap;
+  };
+
+  const extractMonthYearFromText = (text: string) => {
+    const lines = text.split('\n');
+    let year = '';
+    let month = '';
+    
+    const headerLine = lines.find(l => l.includes('AÑO:') && l.includes('MES:'));
+    if (headerLine) {
+        const yearMatch = headerLine.match(/AÑO:\s*(\d+)/);
+        const monthMatch = headerLine.match(/MES:\s*([A-ZÁÉÍÓÚ]+)/i);
+        
+        if (yearMatch) year = yearMatch[1];
+        if (monthMatch) {
+            const mName = monthMatch[1].toUpperCase();
+            const months: Record<string, string> = {
+                'ENERO': '01', 'FEBRERO': '02', 'MARZO': '03', 'ABRIL': '04',
+                'MAYO': '05', 'JUNIO': '06', 'JULIO': '07', 'AGOSTO': '08',
+                'SEPTIEMBRE': '09', 'OCTUBRE': '10', 'NOVIEMBRE': '11', 'DICIEMBRE': '12'
+            };
+            month = months[mName] || '01';
+        }
+    }
+    
+    if (year && month) return `${year}-${month}`;
+    return null;
   };
 
   const handleArchivar = () => {
@@ -1759,10 +1972,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         totalWorks: totalWorksCount,
         cubaWorks: totalWorksCuba,
         foreignWorks: totalWorksForeign,
-        totalAuthors: uniqueAuthorsList.length,
+        totalAuthors: totalAuthorsCount,
         cubaAuthors: cubanAuthorsCount,
         foreignAuthors: foreignAuthorsCount,
-        totalPerformers: uniquePerformersList.length,
+        totalPerformers: totalPerformersCount,
         cubaPerformers: cubanPerformersCount,
         foreignPerformers: foreignPerformersCount,
         regions: {} as any,
@@ -1963,15 +2176,16 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 ]
               }),
               ...topSongs.map((item, idx) => {
-                const nacPerf = isCuban(item.track.performerCountry) || (!item.track.performerCountry && !item.track.authorCountry) ? "CUBA" : (item.track.performerCountry?.toUpperCase() || '-');
-                const nacAuth = isCuban(item.track.authorCountry) || (!item.track.authorCountry && !item.track.performerCountry) ? "CUBA" : (item.track.authorCountry?.toUpperCase() || '-');
+                const track = item.track || {};
+                const nacPerf = isCuban(track.performerCountry) || (!track.performerCountry && !track.authorCountry) ? "CUBA" : (track.performerCountry?.toUpperCase() || '-');
+                const nacAuth = isCuban(track.authorCountry) || (!track.authorCountry && !track.performerCountry) ? "CUBA" : (track.authorCountry?.toUpperCase() || '-');
                 return new TableRow({
                   children: [
                     docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
-                    docxCell(item.track.title?.toUpperCase() || ''),
-                    docxCell(item.track.performer?.toUpperCase() || ''),
+                    docxCell(track.title?.toUpperCase() || ''),
+                    docxCell(track.performer?.toUpperCase() || ''),
                     docxCell(nacPerf, false, AlignmentType.CENTER),
-                    docxCell(item.track.author?.toUpperCase() || ''),
+                    docxCell(track.author?.toUpperCase() || ''),
                     docxCell(nacAuth, false, AlignmentType.CENTER),
                     docxCell(item.count.toString(), true, AlignmentType.CENTER),
                   ]
@@ -2078,7 +2292,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                     docxCell(item.name, true),
                     docxCell("0", false, AlignmentType.CENTER),
                     docxCell(item.execs.toString(), false, AlignmentType.CENTER),
-                    docxCell(pct(item.execs, stats.totalWorks), true, AlignmentType.CENTER),
+                    docxCell(item.frec.toString(), true, AlignmentType.CENTER),
                   ]
                 });
               })
@@ -2303,17 +2517,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                   docxCell(stats.foreignPct.toString(), false, AlignmentType.CENTER),
                   docxCell(stats.foreignAuthors.toString(), false, AlignmentType.CENTER),
                   docxCell(stats.foreignAuthorsPct.toString(), false, AlignmentType.CENTER),
-                ]
-              }),
-              // Total row
-              new TableRow({
-                children: [
-                  docxCell(""),
-                  docxCell("TOTAL GENERAL", true),
-                  docxCell(stats.totalWorks.toString(), true, AlignmentType.CENTER),
-                  docxCell("100", true, AlignmentType.CENTER),
-                  docxCell(stats.totalAuthors.toString(), true, AlignmentType.CENTER),
-                  docxCell("100", true, AlignmentType.CENTER),
                 ]
               }),
               // Latin America row
@@ -2679,9 +2882,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         <td className="p-1.5 border-r border-black/30">{totalWorksCuba}</td>
                         <td className="p-1.5 border-r border-black/30">{pct(totalWorksCuba, totalWorksCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{cubanAuthorsCount}</td>
-                        <td className="p-1.5 border-r border-black/30">{pct(cubanAuthorsCount, uniqueAuthorsList.length)}</td>
+                        <td className="p-1.5 border-r border-black/30">{pct(cubanAuthorsCount, totalAuthorsCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{cubanPerformersCount}</td>
-                        <td className="p-1.5">{pct(cubanPerformersCount, uniquePerformersList.length)}</td>
+                        <td className="p-1.5">{pct(cubanPerformersCount, totalPerformersCount)}</td>
                       </tr>
                       <tr className="border-b border-black/30">
                         <td className="p-1.5 border-r border-black/30 font-bold">2</td>
@@ -2689,33 +2892,35 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         <td className="p-1.5 border-r border-black/30">{totalWorksForeign}</td>
                         <td className="p-1.5 border-r border-black/30">{pct(totalWorksForeign, totalWorksCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{foreignAuthorsCount}</td>
-                        <td className="p-1.5 border-r border-black/30">{pct(foreignAuthorsCount, uniqueAuthorsList.length)}</td>
+                        <td className="p-1.5 border-r border-black/30">{pct(foreignAuthorsCount, totalAuthorsCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{foreignPerformersCount}</td>
-                        <td className="p-1.5">{pct(foreignPerformersCount, uniquePerformersList.length)}</td>
+                        <td className="p-1.5">{pct(foreignPerformersCount, totalPerformersCount)}</td>
                       </tr>
                       <tr className="border-b border-black/30 font-bold bg-black/5">
                         <td className="p-1.5 border-r border-black/30"></td>
                         <td className="p-1.5 border-r border-black/30 text-left">Total general</td>
                         <td className="p-1.5 border-r border-black/30">{totalWorksCount}</td>
                         <td className="p-1.5 border-r border-black/30">100</td>
-                        <td className="p-1.5 border-r border-black/30">{uniqueAuthorsList.length}</td>
+                        <td className="p-1.5 border-r border-black/30">{totalAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">100</td>
-                        <td className="p-1.5 border-r border-black/30">{uniquePerformersList.length}</td>
+                        <td className="p-1.5 border-r border-black/30">{totalPerformersCount}</td>
                         <td className="p-1.5">100</td>
                       </tr>
                       {/* Foreign subcategories */}
                       {Object.keys(regionStats).map((regName) => {
                         const s = regionStats[regName as keyof typeof regionStats];
+                        const authorCount = (typeof s.authors === 'number') ? s.authors : (s.authors?.size || 0);
+                        const performerCount = (typeof s.performers === 'number') ? s.performers : (s.performers?.size || 0);
                         return (
                           <tr key={regName} className="border-b border-black/20 text-black/70">
                             <td className="p-1 border-r border-black/20"></td>
                             <td className="p-1 border-r border-black/20 text-left italic pl-4">{regName}</td>
                             <td className="p-1 border-r border-black/20">{s.works}</td>
                             <td className="p-1 border-r border-black/20">{pct(s.works, totalWorksCount)}</td>
-                            <td className="p-1 border-r border-black/20">{s.authors.size}</td>
-                            <td className="p-1 border-r border-black/20">{pct(s.authors.size, uniqueAuthorsList.length)}</td>
-                            <td className="p-1 border-r border-black/20">{s.performers.size}</td>
-                            <td className="p-1">{pct(s.performers.size, uniquePerformersList.length)}</td>
+                            <td className="p-1 border-r border-black/20">{authorCount}</td>
+                            <td className="p-1 border-r border-black/20">{pct(authorCount, totalAuthorsCount)}</td>
+                            <td className="p-1 border-r border-black/20">{performerCount}</td>
+                            <td className="p-1">{pct(performerCount, totalPerformersCount)}</td>
                           </tr>
                         );
                       })}
@@ -2745,15 +2950,16 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         {topSongs.length === 0 ? (
                           <tr><td colSpan={7} className="p-2 text-center text-gray-400">Sin datos de temas en este mes</td></tr>
                         ) : topSongs.map((item, idx) => {
-                          const nacPerf = isCuban(item.track.performerCountry) || (!item.track.performerCountry && !item.track.authorCountry) ? "CUBA" : (item.track.performerCountry?.toUpperCase() || '-');
-                          const nacAuth = isCuban(item.track.authorCountry) || (!item.track.authorCountry && !item.track.performerCountry) ? "CUBA" : (item.track.authorCountry?.toUpperCase() || '-');
+                          const track = item.track || {};
+                          const nacPerf = isCuban(track.performerCountry) || (!track.performerCountry && !track.authorCountry) ? "CUBA" : (track.performerCountry?.toUpperCase() || '-');
+                          const nacAuth = isCuban(track.authorCountry) || (!track.authorCountry && !track.performerCountry) ? "CUBA" : (track.authorCountry?.toUpperCase() || '-');
                           return (
                             <tr key={idx} className="border-b border-[gray]/20">
                               <td className="p-1 border-r border-[gray]/20 text-center">{idx + 1}</td>
-                              <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.track.title?.toUpperCase() || ''}</td>
-                              <td className="p-1 border-r border-[gray]/20 pl-2">{item.track.performer?.toUpperCase() || ''}</td>
+                              <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{track.title?.toUpperCase() || ''}</td>
+                              <td className="p-1 border-r border-[gray]/20 pl-2">{track.performer?.toUpperCase() || ''}</td>
                               <td className="p-1 border-r border-[gray]/20 text-center text-[10px]">{nacPerf}</td>
-                              <td className="p-1 border-r border-[gray]/20 pl-2">{item.track.author?.toUpperCase() || ''}</td>
+                              <td className="p-1 border-r border-[gray]/20 pl-2">{track.author?.toUpperCase() || ''}</td>
                               <td className="p-1 border-r border-[gray]/20 text-center text-[10px]">{nacAuth}</td>
                               <td className="p-1 font-bold text-center">{item.count}</td>
                             </tr>
@@ -2785,7 +2991,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name.toUpperCase()}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.nac}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
-                            <td className="p-1 font-bold text-center">{pct(item.execs, totalWorksCount)}</td>
+                            <td className="p-1 font-bold text-center">{item.frec || pct(item.execs, totalWorksCount)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2814,7 +3020,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name.toUpperCase()}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.nac}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
-                            <td className="p-1 font-bold text-center">{pct(item.execs, totalWorksCount)}</td>
+                            <td className="p-1 font-bold text-center">{item.frec || pct(item.execs, totalWorksCount)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2843,7 +3049,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">0</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
-                            <td className="p-1 font-bold text-center">{pct(item.execs, totalWorksCount)}</td>
+                            <td className="p-1 font-bold text-center">{item.frec}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2951,18 +3157,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       <td className="p-3 border-r border-black/80 font-semibold">{activePeriodStats.economia.instrumentalesExtranjera}</td>
                       <td className="p-3 font-bold bg-black/5">{activePeriodStats.economia.instrumentalesTotal}</td>
                     </tr>
-                    <tr className="border-b border-black/80">
-                      <td className="p-3 border-r border-black/80 font-bold text-left bg-black/10">TOTAL</td>
-                      <td className="p-3 border-r border-black/80 font-bold bg-black/10">
-                        {activePeriodStats.economia.completasCubana + activePeriodStats.economia.incidentalesCubana + activePeriodStats.economia.instrumentalesCubana}
-                      </td>
-                      <td className="p-3 border-r border-black/80 font-bold bg-black/10">
-                        {activePeriodStats.economia.completasExtranjera + activePeriodStats.economia.incidentalesExtranjera + activePeriodStats.economia.instrumentalesExtranjera}
-                      </td>
-                      <td className="p-3 font-bold bg-black/20 text-[14px]">
-                        {activePeriodStats.economia.completasTotal + activePeriodStats.economia.incidentalesTotal + activePeriodStats.economia.instrumentalesTotal}
-                      </td>
-                    </tr>
                   </tbody>
                 </table>
                 
@@ -2999,7 +3193,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                   className="bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl transition-colors flex items-center gap-2 text-[12px] shadow-lg"
                   id="download-economy-docx-btn"
                 >
-                  <FileDown size={18} /> Descargar Informe de Economía (.docx)
+                  <FileDown size={18} /> Descargar Informe de Economía (.txt)
                 </button>
               </div>
 
@@ -3353,7 +3547,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                   className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded-xl transition-colors font-bold flex items-center justify-center gap-2 shadow-lg"
                   id="download-incidental-docx-btn"
                 >
-                  <FileDown size={18} /> Descargar (.docx)
+                  <FileDown size={18} /> Descargar (.txt)
                 </button>
               </div>
 
@@ -3394,41 +3588,27 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
             <div className="p-6 flex-1 overflow-auto space-y-6">
                <div className="bg-[#2C1B15] p-6 rounded-xl border border-[#9E7649]/30 shadow-lg">
                  <h4 className="font-bold text-white mb-2 text-sm uppercase tracking-wider flex items-center gap-2">
-                   <Upload size={16} className="text-[#9E7649]" /> Subir Reporte Mensual Externo (.docx)
+                   <Upload size={16} className="text-[#9E7649]" /> Carga Masiva Automática (.txt)
                  </h4>
                  <p className="text-xs text-[#E8DCCF]/60 mb-5">
-                   Para análisis trimestral, semestral y anual correctos, el sistema une los datos mensuales. 
-                   Sube informes antiguos generados en Word para incluirlos en el archivo del sistema.
+                   Sube uno o varios archivos .txt. El sistema detectará automáticamente el mes, el año y el tipo de informe.
                  </p>
                  
                  <div className="flex flex-wrap gap-4 items-center p-4 bg-[#1A100C] rounded-lg border border-[#9E7649]/10">
-                   <div className="flex items-center gap-2">
-                     <span className="text-[#E8DCCF]/60 text-[10px] uppercase font-bold">Añadir al Mes:</span>
-                     <select 
-                       className="bg-[#2C1B15] border border-[#9E7649]/30 text-white text-xs p-2 rounded"
-                       id="archive-month-select"
-                       defaultValue={selectedMonthStr}
-                     >
-                       {[2024, 2025, 2026, 2027, 2028, 2029].map(y => 
-                         MONTH_NAMES_SPANISH.map((m, i) => {
-                           const val = `${y}-${String(i+1).padStart(2,'0')}`;
-                           return <option key={val} value={val}>{m} {y}</option>
-                         })
-                       ).flat()}
-                     </select>
-                   </div>
-                   
-                   <label className="flex-1 bg-[#9E7649]/20 hover:bg-[#9E7649]/40 border border-[#9E7649]/50 transition-colors cursor-pointer rounded-lg p-2 flex items-center justify-center gap-2 text-white font-bold text-xs">
-                     <FileText size={16} /> Seleccionar y Cargar Archivo .docx
+                   <label className="w-full bg-[#9E7649]/20 hover:bg-[#9E7649]/40 border border-[#9E7649]/50 transition-colors cursor-pointer rounded-lg p-5 flex flex-col items-center justify-center gap-3 text-white font-bold text-sm">
+                     <div className="bg-[#9E7649]/40 p-4 rounded-full">
+                       <Upload size={32} />
+                     </div>
+                     <span>Arrastra o selecciona múltiples informes .txt</span>
+                     <span className="text-[10px] opacity-60 font-normal">Soporta Mensual, Economía e Incidental</span>
                      <input 
                        type="file" 
-                       accept=".docx"
+                       accept=".txt"
+                       multiple
                        className="hidden"
                        onChange={e => {
-                         const file = e.target.files?.[0];
-                         const mSelect = document.getElementById('archive-month-select') as HTMLSelectElement;
-                         if (file && mSelect) {
-                           handleUploadDocxForPreview(mSelect.value, file, archiveManagerType);
+                         if (e.target.files && e.target.files.length > 0) {
+                           handleBulkUploadFiles(e.target.files);
                          }
                        }}
                      />
@@ -3453,39 +3633,67 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                        archiveManagerType === 'mensual' ? archiveMensual : 
                        archiveManagerType === 'economia' ? archiveEconomia : archiveIncidental
                      ).sort().reverse().map(mStr => (
-                       <div key={mStr} className="bg-[#1A100C] p-4 text-center rounded-lg border border-green-500/30 flex flex-col items-center gap-2 hover:bg-[#9E7649]/10 transition-colors">
+                       <div key={mStr} className="bg-[#1A100C] p-4 text-center rounded-lg border border-green-500/30 flex flex-col items-center gap-2 hover:bg-[#9E7649]/10 transition-colors relative group">
                          <div className="bg-green-500/20 p-2 rounded-full"><CheckCircle2 size={24} className="text-green-400" /></div>
                          <span className="text-white font-bold tracking-wide mt-2">{mStr}</span>
                          <span className="text-[10px] text-green-400 mb-2">Datos Listos</span>
-                         <button
-                           onClick={() => {
-                             if(onMonthChange) onMonthChange(mStr);
-                              setActivePeriod("mensual");
-                              setActiveReportType(archiveManagerType);
-                              setShowArchiveManager(false);
-                           }}
-                           className="bg-[#2C1B15] border border-[#9E7649]/30 hover:bg-[#3E1A0F] text-white text-[10px] px-3 py-1.5 rounded-lg flex justify-center items-center gap-1 font-bold w-full"
-                         >
-                           <FileDown size={12} /> Ver / Descargar
-                         </button>
-                         <button
-                           onClick={() => {
-                              if (window.confirm(`¿Está seguro que desea eliminar del archivo el mes ${mStr}?`)) {
-                                deleteFromArchive(archiveManagerType, mStr);
-                             }
-                           }}
-                           className="bg-red-500/10 border border-red-500/30 hover:bg-red-500/30 text-red-300 text-[10px] px-3 py-1.5 rounded-lg flex justify-center items-center gap-1 font-bold w-full mt-1"
-                         >
-                           <Trash2 size={12} /> Eliminar
-                         </button>
+                         
+                         <div className="flex flex-col gap-2 w-full mt-auto">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if(onMonthChange) onMonthChange(mStr);
+                                setActivePeriod("mensual");
+                                setActiveReportType(archiveManagerType);
+                                setShowArchiveManager(false);
+                              }}
+                              className="bg-[#2C1B15] border border-[#9E7649]/30 hover:bg-[#3E1A0F] text-white text-[10px] px-3 py-1.5 rounded-lg flex justify-center items-center gap-1 font-bold w-full transition-all active:scale-95"
+                            >
+                              <FileDown size={12} /> Ver / Descargar
+                            </button>
+                            
+                            {deletingMonth === mStr ? (
+                              <div className="flex gap-1 w-full animate-pulse-slow">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteFromArchive(archiveManagerType, mStr);
+                                    setDeletingMonth(null);
+                                  }}
+                                  className="bg-red-600 hover:bg-red-700 text-white text-[9px] py-1.5 rounded flex-1 font-bold"
+                                >
+                                  Confirmar
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeletingMonth(null);
+                                  }}
+                                  className="bg-gray-600 hover:bg-gray-700 text-white text-[9px] py-1.5 rounded flex-1 font-bold"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                   e.stopPropagation();
+                                   setDeletingMonth(mStr);
+                                }}
+                                className="bg-red-500/10 border border-red-500/30 hover:bg-red-500/30 text-red-300 text-[10px] px-3 py-1.5 rounded-lg flex justify-center items-center gap-1 font-bold w-full transition-all active:scale-95"
+                              >
+                                <Trash2 size={12} /> Eliminar
+                              </button>
+                            )}
+                         </div>
                        </div>
                      ))
                    )}
-                 </div>
-               </div>
-            </div>
-          </div>
-        )}
+                  </div>
+                </div>
+             </div>
+           </div>
+         )}
 
       </div>
     </div>
