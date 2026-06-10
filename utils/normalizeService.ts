@@ -16,26 +16,40 @@ function numberToRoman(num: number): string {
     return str;
 }
 
-// Format dates specifically for years in the script
 function formatTextForVoice(text: string): string {
-    // Replace quotes and specific guillemets with empty strings
-    let res = text.replace(/["«»]/g, '');
+    const parts = text.split(/(<[^>]+>)/);
+    for (let i = 0; i < parts.length; i++) {
+        if (!parts[i].startsWith('<')) {
+            let res = parts[i];
+            
+            // Replace quotes and specific guillemets with empty strings
+            res = res.replace(/["«»]/g, '');
 
-    // Format years from 19xx and 20xx
-    res = res.replace(/\b19(\d{2})\b/g, 'mil $1');
-    res = res.replace(/\b20(\d{2})\b/g, 'dos mil $1');
-    
-    // Replace standalone 1-9 representing days with words (very specific common occurrences)
-    // We only do this if it looks like "X de"
-    const singleDigitMap: {[key: string]: string} = {
-        '1': 'uno', '2': 'dos', '3': 'tres', '4': 'cuatro', 
-        '5': 'cinco', '6': 'seis', '7': 'siete', '8': 'ocho', '9': 'nueve'
-    };
-    res = res.replace(/\b([1-9])\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi, (match, p1, p2) => {
-        return `${singleDigitMap[p1]} de ${p2}`;
-    });
+            // Format years from 19xx and 20xx
+            res = res.replace(/\b19(\d{2})\b/g, 'Mil 9$1');
+            res = res.replace(/\b200([0-9])\b/g, (match, p1) => {
+                if (p1 === '0') return 'Dos Mil'; // 2000
+                const singleDigitMap: {[key: string]: string} = {
+                    '1': 'uno', '2': 'dos', '3': 'tres', '4': 'cuatro', 
+                    '5': 'cinco', '6': 'seis', '7': 'siete', '8': 'ocho', '9': 'nueve'
+                };
+                return `Dos Mil ${singleDigitMap[p1]}`;
+            });
+            res = res.replace(/\b20([1-9]\d)\b/g, 'Dos Mil $1');
+            
+            // Replace standalone 1-9 representing days with words (very specific common occurrences)
+            const singleDigitMap: {[key: string]: string} = {
+                '1': 'uno', '2': 'dos', '3': 'tres', '4': 'cuatro', 
+                '5': 'cinco', '6': 'seis', '7': 'siete', '8': 'ocho', '9': 'nueve'
+            };
+            res = res.replace(/\b([1-9])\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi, (match, p1, p2) => {
+                return `${singleDigitMap[p1]} de ${p2}`;
+            });
 
-    return res;
+            parts[i] = res;
+        }
+    }
+    return parts.join('');
 }
 
 export function normalizeScriptNumbering(script: RadioScript, formatMode: 'all' | 'numbering' | 'credits' = 'all'): RadioScript {

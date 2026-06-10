@@ -7,8 +7,63 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
     htmlContext = htmlContext.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 
     // Dividir por líneas y descartar vacías
-    const paragraphs = htmlContext.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const rawParagraphs = htmlContext.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
     
+    // Fix broken tags across paragraphs (e.g. <strong>Line 1 \n Line 2</strong>)
+    const paragraphs: string[] = [];
+    let currentOpenTags: string[] = [];
+
+    for (let p of rawParagraphs) {
+        // Prepend currently open tags
+        const prefix = currentOpenTags.join('');
+        p = prefix + p;
+        
+        // Re-calculate open tags for the end of the line
+        const activeTags: string[] = [];
+        let i = 0;
+        let limitFailsafe = 0;
+        while (i < p.length && limitFailsafe < 5000) {
+            limitFailsafe++;
+            if (p[i] === '<') {
+                const startTagIdx = i;
+                while (i < p.length && p[i] !== '>') i++;
+                const fullTag = p.substring(startTagIdx, i + 1);
+                
+                const isClosing = fullTag.startsWith('</');
+                const tagNameMatch = fullTag.match(/<\/?([a-z0-9]+)/i);
+                if (tagNameMatch) {
+                    const tagName = tagNameMatch[1].toLowerCase();
+                    if (['b', 'strong', 'i', 'em', 'u', 'span'].includes(tagName)) {
+                        if (isClosing) {
+                            for (let k = activeTags.length - 1; k >= 0; k--) {
+                                const tNameMatch = activeTags[k].match(/<([a-z0-9]+)/i);
+                                if (tNameMatch && tNameMatch[1].toLowerCase() === tagName) {
+                                    activeTags.splice(k, 1);
+                                    break;
+                                }
+                            }
+                        } else {
+                            activeTags.push(fullTag);
+                        }
+                    }
+                }
+            }
+            i++;
+        }
+        
+        // Close any tags that are still open at the end of this line
+        let suffix = '';
+        for (let k = activeTags.length - 1; k >= 0; k--) {
+            const tNameMatch = activeTags[k].match(/<([a-z0-9]+)/i);
+            if (tNameMatch) {
+                suffix += `</${tNameMatch[1]}>`;
+            }
+        }
+        
+        paragraphs.push(p + suffix);
+        currentOpenTags = [...activeTags]; // pass open tags to next line
+    }
+
     // Detect if it starts with "MONOLOGO"
     let isMonologo = false;
     if (paragraphs.length > 0) {
@@ -50,11 +105,11 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
     let parsingCredits = true;
     let foundValidContent = false;
     
-    // Helper to find the index in the original string that corresponds to a flat index
-    const getOriginalIndex = (original: string, flatIndex: number): number => {
+    const getOriginalIndex = (original: string, flatIndex: number): { offset: number, openTags: string } => {
         let flatCount = 0;
         let originalIdx = 0;
-        // Trim leading spaces conceptually for the matching offset (since flatP is trimmed)
+        const activeTags: string[] = [];
+        
         const trimmedOriginal = original.replace(/<[^>]+>/g, '').replace(/\*/g, '');
         const leadingSpacesCount = trimmedOriginal.length - trimmedOriginal.trimStart().length;
         
@@ -62,16 +117,41 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
 
         while (originalIdx < original.length && flatCount < targetFlatCount) {
             if (original[originalIdx] === '<') {
-                while (originalIdx < original.length && original[originalIdx] !== '>') originalIdx++;
+                const startTagIdx = originalIdx;
+                while (originalIdx < original.length && original[originalIdx] !== '>') {
+                    originalIdx++;
+                }
+                const fullTag = original.substring(startTagIdx, originalIdx + 1);
+                
+                // Fast-track tracking of simple formatting tags
+                const isClosing = fullTag.startsWith('</');
+                const tagNameMatch = fullTag.match(/<\/?([a-z0-9]+)/i);
+                if (tagNameMatch) {
+                    const tagName = tagNameMatch[1].toLowerCase();
+                    if (['b', 'strong', 'i', 'em', 'u', 'span'].includes(tagName)) {
+                        if (isClosing) {
+                             // find the last open tag of this type and remove it
+                             for (let i = activeTags.length - 1; i >= 0; i--) {
+                                 const tNameMatch = activeTags[i].match(/<([a-z0-9]+)/i);
+                                 if (tNameMatch && tNameMatch[1].toLowerCase() === tagName) {
+                                     activeTags.splice(i, 1);
+                                     break;
+                                 }
+                             }
+                        } else {
+                             activeTags.push(fullTag);
+                        }
+                    }
+                }
                 originalIdx++;
             } else if (original[originalIdx] === '*') {
-                originalIdx++; // Asterisks are removed in flatP, so they don't count towards flatCount
+                originalIdx++;
             } else {
                 flatCount++;
                 originalIdx++;
             }
         }
-        return originalIdx;
+        return { offset: originalIdx, openTags: activeTags.join('') };
     };
     
     for (const p of paragraphs) {
@@ -127,8 +207,8 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
                 
                 // Get original remaining text with tags
                 const headerLength = flatP.length - (soundMatch[3] ? soundMatch[3].length : 0);
-                const originalOffset = getOriginalIndex(p, headerLength);
-                let remainingText = p.substring(originalOffset).trim();
+                const { offset: originalOffset, openTags } = getOriginalIndex(p, headerLength);
+                let remainingText = openTags + p.substring(originalOffset).trim();
                 
                 body.push({
                     type: 'sound',
@@ -169,8 +249,8 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
                 speakerOriginalName = originalNamePart;
                 
                 const headerLength = flatP.length - (colonMatch[4] ? colonMatch[4].length : 0);
-                const originalOffset = getOriginalIndex(p, headerLength);
-                textExtracted = applyRadioTransformations(p.substring(originalOffset).trim());
+                const { offset: originalOffset, openTags } = getOriginalIndex(p, headerLength);
+                textExtracted = applyRadioTransformations(openTags + p.substring(originalOffset).trim());
             }
         }
         
@@ -195,8 +275,8 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
                     speakerOriginalName = originalNamePart;
                     
                     const headerLength = flatP.length - (noColonMatch[4] ? noColonMatch[4].length : 0);
-                    const originalOffset = getOriginalIndex(p, headerLength);
-                    textExtracted = applyRadioTransformations(p.substring(originalOffset).trim());
+                    const { offset: originalOffset, openTags } = getOriginalIndex(p, headerLength);
+                    textExtracted = applyRadioTransformations(openTags + p.substring(originalOffset).trim());
                 }
             } else {
                 // Attempt format 3: No number, no colon, but STARTS EXACTLY with a known speaker
@@ -213,8 +293,8 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
                         speakerOriginalName = originalNamePart;
                         
                         const headerLength = flatP.length - (knownMatch[3] ? knownMatch[3].length : 0);
-                        const originalOffset = getOriginalIndex(p, headerLength);
-                        textExtracted = applyRadioTransformations(p.substring(originalOffset).trim());
+                        const { offset: originalOffset, openTags } = getOriginalIndex(p, headerLength);
+                        textExtracted = applyRadioTransformations(openTags + p.substring(originalOffset).trim());
                     }
                 }
             }
@@ -227,7 +307,7 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
 
             if (isCreditLabel && !intention) {
                 if (isSpeakerRole) {
-                    if (parsingCredits && textExtracted.length < 100 && !/[.!?]$/.test(textExtracted.trim())) {
+                    if (parsingCredits && textExtracted.replace(/<[^>]+>/g, '').length < 100 && !/[.!?]$/.test(textExtracted.replace(/<[^>]+>/g, '').trim())) {
                         // Si estamos en zona de créditos y no parece una frase completa, es el crédito.
                         isSpeaker = false;
                     }
@@ -272,8 +352,8 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
                 // Get original value with tags
                 const labelInFlat = kwMatch[1];
                 const headerLength = flatP.indexOf(kwMatch[2], labelInFlat.length);
-                const originalOffset = getOriginalIndex(p, headerLength);
-                let val = p.substring(originalOffset).trim();
+                const { offset: originalOffset, openTags } = getOriginalIndex(p, headerLength);
+                let val = openTags + p.substring(originalOffset).trim();
                 
                 // Limpiar el valor si empieza por ":" o "." accidentalmente
                 let textVal = val.replace(/<[^>]+>/g, '').trim();
@@ -297,10 +377,10 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
                 continue;
             } else if (creditMatch && creditMatch[1].length < 40) {
                 const headerLength = flatP.indexOf(':') + 1;
-                const originalOffset = getOriginalIndex(p, headerLength);
+                const { offset: originalOffset, openTags } = getOriginalIndex(p, headerLength);
                 credits.push({
                     label: creditMatch[1].trim().toUpperCase(),
-                    value: p.substring(originalOffset).trim()
+                    value: openTags + p.substring(originalOffset).trim()
                 });
                 continue;
             }
@@ -466,6 +546,9 @@ function applyRadioTransformations(text: string): string {
         if (!parts[i].startsWith('<')) {
             let s = parts[i];
 
+            // Remove quotes globally (only outside tags)
+            s = s.replace(/["«»]/g, '');
+
             // Rule 1898 -> Mil 898
             s = s.replace(/\b18(\d{2})\b/g, 'Mil 8$1');
             
@@ -494,8 +577,23 @@ function applyRadioTransformations(text: string): string {
                     }
                 }
                 
+                // Protect specific uppercase words followed by a digit. 
+                // We'll replace them with a temporary token, then restore.
+                const protectedTokens: string[] = [];
+                let pText = subParts[j].replace(/\b(MUSICAL|SON|SONIDO|EFECTO|OP|PISTA|CORTE|TRACK)\s+([0-9])\b/gi, (match) => {
+                    protectedTokens.push(match);
+                    return `__PROTECTED_TOKEN_${protectedTokens.length - 1}__`;
+                });
+
                 // For non-protected parts, apply 0-9 rule
-                subParts[j] = subParts[j].replace(/(?<![0-9])([0-9])(?![0-9])/g, (match, p1) => digitToWordMap[p1]);
+                pText = pText.replace(/(?<![0-9])([0-9])(?![0-9])/g, (match, p1) => digitToWordMap[p1]);
+
+                // Restore protected tokens
+                for (let k = 0; k < protectedTokens.length; k++) {
+                    pText = pText.replace(`__PROTECTED_TOKEN_${k}__`, protectedTokens[k]);
+                }
+
+                subParts[j] = pText;
             }
             s = subParts.join('');
 
