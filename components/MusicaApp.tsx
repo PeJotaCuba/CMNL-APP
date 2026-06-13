@@ -151,6 +151,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [currentPath, setCurrentPath] = useState<string>(''); 
 
   const [customRoots, setCustomRoots] = useState<string[]>([]);
+  const [activeRootToDownloadPrompt, setActiveRootToDownloadPrompt] = useState<string | null>(null);
+  const [whatsAppPromptPayload, setWhatsAppPromptPayload] = useState<string | null>(null);
   
   const [programs, setPrograms] = useState<string[]>(() => {
       const saved = localStorage.getItem(PROGRAMS_KEY);
@@ -748,7 +750,6 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   };
 
   const parsePlaylistText = (text: string) => {
-      const lines = text.split('\n');
       const parsedTracks: {
           title?: string;
           author?: string;
@@ -756,52 +757,160 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           performer?: string;
           performerCountry?: string;
           genre?: string;
+          album?: string;
+          year?: string;
       }[] = [];
-      let currentTrack: {
-          title?: string;
-          author?: string;
-          authorCountry?: string;
-          performer?: string;
-          performerCountry?: string;
-          genre?: string;
-      } | null = null;
-      let countryContext: 'author' | 'performer' | null = null;
 
-      for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+      const cleanText = text.replace(/\*\*/g, '');
 
-          const lowerTrimmed = trimmed.toLowerCase();
-          
-          if (lowerTrimmed.startsWith('título:') || lowerTrimmed.startsWith('titulo:')) {
-              if (currentTrack) {
-                  parsedTracks.push(currentTrack);
+      // Identify if the text has structured label declarations
+      const normalizedAndLower = cleanText.toLowerCase();
+      const hasLabels = /titulo|titulo|nombre|tema|cancion|autor|compositor|interprete|cantante|artista|grupo|pais|origen|nacionalidad|disco|album|ano|year|fecha|genero|estilo|disquera/gi.test(normalizedAndLower);
+
+      if (hasLabels) {
+          const lines = cleanText.split(/\r?\n|\r|\u2028/).map(l => l.trim());
+
+          const normalizeKey = (key: string): string => {
+              const base = key.toLowerCase()
+                              .normalize("NFD")
+                              .replace(/[\u0300-\u036f]/g, "")
+                              .trim();
+              if (['titulo', 'nombre', 'tema', 'cancion'].includes(base)) return 'titulo';
+              if (['autor', 'compositor', 'creador'].includes(base)) return 'autor';
+              if (['interprete', 'cantante', 'artista', 'grupo'].includes(base)) return 'interprete';
+              if (['pais', 'origen', 'nacionalidad'].includes(base)) return 'pais';
+              if (['disco', 'album'].includes(base)) return 'album';
+              if (['ano', 'year', 'fecha'].includes(base)) return 'ano';
+              if (['genero', 'estilo'].includes(base)) return 'genero';
+              if (['disquera', 'sello'].includes(base)) return 'disquera';
+              return base;
+          };
+
+          let currentTrack: any = null;
+          let lastKeyContext: string = '';
+
+          for (const line of lines) {
+              if (!line) continue;
+
+              // Skip numbering lines like "1." or "12)" or "3"
+              if (/^\d+[\.\s\-)]*$/i.test(line)) {
+                  continue;
               }
-              const val = trimmed.replace(/^(título:|titulo:)\s*/i, '').trim();
-              currentTrack = { title: val };
-              countryContext = null;
-          } else if (currentTrack) {
-              if (lowerTrimmed.startsWith('autor:')) {
-                  currentTrack.author = trimmed.replace(/^autor:\s*/i, '').trim();
-                  countryContext = 'author';
-              } else if (lowerTrimmed.startsWith('intérprete:') || lowerTrimmed.startsWith('interprete:')) {
-                  currentTrack.performer = trimmed.replace(/^(intérprete:|interprete:)\s*/i, '').trim();
-                  countryContext = 'performer';
-              } else if (lowerTrimmed.startsWith('país:') || lowerTrimmed.startsWith('pais:')) {
-                  const countryVal = trimmed.replace(/^(país:|pais:)\s*/i, '').trim();
-                  if (countryContext === 'author') {
-                      currentTrack.authorCountry = countryVal;
-                  } else if (countryContext === 'performer') {
-                      currentTrack.performerCountry = countryVal;
+
+              const keyMatchRegex = /(título|titulo|nombre|tema|canción|cancion|autor|compositor|creador|intérprete|interprete|cantante|artista|grupo|país|pais|origen|nacionalidad|disco|album|álbum|disquera|sello|año|ano|year|fecha|género|genero|estilo)\s*:/gi;
+              const matches: { key: string; index: number; lastIndex: number }[] = [];
+              let match;
+              while ((match = keyMatchRegex.exec(line)) !== null) {
+                  matches.push({
+                      key: match[1],
+                      index: match.index,
+                      lastIndex: keyMatchRegex.lastIndex
+                  });
+              }
+
+              if (matches.length > 0) {
+                  for (let i = 0; i < matches.length; i++) {
+                      const m = matches[i];
+                      const nextIndex = (i + 1 < matches.length) ? matches[i + 1].index : line.length;
+                      const rawVal = line.substring(m.lastIndex, nextIndex);
+                      const trimmedRaw = rawVal.trim();
+                      
+                      let val = '';
+                      if (!trimmedRaw || /^[- :]+$/.test(trimmedRaw)) {
+                          val = '---';
+                      } else {
+                          val = trimmedRaw
+                                            .replace(/^[:\s,;\-*]+/, '')
+                                            .replace(/[:\s,;\-*]+$/, '')
+                                            .trim();
+                          if (!val) {
+                              val = '---';
+                          }
+                      }
+
+                      const normKey = normalizeKey(m.key);
+
+                      if (normKey === 'titulo') {
+                          if (currentTrack) {
+                              parsedTracks.push(currentTrack);
+                          }
+                          currentTrack = { title: val };
+                          lastKeyContext = 'titulo';
+                      } else if (currentTrack) {
+                          if (normKey === 'autor') {
+                              currentTrack.author = val;
+                              lastKeyContext = 'autor';
+                          } else if (normKey === 'interprete') {
+                              currentTrack.performer = val;
+                              lastKeyContext = 'interprete';
+                          } else if (normKey === 'pais') {
+                              if (lastKeyContext === 'autor') {
+                                  currentTrack.authorCountry = val;
+                              } else if (lastKeyContext === 'interprete') {
+                                  currentTrack.performerCountry = val;
+                              } else {
+                                  if (!currentTrack.authorCountry) {
+                                      currentTrack.authorCountry = val;
+                                  } else {
+                                      currentTrack.performerCountry = val;
+                                  }
+                              }
+                          } else if (normKey === 'genero') {
+                              currentTrack.genre = val;
+                          } else if (normKey === 'album') {
+                              currentTrack.album = val;
+                          } else if (normKey === 'ano') {
+                              currentTrack.year = val;
+                          }
+                      }
                   }
-              } else if (lowerTrimmed.startsWith('género:') || lowerTrimmed.startsWith('genero:')) {
-                  currentTrack.genre = trimmed.replace(/^(género:|genero:)\s*/i, '').trim();
+              }
+          }
+
+          if (currentTrack) {
+              parsedTracks.push(currentTrack);
+          }
+      } else {
+          const rawLines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+          for (const line of rawLines) {
+              let parts: string[] = [];
+              if (line.includes('\t')) {
+                  parts = line.split('\t').map(p => p.trim());
+              } else if (line.includes(';')) {
+                  parts = line.split(';').map(p => p.trim());
+              } else if (line.includes(',')) {
+                  parts = line.split(',').map(p => p.trim());
+              }
+
+              if (parts.length >= 2) {
+                  const track: any = {};
+                  if (parts[0]) track.title = parts[0];
+                  if (parts[1]) track.author = parts[1];
+                  
+                  if (parts.length === 3) {
+                      track.performer = parts[2];
+                  } else if (parts.length === 4) {
+                      track.performer = parts[2];
+                      track.genre = parts[3];
+                  } else if (parts.length === 5) {
+                      track.authorCountry = parts[2];
+                      track.performer = parts[3];
+                      track.genre = parts[4];
+                  } else if (parts.length >= 6) {
+                      track.authorCountry = parts[2];
+                      track.performer = parts[3];
+                      track.performerCountry = parts[4];
+                      track.genre = parts[5];
+                  }
+                  parsedTracks.push(track);
+              } else {
+                  if (line.length > 2) {
+                      parsedTracks.push({ title: line });
+                  }
               }
           }
       }
-      if (currentTrack) {
-          parsedTracks.push(currentTrack);
-      }
+
       return parsedTracks;
   };
 
@@ -809,6 +918,19 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       if (!wishlistText.trim()) return;
       const parsedList = parsePlaylistText(wishlistText);
       const resolvedTracks: Track[] = [];
+      const tracksToUpdateInDb: Track[] = [];
+      const updatedTracksForUserText: { title: string, author: string, authorCountry: string, performer: string, performerCountry: string, genre: string, album: string, year: string }[] = [];
+
+      const isAdminOrCoordinator = authMode === 'admin';
+
+      const findRootForTrack = (track: Track): string => {
+          for (const key of Object.keys(ROOT_DB_CONFIG)) {
+              if (track.path && track.path.startsWith(key)) {
+                  return key;
+              }
+          }
+          return activeRoot;
+      };
 
       parsedList.forEach((item, idx) => {
           const cleanTitle = (item.title || "").trim().toLowerCase();
@@ -826,32 +948,102 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
               matchedDbTrack = tracks.find(t => t.metadata.title.toLowerCase() === cleanTitle);
           }
 
+          // Merge fields prioritizing copy-pasted data, then DB fallback, then blank ""
+          const finalMetadata = {
+              title: (item.title !== undefined ? item.title : (matchedDbTrack ? matchedDbTrack.metadata.title : "")).trim(),
+              author: (item.author !== undefined ? item.author : (matchedDbTrack ? matchedDbTrack.metadata.author : "")).trim(),
+              authorCountry: (item.authorCountry !== undefined ? item.authorCountry : (matchedDbTrack ? matchedDbTrack.metadata.authorCountry : "")).trim(),
+              performer: (item.performer !== undefined ? item.performer : (matchedDbTrack ? matchedDbTrack.metadata.performer : "")).trim(),
+              performerCountry: (item.performerCountry !== undefined ? item.performerCountry : (matchedDbTrack ? matchedDbTrack.metadata.performerCountry : "")).trim(),
+              genre: (item.genre !== undefined ? item.genre : (matchedDbTrack ? matchedDbTrack.metadata.genre : "")).trim(),
+              album: (item.album !== undefined ? item.album : (matchedDbTrack ? matchedDbTrack.metadata.album : "")).trim(),
+              year: (item.year !== undefined ? item.year : (matchedDbTrack ? matchedDbTrack.metadata.year : "")).trim()
+          };
+
           if (matchedDbTrack) {
-              if (!resolvedTracks.some(r => r.id === matchedDbTrack!.id)) {
-                  resolvedTracks.push(matchedDbTrack);
+              const originalMeta = matchedDbTrack.metadata;
+              let isUpdatedInDb = false;
+
+              // Compare fields to see if metadata is enriched or changed
+              if (finalMetadata.title !== originalMeta.title) isUpdatedInDb = true;
+              if (finalMetadata.author !== originalMeta.author) isUpdatedInDb = true;
+              if (finalMetadata.authorCountry !== (originalMeta.authorCountry || '')) isUpdatedInDb = true;
+              if (finalMetadata.performer !== originalMeta.performer) isUpdatedInDb = true;
+              if (finalMetadata.performerCountry !== (originalMeta.performerCountry || '')) isUpdatedInDb = true;
+              if (finalMetadata.genre !== (originalMeta.genre || '')) isUpdatedInDb = true;
+              if (finalMetadata.album !== (originalMeta.album || '')) isUpdatedInDb = true;
+              if (finalMetadata.year !== (originalMeta.year || '')) isUpdatedInDb = true;
+
+              const resolvedTrack: Track = {
+                  ...matchedDbTrack,
+                  metadata: finalMetadata
+              };
+
+              if (isUpdatedInDb) {
+                  tracksToUpdateInDb.push(resolvedTrack);
+                  if (!isAdminOrCoordinator) {
+                      updatedTracksForUserText.push({
+                          title: finalMetadata.title,
+                          author: finalMetadata.author,
+                          authorCountry: finalMetadata.authorCountry,
+                          performer: finalMetadata.performer,
+                          performerCountry: finalMetadata.performerCountry,
+                          genre: finalMetadata.genre,
+                          album: finalMetadata.album,
+                          year: finalMetadata.year
+                      });
+                  }
+              }
+
+              if (!resolvedTracks.some(r => r.id === resolvedTrack.id)) {
+                  resolvedTracks.push(resolvedTrack);
               }
           } else {
-              // Create virtual Track to grant the same capabilities (export/play list visualizer/actions)
+              // Create virtual Track with unified metadata (missing fields left blank)
               const virtualId = `track-virtual-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 5)}`;
               const virtualTrack: Track = {
                   id: virtualId,
-                  filename: `${item.title || 'Desconocido'}.mp3`,
+                  filename: `${finalMetadata.title || 'Desconocido'}.mp3`,
                   path: 'Carga Externa',
                   isVerified: true,
-                  metadata: {
-                      title: item.title || 'Tema Desconocido',
-                      author: item.author || 'Autor Desconocido',
-                      authorCountry: item.authorCountry || 'Cuba',
-                      performer: item.performer || 'Intérprete Desconocido',
-                      performerCountry: item.performerCountry || 'Cuba',
-                      genre: item.genre || 'Changüí',
-                      album: 'Carga Externa',
-                      year: new Date().getFullYear().toString()
-                  }
+                  metadata: finalMetadata
               };
               resolvedTracks.push(virtualTrack);
           }
       });
+
+      // Update in local DB either way
+      if (tracksToUpdateInDb.length > 0) {
+          const updatedTracksList = tracks.map(t => {
+              const found = tracksToUpdateInDb.find(ut => ut.id === t.id);
+              return found ? found : t;
+          });
+          updateTracks(updatedTracksList);
+
+          if (isAdminOrCoordinator) {
+              const updatedRoots = new Set<string>();
+              tracksToUpdateInDb.forEach(t => {
+                  updatedRoots.add(findRootForTrack(t));
+              });
+              const rootToPrompt = Array.from(updatedRoots)[0] || activeRoot;
+              setActiveRootToDownloadPrompt(rootToPrompt);
+          } else if (updatedTracksForUserText.length > 0) {
+              // Format txt block report
+              let textMessage = "Hola Administrador. Aquí tienes los nuevos datos para actualizar la base de datos de música:\n\n";
+              updatedTracksForUserText.forEach(t => {
+                  textMessage += `Título: ${t.title}\n`;
+                  textMessage += `Autor: ${t.author}\n`;
+                  if (t.authorCountry) textMessage += `País: ${t.authorCountry}\n`;
+                  textMessage += `Intérprete: ${t.performer}\n`;
+                  if (t.performerCountry) textMessage += `País: ${t.performerCountry}\n`;
+                  if (t.album) textMessage += `Disco: ${t.album}\n`;
+                  if (t.year) textMessage += `Año: ${t.year}\n`;
+                  if (t.genre) textMessage += `Género: ${t.genre}\n`;
+                  textMessage += `\n`;
+              });
+              setWhatsAppPromptPayload(textMessage);
+          }
+      }
 
       if (resolvedTracks.length > 0) {
           setSelectedTracksList(prev => {
@@ -1314,6 +1506,101 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                     <div className="flex gap-3 mt-4">
                         <button onClick={() => setShowImportSelectionModal(false)} className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white">Cerrar</button>
                         <button onClick={handleProcessImportSelection} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700">Procesar</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {activeRootToDownloadPrompt && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setActiveRootToDownloadPrompt(null)}>
+                <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-bold text-lg mb-2 text-white flex items-center gap-2">💾 Base de Datos de Música</h3>
+                    <p className="text-sm text-[#E8DCCF]/80 mb-6 leading-relaxed">
+                        Se han incorporado nuevos datos para la base de datos de <span className="font-bold text-amber-200">{activeRootToDownloadPrompt}</span>. 
+                        Por favor, descargue el archivo oficial para guardarlo en el servidor:
+                    </p>
+                    <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20 text-xs text-[#E8DCCF]/60 mb-6 font-mono break-all text-center">
+                        Archivo: {ROOT_DB_CONFIG[activeRootToDownloadPrompt]?.filename || 'mdatos.json'}
+                    </div>
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={() => {
+                                handleExportRoot(activeRootToDownloadPrompt);
+                                setActiveRootToDownloadPrompt(null);
+                            }} 
+                            className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl font-bold font-sans text-sm shadow-lg flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <span className="material-symbols-outlined text-sm">download</span> Descargar {ROOT_DB_CONFIG[activeRootToDownloadPrompt]?.filename || 'mdatos.json'}
+                        </button>
+                        <button 
+                            onClick={() => setActiveRootToDownloadPrompt(null)} 
+                            className="w-full py-3 text-[#E8DCCF]/60 font-bold hover:text-white text-sm transition-colors text-center"
+                        >
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {whatsAppPromptPayload && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setWhatsAppPromptPayload(null)}>
+                <div className="w-full max-w-md bg-[#2C1B15] rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
+                    <h3 className="font-bold text-lg mb-2 text-white flex items-center gap-2">📲 Enviar Sincronización</h3>
+                    <p className="text-sm text-[#E8DCCF]/80 mb-4 leading-relaxed">
+                        Se han guardado localmente nuevos datos de música. Para coordinarlo con la emisora, envíe las modificaciones al administrador:
+                    </p>
+                    <textarea 
+                        className="w-full h-32 p-3 border border-[#9E7649]/30 bg-[#1A100C] text-white rounded-xl text-xs outline-none focus:border-[#9E7649] font-mono leading-relaxed mb-6"
+                        value={whatsAppPromptPayload}
+                        readOnly
+                    />
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setWhatsAppPromptPayload(null)} 
+                            className="flex-1 py-3 text-[#E8DCCF]/60 font-bold hover:text-white text-sm transition-colors"
+                        >
+                            Cancelar
+                        </button>
+                        <a 
+                            href={`https://wa.me/${(() => {
+                                let adminPhone = '54413935'; 
+                                const savedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+                                if (savedEquipo) {
+                                    try {
+                                        const equipo = JSON.parse(savedEquipo);
+                                        if (Array.isArray(equipo)) {
+                                            const adminStatic = equipo.find((m: any) => m.id === 'admin_app_static');
+                                            let designatedUserId = 'pedro';
+                                            if (adminStatic) {
+                                                if (adminStatic.designatedUserId) {
+                                                    designatedUserId = adminStatic.designatedUserId;
+                                                }
+                                                if (adminStatic.mobile) adminPhone = adminStatic.mobile;
+                                                else if (adminStatic.phone) adminPhone = adminStatic.phone;
+                                            }
+                                            const designatedMember = equipo.find((m: any) => m.id === designatedUserId || m.username === designatedUserId);
+                                            if (designatedMember) {
+                                                if (designatedMember.mobile) adminPhone = designatedMember.mobile;
+                                                else if (designatedMember.phone) adminPhone = designatedMember.phone;
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                    }
+                                }
+                                return adminPhone;
+                            })()}?text=${encodeURIComponent(whatsAppPromptPayload)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setWhatsAppPromptPayload(null)}
+                            className="flex-1 py-3 bg-[#25D366] hover:bg-[#1DA851] text-white rounded-xl font-bold text-center flex items-center justify-center gap-1.5 shadow-lg text-sm transition-colors"
+                        >
+                            <svg className="w-4 h-4 text-white fill-current inline-block" viewBox="0 0 24 24">
+                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.45L0 24zm6.59-4.846c1.6.95 3.1 1.45 4.6 1.45a9.85 9.85 0 0 0 9.85-9.85c.002-5.432-4.417-9.85-9.858-9.85-5.432 0-9.85 4.418-9.852 9.85a9.83 9.83 0 0 0 1.49 5.093l-.99 3.633 3.76-.976zm10.468-4.8c-.29-.145-1.72-.85-1.985-.945-.267-.1-.462-.146-.658.147-.196.29-.757.945-.928 1.14-.171.192-.34.215-.63.072-.29-.145-1.226-.453-2.335-1.44-.864-.772-1.448-1.725-1.618-2.016-.17-.29-.018-.447.127-.59.13-.13.29-.34.435-.51.145-.17.192-.29.29-.48.096-.193.048-.362-.024-.508-.07-.145-.658-1.587-.902-2.174-.236-.57-.478-.492-.656-.5-.17-.008-.367-.01-.564-.01-.197 0-.516.074-.787.368-.27.293-1.03 1.008-1.03 2.455 0 1.448 1.054 2.848 1.202 3.043.148.195 2.078 3.172 5.035 4.45.704.304 1.253.486 1.68.622.71.226 1.354.194 1.864.118a2.76 2.76 0 0 0 1.81-1.27c.264-.54.264-.997.185-1.093-.078-.096-.29-.144-.58-.29z"/>
+                            </svg>
+                            Enviar WhatsApp
+                        </a>
                     </div>
                 </div>
             </div>
