@@ -101,6 +101,47 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [showReportsMenu, setShowReportsMenu] = useState(false);
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [selectedReportTypeForModal, setSelectedReportTypeForModal] = useState<'mensual' | 'economia' | 'incidental'>('mensual');
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
+
+  const toggleMonthExpanded = (monthKey: string) => {
+      setExpandedMonths(prev => ({
+          ...prev,
+          [monthKey]: !prev[monthKey]
+      }));
+  };
+
+  const getMonthStats = (monthKey: string, prodsInMonth: Production[]) => {
+      if (monthKey === 'Desconocido') {
+          return { programados: 0, reales: prodsInMonth.length, restantes: 0 };
+      }
+      const [year, month] = monthKey.split('-').map(Number);
+      if (!year || !month) {
+          return { programados: 0, reales: prodsInMonth.length, restantes: 0 };
+      }
+
+      let programados = 0;
+      balancePrograms.forEach(prog => {
+          const expected = getExpectedDaysForProgram(prog, year, month);
+          programados += expected.length;
+      });
+
+      const reales = prodsInMonth.length;
+      const restantes = Math.max(0, programados - reales);
+
+      return { programados, reales, restantes };
+  };
+
+  const formatMonthKey = (key: string) => {
+      if (!key || key === 'Desconocido') return 'Desconocido';
+      const parts = key.split('-');
+      if (parts.length === 2) {
+          const year = parts[0];
+          const monthNum = parseInt(parts[1], 10);
+          return `${getMonthName(monthNum)} de ${year}`;
+      }
+      return key;
+  };
+
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [selectedBalanceProgram, setSelectedBalanceProgram] = useState<string | null>(null);
   const [showAddProgramModal, setShowAddProgramModal] = useState(false);
@@ -1202,33 +1243,115 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
         )}
 
         {activeTab === 'archive' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-fadeIn">
                 <h3 className="font-bold text-white mb-4 border-b border-[#9E7649]/20 pb-2">Archivo Histórico</h3>
                 {Object.keys(archivoPorMes).length === 0 ? (
                     <div className="p-8 border-2 border-dashed border-[#9E7649]/20 rounded-2xl text-center text-[#E8DCCF]/40 text-xs">
                         No hay producciones archivadas de meses anteriores.
                     </div>
                 ) : (
-                    Object.keys(archivoPorMes).sort().reverse().map(month => (
-                        <div key={month} className="space-y-3">
-                            <h4 className="text-xs font-bold text-[#E8DCCF]/60 uppercase tracking-widest sticky top-0 bg-[#1A100C] py-2 z-10">{month}</h4>
-                            {archivoPorMes[month].map(prod => {
-                                if (!prod) return null;
-                                return (
-                                <div key={prod.id || Math.random()} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm">
-                                    <div className="flex justify-between items-start mb-2">
+                    <div className="space-y-4">
+                        {Object.keys(archivoPorMes).sort().reverse().map(monthKey => {
+                            const prodsInMonth = archivoPorMes[monthKey];
+                            const { programados, reales, restantes } = getMonthStats(monthKey, prodsInMonth);
+                            const isExpanded = !!expandedMonths[monthKey];
+
+                            return (
+                                <div key={monthKey} className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 shadow-sm overflow-hidden transition-all duration-350">
+                                    {/* Header / Card Trigger */}
+                                    <div 
+                                        onClick={() => toggleMonthExpanded(monthKey)}
+                                        className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-[#38221A] transition-colors"
+                                        id={`archive-month-card-${monthKey}`}
+                                    >
                                         <div>
-                                            <h4 className="font-bold text-white text-sm">{prod.program || 'Sin programa'}</h4>
-                                            <p className="text-xs text-[#E8DCCF]/60">{prod.date || 'Sin fecha'} • {prod.tracks?.length || 0} temas</p>
+                                            <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-[#9E7649] text-base">calendar_today</span>
+                                                {formatMonthKey(monthKey)}
+                                            </h4>
+                                            <p className="text-xs text-[#E8DCCF]/60 mt-0.5">
+                                                {prodsInMonth.length} {prodsInMonth.length === 1 ? 'reporte guardado' : 'reportes guardados'}
+                                            </p>
                                         </div>
-                                        <button onClick={() => prod.id && handleDeleteProduction(prod.id)} className="text-red-400 hover:text-red-300 p-1">
-                                            <span className="material-symbols-outlined text-sm">delete</span>
-                                        </button>
+
+                                        <div className="flex items-center justify-between gap-6">
+                                            {/* Metrics display */}
+                                            <div className="flex items-center gap-2 text-xs sm:gap-4 md:gap-6">
+                                                <div className="bg-[#1A100C] py-1.5 px-3 rounded-lg text-center min-w-[70px]">
+                                                    <p className="text-[10px] text-[#E8DCCF]/40 uppercase font-semibold">Prog.</p>
+                                                    <p className="text-sm font-bold text-white">{programados}</p>
+                                                </div>
+                                                <div className="bg-[#1A100C] py-1.5 px-3 rounded-lg text-center min-w-[70px]">
+                                                    <p className="text-[10px] text-green-400/60 uppercase font-semibold">Real</p>
+                                                    <p className="text-sm font-bold text-green-400">{reales}</p>
+                                                </div>
+                                                <div className="bg-[#1A100C] py-1.5 px-3 rounded-lg text-center min-w-[70px]">
+                                                    <p className="text-[10px] text-red-400/60 uppercase font-semibold font-bold">Rest.</p>
+                                                    <p className="text-sm font-bold text-red-400">{restantes}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Expand arrow */}
+                                            <div className="text-[#9E7649] hover:text-[#B38757] transition-colors">
+                                                <span 
+                                                    className="material-symbols-outlined transition-transform duration-300 block"
+                                                    style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                                                >
+                                                    expand_more
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    {/* Expanded List */}
+                                    {isExpanded && (
+                                        <div className="border-t border-[#9E7649]/20 bg-[#211410] p-4 space-y-3">
+                                            {prodsInMonth.map(prod => {
+                                                if (!prod) return null;
+                                                return (
+                                                    <div key={prod.id || Math.random()} className="bg-[#2C1B15]/55 p-4 rounded-xl border border-[#9E7649]/10 shadow-sm hover:border-[#9E7649]/30 transition-all flex justify-between items-start gap-4">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-start">
+                                                                <div>
+                                                                    <h5 className="font-bold text-white text-sm truncate">{prod.program || 'Sin programa'}</h5>
+                                                                    <p className="text-xs text-[#E8DCCF]/60 mt-0.5">{prod.date || 'Sin fecha'} • {prod.tracks?.length || 0} temas</p>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {prod.tracks && prod.tracks.length > 0 && (
+                                                                <div className="mt-3 space-y-1 pl-3.5 border-l-2 border-[#9E7649]/30">
+                                                                    {prod.tracks.slice(0, 3).map((t, i) => (
+                                                                        <p key={i} className="text-[10px] text-[#E8DCCF]/85 truncate">
+                                                                            • {t?.title || 'Sin título'} — {t?.author || 'Desconocido'}
+                                                                        </p>
+                                                                    ))}
+                                                                    {prod.tracks.length > 3 && (
+                                                                        <p className="text-[10px] text-[#9E7649] italic">
+                                                                            ... y {prod.tracks.length - 3} temas más
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (prod.id) handleDeleteProduction(prod.id);
+                                                            }} 
+                                                            className="text-red-400 hover:text-red-300 p-1.5 bg-red-950/15 rounded hover:bg-red-950/35 transition-colors shrink-0"
+                                                            title="Eliminar producción"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm block">delete</span>
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            )})}
-                        </div>
-                    ))
+                            );
+                        })}
+                    </div>
                 )}
             </div>
         )}

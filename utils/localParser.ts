@@ -582,7 +582,9 @@ function applyRadioTransformations(text: string): string {
                 const protectedTokens: string[] = [];
                 let pText = subParts[j].replace(/\b(MUSICAL|SON|SONIDO|EFECTO|OP|PISTA|CORTE|TRACK)\s+([0-9])\b/gi, (match) => {
                     protectedTokens.push(match);
-                    return `__PROTECTED_TOKEN_${protectedTokens.length - 1}__`;
+                    const index = protectedTokens.length - 1;
+                    const indexLetters = String(index).split('').map(d => String.fromCharCode(65 + parseInt(d))).join('');
+                    return `__PROTECTED_TOKEN_${indexLetters}__`;
                 });
 
                 // For non-protected parts, apply 0-9 rule
@@ -590,7 +592,8 @@ function applyRadioTransformations(text: string): string {
 
                 // Restore protected tokens
                 for (let k = 0; k < protectedTokens.length; k++) {
-                    pText = pText.replace(`__PROTECTED_TOKEN_${k}__`, protectedTokens[k]);
+                    const indexLetters = String(k).split('').map(d => String.fromCharCode(65 + parseInt(d))).join('');
+                    pText = pText.replace(`__PROTECTED_TOKEN_${indexLetters}__`, protectedTokens[k]);
                 }
 
                 subParts[j] = pText;
