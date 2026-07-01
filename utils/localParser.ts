@@ -301,9 +301,9 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
         }
         
         if (isSpeaker) {
-            const isCreditLabel = name.match(/^(EMISORA|PROGRAMA|EMISI[OÓ]N|FECHA|FECHA DE TRANSMISI[OÓ]N|FECHA DE GRABACI[OÓ]N|ESCRIBE|ESCRITOR|ESCRITORA|GUI[OÓ]N|GUION|ASESOR|ASESORA|DIRIGE|DIRECTOR|DIRECTORA|DIRECCI[OÓ]N(?: GENERAL)?|REDACCI[OÓ]N|TEMA|REALIZADOR(?:A)?(?:\s*\(A\))?(?:\s*DE\s*SONIDOS?)?|REALIZACI[OÓ]N\s*DE\s*SONIDO|LOCUTOR|LOCUTORA|LOCUCI[OÓ]N|LOC|ANIMADOR|ANIMADORA|PERIODISTA|SECCI[OÓ]N|ACTOR|ACTRIZ|T[ÍI]TULO|FORMATO|NARRACI[OÓ]N|NARRADOR(?:A)?|PRODUCCI[OÓ]N|ELENCO|REPARTO|GRABACI[OÓ]N|COORDINACI[OÓ]N)$/i);
+            const isCreditLabel = name.match(/^(EMISORA|PROGRAMA|EMISI[OÓ]N|FECHA|FECHA DE TRANSMISI[OÓ]N|FECHA DE GRABACI[OÓ]N|ESCRIBE|ESCRITOR|ESCRITORA|GUI[OÓ]N|GUION|ASESOR|ASESORA|DIRIGE|DIRECTOR|DIRECTORA|DIRECCI[OÓ]N(?: GENERAL)?|REDACCI[OÓ]N|TEMA|REALIZADOR(?:A)?(?:\s*\(A\))?(?:\s*DE\s*SONIDOS?)?|REALIZACI[OÓ]N\s*DE\s*SONIDO|LOCUTOR|LOCUTORES|LOCUTORA|LOCUTORAS|LOCUCI[OÓ]N|LOC|ANIMADOR|ANIMADORA|PERIODISTA|SECCI[OÓ]N|ACTOR|ACTRIZ|T[ÍI]TULO|FORMATO|NARRACI[OÓ]N|NARRADOR(?:A)?|PRODUCCI[OÓ]N|ELENCO|REPARTO|GRABACI[OÓ]N|COORDINACI[OÓ]N)$/i);
             
-            const isSpeakerRole = /^(LOCUTOR|LOCUTORA|LOC|ACTOR|ACTRIZ|ANIMADOR|ANIMADORA|PERIODISTA)$/i.test(name);
+            const isSpeakerRole = /^(LOCUTOR|LOCUTORES|LOCUTORA|LOCUTORAS|LOC|ACTOR|ACTRIZ|ANIMADOR|ANIMADORA|PERIODISTA)$/i.test(name);
 
             if (isCreditLabel && !intention) {
                 if (isSpeakerRole) {
@@ -346,7 +346,7 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
         // Matcher para créditos
         if (parsingCredits) {
             const creditMatch = flatP.match(/^(?:[\d.-]+\s*|\(\d+\)\s*)?([a-zA-ZÁÉÍÓÚáéíóúñÑ\s\(\)]+):\s*(.*)$/i);
-            const kwMatch = flatP.match(/^(?:[\d.-]+\s*|\(\d+\)\s*)?(EMISORA|PROGRAMA|EMISI[OÓ]N|FECHA(?: DE TRANSMISI[OÓ]N| DE GRABACI[OÓ]N)?|ESCRIBE|ESCRITOR|ESCRITORA|GUI[OÓ]N|GUION|ASESOR|ASESORA|DIRIGE|DIRECTOR|DIRECTORA|DIRECCI[OÓ]N(?: GENERAL)?|REDACCI[OÓ]N|TEMA|REALIZADOR(?:A)?(?:\s*\(A\))?(?:\s*DE\s*SONIDOS?)?|REALIZACI[OÓ]N\s*DE\s*SONIDO|LOC(?:UTOR|UTORA|UCI[OÓ]N)?|ANIMADOR|ANIMADORA|PERIODISTA|SECCI[OÓ]N|ACTOR|ACTRIZ|T[ÍI]TULO|FORMATO|NARRACI[OÓ]N|NARRADOR(?:A)?|PRODUCCI[OÓ]N|ELENCO|REPARTO|GRABACI[OÓ]N|COORDINACI[OÓ]N)(?:[\s:.-]+|$)(.*)$/i);
+            const kwMatch = flatP.match(/^(?:[\d.-]+\s*|\(\d+\)\s*)?(EMISORA|PROGRAMA|EMISI[OÓ]N|FECHA(?: DE TRANSMISI[OÓ]N| DE GRABACI[OÓ]N)?|ESCRIBE|ESCRITOR|ESCRITORA|GUI[OÓ]N|GUION|ASESOR|ASESORA|DIRIGE|DIRECTOR|DIRECTORA|DIRECCI[OÓ]N(?: GENERAL)?|REDACCI[OÓ]N|TEMA|REALIZADOR(?:A)?(?:\s*\(A\))?(?:\s*DE\s*SONIDOS?)?|REALIZACI[OÓ]N\s*DE\s*SONIDO|LOC(?:UTOR|UTORES|UTORA|UTORAS|UCI[OÓ]N)?|ANIMADOR|ANIMADORA|PERIODISTA|SECCI[OÓ]N|ACTOR|ACTRIZ|T[ÍI]TULO|FORMATO|NARRACI[OÓ]N|NARRADOR(?:A)?|PRODUCCI[OÓ]N|ELENCO|REPARTO|GRABACI[OÓ]N|COORDINACI[OÓ]N)(?:[\s:.-]+|$)(.*)$/i);
 
             if (kwMatch) {
                 // Get original value with tags
@@ -389,9 +389,10 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
         // Párrafo de continuación (si pertenece a la intervención anterior)
         if (!parsingCredits) {
             // Check if it's a misplaced credit label
-            const isCreditLabel = flatP.match(/^(EMISORA|PROGRAMA|EMISI[OÓ]N|FECHA(?: DE TRANSMISI[OÓ]N| DE GRABACI[OÓ]N)?|ESCRIBE|ESCRITOR|ESCRITORA|GUI[OÓ]N|GUION|ASESOR|ASESORA|DIRIGE|DIRECTOR|DIRECTORA|DIRECCI[OÓ]N(?: GENERAL)?|REDACCI[OÓ]N|TEMA|REALIZADOR(?:A)?(?:\s*\(A\))?(?:\s*DE\s*SONIDOS?)?|REALIZACI[OÓ]N\s*DE\s*SONIDO|LOC(?:UTOR|UTORA|UCI[OÓ]N)?|ANIMADOR|ANIMADORA|PERIODISTA|SECCI[OÓ]N|T[ÍI]TULO|FORMATO|NARRACI[OÓ]N|NARRADOR(?:A)?|PRODUCCI[OÓ]N|ELENCO|REPARTO|GRABACI[OÓ]N|COORDINACI[OÓ]N)\b[\s:.-]/i);
+            const isCreditLabel = flatP.match(/^(EMISORA|PROGRAMA|EMISI[OÓ]N|FECHA(?: DE TRANSMISI[OÓ]N| DE GRABACI[OÓ]N)?|ESCRIBE|ESCRITOR|ESCRITORA|GUI[OÓ]N|GUION|ASESOR|ASESORA|DIRIGE|DIRECTOR|DIRECTORA|DIRECCI[OÓ]N(?: GENERAL)?|REDACCI[OÓ]N|TEMA|REALIZADOR(?:A)?(?:\s*\(A\))?(?:\s*DE\s*SONIDOS?)?|REALIZACI[OÓ]N\s*DE\s*SONIDO|LOC(?:UTOR|UTORES|UTORA|UTORAS|UCI[OÓ]N)?|ANIMADOR|ANIMADORA|PERIODISTA|SECCI[OÓ]N|T[ÍI]TULO|FORMATO|NARRACI[OÓ]N|NARRADOR(?:A)?|PRODUCCI[OÓ]N|ELENCO|REPARTO|GRABACI[OÓ]N|COORDINACI[OÓ]N)\b[\s:.-]/i);
             
             if (isCreditLabel) {
+                body.push({ type: 'text', text: [p] });
                 continue;
             }
 
@@ -456,7 +457,7 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
     // Helper to find and normalize labels
     const getGroup = (label: string) => {
         let cleanLabel = label.toUpperCase().trim();
-        if (/^(LOCUTOR|LOCUTORA|LOC|LOCUCI[OÓ]N|ANIMADOR|ANIMADORA|PERIODISTA|NARRACI[OÓ]N|NARRADOR|NARRADORA)$/.test(cleanLabel)) return 'LOCUCIÓN';
+        if (/^(LOCUTOR|LOCUTORA|LOCUTORES|LOCUTORAS|LOC|LOCUCI[OÓ]N|ANIMADOR|ANIMADORA|PERIODISTA|NARRACI[OÓ]N|NARRADOR|NARRADORA)$/.test(cleanLabel)) return 'LOCUCIÓN';
         if (/^(ESCRITOR|ESCRITORA|ESCRIBE|GUI[OÓ]N|GUION|REDACCI[OÓ]N)$/.test(cleanLabel)) return 'ESCRIBE';
         if (/^(ASESOR|ASESORA)$/.test(cleanLabel)) return 'ASESORA';
         if (/^(DIRECTOR|DIRECTORA|DIRIGE|DIRECCI[OÓ]N|DIRECCI[OÓ]N GENERAL|COORDINACI[OÓ]N)$/.test(cleanLabel)) return 'DIRIGE';
