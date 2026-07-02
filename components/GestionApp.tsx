@@ -494,6 +494,57 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       }
   }, [fichas, transmissionConfig.categoryPrograms]);
 
+  // Automatic transmission consolidation
+  useEffect(() => {
+      if (!transmissionConfig) return;
+
+      const now = new Date();
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthStr = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      const isConsolidated = consolidatedMonths.some(m => m.month === lastMonthStr);
+      const autoConsolidatedKey = `rcm_auto_consolidated_${lastMonthStr}`;
+      const hasBeenAutoConsolidated = localStorage.getItem(autoConsolidatedKey) === 'true';
+      
+      if (!isConsolidated && !hasBeenAutoConsolidated) {
+          const targetYear = lastMonthDate.getFullYear();
+          const targetMonth = lastMonthDate.getMonth(); // 0-indexed
+          
+          const accumulatedData = getMonthlyTotalData(targetMonth, targetYear, transmissionConfig);
+          
+          const pastMonthInterruptions = interruptions.filter(i => i.date?.startsWith(lastMonthStr));
+          
+          const categories: (keyof TransmissionBreakdown)[] = [
+              'informativos', 'boletines', 'publicidad', 'educativos', 'orientacion', 
+              'cienciaTecnica', 'variados', 'variadoInfantilGrabado', 'historicosGrabado', 
+              'dramatizados', 'literaturaArte', 'musicales', 'deportivos', 'reposiciones'
+          ];
+          
+          const interruptionsByCategory = categories.reduce((acc, cat) => {
+              acc[cat] = pastMonthInterruptions
+                  .filter(i => i.category === cat)
+                  .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+              return acc;
+          }, {} as Record<keyof TransmissionBreakdown, number>);
+          
+          interruptionsByCategory.total = pastMonthInterruptions
+              .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+              
+          const newConsolidated: ConsolidatedMonth = {
+              id: `auto-${lastMonthStr}-${Date.now()}`,
+              month: lastMonthStr,
+              accumulated: accumulatedData.breakdown,
+              interruptions: interruptionsByCategory,
+              totalRealMinutes: accumulatedData.breakdown.total - interruptionsByCategory.total,
+              dateConsolidated: new Date().toISOString(),
+              interruptionDetails: pastMonthInterruptions
+          };
+          
+          setConsolidatedMonths(prev => [...prev, newConsolidated]);
+          localStorage.setItem(autoConsolidatedKey, 'true');
+      }
+  }, [consolidatedMonths, interruptions, transmissionConfig]);
+
   const [showInterruptionsModal, setShowInterruptionsModal] = useState(false);
   const [showConsolidateModal, setShowConsolidateModal] = useState(false);
   const [showRestrictionModal, setShowRestrictionModal] = useState(false);
@@ -1633,7 +1684,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           for (let i = 0; i < 8; i++) wsData.push([]);
           wsData.push([]); // 41
           wsData.push([]); // 42
-          wsData.push(["", "Elaborado por:", "Beatriz González Rondón", "", "", "", "", ""]); // 43
+          const jefeProgramacion = teamData?.find(m => {
+              const roles = (m.specialty || '').split('/').map((s: string) => s.trim().toLowerCase());
+              return roles.includes('jefe de programación') || roles.includes('jefa de programación') || roles.includes('jefe de programacion') || roles.includes('jefa de programacion');
+          });
+          const elaboradorName = jefeProgramacion ? jefeProgramacion.name : "Beatriz González Rondón";
+
+          wsData.push(["", "Elaborado por:", elaboradorName, "", "", "", "", ""]); // 43
           wsData.push(["", "Visto bueno:", "Leipzig del Carmen Vázquez García", "", "", "", "", ""]); // 44
 
           const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -1758,87 +1815,6 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           
           const fileName = `Transmision_${monthData.month}.xlsx`;
           XLSX.writeFile(wb, fileName);
-      };
-
-      const exportToWord = async (monthData: ConsolidatedMonth) => {
-          const createCell = (text: string, bold: boolean = false, align: any = AlignmentType.CENTER) => new TableCell({
-              children: [new Paragraph({
-                  alignment: align,
-                  children: [new TextRun({ text, font: "Arial", size: 22, bold })]
-              })],
-              verticalAlign: "center",
-          });
-
-          const { rows, totalPlanificado, totalVivo, totalGrabado } = getExportDataRows(monthData);
-
-          const tableRows = [
-              new TableRow({
-                  children: [
-                      createCell("GRUPO DE PROGRAMAS", true),
-                      createCell("Total horas emisión", true),
-                      createCell("En vivo", true),
-                      createCell("Grabado", true),
-                      createCell("OBSERVACIONES", true),
-                  ],
-              }),
-              ...rows.map(row => new TableRow({
-                  children: [
-                      createCell(row.isGroup ? (row.group || '') : `    ${row.name}`, row.isGroup, row.isGroup ? AlignmentType.LEFT : AlignmentType.LEFT),
-                      createCell(formatMinutesToHHMMSS(row.plannedTotal), row.isGroup),
-                      createCell(formatMinutesToHHMMSS(row.plannedVivo), row.isGroup),
-                      createCell(formatMinutesToHHMMSS(row.plannedGrabado), row.isGroup),
-                      createCell(""),
-                  ],
-              })),
-              new TableRow({
-                  children: [
-                      createCell("Total Planificado:", true, AlignmentType.RIGHT),
-                      createCell(formatMinutesToHHMMSS(totalPlanificado), true),
-                      createCell("", true),
-                      createCell("", true),
-                      createCell(""),
-                  ],
-              }),
-              new TableRow({
-                  children: [
-                      createCell("Interrupciones:", true, AlignmentType.RIGHT),
-                      createCell(formatMinutesToHHMMSS(monthData.interruptions.total), true),
-                      createCell("", true),
-                      createCell("", true),
-                      createCell(""),
-                  ],
-              }),
-              new TableRow({
-                  children: [
-                      createCell("Total Real Transmisión:", true, AlignmentType.RIGHT),
-                      createCell(formatMinutesToHHMMSS(totalPlanificado - monthData.interruptions.total), true),
-                      createCell(formatMinutesToHHMMSS(totalVivo), true),
-                      createCell(formatMinutesToHHMMSS(totalGrabado), true),
-                      createCell(""),
-                  ],
-              })
-          ];
-
-          const doc = new Document({
-              sections: [{
-                  properties: {},
-                  children: [
-                      new Paragraph({
-                          alignment: AlignmentType.CENTER,
-                          spacing: { after: 400 },
-                          children: [new TextRun({ text: `Reporte de Transmisión - ${monthData.month}`, font: "Arial", size: 26, bold: true })]
-                      }),
-                      new Table({ 
-                          rows: tableRows,
-                          alignment: AlignmentType.CENTER,
-                          width: { size: 100, type: WidthType.PERCENTAGE }
-                      }),
-                  ],
-              }],
-          });
-
-          const blob = await Packer.toBlob(doc);
-          saveAs(blob, `Transmision_${monthData.month}.docx`);
       };
 
       const handleAddManualMonth = () => {
@@ -2014,9 +1990,9 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       )}
 
                       <div className="bg-[#2C1B15] rounded-xl border border-[#9E7649]/20 overflow-hidden shadow-xl">
-                          <div className="overflow-x-auto">
-                              <table className="w-full text-sm text-left">
-                                  <thead className="text-xs text-[#9E7649] uppercase bg-black/20">
+                          <div className="overflow-hidden md:overflow-x-auto">
+                              <table className="w-full text-sm text-left block md:table">
+                                  <thead className="hidden md:table-header-group text-xs text-[#9E7649] uppercase bg-black/20">
                                       <tr>
                                           <th className="px-6 py-4">Mes</th>
                                           <th className="px-6 py-4 text-center">Horas Programadas</th>
@@ -2025,30 +2001,39 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                           <th className="px-6 py-4 text-right">Acciones</th>
                                       </tr>
                                   </thead>
-                                  <tbody className="divide-y divide-[#9E7649]/10">
+                                  <tbody className="block md:table-row-group divide-y divide-[#9E7649]/10">
                                       {consolidatedMonths.length === 0 ? (
-                                          <tr>
-                                              <td colSpan={5} className="px-6 py-8 text-center text-[#E8DCCF]/50">No hay meses consolidados aún.</td>
+                                          <tr className="block md:table-row">
+                                              <td colSpan={5} className="px-6 py-8 text-center text-[#E8DCCF]/50 block md:table-cell">No hay meses consolidados aún.</td>
                                           </tr>
                                       ) : (
                                           [...consolidatedMonths].sort((a, b) => b.month.localeCompare(a.month)).map(month => (
-                                              <tr key={month.id} className="hover:bg-white/5 transition-colors">
-                                                  <td className="px-6 py-4 font-bold text-white">{month.month}</td>
-                                                  <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">{(month.accumulated.total / 60).toFixed(2)} h</td>
-                                                  <td className="px-6 py-4 text-center font-mono text-red-400">{(month.interruptions.total / 60).toFixed(2)} h</td>
-                                                  <td className="px-6 py-4 text-center font-mono text-green-400 font-bold">{(month.totalRealMinutes / 60).toFixed(2)} h</td>
-                                                  <td className="px-6 py-4 text-right whitespace-nowrap">
-                                                      <div className="flex justify-end gap-2">
-                                                          <button onClick={() => exportToExcel(month)} className="bg-green-900/40 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-green-900/60 transition-colors">
+                                              <tr key={month.id} className="hover:bg-white/5 transition-colors flex flex-col md:table-row border-b border-[#9E7649]/10">
+                                                  <td className="px-4 py-3 md:px-6 md:py-4 font-bold text-white flex justify-between items-center md:table-cell">
+                                                      <span className="md:hidden text-[#9E7649] text-xs uppercase">Mes:</span>
+                                                      <span>{month.month}</span>
+                                                  </td>
+                                                  <td className="px-4 py-2 md:px-6 md:py-4 text-right md:text-center font-mono text-[#E8DCCF]/50 flex justify-between items-center md:table-cell">
+                                                      <span className="md:hidden text-[#9E7649] text-xs uppercase">Programadas:</span>
+                                                      <span>{(month.accumulated.total / 60).toFixed(2)} h</span>
+                                                  </td>
+                                                  <td className="px-4 py-2 md:px-6 md:py-4 text-right md:text-center font-mono text-red-400 flex justify-between items-center md:table-cell">
+                                                      <span className="md:hidden text-[#9E7649] text-xs uppercase">Interrupciones:</span>
+                                                      <span>{(month.interruptions.total / 60).toFixed(2)} h</span>
+                                                  </td>
+                                                  <td className="px-4 py-2 md:px-6 md:py-4 text-right md:text-center font-mono text-green-400 font-bold flex justify-between items-center md:table-cell">
+                                                      <span className="md:hidden text-[#9E7649] text-xs uppercase">Reales:</span>
+                                                      <span>{(month.totalRealMinutes / 60).toFixed(2)} h</span>
+                                                  </td>
+                                                  <td className="px-4 py-4 md:px-6 md:py-4 text-right whitespace-nowrap md:table-cell flex justify-center w-full bg-black/10 md:bg-transparent">
+                                                      <div className="flex justify-center md:justify-end gap-2 w-full">
+                                                          <button onClick={() => exportToExcel(month)} className="flex-1 md:flex-none bg-green-900/40 text-green-400 border border-green-500/30 px-3 py-2 md:py-1.5 rounded-lg text-xs hover:bg-green-900/60 transition-colors">
                                                               Excel
                                                           </button>
-                                                          <button onClick={() => exportToWord(month)} className="bg-blue-900/40 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-900/60 transition-colors">
-                                                              Word
-                                                          </button>
-                                                          <button onClick={() => handleEditHistoricalMonth(month)} className="bg-yellow-900/40 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-yellow-900/60 transition-colors">
+                                                          <button onClick={() => handleEditHistoricalMonth(month)} className="flex-1 md:flex-none bg-yellow-900/40 text-yellow-400 border border-yellow-500/30 px-3 py-2 md:py-1.5 rounded-lg text-xs hover:bg-yellow-900/60 transition-colors">
                                                               Editar
                                                           </button>
-                                                          <button onClick={() => handleDeleteConsolidatedMonth(month.id)} className="bg-red-900/40 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-red-900/60 transition-colors">
+                                                          <button onClick={() => handleDeleteConsolidatedMonth(month.id)} className="flex-1 md:flex-none bg-red-900/40 text-red-400 border border-red-500/30 px-3 py-2 md:py-1.5 rounded-lg text-xs hover:bg-red-900/60 transition-colors">
                                                               Eliminar
                                                           </button>
                                                       </div>
@@ -2094,8 +2079,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                           </button>
                       </div>
                   ) : (
-                      <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-4 flex-shrink-0">
+                          <div className="flex items-center gap-1 sm:gap-2">
                               {canManageGestion && (
                                   <button 
                                       onClick={() => {
@@ -2103,13 +2088,13 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                           const date = new Date(y, m - 2, 1);
                                           setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
                                       }}
-                                      className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
+                                      className="p-0.5 sm:p-1 rounded hover:bg-black/20 text-[#9E7649] flex-shrink-0"
                                   >
-                                      <ChevronLeft size={20} />
+                                      <ChevronLeft size={18} className="sm:w-5 sm:h-5" />
                                   </button>
                               )}
-                              <span className="font-bold text-sm text-[#9E7649] capitalize">
-                                  {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                              <span className="font-bold text-[11px] sm:text-sm text-[#9E7649] capitalize whitespace-nowrap">
+                                  {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/\s+de\s+/gi, ' ')}
                               </span>
                               {canManageGestion && (
                                   <button 
@@ -2118,18 +2103,18 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                           const date = new Date(y, m, 1);
                                           setSelectedMonth(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
                                       }}
-                                      className="p-1 rounded hover:bg-black/20 text-[#9E7649]"
+                                      className="p-0.5 sm:p-1 rounded hover:bg-black/20 text-[#9E7649] flex-shrink-0"
                                   >
-                                      <ChevronRight size={20} />
+                                      <ChevronRight size={18} className="sm:w-5 sm:h-5" />
                                   </button>
                               )}
                           </div>
                           {canManageGestion && (
                                <button 
                                    onClick={() => setShowAccumulatedMonths(true)}
-                                   className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all whitespace-nowrap"
+                                   className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs px-1.5 sm:px-3 py-1 sm:py-2 rounded-lg font-bold bg-black/20 text-[#9E7649] border border-[#9E7649]/30 hover:bg-[#9E7649]/10 transition-all whitespace-nowrap flex-shrink-0"
                                >
-                                   <Library size={14} className="sm:w-4 sm:h-4" />
+                                   <Library size={12} className="sm:w-4 sm:h-4" />
                                    <span>Histórico</span>
                                </button>
                           )}
@@ -2148,15 +2133,15 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               {isFuture
                                   ? `El mes aún no transcurre.`
                                   : isPast
-                                      ? `Total final del mes de ${new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}. Interrupciones descontadas.`
-                                      : `Hasta ayer ${new Date(now.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}. Interrupciones descontadas.`
+                                      ? `Total final del mes de ${new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/\s+de\s+/gi, ' ')}. Interrupciones descontadas.`
+                                      : `Hasta ayer ${new Date(now.getTime() - 86400000).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' }).replace(/\s+de\s+/gi, ' ')}. Interrupciones descontadas.`
                               }
                           </p>
                       </div>
                       <div className="bg-gradient-to-br from-[#1A100C] to-[#2C1B15] p-6 rounded-2xl border border-[#9E7649]/10 shadow-xl">
                           <p className="text-[#9E7649] text-xs uppercase tracking-widest mb-2">Proyección Mensual</p>
                           <h2 className="text-5xl font-bold text-[#9E7649] mb-1">{displayMonthlyHours.toFixed(2)} <span className="text-xl font-normal text-[#E8DCCF]/30">h</span></h2>
-                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
+                          <p className="text-xs text-[#E8DCCF]/50">Total estimado para {new Date(targetYear, targetMonth, 2).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }).replace(/\s+de\s+/gi, ' ')}</p>
                       </div>
                   </div>
 
@@ -2237,24 +2222,10 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                                                               )}
                                                           </td>
                                                           <td className="px-6 py-4 text-center font-mono text-[#E8DCCF]/50">
-                                                              {isEditingHistorical ? (
-                                                                  <input 
-                                                                      type="number" 
-                                                                      value={totalMin} 
-                                                                      onChange={(e) => handleHistoricalEdit('accumulated', cat, Number(e.target.value))}
-                                                                      className="w-16 bg-transparent border-b border-[#9E7649] text-center text-white focus:outline-none"
-                                                                  />
-                                                              ) : totalMin}
+                                                              {totalMin}
                                                           </td>
                                                           <td className="px-6 py-4 text-center font-mono text-red-400">
-                                                              {isEditingHistorical ? (
-                                                                  <input 
-                                                                      type="number" 
-                                                                      value={intMin} 
-                                                                      onChange={(e) => handleHistoricalEdit('interruptions', cat, Number(e.target.value))}
-                                                                      className="w-16 bg-transparent border-b border-red-500 text-center text-red-400 focus:outline-none"
-                                                                  />
-                                                              ) : (intMin > 0 ? `-${intMin}` : '0')}
+                                                              {intMin > 0 ? `-${intMin}` : '0'}
                                                           </td>
                                                           <td className="px-6 py-4 text-center font-mono text-green-400 font-bold">{realMin}</td>
                                                           <td className="px-6 py-4 text-right">
@@ -2312,6 +2283,12 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                         )}
                         {isAdmin && isEditingHistorical && (
                             <div className="bg-black/20 px-6 py-4 border-t border-[#9E7649]/10 flex justify-end gap-4">
+                                <button 
+                                    onClick={() => setShowInterruptionChoiceModal(true)}
+                                    className="bg-red-900/40 text-red-400 border border-red-500/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-900/60 transition-colors flex items-center gap-2"
+                                >
+                                    <Radio size={16} /> Registrar Interrupción
+                                </button>
                                 <button 
                                     onClick={handleCancelHistoricalEdit}
                                     className="bg-[#1A100C] text-[#9E7649] border border-[#9E7649]/30 px-4 py-2 rounded-lg text-sm font-bold hover:bg-[#9E7649]/10 transition-colors flex items-center gap-2"
@@ -2387,30 +2364,80 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                               </button>
                           </div>
                           <div className="max-h-[400px] overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
-                              {interruptions.length > 0 ? (
-                                  interruptions.map(inter => (
-                                      <div key={inter.id} className="bg-[#1A100C] border border-[#9E7649]/20 p-4 rounded-xl flex justify-between items-center">
-                                          <div>
-                                              <div className="text-white font-bold">{inter.programName}</div>
-                                              <div className="text-xs text-[#E8DCCF]/50">{inter.date} | {inter.startTime} - {inter.endTime}</div>
+                              {isEditingHistorical && historicalEditData ? (
+                                  historicalEditData.interruptionDetails && historicalEditData.interruptionDetails.length > 0 ? (
+                                      historicalEditData.interruptionDetails.map(inter => (
+                                          <div key={inter.id} className="bg-[#1A100C] border border-[#9E7649]/20 p-4 rounded-xl flex justify-between items-center">
+                                              <div>
+                                                  <div className="text-white font-bold">{inter.programName}</div>
+                                                  <div className="text-xs text-[#E8DCCF]/50">{inter.date} | {inter.startTime} - {inter.endTime}</div>
+                                              </div>
+                                              <div className="flex items-center gap-4">
+                                                  <span className="text-red-400 font-mono font-bold">-{inter.affectedMinutes} min</span>
+                                                  <button 
+                                                      onClick={() => {
+                                                          if (window.confirm('¿Eliminar esta interrupción?')) {
+                                                              const newInterruptionDetails = historicalEditData.interruptionDetails.filter(i => i.id !== inter.id);
+                                                              
+                                                              const categories: (keyof TransmissionBreakdown)[] = [
+                                                                  'informativos', 'boletines', 'publicidad', 'educativos', 'orientacion', 
+                                                                  'cienciaTecnica', 'variados', 'variadoInfantilGrabado', 'historicosGrabado', 
+                                                                  'dramatizados', 'literaturaArte', 'musicales', 'deportivos', 'reposiciones'
+                                                              ];
+                                                              
+                                                              const interruptionsByCategory = categories.reduce((acc, cat) => {
+                                                                  acc[cat] = newInterruptionDetails
+                                                                      .filter(i => i.category === cat)
+                                                                      .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+                                                                  return acc;
+                                                              }, {} as Record<keyof TransmissionBreakdown, number>);
+                                                              
+                                                              interruptionsByCategory.total = newInterruptionDetails.reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+                                                              
+                                                              setHistoricalEditData({
+                                                                  ...historicalEditData,
+                                                                  interruptionDetails: newInterruptionDetails,
+                                                                  interruptions: interruptionsByCategory,
+                                                                  totalRealMinutes: historicalEditData.accumulated.total - interruptionsByCategory.total
+                                                              });
+                                                          }
+                                                      }}
+                                                      className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                                  >
+                                                      <Trash2 size={18} />
+                                                  </button>
+                                              </div>
                                           </div>
-                                          <div className="flex items-center gap-4">
-                                              <span className="text-red-400 font-mono font-bold">-{inter.affectedMinutes} min</span>
-                                              <button 
-                                                  onClick={() => {
-                                                      if (window.confirm('¿Eliminar esta interrupción?')) {
-                                                          setInterruptions(interruptions.filter(i => i.id !== inter.id));
-                                                      }
-                                                  }}
-                                                  className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                                              >
-                                                  <Trash2 size={18} />
-                                              </button>
-                                          </div>
-                                      </div>
-                                  ))
+                                      ))
+                                  ) : (
+                                      <p className="text-center text-[#E8DCCF]/30 py-10">No hay interrupciones registradas</p>
+                                  )
                               ) : (
-                                  <p className="text-center text-[#E8DCCF]/30 py-10">No hay interrupciones registradas</p>
+                                  interruptions.length > 0 ? (
+                                      interruptions.map(inter => (
+                                          <div key={inter.id} className="bg-[#1A100C] border border-[#9E7649]/20 p-4 rounded-xl flex justify-between items-center">
+                                              <div>
+                                                  <div className="text-white font-bold">{inter.programName}</div>
+                                                  <div className="text-xs text-[#E8DCCF]/50">{inter.date} | {inter.startTime} - {inter.endTime}</div>
+                                              </div>
+                                              <div className="flex items-center gap-4">
+                                                  <span className="text-red-400 font-mono font-bold">-{inter.affectedMinutes} min</span>
+                                                  <button 
+                                                      onClick={() => {
+                                                          if (window.confirm('¿Eliminar esta interrupción?')) {
+                                                              setInterruptions(interruptions.filter(i => i.id !== inter.id));
+                                                          }
+                                                      }}
+                                                      className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                                                  >
+                                                      <Trash2 size={18} />
+                                                  </button>
+                                              </div>
+                                          </div>
+                                      ))
+                                  ) : (
+                                      <p className="text-center text-[#E8DCCF]/30 py-10">No hay interrupciones registradas</p>
+                                  )
                               )}
                           </div>
                           <div className="flex justify-end">
@@ -2501,7 +2528,34 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   <InterruptionModal 
                       onClose={() => setShowInterruptionsModal(false)} 
                       onSave={(newInterruptions) => {
-                          setInterruptions([...interruptions, ...newInterruptions]);
+                          if (isEditingHistorical && historicalEditData) {
+                              const updatedInterruptions = [...(historicalEditData.interruptionDetails || []), ...newInterruptions];
+                              
+                              const categories: (keyof TransmissionBreakdown)[] = [
+                                  'informativos', 'boletines', 'publicidad', 'educativos', 'orientacion', 
+                                  'cienciaTecnica', 'variados', 'variadoInfantilGrabado', 'historicosGrabado', 
+                                  'dramatizados', 'literaturaArte', 'musicales', 'deportivos', 'reposiciones'
+                              ];
+                              
+                              const interruptionsByCategory = categories.reduce((acc, cat) => {
+                                  acc[cat] = updatedInterruptions
+                                      .filter(i => i.category === cat)
+                                      .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+                                  return acc;
+                              }, {} as Record<keyof TransmissionBreakdown, number>);
+                              
+                              interruptionsByCategory.total = updatedInterruptions
+                                  .reduce((sum, i) => sum + (Number(i.affectedMinutes) || 0), 0);
+                                  
+                              setHistoricalEditData({
+                                  ...historicalEditData,
+                                  interruptionDetails: updatedInterruptions,
+                                  interruptions: interruptionsByCategory,
+                                  totalRealMinutes: historicalEditData.accumulated.total - interruptionsByCategory.total
+                              });
+                          } else {
+                              setInterruptions([...interruptions, ...newInterruptions]);
+                          }
                           setShowInterruptionsModal(false);
                       }}
                       fichas={fichas}
