@@ -763,9 +763,12 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
       const cleanText = text.replace(/\*\*/g, '');
 
-      // Identify if the text has structured label declarations
-      const normalizedAndLower = cleanText.toLowerCase();
-      const hasLabels = /titulo|titulo|nombre|tema|cancion|autor|compositor|interprete|cantante|artista|grupo|pais|origen|nacionalidad|disco|album|ano|year|fecha|genero|estilo|disquera/gi.test(normalizedAndLower);
+      // Identify if the text has structured label declarations by looking for colons
+      const hasLabels = /:/g.test(cleanText);
+
+      const cleanLeadingNumbering = (t: string): string => {
+          return t.replace(/^[\d\s\.\-\)\]\[\*(#:]+/g, '').trim();
+      };
 
       if (hasLabels) {
           const lines = cleanText.split(/\r?\n|\r|\u2028/).map(l => l.trim());
@@ -775,14 +778,14 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                               .normalize("NFD")
                               .replace(/[\u0300-\u036f]/g, "")
                               .trim();
-              if (['titulo', 'nombre', 'tema', 'cancion'].includes(base)) return 'titulo';
-              if (['autor', 'compositor', 'creador'].includes(base)) return 'autor';
-              if (['interprete', 'cantante', 'artista', 'grupo'].includes(base)) return 'interprete';
-              if (['pais', 'origen', 'nacionalidad'].includes(base)) return 'pais';
-              if (['disco', 'album'].includes(base)) return 'album';
-              if (['ano', 'year', 'fecha'].includes(base)) return 'ano';
-              if (['genero', 'estilo'].includes(base)) return 'genero';
-              if (['disquera', 'sello'].includes(base)) return 'disquera';
+              if (base.startsWith('tit') || base.startsWith('nom') || base.startsWith('tem') || base.startsWith('canc')) return 'titulo';
+              if (base.startsWith('aut') || base.startsWith('comp') || base.startsWith('crea') || base.startsWith('let')) return 'autor';
+              if (base.startsWith('int') || base.startsWith('cant') || base.startsWith('art') || base.startsWith('grup')) return 'interprete';
+              if (base.startsWith('pa') || base.startsWith('orig') || base.startsWith('nac')) return 'pais';
+              if (base.startsWith('disc') || base.startsWith('alb')) return 'album';
+              if (base.startsWith('an') || base.startsWith('ye') || base.startsWith('fech')) return 'ano';
+              if (base.startsWith('gen') || base.startsWith('est')) return 'genero';
+              if (base.startsWith('disq') || base.startsWith('sell')) return 'disquera';
               return base;
           };
 
@@ -792,43 +795,36 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
           for (const line of lines) {
               if (!line) continue;
 
-              // Skip numbering lines like "1." or "12)" or "3"
-              if (/^\d+[\.\s\-)]*$/i.test(line)) {
+              // If the line is purely a number or separator (without colons), skip it.
+              if (/^\d+[\.\s\-)]*$/i.test(line) && !line.includes(':')) {
                   continue;
               }
 
-              const keyMatchRegex = /(título|titulo|nombre|tema|canción|cancion|autor|compositor|creador|intérprete|interprete|cantante|artista|grupo|país|pais|origen|nacionalidad|disco|album|álbum|disquera|sello|año|ano|year|fecha|género|genero|estilo)\s*:/gi;
-              const matches: { key: string; index: number; lastIndex: number }[] = [];
-              let match;
-              while ((match = keyMatchRegex.exec(line)) !== null) {
-                  matches.push({
-                      key: match[1],
-                      index: match.index,
-                      lastIndex: keyMatchRegex.lastIndex
-                  });
-              }
+              const colonIndex = line.indexOf(':');
+              if (colonIndex !== -1) {
+                  const beforeColon = line.substring(0, colonIndex).trim();
+                  const afterColon = line.substring(colonIndex + 1).trim();
 
-              if (matches.length > 0) {
-                  for (let i = 0; i < matches.length; i++) {
-                      const m = matches[i];
-                      const nextIndex = (i + 1 < matches.length) ? matches[i + 1].index : line.length;
-                      const rawVal = line.substring(m.lastIndex, nextIndex);
-                      const trimmedRaw = rawVal.trim();
-                      
-                      let val = '';
-                      if (!trimmedRaw || /^[- :]+$/.test(trimmedRaw)) {
+                  // Strip leading numbering/symbols from the field key
+                  let fieldPart = cleanLeadingNumbering(beforeColon);
+                  if (!fieldPart) {
+                      fieldPart = beforeColon;
+                  }
+
+                  // "la primera palabra de cada linea el nombre del campo"
+                  const words = fieldPart.split(/\s+/);
+                  const firstWord = words[0] || '';
+
+                  if (firstWord) {
+                      const normKey = normalizeKey(firstWord);
+
+                      let val = afterColon
+                                        .replace(/^[:\s,;\-*]+/, '')
+                                        .replace(/[:\s,;\-*]+$/, '')
+                                        .trim();
+                      if (!val) {
                           val = '---';
-                      } else {
-                          val = trimmedRaw
-                                            .replace(/^[:\s,;\-*]+/, '')
-                                            .replace(/[:\s,;\-*]+$/, '')
-                                            .trim();
-                          if (!val) {
-                              val = '---';
-                          }
                       }
-
-                      const normKey = normalizeKey(m.key);
 
                       if (normKey === 'titulo') {
                           if (currentTrack) {
@@ -884,8 +880,8 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
               if (parts.length >= 2) {
                   const track: any = {};
-                  if (parts[0]) track.title = parts[0];
-                  if (parts[1]) track.author = parts[1];
+                  if (parts[0]) track.title = cleanLeadingNumbering(parts[0]);
+                  if (parts[1]) track.author = parts[1].trim();
                   
                   if (parts.length === 3) {
                       track.performer = parts[2];
@@ -905,7 +901,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                   parsedTracks.push(track);
               } else {
                   if (line.length > 2) {
-                      parsedTracks.push({ title: line });
+                      parsedTracks.push({ title: cleanLeadingNumbering(line) });
                   }
               }
           }
@@ -1047,9 +1043,9 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
 
       if (resolvedTracks.length > 0) {
           setSelectedTracksList(prev => {
-              const existingIds = new Set(prev.map(t => t.id));
-              const newTracks = resolvedTracks.filter(t => !existingIds.has(t.id));
-              return [...prev, ...newTracks];
+              const resolvedIds = new Set(resolvedTracks.map(t => t.id));
+              const remainingPrev = prev.filter(t => !resolvedIds.has(t.id));
+              return [...remainingPrev, ...resolvedTracks];
           });
           alert(`Lista cargada con éxito: se agregaron y generaron ${resolvedTracks.length} temas.`);
       } else {
