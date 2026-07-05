@@ -654,6 +654,18 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  app.post("/api/save-actualcmnl", (req, res) => {
+    try {
+      const data = req.body;
+      const filePath = path.join(process.cwd(), "actualcmnl.json");
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+      res.json({ success: true, message: "Datos guardados en actualcmnl.json con éxito." });
+    } catch (err: any) {
+      console.error("Error al guardar en actualcmnl.json:", err.message);
+      res.status(500).json({ error: `No se pudo guardar actualcmnl.json: ${err.message}` });
+    }
+  });
+
   app.post('/api/dictionary', async (req, res) => {
     const { word, mode } = req.body;
     if (!word) {

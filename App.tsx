@@ -670,6 +670,8 @@ const AppContent: React.FC = () => {
           rcm_user_notifications: getLocal('rcm_user_notifications')
       };
 
+      dataToExport.radialDictionary = getLocal('rcm_diccionario_radial') || [];
+
       // Clean up undefined values
       Object.keys(dataToExport).forEach(key => {
           if (dataToExport[key] === undefined) {
@@ -691,6 +693,128 @@ const AppContent: React.FC = () => {
       document.body.appendChild(downloadAnchorNode);
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
+  };
+
+  const saveActualCMNLToServer = async () => {
+    try {
+      const dataToExport: Record<string, any> = {};
+      const getLocal = (key: string) => {
+          const val = localStorage.getItem(key);
+          if (!val) return undefined;
+          try { return JSON.parse(val); } catch (e) { return val; }
+      };
+
+      dataToExport.users = users;
+      dataToExport.historyContent = getLocal('rcm_data_history') || "";
+      dataToExport.aboutContent = getLocal('rcm_data_about') || "";
+      dataToExport.news = getLocal('rcm_data_news') || [];
+      dataToExport.fichas = getLocal('rcm_data_fichas') || [];
+      dataToExport.catalogo = getLocal('rcm_data_catalogo') || [];
+      
+      const allInterruptions: any[] = [];
+      const allWorklogs: any[] = [];
+      const allConsolidated: any[] = [];
+      const allConsolidatedMonths: any[] = [];
+      const allHabitualExclusions: any[] = [];
+      const allHabitualModes: any[] = [];
+      
+      users.forEach(user => {
+          const u = user.username;
+          const userWorklogs = getLocal(`user_${u}_rcm_data_worklogs`);
+          const userConsolidated = getLocal(`user_${u}_rcm_data_consolidated`);
+          const userInterruptions = getLocal(`user_${u}_rcm_interruptions`);
+          const userConsolidatedMonths = getLocal(`user_${u}_rcm_consolidated_months`);
+          const userHabitualExclusions = getLocal(`user_${u}_habitual_exclusions`);
+          const userHabitualMode = getLocal(`user_${u}_habitual_mode`);
+          
+          if (Array.isArray(userWorklogs)) allWorklogs.push(...userWorklogs);
+          if (Array.isArray(userConsolidated)) allConsolidated.push(...userConsolidated);
+          if (Array.isArray(userInterruptions)) allInterruptions.push(...userInterruptions);
+          if (Array.isArray(userConsolidatedMonths)) allConsolidatedMonths.push(...userConsolidatedMonths);
+          if (Array.isArray(userHabitualExclusions)) allHabitualExclusions.push({ username: u, exclusions: userHabitualExclusions });
+          if (userHabitualMode !== undefined) allHabitualModes.push({ username: u, mode: userHabitualMode });
+      });
+      
+      dataToExport.worklogs = allWorklogs;
+      dataToExport.consolidated = allConsolidated;
+      dataToExport.interruptions = allInterruptions;
+      dataToExport.consolidatedMonths = allConsolidatedMonths;
+      dataToExport.habitualExclusions = allHabitualExclusions;
+      dataToExport.habitualModes = allHabitualModes;
+      
+      dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
+      dataToExport.transmissionInterruptions = getLocal('rcm_transmission_interruptions') || [];
+      dataToExport.transmissionHistorical = getLocal('rcm_transmission_historical') || [];
+      
+      dataToExport.paymentConfigs = {
+          rcm_payment_config: getLocal('rcm_payment_config'),
+          rcm_payment_workers: getLocal('rcm_payment_workers'),
+          rcm_payment_programs: getLocal('rcm_payment_programs'),
+          rcm_payment_roles: getLocal('rcm_payment_roles'),
+          rcm_payment_history: getLocal('rcm_payment_history')
+      };
+
+      dataToExport.scripts = {
+          rcm_scripts_programs: getLocal('rcm_scripts_programs'),
+          rcm_scripts_history: getLocal('rcm_scripts_history')
+      };
+      
+      PROGRAMS.forEach(prog => {
+          dataToExport.scripts[`guionbd_data_${prog.file}`] = getLocal(`guionbd_data_${prog.file}`);
+      });
+
+      dataToExport.programSections = {
+          rcm_program_sections: getLocal('rcm_program_sections')
+      };
+      
+      PROGRAMS.forEach(prog => {
+          dataToExport.programSections[`program_sections_${prog.name}`] = getLocal(`program_sections_${prog.name}`);
+      });
+
+      dataToExport.agendaPrograms = getLocal('rcm_programs') || [];
+      dataToExport.agendaEfemerides = getLocal('rcm_efemerides') || {};
+      dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones') || {};
+      dataToExport.agendaDayThemes = getLocal('rcm_day_themes') || {};
+      dataToExport.agendaUsers = users;
+      dataToExport.agendaPropaganda = getLocal('rcm_propaganda') || {};
+      dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options') || {};
+
+      dataToExport.programsList = getLocal('rcm_programs_list') || [];
+      dataToExport.customRoots = getLocal('rcm_custom_roots') || [];
+      dataToExport.equipo = getLocal('rcm_equipo_cmnl') || [];
+      dataToExport.manualProgramming = getLocal('rcm_manual_programming') || [];
+      dataToExport.digital_signatures = getLocal('cmnl_digital_signatures');
+      
+      dataToExport.managementReports = getLocal('rcm_gestion_reportes') || [];
+      dataToExport.allConsolidatedPayments = getLocal('rcm_all_consolidated_payments') || [];
+
+      dataToExport.userData = {
+          rcm_user_preferences: getLocal('rcm_user_preferences'),
+          rcm_user_notifications: getLocal('rcm_user_notifications')
+      };
+
+      dataToExport.radialDictionary = getLocal('rcm_diccionario_radial') || [];
+
+      Object.keys(dataToExport).forEach(key => {
+          if (dataToExport[key] === undefined) {
+              delete dataToExport[key];
+          } else if (typeof dataToExport[key] === 'object' && !Array.isArray(dataToExport[key])) {
+              Object.keys(dataToExport[key]).forEach(subKey => {
+                  if (dataToExport[key][subKey] === undefined) {
+                      delete dataToExport[key][subKey];
+                  }
+              });
+          }
+      });
+
+      await fetch('/api/save-actualcmnl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToExport)
+      });
+    } catch (e) {
+      console.error("Error saving actualcmnl.json to server:", e);
+    }
   };
 
   // Logic to sync from GitHub (Used by Users and Admins)
@@ -832,6 +956,7 @@ const AppContent: React.FC = () => {
                   if (json.digital_signatures) setLocal('cmnl_digital_signatures', json.digital_signatures);
                   if (json.managementReports) setLocal('rcm_gestion_reportes', json.managementReports);
                   if (json.allConsolidatedPayments) setLocal('rcm_all_consolidated_payments', json.allConsolidatedPayments);
+                  if (json.radialDictionary && Array.isArray(json.radialDictionary)) setLocal('rcm_diccionario_radial', json.radialDictionary);
                   if (json.userData) {
                       Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
                   }
@@ -1052,7 +1177,7 @@ const AppContent: React.FC = () => {
       case AppView.APP_REPORTES:
         return <Reports />;
       case AppView.APP_TOOLS:
-        return <ToolsSection onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} equipoData={equipoData} users={users} />;
+        return <ToolsSection onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} equipoData={equipoData} users={users} onSaveCMNL={saveActualCMNLToServer} />;
       case AppView.APP_GUIONES:
         return <GuionesApp onBack={handleBack} onMenuClick={() => setIsSidebarOpen(true)} currentUser={currentUser} onDirtyChange={setIsDirty} />;
       case AppView.APP_PROGRAMACION:

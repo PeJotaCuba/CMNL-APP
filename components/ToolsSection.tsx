@@ -27,9 +27,10 @@ interface ToolsSectionProps {
   currentUser: any;
   equipoData?: any[];
   users?: any[];
+  onSaveCMNL?: () => void;
 }
 
-const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser, equipoData = [], users = [] }) => {
+const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser, equipoData = [], users = [], onSaveCMNL }) => {
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
   const allTools = [
@@ -116,8 +117,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     },
     {
       id: 'diccionario',
-      title: 'Diccionario',
-      description: 'Permite buscar significados de palabras, encontrar sinónimos y antónimos, y determinar conjugaciones verbales de un verbo.',
+      title: 'Diccionario Radial',
+      description: 'Glosario de consulta técnica para radialistas con navegación secuencial de términos y administración del diccionario de especialidad.',
       icon: BookOpen,
       color: 'from-blue-600/20 to-blue-700/20',
       textColor: 'text-blue-300',
@@ -200,6 +201,7 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
                const data = saved ? JSON.parse(saved) : { validated_users: [] };
                data.validated_users.push(newCert);
                localStorage.setItem('cmnl_digital_signatures', JSON.stringify(data));
+               onSaveCMNL?.();
             }}
           />
         </main>
@@ -224,12 +226,12 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
         <CMNLHeader 
           user={currentUser}
-          sectionTitle="Diccionario" 
+          sectionTitle="Diccionario Radial" 
           onBack={() => setActiveTool(null)}
           onMenuClick={onMenuClick}
         />
         <main className="max-w-7xl mx-auto px-4 py-8">
-          <DiccionarioTool onBack={() => setActiveTool(null)} currentUser={currentUser} />
+          <DiccionarioTool onBack={() => setActiveTool(null)} currentUser={currentUser} onSaveCMNL={onSaveCMNL} />
         </main>
       </div>
     );
