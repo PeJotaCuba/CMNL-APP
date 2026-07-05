@@ -27,6 +27,8 @@ interface DefinitionResult {
   synonyms: string[];
   antonyms: string[];
   examples: string[];
+  found?: boolean;
+  suggestions?: string[];
 }
 
 interface ConjugationResult {
@@ -140,10 +142,10 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser }
           <div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
               <BookOpen className="text-amber-500" />
-              Diccionario Inteligente
+              Diccionario RAE Oficial
             </h1>
             <p className="text-stone-400 mt-1 max-w-2xl font-mono text-sm leading-relaxed">
-              Consulte definiciones, sinónimos, antónimos y obtenga conjugaciones completas en tiempo real apoyado por inteligencia artificial.
+              Consulte definiciones de la Real Academia Española, sinónimos, antónimos y obtenga conjugaciones completas al instante, 100% libre de IA y totalmente offline.
             </p>
           </div>
           <button 
@@ -278,9 +280,9 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser }
               className="flex flex-col items-center justify-center py-16 text-center"
             >
               <div className="w-12 h-12 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-stone-300 font-bold font-mono text-sm">Consultando al filólogo digital...</p>
+              <p className="text-stone-300 font-bold font-mono text-sm">Buscando en el diccionario local...</p>
               <p className="text-stone-500 text-xs font-mono mt-1 max-w-sm">
-                Procesando raíces morfológicas y analizando la estructura sintáctica de la palabra.
+                Consultando el índice morfológico de 45,000+ términos de la RAE de forma instantánea.
               </p>
             </motion.div>
           )}
@@ -298,121 +300,173 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser }
               <div>
                 <h3 className="font-bold text-red-200">Error de consulta</h3>
                 <p className="text-sm text-red-300/80 mt-1">{error}</p>
-                <div className="mt-4 text-xs font-mono bg-black/40 p-2.5 rounded border border-red-900/20 text-stone-500">
-                  Asegúrese de contar con una API Key de Gemini configurada.
-                </div>
               </div>
             </motion.div>
           )}
 
           {/* Definition Result Component */}
           {definitionResult && mode === 'definition' && !loading && (
-            <motion.div
-              key="definition-result"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-            >
-              {/* Meaning & Definitions */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="p-8 rounded-xl bg-[#1C120C] border border-stone-800 shadow-xl shadow-black/20">
-                  <div className="flex flex-wrap items-baseline gap-3 mb-6">
-                    <h2 className="text-3xl font-extrabold text-white tracking-tight capitalize">{definitionResult.word}</h2>
-                    <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-xs font-bold font-mono text-amber-500 uppercase">
-                      {definitionResult.category}
-                    </span>
+            definitionResult.found === false ? (
+              <motion.div
+                key="definition-not-found"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-8 rounded-xl bg-[#1C120C] border border-stone-800 text-center max-w-2xl mx-auto"
+              >
+                <AlertTriangle className="text-amber-500 mx-auto mb-4" size={48} />
+                <h3 className="text-xl font-bold text-white mb-2">Palabra no encontrada</h3>
+                <p className="text-stone-400 font-mono text-sm mb-6">
+                  No se encontró la palabra exacta <strong className="text-amber-500">"{definitionResult.word}"</strong> en nuestra base de datos local de la RAE.
+                </p>
+                {definitionResult.suggestions && definitionResult.suggestions.length > 0 ? (
+                  <div>
+                    <p className="text-xs text-stone-500 font-mono uppercase tracking-wider mb-3">¿Quizás quiso decir alguna de estas?</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {definitionResult.suggestions.map((suggestion, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => { setWord(suggestion); handleSearch(suggestion, 'definition'); }}
+                          className="px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/60 text-sm font-semibold text-amber-300 transition-all hover:-translate-y-0.5"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-500 font-mono">No se encontraron sugerencias ortográficas cercanas.</p>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="definition-result"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`grid grid-cols-1 ${
+                  (definitionResult.synonyms && definitionResult.synonyms.length > 0) || 
+                  (definitionResult.antonyms && definitionResult.antonyms.length > 0)
+                    ? 'lg:grid-cols-3' 
+                    : 'grid-cols-1'
+                } gap-6`}
+              >
+                {/* Meaning & Definitions */}
+                <div className={`${
+                  (definitionResult.synonyms && definitionResult.synonyms.length > 0) || 
+                  (definitionResult.antonyms && definitionResult.antonyms.length > 0)
+                    ? 'lg:col-span-2' 
+                    : 'lg:col-span-3'
+                } space-y-6`}>
+                  <div className="p-8 rounded-xl bg-[#1C120C] border border-stone-800 shadow-xl shadow-black/20">
+                    <div className="flex flex-wrap items-baseline gap-3 mb-6">
+                      <h2 className="text-3xl font-extrabold text-white tracking-tight capitalize">{definitionResult.word}</h2>
+                      <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-xs font-bold font-mono text-amber-500 uppercase">
+                        {definitionResult.category}
+                      </span>
+                    </div>
+
+                    <h3 className="text-xs font-bold tracking-wider text-stone-500 font-mono uppercase mb-4">Acepciones y Significados</h3>
+                    <ol className="space-y-4">
+                      {definitionResult.meanings && definitionResult.meanings.map((meaning, idx) => (
+                        <li key={idx} className="flex gap-4 items-start text-stone-200">
+                          <span className="w-6 h-6 shrink-0 rounded-full bg-amber-950/40 text-amber-500 font-mono text-xs flex items-center justify-center border border-amber-500/20">
+                            {idx + 1}
+                          </span>
+                          <p className="text-base leading-relaxed pt-0.5">{meaning}</p>
+                        </li>
+                      ))}
+                      {(!definitionResult.meanings || definitionResult.meanings.length === 0) && (
+                        <p className="text-sm text-stone-500 font-mono italic">No se devolvieron definiciones.</p>
+                      )}
+                    </ol>
                   </div>
 
-                  <h3 className="text-xs font-bold tracking-wider text-stone-500 font-mono uppercase mb-4">Acepciones y Significados</h3>
-                  <ol className="space-y-4">
-                    {definitionResult.meanings && definitionResult.meanings.map((meaning, idx) => (
-                      <li key={idx} className="flex gap-4 items-start text-stone-200">
-                        <span className="w-6 h-6 shrink-0 rounded-full bg-amber-950/40 text-amber-500 font-mono text-xs flex items-center justify-center border border-amber-500/20">
-                          {idx + 1}
-                        </span>
-                        <p className="text-base leading-relaxed pt-0.5">{meaning}</p>
-                      </li>
-                    ))}
-                    {(!definitionResult.meanings || definitionResult.meanings.length === 0) && (
-                      <p className="text-sm text-stone-500 font-mono italic">No se devolvieron definiciones.</p>
-                    )}
-                  </ol>
+                  {/* Examples */}
+                  <div className="p-6 rounded-xl bg-[#1C120C] border border-stone-800">
+                    <h3 className="text-xs font-bold tracking-wider text-stone-500 font-mono uppercase mb-4 flex items-center gap-2">
+                      <Quote size={14} className="text-amber-500" />
+                      Ejemplos de uso
+                    </h3>
+                    <div className="space-y-3">
+                      {definitionResult.examples && definitionResult.examples.map((example, idx) => (
+                        <div key={idx} className="p-3 rounded-lg bg-black/20 border border-stone-800/40 italic text-stone-300 text-sm leading-relaxed font-serif">
+                          "{example}"
+                        </div>
+                      ))}
+                      {(!definitionResult.examples || definitionResult.examples.length === 0) && (
+                        <p className="text-sm text-stone-500 font-mono italic">No se incluyeron ejemplos de uso.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Lexicographical Base Credit Badge if NO synonyms/antonyms side panels */}
+                  {(!((definitionResult.synonyms && definitionResult.synonyms.length > 0) || 
+                      (definitionResult.antonyms && definitionResult.antonyms.length > 0))) && (
+                    <div className="p-4 rounded-xl bg-black/40 border border-stone-800 text-center flex items-center justify-center gap-3 mt-6">
+                      <BookOpen className="text-amber-500/40 animate-pulse" size={18} />
+                      <p className="text-[10px] text-stone-500 font-mono uppercase tracking-wider">
+                        Base lexicográfica oficial RAE sin conexión
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Examples */}
-                <div className="p-6 rounded-xl bg-[#1C120C] border border-stone-800">
-                  <h3 className="text-xs font-bold tracking-wider text-stone-500 font-mono uppercase mb-4 flex items-center gap-2">
-                    <Quote size={14} className="text-amber-500" />
-                    Ejemplos de uso
-                  </h3>
-                  <div className="space-y-3">
-                    {definitionResult.examples && definitionResult.examples.map((example, idx) => (
-                      <div key={idx} className="p-3 rounded-lg bg-black/20 border border-stone-800/40 italic text-stone-300 text-sm leading-relaxed font-serif">
-                        "{example}"
+                {/* Synonyms & Antonyms Side Panels */}
+                {((definitionResult.synonyms && definitionResult.synonyms.length > 0) || 
+                  (definitionResult.antonyms && definitionResult.antonyms.length > 0)) && (
+                  <div className="space-y-6">
+                    {/* Synonyms */}
+                    {definitionResult.synonyms && definitionResult.synonyms.length > 0 && (
+                      <div className="p-6 rounded-xl bg-gradient-to-b from-[#221712] to-[#1C120C] border border-stone-800">
+                        <h3 className="text-sm font-bold tracking-wider text-cyan-400 font-mono uppercase mb-4 flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
+                          Sinónimos
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {definitionResult.synonyms.map((syn, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => { setWord(syn); handleSearch(syn, 'definition'); }}
+                              className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/50 text-xs text-cyan-300 font-semibold transition-all hover:-translate-y-0.5"
+                            >
+                              {syn}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    ))}
-                    {(!definitionResult.examples || definitionResult.examples.length === 0) && (
-                      <p className="text-sm text-stone-500 font-mono italic">No se incluyeron ejemplos de uso.</p>
                     )}
-                  </div>
-                </div>
-              </div>
 
-              {/* Synonyms & Antonyms Side Panels */}
-              <div className="space-y-6">
-                {/* Synonyms */}
-                <div className="p-6 rounded-xl bg-gradient-to-b from-[#221712] to-[#1C120C] border border-stone-800">
-                  <h3 className="text-sm font-bold tracking-wider text-cyan-400 font-mono uppercase mb-4 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
-                    Sinónimos
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {definitionResult.synonyms && definitionResult.synonyms.map((syn, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => { setWord(syn); handleSearch(syn, 'definition'); }}
-                        className="px-3 py-1.5 rounded-lg bg-cyan-505/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/50 text-xs text-cyan-300 font-semibold transition-all hover:-translate-y-0.5"
-                      >
-                        {syn}
-                      </button>
-                    ))}
-                    {(!definitionResult.synonyms || definitionResult.synonyms.length === 0) && (
-                      <p className="text-xs text-stone-500 font-mono italic">No se encontraron sinónimos.</p>
+                    {/* Antonyms */}
+                    {definitionResult.antonyms && definitionResult.antonyms.length > 0 && (
+                      <div className="p-6 rounded-xl bg-gradient-to-b from-[#221712] to-[#1C120C] border border-stone-800">
+                        <h3 className="text-sm font-bold tracking-wider text-rose-400 font-mono uppercase mb-4 flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                          Antónimos
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                          {definitionResult.antonyms.map((ant, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => { setWord(ant); handleSearch(ant, 'definition'); }}
+                              className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/50 text-xs text-rose-300 font-semibold transition-all hover:-translate-y-0.5"
+                            >
+                              {ant}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
 
-                {/* Antonyms */}
-                <div className="p-6 rounded-xl bg-gradient-to-b from-[#221712] to-[#1C120C] border border-stone-800">
-                  <h3 className="text-sm font-bold tracking-wider text-rose-400 font-mono uppercase mb-4 flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    Antónimos
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {definitionResult.antonyms && definitionResult.antonyms.map((ant, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => { setWord(ant); handleSearch(ant, 'definition'); }}
-                        className="px-3 py-1.5 rounded-lg bg-rose-505/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/50 text-xs text-rose-300 font-semibold transition-all hover:-translate-y-0.5"
-                      >
-                        {ant}
-                      </button>
-                    ))}
-                    {(!definitionResult.antonyms || definitionResult.antonyms.length === 0) && (
-                      <p className="text-xs text-stone-500 font-mono italic">No se encontraron antónimos.</p>
-                    )}
+                    {/* Lexicographical Base Credit Badge */}
+                    <div className="p-4 rounded-xl bg-black/40 border border-stone-800 text-center flex flex-col items-center justify-center">
+                      <BookOpen className="text-amber-500/40 mb-2 animate-pulse" size={24} />
+                      <p className="text-[10px] text-stone-500 font-mono uppercase leading-snug">
+                        Base lexicográfica oficial RAE sin conexión
+                      </p>
+                    </div>
                   </div>
-                </div>
-
-                {/* AI Validation Credit Badge */}
-                <div className="p-4 rounded-xl bg-black/40 border border-stone-800 text-center flex flex-col items-center justify-center">
-                  <Sparkles className="text-amber-500/40 mb-2 animate-pulse" size={24} />
-                  <p className="text-[10px] text-stone-500 font-mono uppercase leading-snug">
-                    Sincronizado vía Real Academia de la Inteligencia
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+                )}
+              </motion.div>
+            )
           )}
 
           {/* Conjugation Result Component */}
