@@ -19,6 +19,7 @@ import GenericTool from './GenericTool';
 import GuionesGestionTool from './GuionesGestionTool';
 import FirmaDigitalTool from './FirmaDigitalTool';
 import GuionFormatTool from './GuionFormatTool';
+import DiccionarioTool from './DiccionarioTool';
 
 interface ToolsSectionProps {
   onBack: () => void;
@@ -112,6 +113,15 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
       color: 'from-amber-600/20 to-amber-700/20',
       textColor: 'text-amber-500',
       borderColor: 'border-amber-500/30'
+    },
+    {
+      id: 'diccionario',
+      title: 'Diccionario',
+      description: 'Permite buscar significados de palabras, encontrar sinónimos y antónimos, y determinar conjugaciones verbales de un verbo.',
+      icon: BookOpen,
+      color: 'from-blue-600/20 to-blue-700/20',
+      textColor: 'text-blue-300',
+      borderColor: 'border-blue-500/30'
     }
   ];
 
@@ -126,11 +136,12 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const isAsesor = specialtyStr.includes('asesor') || classificationStr.includes('asesor');
   
   // Admins see all tools, workers see assigned tools
-  // Requirement: Institutional Documents and Digital Signature are enabled for everyone by default
+  // Requirement: Institutional Documents, Digital Signature, and Dictionary are enabled for everyone by default
   const tools = isAdmin ? allTools : allTools.filter(t => 
     userTools.includes(t.id) || 
     t.id === 'inst-docs' || 
     t.id === 'digital-signature' ||
+    t.id === 'diccionario' ||
     (t.id === 'script-format' && (isGuionista || isAsesor))
   );
 
@@ -204,6 +215,22 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
           currentUser={currentUser} 
           onMenuClick={onMenuClick} 
         />
+      </div>
+    );
+  }
+
+  if (activeTool === 'diccionario') {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          user={currentUser}
+          sectionTitle="Diccionario" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <DiccionarioTool onBack={() => setActiveTool(null)} currentUser={currentUser} />
+        </main>
       </div>
     );
   }
