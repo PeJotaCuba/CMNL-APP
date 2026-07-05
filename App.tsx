@@ -20,7 +20,8 @@ import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrent
 import BackupDialog from './components/BackupDialog';
 import { UpdateDetailsModal, UpdateReminderModal } from './components/UpdateDialogs';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
-import { Play, Pause, SkipBack, SkipForward, RefreshCw } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, RefreshCw, BookOpen, X } from 'lucide-react';
+import { RADIAL_TERMS_BASE } from './components/radialTermsBase';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { FirebaseProvider, useFirebase } from './src/contexts/FirebaseContext';
@@ -308,6 +309,35 @@ const AppContent: React.FC = () => {
 
   const [updateDetails, setUpdateDetails] = useState<{ show: boolean; content: string } | null>(null);
   const [showUpdateReminder, setShowUpdateReminder] = useState(false);
+  const [sabiasEstoTerm, setSabiasEstoTerm] = useState<any | null>(null);
+
+  // Check for daily "¿Sabías esto?" pop-up on mount (first time in 24 hours)
+  useEffect(() => {
+    const lastShow = localStorage.getItem('rcm_sabias_esto_last_show');
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    if (!lastShow || (now - parseInt(lastShow, 10)) > twentyFourHours) {
+      let terms = RADIAL_TERMS_BASE;
+      const saved = localStorage.getItem('rcm_diccionario_radial');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            terms = parsed;
+          }
+        } catch (e) {
+          console.error("Error parsing dictionary terms for daily popup:", e);
+        }
+      }
+
+      if (terms && terms.length > 0) {
+        const randomIndex = Math.floor(Math.random() * terms.length);
+        const chosen = terms[randomIndex];
+        setSabiasEstoTerm(chosen);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     setCurrentProgram(getCurrentProgram());
@@ -745,6 +775,7 @@ const AppContent: React.FC = () => {
       dataToExport.transmissionConfig = getLocal('rcm_transmission_config');
       dataToExport.transmissionInterruptions = getLocal('rcm_transmission_interruptions') || [];
       dataToExport.transmissionHistorical = getLocal('rcm_transmission_historical') || [];
+      dataToExport.toolsOrder = getLocal('rcm_tools_order') || [];
       
       dataToExport.paymentConfigs = {
           rcm_payment_config: getLocal('rcm_payment_config'),
@@ -957,6 +988,7 @@ const AppContent: React.FC = () => {
                   if (json.managementReports) setLocal('rcm_gestion_reportes', json.managementReports);
                   if (json.allConsolidatedPayments) setLocal('rcm_all_consolidated_payments', json.allConsolidatedPayments);
                   if (json.radialDictionary && Array.isArray(json.radialDictionary)) setLocal('rcm_diccionario_radial', json.radialDictionary);
+                  if (json.toolsOrder && Array.isArray(json.toolsOrder)) setLocal('rcm_tools_order', json.toolsOrder);
                   if (json.userData) {
                       Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
                   }
@@ -1307,6 +1339,62 @@ const AppContent: React.FC = () => {
           }}
           isLogoutTrigger={isLogoutTrigger}
         />
+
+        {sabiasEstoTerm && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[550] flex items-center justify-center p-4">
+            <div 
+              className="bg-[#2D1B13] border border-amber-500/30 rounded-2xl p-8 max-w-lg w-full shadow-2xl relative animate-in zoom-in-95 duration-200 flex flex-col gap-4 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => {
+                  setSabiasEstoTerm(null);
+                  localStorage.setItem('rcm_sabias_esto_last_show', Date.now().toString());
+                }}
+                className="absolute top-4 right-4 text-stone-400 hover:text-white transition-all p-1 hover:bg-white/5 rounded-full"
+                title="Cerrar"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="mx-auto w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-500 mb-2">
+                <BookOpen size={28} className="animate-pulse" />
+              </div>
+
+              <h3 className="text-2xl font-extrabold text-[#F5EFE6] tracking-tight">
+                ¿Sabías esto?
+              </h3>
+
+              <div className="bg-black/30 border border-stone-800/80 rounded-xl p-5 text-left text-sm font-mono leading-relaxed text-stone-200">
+                <p>
+                  {(() => {
+                    const term = sabiasEstoTerm.term;
+                    const definition = sabiasEstoTerm.definition;
+                    const firstChar = definition.charAt(0);
+                    const rest = definition.slice(1);
+                    const isAcronym = /^[A-Z]{2,}/.test(definition);
+                    const lowercaseFirst = isAcronym ? firstChar : firstChar.toLowerCase();
+                    return (
+                      <>
+                        El término <span className="text-amber-400 font-bold font-sans capitalize">{term}</span> hace referencia a {lowercaseFirst}{rest}
+                      </>
+                    );
+                  })()}
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSabiasEstoTerm(null);
+                  localStorage.setItem('rcm_sabias_esto_last_show', Date.now().toString());
+                }}
+                className="mt-2 w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all shadow-lg shadow-amber-900/20"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
 
         {confirmAction && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[500] flex items-center justify-center p-4 animate-in fade-in duration-200">

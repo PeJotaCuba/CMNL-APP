@@ -2,24 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
   BookOpen, 
-  Sparkles, 
-  History, 
-  RotateCcw, 
-  ArrowRight, 
-  Bookmark, 
   Quote, 
-  Layers, 
   Compass,
   AlertTriangle,
-  FileText,
   ChevronLeft,
   ChevronRight,
   Plus,
   Upload,
   Trash2,
   CheckCircle,
-  HelpCircle,
-  FileDown
+  Copy,
+  Check,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RADIAL_TERMS_BASE, RadialTerm } from './radialTermsBase';
@@ -30,49 +24,24 @@ interface DiccionarioToolProps {
   onSaveCMNL?: () => void;
 }
 
-interface DefinitionResult {
-  word: string;
-  category: string;
-  meanings: string[];
-  synonyms: string[];
-  antonyms: string[];
-  examples: string[];
-  found?: boolean;
-  suggestions?: string[];
-}
-
-interface ConjugationResult {
-  verb: string;
-  infinitive: string;
-  gerund: string;
-  participle: string;
-  indicativePresent: string[];
-  indicativePastPerfect: string[];
-  indicativeImperfect: string[];
-  indicativeFuture: string[];
-  subjunctivePresent: string[];
-  imperative: string[];
-}
-
-const PRONOUNS = ['Yo', 'Tú', 'Él/Ella/Ud.', 'Nosotros', 'Vosotros', 'Ellos/Ellas/Uds.'];
-const IMPERATIVE_PRONOUNS = ['Tú', 'Él/Ella/Ud. (Imp.)', 'Nosotros', 'Vosotros', 'Ellos/Ellas/Uds. (Imp.)'];
-
 const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, onSaveCMNL }) => {
-  // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<'radial' | 'general' | 'conjugation'>('radial');
-  
   // Radial Dictionary States
   const [radialTerms, setRadialTerms] = useState<RadialTerm[]>([]);
   const [selectedRadialTerm, setSelectedRadialTerm] = useState<RadialTerm | null>(null);
   const [searchRadialQuery, setSearchRadialQuery] = useState('');
-  
-  // RAE Search States
-  const [word, setWord] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [definitionResult, setDefinitionResult] = useState<DefinitionResult | null>(null);
-  const [conjugationResult, setConjugationResult] = useState<ConjugationResult | null>(null);
-  const [generalHistory, setGeneralHistory] = useState<Array<{ word: string, mode: 'definition' | 'conjugation' }>>([]);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyTerm = (term: string, definition: string) => {
+    navigator.clipboard.writeText(`${term}: ${definition}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const selectTerm = (term: RadialTerm) => {
+    setSelectedRadialTerm(term);
+    setShowOverlay(true);
+  };
   
   // Admin Panel States
   const [showAdminForm, setShowAdminForm] = useState(false);
@@ -86,7 +55,7 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador';
 
-  // Load Radial Terms and general history on mount
+  // Load Radial Terms on mount
   useEffect(() => {
     // 1. Radial dictionary terms
     const savedRadial = localStorage.getItem('rcm_diccionario_radial');
@@ -109,16 +78,6 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
       setRadialTerms(RADIAL_TERMS_BASE);
       setSelectedRadialTerm(RADIAL_TERMS_BASE[0]);
       localStorage.setItem('rcm_diccionario_radial', JSON.stringify(RADIAL_TERMS_BASE));
-    }
-
-    // 2. RAE General search history
-    const savedHistory = localStorage.getItem('rcm_dictionary_history');
-    if (savedHistory) {
-      try {
-        setGeneralHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error(e);
-      }
     }
   }, []);
 
@@ -166,67 +125,6 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
     } else {
       // Loop to beginning
       setSelectedRadialTerm(filteredRadialTerms[0]);
-    }
-  };
-
-  // 2. GENERAL SEARCH FUNCTIONS (Local + Gemini Fallback)
-  const addToHistory = (newWord: string, searchMode: 'definition' | 'conjugation') => {
-    const sanitized = newWord.trim();
-    if (!sanitized) return;
-
-    setGeneralHistory(prev => {
-      const filtered = prev.filter(item => !(item.word.toLowerCase() === sanitized.toLowerCase() && item.mode === searchMode));
-      const updated = [{ word: sanitized, mode: searchMode }, ...filtered].slice(0, 8);
-      localStorage.setItem('rcm_dictionary_history', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  const clearHistory = () => {
-    setGeneralHistory([]);
-    localStorage.removeItem('rcm_dictionary_history');
-  };
-
-  const handleGeneralSearch = async (searchWord?: string, searchMode?: 'definition' | 'conjugation') => {
-    const targetWord = (searchWord || word).trim();
-    const targetMode = searchMode || (activeTab === 'conjugation' ? 'conjugation' : 'definition');
-
-    if (!targetWord) return;
-
-    setLoading(true);
-    setError(null);
-    if (targetMode === 'definition') {
-      setDefinitionResult(null);
-    } else {
-      setConjugationResult(null);
-    }
-
-    try {
-      const response = await fetch('/api/dictionary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ word: targetWord, mode: targetMode }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || 'Ocurrió un error al consultar el diccionario.');
-      }
-
-      const data = await response.json();
-
-      if (targetMode === 'definition') {
-        setDefinitionResult(data);
-        addToHistory(data.word || targetWord, 'definition');
-      } else {
-        setConjugationResult(data);
-        addToHistory(data.verb || targetWord, 'conjugation');
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'No se pudo conectar con el servidor.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -425,43 +323,6 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
         </div>
       </div>
 
-      {/* Main Tabs Navigation */}
-      <div className="flex flex-wrap gap-2 p-1 bg-black/40 rounded-xl border border-stone-900 mb-8 max-w-2xl">
-        <button
-          onClick={() => { setActiveTab('radial'); setError(null); }}
-          className={`flex-1 min-w-[140px] py-3 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-            activeTab === 'radial' 
-              ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40 border border-amber-500/30' 
-              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
-          }`}
-        >
-          <Compass size={14} />
-          Glosario Radial
-        </button>
-        <button
-          onClick={() => { setActiveTab('general'); setError(null); }}
-          className={`flex-1 min-w-[140px] py-3 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-            activeTab === 'general' 
-              ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40 border border-amber-500/30' 
-              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
-          }`}
-        >
-          <FileText size={14} />
-          Búsqueda General (RAE)
-        </button>
-        <button
-          onClick={() => { setActiveTab('conjugation'); setError(null); }}
-          className={`flex-1 min-w-[140px] py-3 rounded-lg text-xs font-bold font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-            activeTab === 'conjugation' 
-              ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/40 border border-amber-500/30' 
-              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900/50'
-          }`}
-        >
-          <Layers size={14} />
-          Conjugación Verbal
-        </button>
-      </div>
-
       {/* Notification Alerts */}
       <AnimatePresence mode="wait">
         {successMessage && (
@@ -491,8 +352,7 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
       </AnimatePresence>
 
       {/* VIEW 1: DICCIONARIO / GLOSARIO RADIAL (CORE OBJECTIVE) */}
-      {activeTab === 'radial' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
           {/* LEFT SIDEBAR: Search, Alphabetical List, Admin Actions */}
           <div className="lg:col-span-5 bg-[#1C120C] border border-stone-800 rounded-2xl p-5 shadow-xl space-y-6">
@@ -543,7 +403,7 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
                   return (
                     <button
                       key={idx}
-                      onClick={() => setSelectedRadialTerm(t)}
+                      onClick={() => selectTerm(t)}
                       className={`w-full px-4 py-3 text-left transition-all flex items-center justify-between gap-3 text-xs ${
                         isSelected 
                           ? 'bg-amber-600/10 text-amber-400 font-bold border-l-2 border-amber-500' 
@@ -746,10 +606,29 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
                       )}
                     </div>
 
-                    {/* Term Display Heading */}
-                    <h2 className="text-3xl font-extrabold text-white tracking-tight capitalize mb-4 font-sans">
-                      {selectedRadialTerm.term}
-                    </h2>
+                    {/* Term Display Heading & Copy Button */}
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <h2 className="text-3xl font-extrabold text-white tracking-tight capitalize font-sans">
+                        {selectedRadialTerm.term}
+                      </h2>
+                      <button
+                        onClick={() => handleCopyTerm(selectedRadialTerm.term, selectedRadialTerm.definition)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-900 border border-stone-800 hover:border-amber-500/30 text-stone-400 hover:text-white transition-all text-xs font-mono"
+                        title="Copiar término y definición"
+                      >
+                        {copied ? (
+                          <>
+                            <Check size={14} className="text-emerald-500" />
+                            <span className="text-emerald-400">¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} />
+                            <span>Copiar</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
 
                     {/* Definition Paragraph */}
                     <div className="p-5 rounded-xl bg-black/30 border border-stone-800/80 mb-6 relative">
@@ -789,7 +668,7 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
                     </div>
                   </div>
 
-                  {/* BOTTOM SEQUENTIAL PAGER (Consultando uno por uno) */}
+                  {/* BOTTOM SEQUENTIAL PAGER (Consultando uno por uno - Text removed to prevent crowding) */}
                   <div className="flex items-center justify-between border-t border-stone-800/80 pt-6 mt-8">
                     <button
                       onClick={handlePrevTerm}
@@ -798,10 +677,6 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
                       <ChevronLeft size={16} />
                       Término Anterior
                     </button>
-                    
-                    <span className="text-[10px] text-stone-500 font-mono uppercase tracking-widest">
-                      Navegación Secuencial
-                    </span>
 
                     <button
                       onClick={handleNextTerm}
@@ -822,402 +697,112 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
             </AnimatePresence>
           </div>
         </div>
-      )}
 
-      {/* VIEW 2: GENERAL RAE OFFLINE SEARCH (PRESERVED PREVIOUS BEHAVIORS) */}
-      {activeTab === 'general' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 p-6 rounded-xl bg-[#221510] border border-stone-800 flex flex-col justify-between min-h-[220px]">
-            <div>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Search className="text-amber-500" size={18} />
-                Búsqueda en Base RAE y API
-              </h2>
-              <form onSubmit={(e) => { e.preventDefault(); handleGeneralSearch(); }} className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" size={18} />
-                  <input
-                    type="text"
-                    required
-                    value={word}
-                    onChange={(e) => setWord(e.target.value)}
-                    placeholder="Escriba palabra para definir..."
-                    className="w-full pl-11 pr-4 py-3 bg-black/40 border border-stone-800 hover:border-stone-700 focus:border-amber-500/50 rounded-xl text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-all font-mono"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-amber-900/20 shrink-0 font-mono uppercase tracking-wider"
-                >
-                  {loading ? 'Consultando...' : 'Definir'}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* History Panel */}
-          <div className="p-6 rounded-xl bg-[#1C120C] border border-stone-800 flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold tracking-wider text-stone-400 font-mono uppercase flex items-center gap-2">
-                  <History size={16} />
-                  Historial de búsquedas
-                </h3>
-                {generalHistory.length > 0 && (
-                  <button 
-                    onClick={clearHistory}
-                    className="text-[10px] font-bold text-stone-500 hover:text-amber-500 font-mono uppercase tracking-wider flex items-center gap-1"
-                  >
-                    <RotateCcw size={10} />
-                    Limpiar
-                  </button>
-                )}
-              </div>
-
-              {generalHistory.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {generalHistory.map((item, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => { setWord(item.word); handleGeneralSearch(item.word, item.mode); }}
-                      className="px-3 py-1.5 rounded-lg bg-[#221510] hover:bg-[#2A1A14] border border-stone-800 hover:border-stone-700 text-xs text-stone-300 font-mono transition-all flex items-center gap-1.5"
-                    >
-                      {item.word}
-                      <ArrowRight size={10} className="text-stone-500" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-stone-600 font-mono italic">No hay consultas recientes.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Search Result Display */}
-          <div className="lg:col-span-3 mt-6">
-            {definitionResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-6"
-              >
-                <div className="md:col-span-2 p-8 rounded-2xl bg-[#1C120C] border border-stone-800 relative shadow-xl">
-                  <div className="flex flex-col md:flex-row md:items-baseline gap-4 mb-6">
-                    <h2 className="text-4xl font-extrabold text-white tracking-tight capitalize">
-                      {definitionResult.word}
-                    </h2>
-                    {definitionResult.category && (
-                      <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-xs font-bold font-mono text-amber-500 uppercase">
-                        {definitionResult.category}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-6">
-                    {definitionResult.meanings && definitionResult.meanings.length > 0 ? (
-                      definitionResult.meanings.map((meaning, index) => (
-                        <div key={index} className="flex gap-4 items-start">
-                          <span className="w-6 h-6 rounded-full bg-[#2A1810] text-amber-500 flex items-center justify-center font-bold text-xs shrink-0 font-mono border border-amber-500/10">
-                            {index + 1}
-                          </span>
-                          <p className="text-stone-300 text-sm leading-relaxed font-mono">
-                            {meaning}
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-stone-500 text-sm font-mono">No se encontraron significados.</p>
-                    )}
-                  </div>
-
-                  {/* Examples */}
-                  {definitionResult.examples && definitionResult.examples.length > 0 && (
-                    <div className="mt-8 pt-6 border-t border-stone-800/80">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500 font-mono mb-4 flex items-center gap-1.5">
-                        <Bookmark size={14} className="text-amber-500/40" />
-                        Ejemplos prácticos
-                      </h4>
-                      <div className="space-y-3">
-                        {definitionResult.examples.map((ex, idx) => (
-                          <div key={idx} className="p-3 rounded-lg bg-black/20 border border-stone-900/60 font-mono text-xs text-stone-400 italic">
-                            "{ex}"
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Synonyms & Antonyms Side Panel */}
-                <div className="space-y-6">
-                  {definitionResult.synonyms && definitionResult.synonyms.length > 0 && (
-                    <div className="p-6 rounded-xl bg-gradient-to-b from-[#221712] to-[#1C120C] border border-stone-800">
-                      <h3 className="text-sm font-bold tracking-wider text-cyan-400 font-mono uppercase mb-4 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
-                        Sinónimos
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {definitionResult.synonyms.map((syn, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => { setWord(syn); handleGeneralSearch(syn, 'definition'); }}
-                            className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 hover:border-cyan-500/50 text-xs text-cyan-300 font-semibold font-mono"
-                          >
-                            {syn}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {definitionResult.antonyms && definitionResult.antonyms.length > 0 && (
-                    <div className="p-6 rounded-xl bg-gradient-to-b from-[#221712] to-[#1C120C] border border-stone-800">
-                      <h3 className="text-sm font-bold tracking-wider text-rose-400 font-mono uppercase mb-4 flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                        Antónimos
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {definitionResult.antonyms.map((ant, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => { setWord(ant); handleGeneralSearch(ant, 'definition'); }}
-                            className="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 hover:border-rose-500/50 text-xs text-rose-300 font-semibold font-mono"
-                          >
-                            {ant}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="p-4 rounded-xl bg-black/40 border border-stone-800 text-center flex flex-col items-center justify-center">
-                    <BookOpen className="text-amber-500/40 mb-2 animate-pulse" size={24} />
-                    <p className="text-[10px] text-stone-500 font-mono uppercase leading-snug">
-                      Base lexicográfica RAE oficial con respaldo API
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* VIEW 3: VERB CONJUGATOR (PRESERVED PREVIOUS BEHAVIORS) */}
-      {activeTab === 'conjugation' && (
-        <div className="space-y-6">
-          <div className="p-6 rounded-xl bg-[#221510] border border-stone-800 flex flex-col justify-between min-h-[160px]">
-            <div>
-              <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Layers className="text-amber-500" size={18} />
-                Conjugador Verbal Integrado
-              </h2>
-              <form onSubmit={(e) => { e.preventDefault(); handleGeneralSearch(undefined, 'conjugation'); }} className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-500" size={18} />
-                  <input
-                    type="text"
-                    required
-                    value={word}
-                    onChange={(e) => setWord(e.target.value)}
-                    placeholder="Escriba un verbo en infinitivo (ej. Escribir, Redactar)..."
-                    className="w-full pl-11 pr-4 py-3 bg-black/40 border border-stone-800 hover:border-stone-700 focus:border-amber-500/50 rounded-xl text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-all font-mono"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-amber-900/20 shrink-0 font-mono uppercase tracking-wider"
-                >
-                  {loading ? 'Analizando...' : 'Conjugar'}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Conjugation Grids */}
-          {conjugationResult && (
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
+        {/* OVERLAY PANEL (SIEMPRE VISIBLE CUANDO SHOWOVERLAY ES TRUE, NO SCROLLEABLE EN EL FONDO) */}
+        <AnimatePresence>
+          {showOverlay && selectedRadialTerm && (
+            <div 
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[250] flex items-center justify-center p-4 animate-in fade-in duration-200"
+              onClick={() => setShowOverlay(false)}
             >
-              <div className="p-6 rounded-xl bg-[#1C120C] border border-stone-800">
-                <div className="flex flex-col md:flex-row md:items-baseline gap-4 mb-6">
-                  <h2 className="text-3xl font-extrabold text-white tracking-tight capitalize">
-                    {conjugationResult.verb}
-                  </h2>
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold font-mono text-emerald-500 uppercase">
-                    Modelos Verbales RAE
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-[#231510] border border-amber-500/30 rounded-2xl p-6 md:p-8 max-w-lg w-full shadow-2xl relative flex flex-col gap-5 text-stone-200 animate-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close button top right */}
+                <button 
+                  onClick={() => setShowOverlay(false)}
+                  className="absolute top-4 right-4 text-stone-500 hover:text-white transition-all p-1.5 hover:bg-white/5 rounded-full"
+                  title="Cerrar vista superpuesta"
+                >
+                  <X size={20} />
+                </button>
+
+                {/* Category Badge */}
+                <div>
+                  <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold font-mono text-amber-400 uppercase tracking-widest">
+                    {selectedRadialTerm.category || 'Módulo de Especialidad'}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-xl bg-black/30 border border-stone-800/60 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#2A1810] flex items-center justify-center font-bold text-amber-500 text-xs font-mono border border-amber-500/10">INF</div>
-                    <div>
-                      <p className="text-[10px] text-stone-500 font-mono uppercase">Infinitivo</p>
-                      <p className="text-sm font-bold text-stone-200 capitalize font-mono">{conjugationResult.infinitive || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-black/30 border border-stone-800/60 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#2A1810] flex items-center justify-center font-bold text-amber-500 text-xs font-mono border border-amber-500/10">GER</div>
-                    <div>
-                      <p className="text-[10px] text-stone-500 font-mono uppercase">Gerundio</p>
-                      <p className="text-sm font-bold text-stone-200 capitalize font-mono">{conjugationResult.gerund || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-black/30 border border-stone-800/60 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#2A1810] flex items-center justify-center font-bold text-amber-500 text-xs font-mono border border-amber-500/10">PAR</div>
-                    <div>
-                      <p className="text-[10px] text-stone-500 font-mono uppercase">Participio</p>
-                      <p className="text-sm font-bold text-stone-200 capitalize font-mono">{conjugationResult.participle || '-'}</p>
-                    </div>
-                  </div>
+                {/* Title & Copy Button Row */}
+                <div className="flex items-center justify-between gap-4 border-b border-stone-800 pb-3">
+                  <h3 className="text-2xl font-extrabold text-white tracking-tight capitalize font-sans">
+                    {selectedRadialTerm.term}
+                  </h3>
+                  
+                  <button
+                    onClick={() => handleCopyTerm(selectedRadialTerm.term, selectedRadialTerm.definition)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-900 border border-stone-800 hover:border-amber-500/30 text-stone-400 hover:text-white transition-all text-xs font-mono shrink-0"
+                    title="Copiar término y definición"
+                  >
+                    {copied ? (
+                      <>
+                        <Check size={14} className="text-emerald-500" />
+                        <span className="text-emerald-400">¡Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Presente Indicativo */}
-                {conjugationResult.indicativePresent && (
-                  <div className="p-5 rounded-xl bg-[#1C120C] border border-stone-800">
-                    <h3 className="text-sm font-bold tracking-wider text-amber-500 font-mono uppercase mb-4 border-b border-stone-800 pb-2">
-                      Presente de Indicativo
-                    </h3>
-                    <div className="space-y-2.5">
-                      {conjugationResult.indicativePresent.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 font-mono text-xs border-b border-stone-900/50">
-                          <span className="text-stone-500">{PRONOUNS[idx] || ''}</span>
-                          <span className="text-stone-100 font-bold capitalize">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* Definition */}
+                <div className="p-5 rounded-xl bg-black/40 border border-stone-800/80 relative">
+                  <Quote className="absolute -top-3 left-3 text-amber-500/10" size={28} />
+                  <p className="text-stone-200 text-sm font-mono leading-relaxed pl-3">
+                    {selectedRadialTerm.definition}
+                  </p>
+                </div>
 
-                {/* Pretérito Perfecto Simple */}
-                {conjugationResult.indicativePastPerfect && (
-                  <div className="p-5 rounded-xl bg-[#1C120C] border border-stone-800">
-                    <h3 className="text-sm font-bold tracking-wider text-cyan-400 font-mono uppercase mb-4 border-b border-stone-800 pb-2">
-                      Pretérito Perfecto Simple
-                    </h3>
-                    <div className="space-y-2.5">
-                      {conjugationResult.indicativePastPerfect.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 font-mono text-xs border-b border-stone-900/50">
-                          <span className="text-stone-500">{PRONOUNS[idx] || ''}</span>
-                          <span className="text-stone-100 font-bold capitalize">{item}</span>
+                {/* Synonyms and Antonyms if present */}
+                {(selectedRadialTerm.synonyms?.length || selectedRadialTerm.antonyms?.length) ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                    {selectedRadialTerm.synonyms && selectedRadialTerm.synonyms.length > 0 && (
+                      <div className="p-3.5 rounded-lg bg-cyan-950/15 border border-cyan-800/20">
+                        <p className="text-[9px] text-cyan-400 font-mono uppercase tracking-widest font-bold mb-1.5">Sinónimos</p>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedRadialTerm.synonyms.map((syn, idx) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-cyan-900/20 border border-cyan-800/30 text-[10px] text-cyan-300 font-mono">
+                              {syn}
+                            </span>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {/* Pretérito Imperfecto */}
-                {conjugationResult.indicativeImperfect && (
-                  <div className="p-5 rounded-xl bg-[#1C120C] border border-stone-800">
-                    <h3 className="text-sm font-bold tracking-wider text-emerald-400 font-mono uppercase mb-4 border-b border-stone-800 pb-2">
-                      Pretérito Imperfecto
-                    </h3>
-                    <div className="space-y-2.5">
-                      {conjugationResult.indicativeImperfect.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 font-mono text-xs border-b border-stone-900/50">
-                          <span className="text-stone-500">{PRONOUNS[idx] || ''}</span>
-                          <span className="text-stone-100 font-bold capitalize">{item}</span>
+                    {selectedRadialTerm.antonyms && selectedRadialTerm.antonyms.length > 0 && (
+                      <div className="p-3.5 rounded-lg bg-rose-950/15 border border-rose-800/20">
+                        <p className="text-[9px] text-rose-400 font-mono uppercase tracking-widest font-bold mb-1.5">Antónimos</p>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedRadialTerm.antonyms.map((ant, idx) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-rose-900/20 border border-rose-800/30 text-[10px] text-rose-300 font-mono">
+                              {ant}
+                            </span>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                ) : null}
 
-                {/* Futuro de Indicativo */}
-                {conjugationResult.indicativeFuture && (
-                  <div className="p-5 rounded-xl bg-[#1C120C] border border-stone-800">
-                    <h3 className="text-sm font-bold tracking-wider text-purple-400 font-mono uppercase mb-4 border-b border-stone-800 pb-2">
-                      Futuro Simple
-                    </h3>
-                    <div className="space-y-2.5">
-                      {conjugationResult.indicativeFuture.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 font-mono text-xs border-b border-stone-900/50">
-                          <span className="text-stone-500">{PRONOUNS[idx] || ''}</span>
-                          <span className="text-stone-100 font-bold capitalize">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Presente de Subjuntivo */}
-                {conjugationResult.subjunctivePresent && (
-                  <div className="p-5 rounded-xl bg-[#1C120C] border border-stone-800">
-                    <h3 className="text-sm font-bold tracking-wider text-[#9E7649] font-mono uppercase mb-4 border-b border-stone-800 pb-2">
-                      Presente de Subjuntivo
-                    </h3>
-                    <div className="space-y-2.5">
-                      {conjugationResult.subjunctivePresent.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 font-mono text-xs border-b border-stone-900/50">
-                          <span className="text-stone-500">{PRONOUNS[idx] || ''}</span>
-                          <span className="text-stone-100 font-bold capitalize">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Imperativo */}
-                {conjugationResult.imperative && (
-                  <div className="p-5 rounded-xl bg-[#1C120C] border border-stone-800">
-                    <h3 className="text-sm font-bold tracking-wider text-rose-400 font-mono uppercase mb-4 border-b border-stone-800 pb-2">
-                      Imperativo Afirmativo
-                    </h3>
-                    <div className="space-y-2.5">
-                      {conjugationResult.imperative.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center py-1 font-mono text-xs border-b border-stone-900/50">
-                          <span className="text-stone-500">{IMPERATIVE_PRONOUNS[idx] || ''}</span>
-                          <span className="text-stone-100 font-bold capitalize">{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
+                {/* Footer Button to close */}
+                <button
+                  onClick={() => setShowOverlay(false)}
+                  className="mt-2 py-2.5 w-full bg-amber-600/10 hover:bg-amber-600/20 border border-amber-500/20 text-amber-400 font-mono text-xs font-bold uppercase rounded-xl transition-all"
+                >
+                  Volver a la lista
+                </button>
+              </motion.div>
+            </div>
           )}
-        </div>
-      )}
-
-      {/* Initial state screen when no queries are made */}
-      {activeTab !== 'radial' && !definitionResult && !conjugationResult && !loading && !error && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-8 p-12 rounded-2xl border border-stone-800 bg-black/20 flex flex-col items-center text-center"
-        >
-          <div className="w-16 h-16 rounded-full bg-[#2A1810]/60 flex items-center justify-center mb-6 border border-stone-800">
-            <Sparkles className="text-amber-500 animate-pulse" size={30} />
-          </div>
-          <h3 className="text-lg font-bold text-white mb-2 font-sans">Asistente Lingüístico Integrado</h3>
-          <p className="text-stone-400 max-w-md text-xs font-mono leading-relaxed">
-            Consulte términos de la RAE con sinónimos, antónimos, ejemplos prácticos y la conjugación en todos los tiempos verbales.
-          </p>
-          <div className="grid grid-cols-2 gap-4 mt-8 w-full max-w-md">
-            <button 
-              onClick={() => { setWord('Elocuente'); handleGeneralSearch('Elocuente', 'definition'); }}
-              className="p-3 rounded-xl bg-[#221510] border border-stone-800 text-stone-400 hover:text-amber-500 hover:border-amber-500/30 text-xs font-mono transition-all text-left"
-            >
-              <p className="text-stone-500 text-[9px] uppercase mb-1">Ejemplo de Búsqueda</p>
-              <strong>Elocuente</strong>
-            </button>
-            <button 
-              onClick={() => { setWord('Escribir'); handleGeneralSearch('Escribir', 'conjugation'); }}
-              className="p-3 rounded-xl bg-[#221510] border border-stone-800 text-stone-400 hover:text-amber-500 hover:border-amber-500/30 text-xs font-mono transition-all text-left"
-            >
-              <p className="text-stone-500 text-[9px] uppercase mb-1">Ejemplo de Conjugación</p>
-              <strong>Escribir</strong>
-            </button>
-          </div>
-        </motion.div>
-      )}
+        </AnimatePresence>
     </div>
   );
 };

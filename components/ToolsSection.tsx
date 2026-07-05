@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wrench, 
   FileText, 
@@ -11,7 +11,8 @@ import {
   Database,
   Briefcase,
   Bell,
-  Shield
+  Shield,
+  GripVertical
 } from 'lucide-react';
 import CMNLHeader from './CMNLHeader';
 import DataExtractionTool from './DataExtractionTool';
@@ -33,7 +34,7 @@ interface ToolsSectionProps {
 const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser, equipoData = [], users = [], onSaveCMNL }) => {
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
-  const allTools = [
+  const initialToolsList = [
     {
       id: 'guiones-management',
       title: 'Gestión de Guiones',
@@ -126,6 +127,35 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     }
   ];
 
+  // Load tools order state from LocalStorage
+  const [orderedTools, setOrderedTools] = useState<any[]>(() => {
+    const savedOrder = localStorage.getItem('rcm_tools_order');
+    if (savedOrder) {
+      try {
+        const orderIds = JSON.parse(savedOrder);
+        if (Array.isArray(orderIds) && orderIds.length > 0) {
+          // Sort items based on saved orderIds, appending any new/missing items at the end
+          const sorted = [...initialToolsList].sort((a, b) => {
+            const indexA = orderIds.indexOf(a.id);
+            const indexB = orderIds.indexOf(b.id);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+          return sorted;
+        }
+      } catch (e) {
+        console.error("Error parsing saved tools order:", e);
+      }
+    }
+    return initialToolsList;
+  });
+
+  const [isReordering, setIsReordering] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [touchDraggedIndex, setTouchDraggedIndex] = useState<number | null>(null);
+
   const userTools = currentUser?.tools || [];
   const isAdmin = currentUser?.role === 'admin' || currentUser?.classification === 'Administrador';
   
@@ -136,9 +166,8 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const isGuionista = specialtyStr.includes('guionista') || classificationStr.includes('guionista');
   const isAsesor = specialtyStr.includes('asesor') || classificationStr.includes('asesor');
   
-  // Admins see all tools, workers see assigned tools
-  // Requirement: Institutional Documents, Digital Signature, and Dictionary are enabled for everyone by default
-  const tools = isAdmin ? allTools : allTools.filter(t => 
+  // Filter according to user privileges, preserving ordered state
+  const tools = isAdmin ? orderedTools : orderedTools.filter(t => 
     userTools.includes(t.id) || 
     t.id === 'inst-docs' || 
     t.id === 'digital-signature' ||
@@ -146,8 +175,107 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     (t.id === 'script-format' && (isGuionista || isAsesor))
   );
 
+  // HTML5 Drag & Drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (!isReordering) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (!isReordering || draggedIndex === null) return;
+    e.preventDefault();
+    if (draggedIndex === index) return;
+    
+    const updated = [...orderedTools];
+    const draggedItem = updated[draggedIndex];
+    updated.splice(draggedIndex, 1);
+    updated.splice(index, 0, draggedItem);
+    
+    setDraggedIndex(index);
+    setOrderedTools(updated);
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+    if (!isReordering) return;
+    e.preventDefault();
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
+  // Touch handlers for mobile reordering
+  const handleTouchStart = (e: React.TouchEvent, index: number) => {
+    if (!isReordering) return;
+    setTouchDraggedIndex(index);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, index: number) => {
+    if (!isReordering || touchDraggedIndex === null) return;
+    
+    const touch = e.touches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!element) return;
+    
+    const card = element.closest('[data-index]');
+    if (!card) return;
+    
+    const targetIndex = parseInt(card.getAttribute('data-index') || '', 10);
+    if (isNaN(targetIndex) || targetIndex === touchDraggedIndex) return;
+    
+    const updated = [...orderedTools];
+    const draggedItem = updated[touchDraggedIndex];
+    updated.splice(touchDraggedIndex, 1);
+    updated.splice(targetIndex, 0, draggedItem);
+    
+    setTouchDraggedIndex(targetIndex);
+    setOrderedTools(updated);
+  };
+
+  const handleTouchEnd = () => {
+    setTouchDraggedIndex(null);
+  };
+
+  // Reorder save / cancel actions
+  const saveNewOrder = () => {
+    const orderIds = orderedTools.map(t => t.id);
+    localStorage.setItem('rcm_tools_order', JSON.stringify(orderIds));
+    setIsReordering(false);
+    if (onSaveCMNL) {
+      onSaveCMNL();
+    }
+  };
+
+  const cancelReordering = () => {
+    const savedOrder = localStorage.getItem('rcm_tools_order');
+    if (savedOrder) {
+      try {
+        const orderIds = JSON.parse(savedOrder);
+        if (Array.isArray(orderIds) && orderIds.length > 0) {
+          const sorted = [...initialToolsList].sort((a, b) => {
+            const indexA = orderIds.indexOf(a.id);
+            const indexB = orderIds.indexOf(b.id);
+            if (indexA === -1 && indexB === -1) return 0;
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+          });
+          setOrderedTools(sorted);
+        }
+      } catch (e) {
+        setOrderedTools(initialToolsList);
+      }
+    } else {
+      setOrderedTools(initialToolsList);
+    }
+    setIsReordering(false);
+  };
+
   // If a tool is active, render it
-  const currentTool = allTools.find(t => t.id === activeTool);
+  const currentTool = initialToolsList.find(t => t.id === activeTool);
 
   if (activeTool === 'data-extraction') {
     return (
@@ -277,45 +405,106 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <Sparkles size={120} />
           </div>
-          <div className="relative z-10">
-            <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
-              <Wrench className="text-amber-500" />
-              Módulo Especializado
-            </h2>
-            <p className="text-stone-400 max-w-2xl">
-              Bienvenido a tu panel de herramientas. Aquí encontrarás recursos diseñados específicamente para tu especialización dentro de Radio Ciudad Monumento.
-            </p>
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+                <Wrench className="text-amber-500" />
+                Módulo Especializado
+              </h2>
+              <p className="text-stone-400 max-w-2xl text-sm">
+                Bienvenido a tu panel de herramientas. Aquí encontrarás recursos diseñados específicamente para tu especialización dentro de Radio Ciudad Monumento.
+              </p>
+            </div>
+            
+            {isAdmin && (
+              <div className="shrink-0 flex items-center">
+                {!isReordering ? (
+                  <button
+                    onClick={() => setIsReordering(true)}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all shadow-lg shadow-amber-950/40 flex items-center gap-2"
+                  >
+                    <Settings size={14} className="animate-spin duration-1000" />
+                    Reorganizar Lista
+                  </button>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <button
+                      onClick={saveNewOrder}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold uppercase rounded-xl transition-all shadow-lg shadow-emerald-950/40"
+                    >
+                      Guardar Orden
+                    </button>
+                    <button
+                      onClick={cancelReordering}
+                      className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 font-mono text-xs font-bold uppercase rounded-xl transition-all"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+          
+          {isAdmin && isReordering && (
+            <div className="mt-3 text-xs text-amber-400 font-mono bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg animate-pulse">
+              💡 <strong>Modo de Ordenamiento:</strong> Mantenga presionado y arrastre cualquier tarjeta (con el dedo en móvil o el cursor en PC) para cambiar su posición.
+            </div>
+          )}
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
-          {tools.map((tool, index) => (
-            <motion.button
-              key={tool.id}
-              onClick={() => setActiveTool(tool.id)}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`group flex items-start gap-4 p-5 rounded-xl bg-gradient-to-br ${tool.color} border ${tool.borderColor} text-left transition-all hover:shadow-lg hover:shadow-black/40`}
-            >
-              <div className={`p-3 rounded-lg bg-black/40 ${tool.textColor}`}>
-                <tool.icon size={28} />
+          {tools.map((tool, index) => {
+            const isBeingDragged = index === draggedIndex || index === touchDraggedIndex;
+            return (
+              <div
+                key={tool.id}
+                data-index={index}
+                draggable={isReordering}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onTouchStart={(e) => handleTouchStart(e, index)}
+                onTouchMove={(e) => handleTouchMove(e, index)}
+                onTouchEnd={handleTouchEnd}
+                style={{ touchAction: isReordering ? 'none' : 'auto' }}
+                className={`group flex items-start gap-4 p-5 rounded-xl bg-gradient-to-br ${tool.color} border transition-all ${
+                  isReordering 
+                    ? isBeingDragged
+                      ? 'border-amber-500 bg-stone-900/80 scale-[1.03] shadow-xl shadow-amber-950/20 opacity-90 cursor-grabbing'
+                      : 'border-amber-500/30 hover:border-amber-500/60 border-dashed cursor-grab'
+                    : `hover:shadow-lg hover:shadow-black/40 ${tool.borderColor}`
+                }`}
+                onClick={isReordering ? undefined : () => setActiveTool(tool.id)}
+              >
+                {isReordering && (
+                  <div className="pt-3 text-amber-500/50 group-hover:text-amber-500 transition-all shrink-0">
+                    <GripVertical size={20} className="animate-pulse" />
+                  </div>
+                )}
+                
+                <div className={`p-3 rounded-lg bg-black/40 ${tool.textColor} shrink-0`}>
+                  <tool.icon size={28} />
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-bold text-white group-hover:text-amber-500 transition-colors uppercase tracking-tight truncate">
+                    {tool.title}
+                  </h3>
+                  <p className="text-sm text-stone-300 mt-1 line-clamp-2 leading-relaxed font-mono">
+                    {tool.description}
+                  </p>
+                </div>
+                
+                {!isReordering && (
+                  <div className="pt-2 text-stone-500 group-hover:text-amber-500 transition-colors shrink-0">
+                    <ChevronRight size={20} />
+                  </div>
+                )}
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-white group-hover:text-amber-500 transition-colors uppercase tracking-tight">
-                  {tool.title}
-                </h3>
-                <p className="text-sm text-stone-300 mt-1 line-clamp-2 leading-relaxed font-mono">
-                  {tool.description}
-                </p>
-              </div>
-              <div className="pt-2 text-stone-500 group-hover:text-amber-500 transition-colors">
-                <ChevronRight size={20} />
-              </div>
-            </motion.button>
-          ))}
+            );
+          })}
         </div>
 
         <motion.div 
