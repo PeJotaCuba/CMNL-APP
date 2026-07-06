@@ -2197,306 +2197,311 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   const handleGenerateDOCX_Music = async () => {
     const stats = activePeriodStats.mensual;
     const regionStatsAgg = getActiveRegionStats();
-    const { topSongs, topAuthors, topPerformers, topGenres } = getActiveTopLists();
+    try {
+      const { topSongs, topAuthors, topPerformers, topGenres } = getActiveTopLists();
 
-    const periodStr = getPeriodName(selectedMonthNum, selectedYear, activePeriod);
+      const periodStr = getPeriodName(selectedMonthNum, selectedYear, activePeriod);
 
-    // Regional breakdown rows helper
-    const makeRegionRow = (regionName: string) => {
-      const regObj = regionStatsAgg[regionName as keyof typeof regionStatsAgg] || { works: 0, authors: new Set(), performers: new Set() };
-      return new TableRow({
-        children: [
-          docxCell(""),
-          docxCell(regionName, false),
-          docxCell(regObj.works.toString(), false, AlignmentType.CENTER),
-          docxCell(pct(regObj.works, stats.totalWorks), false, AlignmentType.CENTER),
-          docxCell(regObj.authors.size.toString(), false, AlignmentType.CENTER),
-          docxCell(pct(regObj.authors.size, stats.totalAuthors), false, AlignmentType.CENTER),
-          docxCell(regObj.performers.size.toString(), false, AlignmentType.CENTER),
-          docxCell(pct(regObj.performers.size, stats.totalPerformers), false, AlignmentType.CENTER),
-        ]
+      // Regional breakdown rows helper
+      const makeRegionRow = (regionName: string) => {
+        const regObj = regionStatsAgg[regionName as keyof typeof regionStatsAgg] || { works: 0, authors: new Set(), performers: new Set() };
+        return new TableRow({
+          children: [
+            docxCell(""),
+            docxCell(regionName, false),
+            docxCell((regObj.works || 0).toString(), false, AlignmentType.CENTER),
+            docxCell(pct(regObj.works || 0, stats.totalWorks), false, AlignmentType.CENTER),
+            docxCell((regObj.authors?.size || 0).toString(), false, AlignmentType.CENTER),
+            docxCell(pct(regObj.authors?.size || 0, stats.totalAuthors), false, AlignmentType.CENTER),
+            docxCell((regObj.performers?.size || 0).toString(), false, AlignmentType.CENTER),
+            docxCell(pct(regObj.performers?.size || 0, stats.totalPerformers), false, AlignmentType.CENTER),
+          ]
+        });
+      };
+
+      const doc = new Document({
+        sections: [{
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ font: "Arial", text: "DIRECCIÓN NACIONAL DE MÚSICA", bold: true, size: 28 }),
+              ],
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ font: "Arial", text: "ESTADÍSTICAS MUSICALES", bold: true, size: 24 }),
+              ],
+            }),
+            new Paragraph({ text: "" }),
+
+            // Emisora & Provincia table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: `Emisora: RADIO CIUDAD MONUMENTO`, bold: true })] })] }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: `Provincia: GRANMA`, bold: true })] })] }),
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: `Año: ${selectedYear}` })] })] }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: periodStr })] })] }),
+                  ]
+                })
+              ]
+            }),
+
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Obras, autores e intérpretes por zonas geográficas", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+
+            // Standard stats table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                // Header
+                new TableRow({
+                  children: [
+                    docxCellHeader("No"),
+                    docxCellHeader("Zonas"),
+                    docxCellHeader("Cantidad de obras"),
+                    docxCellHeader("%"),
+                    docxCellHeader("Cantidad autores"),
+                    docxCellHeader("%"),
+                    docxCellHeader("Cantidad intérpretes"),
+                    docxCellHeader("%"),
+                  ]
+                }),
+                // Cuba row
+                new TableRow({
+                  children: [
+                    docxCell("1", false, AlignmentType.CENTER),
+                    docxCell("Cuba", true),
+                    docxCell((stats.cubaWorks || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell(pct(stats.cubaWorks || 0, stats.totalWorks), false, AlignmentType.CENTER),
+                    docxCell((stats.cubaAuthors || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell(pct(stats.cubaAuthors || 0, stats.totalAuthors), false, AlignmentType.CENTER),
+                    docxCell((stats.cubaPerformers || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell(pct(stats.cubaPerformers || 0, stats.totalPerformers), false, AlignmentType.CENTER),
+                  ]
+                }),
+                // Extranjera row
+                new TableRow({
+                  children: [
+                    docxCell("2", false, AlignmentType.CENTER),
+                    docxCell("Extranjera", true),
+                    docxCell((stats.foreignWorks || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell(pct(stats.foreignWorks || 0, stats.totalWorks), false, AlignmentType.CENTER),
+                    docxCell((stats.foreignAuthors || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell(pct(stats.foreignAuthors || 0, stats.totalAuthors), false, AlignmentType.CENTER),
+                    docxCell((stats.foreignPerformers || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell(pct(stats.foreignPerformers || 0, stats.totalPerformers), false, AlignmentType.CENTER),
+                  ]
+                }),
+                // Total row
+                new TableRow({
+                  children: [
+                    docxCell(""),
+                    docxCell("Total general", true),
+                    docxCell((stats.totalWorks || 0).toString(), true, AlignmentType.CENTER),
+                    docxCell("100", true, AlignmentType.CENTER),
+                    docxCell((stats.totalAuthors || 0).toString(), true, AlignmentType.CENTER),
+                    docxCell("100", true, AlignmentType.CENTER),
+                    docxCell((stats.totalPerformers || 0).toString(), true, AlignmentType.CENTER),
+                    docxCell("100", true, AlignmentType.CENTER),
+                  ]
+                }),
+                // Foreign subcategories
+                makeRegionRow('Latinoam. y del Caribe'),
+                makeRegionRow('Norteamericana'),
+                makeRegionRow('Europa'),
+                makeRegionRow('Asia'),
+                makeRegionRow('Africa'),
+                makeRegionRow('Otras zonas'),
+              ]
+            }),
+
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Obras musicales más difundidas", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+
+            // Top Songs table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    docxCellHeader("No"),
+                    docxCellHeader("Título"),
+                    docxCellHeader("Intérprete"),
+                    docxCellHeader("Nac"),
+                    docxCellHeader("Autor"),
+                    docxCellHeader("Nac"),
+                    docxCellHeader("Frec."),
+                  ]
+                }),
+                ...topSongs.map((item, idx) => {
+                  const track = item.track || {};
+                  const nacPerf = isCuban(track.performerCountry) || (!track.performerCountry && !track.authorCountry) ? "CUBA" : (track.performerCountry?.toUpperCase() || '-');
+                  const nacAuth = isCuban(track.authorCountry) || (!track.authorCountry && !track.performerCountry) ? "CUBA" : (track.authorCountry?.toUpperCase() || '-');
+                  return new TableRow({
+                    children: [
+                      docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
+                      docxCell(track.title?.toUpperCase() || ''),
+                      docxCell(track.performer?.toUpperCase() || ''),
+                      docxCell(nacPerf, false, AlignmentType.CENTER),
+                      docxCell(track.author?.toUpperCase() || ''),
+                      docxCell(nacAuth, false, AlignmentType.CENTER),
+                      docxCell((item.count || 0).toString(), true, AlignmentType.CENTER),
+                    ]
+                  });
+                })
+              ]
+            }),
+
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Autores más difundidos", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+
+            // Top Authors Table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    docxCellHeader("No"),
+                    docxCellHeader("Autores"),
+                    docxCellHeader("Nac"),
+                    docxCellHeader("Cant."),
+                    docxCellHeader("Frec."),
+                  ]
+                }),
+                ...topAuthors.map((item, idx) => {
+                  return new TableRow({
+                    children: [
+                      docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.name || '').toUpperCase(), true),
+                      docxCell(item.nac || '-', false, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell(pct(item.execs || 0, stats.totalWorks), true, AlignmentType.CENTER),
+                    ]
+                  });
+                })
+              ]
+            }),
+
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Intérpretes más difundidos", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+
+            // Top Performers Table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    docxCellHeader("No"),
+                    docxCellHeader("Intérpretes"),
+                    docxCellHeader("Nac"),
+                    docxCellHeader("Cant."),
+                    docxCellHeader("Frec."),
+                  ]
+                }),
+                ...topPerformers.map((item, idx) => {
+                  return new TableRow({
+                    children: [
+                      docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.name || '').toUpperCase(), true),
+                      docxCell(item.nac || '-', false, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell(pct(item.execs || 0, stats.totalWorks), true, AlignmentType.CENTER),
+                    ]
+                  });
+                })
+              ]
+            }),
+
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Géneros más difundidos", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+
+            // Top Genres Table
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    docxCellHeader("No"),
+                    docxCellHeader("Géneros"),
+                    docxCellHeader("Nac"),
+                    docxCellHeader("Cant."),
+                    docxCellHeader("Frec."),
+                  ]
+                }),
+                ...topGenres.map((item, idx) => {
+                  return new TableRow({
+                    children: [
+                      docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
+                      docxCell(item.name || '', true),
+                      docxCell("0", false, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.frec || 0).toString(), true, AlignmentType.CENTER),
+                    ]
+                  });
+                })
+              ]
+            }),
+
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+
+            // Signatures row
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ font: "Arial", text: "____________________________________             ___________________________________\n", bold: true }),
+              ]
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ font: "Arial", text: `Coordinador musical: ${coordinadorMusical}               J' Programación: ${jefeProgramacion}`, bold: true, size: 24 })
+              ]
+            })
+          ],
+        }],
       });
-    };
 
-    const doc = new Document({
-      sections: [{
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ font: "Arial", text: "DIRECCIÓN NACIONAL DE MÚSICA", bold: true, size: 28 }),
-            ],
-          }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ font: "Arial", text: "ESTADÍSTICAS MUSICALES", bold: true, size: 24 }),
-            ],
-          }),
-          new Paragraph({ text: "" }),
-
-          // Emisora & Provincia table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: `Emisora: RADIO CIUDAD MONUMENTO`, bold: true })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: `Provincia: GRANMA`, bold: true })] })] }),
-                ]
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: `Año: ${selectedYear}` })] })] }),
-                  new TableCell({ children: [new Paragraph({ children: [new TextRun({ font: "Arial", text: periodStr })] })] }),
-                ]
-              })
-            ]
-          }),
-
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Obras, autores e intérpretes por zonas geográficas", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-
-          // Standard stats table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              // Header
-              new TableRow({
-                children: [
-                  docxCellHeader("No"),
-                  docxCellHeader("Zonas"),
-                  docxCellHeader("Cantidad de obras"),
-                  docxCellHeader("%"),
-                  docxCellHeader("Cantidad autores"),
-                  docxCellHeader("%"),
-                  docxCellHeader("Cantidad intérpretes"),
-                  docxCellHeader("%"),
-                ]
-              }),
-              // Cuba row
-              new TableRow({
-                children: [
-                  docxCell("1", false, AlignmentType.CENTER),
-                  docxCell("Cuba", true),
-                  docxCell(stats.cubaWorks.toString(), false, AlignmentType.CENTER),
-                  docxCell(pct(stats.cubaWorks, stats.totalWorks), false, AlignmentType.CENTER),
-                  docxCell(stats.cubaAuthors.toString(), false, AlignmentType.CENTER),
-                  docxCell(pct(stats.cubaAuthors, stats.totalAuthors), false, AlignmentType.CENTER),
-                  docxCell(stats.cubaPerformers.toString(), false, AlignmentType.CENTER),
-                  docxCell(pct(stats.cubaPerformers, stats.totalPerformers), false, AlignmentType.CENTER),
-                ]
-              }),
-              // Extranjera row
-              new TableRow({
-                children: [
-                  docxCell("2", false, AlignmentType.CENTER),
-                  docxCell("Extranjera", true),
-                  docxCell(stats.foreignWorks.toString(), false, AlignmentType.CENTER),
-                  docxCell(pct(stats.foreignWorks, stats.totalWorks), false, AlignmentType.CENTER),
-                  docxCell(stats.foreignAuthors.toString(), false, AlignmentType.CENTER),
-                  docxCell(pct(stats.foreignAuthors, stats.totalAuthors), false, AlignmentType.CENTER),
-                  docxCell(stats.foreignPerformers.toString(), false, AlignmentType.CENTER),
-                  docxCell(pct(stats.foreignPerformers, stats.totalPerformers), false, AlignmentType.CENTER),
-                ]
-              }),
-              // Total row
-              new TableRow({
-                children: [
-                  docxCell(""),
-                  docxCell("Total general", true),
-                  docxCell(stats.totalWorks.toString(), true, AlignmentType.CENTER),
-                  docxCell("100", true, AlignmentType.CENTER),
-                  docxCell(stats.totalAuthors.toString(), true, AlignmentType.CENTER),
-                  docxCell("100", true, AlignmentType.CENTER),
-                  docxCell(stats.totalPerformers.toString(), true, AlignmentType.CENTER),
-                  docxCell("100", true, AlignmentType.CENTER),
-                ]
-              }),
-              // Foreign subcategories
-              makeRegionRow('Latinoam. y del Caribe'),
-              makeRegionRow('Norteamericana'),
-              makeRegionRow('Europa'),
-              makeRegionRow('Asia'),
-              makeRegionRow('Africa'),
-              makeRegionRow('Otras zonas'),
-            ]
-          }),
-
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Obras musicales más difundidas", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-
-          // Top Songs table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  docxCellHeader("No"),
-                  docxCellHeader("Título"),
-                  docxCellHeader("Intérprete"),
-                  docxCellHeader("Nac"),
-                  docxCellHeader("Autor"),
-                  docxCellHeader("Nac"),
-                  docxCellHeader("Frec."),
-                ]
-              }),
-              ...topSongs.map((item, idx) => {
-                const track = item.track || {};
-                const nacPerf = isCuban(track.performerCountry) || (!track.performerCountry && !track.authorCountry) ? "CUBA" : (track.performerCountry?.toUpperCase() || '-');
-                const nacAuth = isCuban(track.authorCountry) || (!track.authorCountry && !track.performerCountry) ? "CUBA" : (track.authorCountry?.toUpperCase() || '-');
-                return new TableRow({
-                  children: [
-                    docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
-                    docxCell(track.title?.toUpperCase() || ''),
-                    docxCell(track.performer?.toUpperCase() || ''),
-                    docxCell(nacPerf, false, AlignmentType.CENTER),
-                    docxCell(track.author?.toUpperCase() || ''),
-                    docxCell(nacAuth, false, AlignmentType.CENTER),
-                    docxCell(item.count.toString(), true, AlignmentType.CENTER),
-                  ]
-                });
-              })
-            ]
-          }),
-
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Autores más difundidos", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-
-          // Top Authors Table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  docxCellHeader("No"),
-                  docxCellHeader("Autores"),
-                  docxCellHeader("Nac"),
-                  docxCellHeader("Cant."),
-                  docxCellHeader("Frec."),
-                ]
-              }),
-              ...topAuthors.map((item, idx) => {
-                return new TableRow({
-                  children: [
-                    docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
-                    docxCell(item.name.toUpperCase(), true),
-                    docxCell(item.nac, false, AlignmentType.CENTER),
-                    docxCell(item.execs.toString(), false, AlignmentType.CENTER),
-                    docxCell(pct(item.execs, stats.totalWorks), true, AlignmentType.CENTER),
-                  ]
-                });
-              })
-            ]
-          }),
-
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Intérpretes más difundidos", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-
-          // Top Performers Table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  docxCellHeader("No"),
-                  docxCellHeader("Intérpretes"),
-                  docxCellHeader("Nac"),
-                  docxCellHeader("Cant."),
-                  docxCellHeader("Frec."),
-                ]
-              }),
-              ...topPerformers.map((item, idx) => {
-                return new TableRow({
-                  children: [
-                    docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
-                    docxCell(item.name.toUpperCase(), true),
-                    docxCell(item.nac, false, AlignmentType.CENTER),
-                    docxCell(item.execs.toString(), false, AlignmentType.CENTER),
-                    docxCell(pct(item.execs, stats.totalWorks), true, AlignmentType.CENTER),
-                  ]
-                });
-              })
-            ]
-          }),
-
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Géneros más difundidos", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-
-          // Top Genres Table
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  docxCellHeader("No"),
-                  docxCellHeader("Géneros"),
-                  docxCellHeader("Nac"),
-                  docxCellHeader("Cant."),
-                  docxCellHeader("Frec."),
-                ]
-              }),
-              ...topGenres.map((item, idx) => {
-                return new TableRow({
-                  children: [
-                    docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
-                    docxCell(item.name, true),
-                    docxCell("0", false, AlignmentType.CENTER),
-                    docxCell(item.execs.toString(), false, AlignmentType.CENTER),
-                    docxCell(item.frec.toString(), true, AlignmentType.CENTER),
-                  ]
-                });
-              })
-            ]
-          }),
-
-          new Paragraph({ text: "" }),
-          new Paragraph({ text: "" }),
-
-          // Signatures row
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ font: "Arial", text: "____________________________________             ___________________________________\n", bold: true }),
-            ]
-          }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ font: "Arial", text: `Coordinador musical: ${coordinadorMusical}               J' Programación: ${jefeProgramacion}`, bold: true, size: 24 })
-            ]
-          })
-        ],
-      }],
-    });
-
-    const blob = await Packer.toBlob(doc);
-    saveAs(blob, `INFORME_MUSICA_MENSUAL_RCM_${activePeriod.toUpperCase()}_${selectedMonthStr}.docx`);
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `INFORME_MUSICA_MENSUAL_RCM_${activePeriod.toUpperCase()}_${selectedMonthStr}.docx`);
+    } catch (err: any) {
+      console.error("Error generating DOCX Music Report:", err);
+      alert(`No se pudo generar el documento DOCX: ${err.message || 'Error desconocido'}`);
+    }
   };
 
   const handleGenerateDOCX_Economy = async () => {

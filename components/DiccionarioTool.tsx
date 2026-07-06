@@ -42,7 +42,19 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
     setSelectedRadialTerm(term);
     setShowOverlay(true);
   };
-  
+
+  // Disable scroll when overlay is open
+  useEffect(() => {
+    if (showOverlay) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [showOverlay]);
+
   // Admin Panel States
   const [showAdminForm, setShowAdminForm] = useState(false);
   const [showUploadArea, setShowUploadArea] = useState(false);
@@ -311,7 +323,7 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
               Diccionario Radial
             </h1>
             <p className="text-stone-300 mt-1 max-w-3xl font-mono text-xs leading-relaxed">
-              Materia de consulta científica, técnica y terminológica para profesionales de la radiodifusión en Radio Ciudad Monumento. Permite la navegación secuencial, consultas avanzadas y gestión del glosario de especialidad.
+              Materia de consulta científica, técnica y terminológica para profesionales de la radiodifusión en Radio Ciudad Monumento. Permite consultas avanzadas y gestión del glosario de especialidad.
             </p>
           </div>
           <button 
@@ -675,14 +687,14 @@ const DiccionarioTool: React.FC<DiccionarioToolProps> = ({ onBack, currentUser, 
                       className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/20 text-stone-400 hover:text-white transition-all text-xs font-mono uppercase flex items-center gap-2"
                     >
                       <ChevronLeft size={16} />
-                      Término Anterior
+                      Anterior
                     </button>
 
                     <button
                       onClick={handleNextTerm}
                       className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/20 text-stone-400 hover:text-white transition-all text-xs font-mono uppercase flex items-center gap-2"
                     >
-                      Siguiente Término
+                      Siguiente
                       <ChevronRight size={16} />
                     </button>
                   </div>

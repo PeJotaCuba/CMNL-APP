@@ -211,11 +211,17 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const handleTouchStart = (e: React.TouchEvent, index: number) => {
     if (!isReordering) return;
     setTouchDraggedIndex(index);
+    // Add temporary pointer-events none to the dragged item to allow elementFromPoint to see through it
+    const target = e.currentTarget as HTMLElement;
+    target.style.pointerEvents = 'none';
   };
 
-  const handleTouchMove = (e: React.TouchEvent, index: number) => {
+  const handleTouchMove = (e: React.TouchEvent) => {
     if (!isReordering || touchDraggedIndex === null) return;
     
+    // Prevent scrolling while reordering
+    if (e.cancelable) e.preventDefault();
+
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
     if (!element) return;
@@ -235,8 +241,11 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     setOrderedTools(updated);
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
     setTouchDraggedIndex(null);
+    // Restore pointer events
+    const target = e.currentTarget as HTMLElement;
+    target.style.pointerEvents = 'auto';
   };
 
   // Reorder save / cancel actions
@@ -466,7 +475,7 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
                 onTouchStart={(e) => handleTouchStart(e, index)}
-                onTouchMove={(e) => handleTouchMove(e, index)}
+                onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 style={{ touchAction: isReordering ? 'none' : 'auto' }}
                 className={`group flex items-start gap-4 p-5 rounded-xl bg-gradient-to-br ${tool.color} border transition-all ${
