@@ -1051,6 +1051,21 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   // Flat list of all tracks in the monthly stock
   const allTracks: ProductionTrack[] = stockMensual.flatMap(p => p.tracks || []).filter(Boolean);
 
+  // Helper to get tracks for any period (recalculating from raw data)
+  const getTracksForAnyPeriod = (monthStr: string, period: 'mensual' | 'trimestral' | 'semestral' | 'anual') => {
+    const months = getMonthsForPeriod(monthStr, period);
+    const agg: ProductionTrack[] = [];
+    months.forEach(mKey => {
+      const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mKey));
+      prods.forEach(p => {
+        if (p.tracks) p.tracks.forEach(t => t && agg.push(t));
+      });
+    });
+    return agg;
+  };
+
+  const periodTracks = getTracksForAnyPeriod(selectedMonthStr, activePeriod);
+
   // Helper selectors
   const isCuban = (country?: string) => {
     if (!country) return false;
@@ -1095,32 +1110,41 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   // STATS CALCULATIONS FOR MONTHLY MUSIC REPORT
   const archivedMensualData = (activePeriod === 'mensual') ? archiveMensual[selectedMonthStr] : null;
 
-  const rawTotalWorksCount = archivedMensualData ? archivedMensualData.totalWorks : allTracks.length;
-  const cubanWorks = archivedMensualData ? [] : allTracks.filter(isCubaWork);
-  const foreignWorks = archivedMensualData ? [] : allTracks.filter(t => !isCubaWork(t));
+  // Rule of Golden: For periods > month, we MUST recalculate unique counts from raw data
+  // "Frecuencia" = total plays (tracks.length)
+  // "Cantidad" = unique titles (Set size)
+  
+  const tracksToUse = (activePeriod === 'mensual' && archivedMensualData) ? [] : periodTracks;
 
-  const rawTotalWorksCuba = archivedMensualData ? archivedMensualData.cubaWorks : cubanWorks.length;
-  const rawTotalWorksForeign = archivedMensualData ? archivedMensualData.foreignWorks : foreignWorks.length;
+  // 1. Works (Titles)
+  const rawTotalWorksFrequency = archivedMensualData ? (archivedMensualData.totalWorksPlays || archivedMensualData.totalWorks || 0) : tracksToUse.length;
+  const rawTotalWorksCount = archivedMensualData ? (archivedMensualData.totalWorks || 0) : new Set(tracksToUse.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
 
-  // Unique counts that respect archives for proper percentage calculation
-  const rawTotalAuthorsCount = archivedMensualData ? archivedMensualData.totalAuthors : Array.from(new Set(allTracks.map(t => t.author).filter(Boolean))).length;
-  const rawTotalPerformersCount = archivedMensualData ? archivedMensualData.totalPerformers : Array.from(new Set(allTracks.map(t => t.performer).filter(Boolean))).length;
+  const cubanTracksToUse = tracksToUse.filter(isCubaWork);
+  const foreignTracksToUse = tracksToUse.filter(t => !isCubaWork(t));
 
-  // Unique authors
-  const uniqueAuthorsList = Array.from(new Set(allTracks.map(t => t.author).filter(Boolean)));
-  const rawCubanAuthorsCount = archivedMensualData ? archivedMensualData.cubaAuthors : uniqueAuthorsList.filter(name => {
-    const matchingTracks = allTracks.filter(t => t.author === name);
+  const rawTotalWorksCuba = archivedMensualData ? (archivedMensualData.cubaWorks || 0) : new Set(cubanTracksToUse.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+  const rawTotalWorksForeign = archivedMensualData ? (archivedMensualData.foreignWorks || 0) : new Set(foreignTracksToUse.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+
+  // 2. Authors
+  const uniqueAuthorsList = Array.from(new Set(tracksToUse.map(t => t.author).filter(Boolean)));
+  const rawTotalAuthorsCount = archivedMensualData ? (archivedMensualData.totalAuthors || 0) : uniqueAuthorsList.length;
+
+  const rawCubanAuthorsCount = archivedMensualData ? (archivedMensualData.cubaAuthors || 0) : uniqueAuthorsList.filter(name => {
+    const matchingTracks = tracksToUse.filter(t => t.author === name);
     return matchingTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
   }).length;
-  const rawForeignAuthorsCount = archivedMensualData ? archivedMensualData.foreignAuthors : (uniqueAuthorsList.length - rawCubanAuthorsCount);
+  const rawForeignAuthorsCount = archivedMensualData ? (archivedMensualData.foreignAuthors || 0) : (uniqueAuthorsList.length - rawCubanAuthorsCount);
 
-  // Unique performers
-  const uniquePerformersList = Array.from(new Set(allTracks.map(t => t.performer).filter(Boolean)));
-  const rawCubanPerformersCount = archivedMensualData ? archivedMensualData.cubaPerformers : uniquePerformersList.filter(name => {
-    const matchingTracks = allTracks.filter(t => t.performer === name);
+  // 3. Performers
+  const uniquePerformersList = Array.from(new Set(tracksToUse.map(t => t.performer).filter(Boolean)));
+  const rawTotalPerformersCount = archivedMensualData ? (archivedMensualData.totalPerformers || 0) : uniquePerformersList.length;
+
+  const rawCubanPerformersCount = archivedMensualData ? (archivedMensualData.cubaPerformers || 0) : uniquePerformersList.filter(name => {
+    const matchingTracks = tracksToUse.filter(t => t.performer === name);
     return matchingTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
   }).length;
-  const rawForeignPerformersCount = archivedMensualData ? archivedMensualData.foreignPerformers : (uniquePerformersList.length - rawCubanPerformersCount);
+  const rawForeignPerformersCount = archivedMensualData ? (archivedMensualData.foreignPerformers || 0) : (uniquePerformersList.length - rawCubanPerformersCount);
 
   // PERIOD CALCULATION METHODS & ARCHIVES CONSOLIDATOR
   const calculateLiveMensualForMonth = (mStr: string) => {
@@ -1129,51 +1153,58 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mStr));
     const tracks = prods.flatMap(p => p.tracks || []).filter(Boolean);
-    const totalWorks = tracks.length;
-    const cubaWClass = tracks.filter(isCubaWork);
-    const cubaWorks = cubaWClass.length;
+    
+    // Frequency = Total Plays
+    const totalWorksPlays = tracks.length;
+    // Quantity = Unique Titles
+    const totalWorks = new Set(tracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+
+    const cubaTracks = tracks.filter(isCubaWork);
+    const cubaWorks = new Set(cubaTracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
     const foreignWorks = totalWorks - cubaWorks;
 
     const uniqueAuths = Array.from(new Set(tracks.map(t => t.author).filter(Boolean)));
-    const cubaAuths = uniqueAuths.filter(name => {
+    const cubaAuthsCount = uniqueAuths.filter(name => {
       const matchingTracks = tracks.filter(t => t.author === name);
       return matchingTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
     }).length;
-    const foreignAuths = uniqueAuths.length - cubaAuths;
+    const foreignAuthsCount = uniqueAuths.length - cubaAuthsCount;
 
     const uniquePerfs = Array.from(new Set(tracks.map(t => t.performer).filter(Boolean)));
-    const cubaPerfs = uniquePerfs.filter(name => {
+    const cubaPerfsCount = uniquePerfs.filter(name => {
       const matchingTracks = tracks.filter(t => t.performer === name);
       return matchingTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
     }).length;
-    const foreignPerfs = uniquePerfs.length - cubaPerfs;
+    const foreignPerfsCount = uniquePerfs.length - cubaPerfsCount;
 
     // Calculate regions
     const regionStatsLocal = {
-      'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Norteamericana': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Europa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Asia': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Africa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
+      'Latinoam. y del Caribe': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Norteamericana': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Europa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Asia': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Africa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Otras zonas': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 }
     };
 
     tracks.filter(t => !isCubaWork(t)).forEach(t => {
       const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStatsLocal;
       if (regionStatsLocal[region]) {
-        regionStatsLocal[region].works++;
+        if (t.title) regionStatsLocal[region].works.add(t.title.toUpperCase());
         if (t.author) regionStatsLocal[region].authors.add(t.author);
         if (t.performer) regionStatsLocal[region].performers.add(t.performer);
+        regionStatsLocal[region].plays++;
       }
     });
 
-    const regionsFinal: Record<string, { works: number; authors: number; performers: number }> = {};
+    const regionsFinal: Record<string, { works: number; authors: number; performers: number; plays: number }> = {};
     Object.keys(regionStatsLocal).forEach(reg => {
       const s = regionStatsLocal[reg as keyof typeof regionStatsLocal];
       regionsFinal[reg] = {
-        works: s.works,
+        works: s.works.size,
         authors: s.authors.size,
-        performers: s.performers.size
+        performers: s.performers.size,
+        plays: s.plays
       };
     });
 
@@ -1238,14 +1269,15 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     return {
       totalWorks,
+      totalWorksPlays,
       cubaWorks,
       foreignWorks,
       totalAuthors: uniqueAuths.length,
-      cubaAuthors: cubaAuths,
-      foreignAuthors: foreignAuths,
+      cubaAuthors: cubaAuthsCount,
+      foreignAuthors: foreignAuthsCount,
       totalPerformers: uniquePerfs.length,
-      cubaPerformers: cubaPerfs,
-      foreignPerformers: foreignPerfs,
+      cubaPerformers: cubaPerfsCount,
+      foreignPerformers: foreignPerfsCount,
       regions: regionsFinal,
       topSongs: topSongsLocal,
       topAuthors: topAuthorsLocal,
@@ -1346,31 +1378,66 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   const getAggregatedPeriodStats = () => {
     const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
 
-    const mensalAgg = { totalWorks: 0, cubaWorks: 0, foreignWorks: 0, totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0, totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0 };
+    // Initial state
+    const mensalAgg = { 
+      totalWorks: 0, totalWorksPlays: 0, 
+      cubaWorks: 0, foreignWorks: 0, 
+      totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0, 
+      totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0 
+    };
+    
+    // If period is not monthly, we aggregate ALL raw tracks to recalculate unique counts correctly
+    if (activePeriod !== 'mensual') {
+       const tracks = periodTracks;
+       mensalAgg.totalWorksPlays = tracks.length;
+       mensalAgg.totalWorks = new Set(tracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+       
+       const cTracks = tracks.filter(isCubaWork);
+       mensalAgg.cubaWorks = new Set(cTracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+       mensalAgg.foreignWorks = mensalAgg.totalWorks - mensalAgg.cubaWorks;
+       
+       const uAuths = Array.from(new Set(tracks.map(t => t.author).filter(Boolean)));
+       mensalAgg.totalAuthors = uAuths.length;
+       mensalAgg.cubaAuthors = uAuths.filter(name => {
+         const mTracks = tracks.filter(t => t.author === name);
+         return mTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
+       }).length;
+       mensalAgg.foreignAuthors = mensalAgg.totalAuthors - mensalAgg.cubaAuthors;
+       
+       const uPerfs = Array.from(new Set(tracks.map(t => t.performer).filter(Boolean)));
+       mensalAgg.totalPerformers = uPerfs.length;
+       mensalAgg.cubaPerformers = uPerfs.filter(name => {
+         const mTracks = tracks.filter(t => t.performer === name);
+         return mTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
+       }).length;
+       mensalAgg.foreignPerformers = mensalAgg.totalPerformers - mensalAgg.cubaPerformers;
+    } else {
+      // For monthly, we can use the monthly stats (archived or calculated)
+      const mData = archivedMensualData || calculateLiveMensualForMonth(selectedMonthStr);
+      if (mData) {
+        mensalAgg.totalWorks = mData.totalWorks || 0;
+        mensalAgg.totalWorksPlays = mData.totalWorksPlays || mData.totalWorks || 0;
+        mensalAgg.cubaWorks = mData.cubaWorks || 0;
+        mensalAgg.foreignWorks = mData.foreignWorks || 0;
+        mensalAgg.totalAuthors = mData.totalAuthors || 0;
+        mensalAgg.cubaAuthors = mData.cubaAuthors || 0;
+        mensalAgg.foreignAuthors = mData.foreignAuthors || 0;
+        mensalAgg.totalPerformers = mData.totalPerformers || 0;
+        mensalAgg.cubaPerformers = mData.cubaPerformers || 0;
+        mensalAgg.foreignPerformers = mData.foreignPerformers || 0;
+      }
+    }
+
     const economiaAgg = { completasCubana: 0, completasExtranjera: 0, completasTotal: 0, instrumentalesCubana: 0, instrumentalesExtranjera: 0, instrumentalesTotal: 0, incidentalesCubana: 0, incidentalesExtranjera: 0, incidentalesTotal: 0 };
     const incidentalAgg = { cubaWorksCount: 0, cubaAuthors: 0, cubaPct: 0, cubaAuthorsPct: 0, foreignWorksCount: 0, foreignAuthors: 0, foreignPct: 0, foreignAuthorsPct: 0, totalWorks: 0, totalAuthors: 0, regions: { latam: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, norte: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, europa: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, otras: { works: 0, pct: 0, authors: 0, authorsPct: 0 } } };
 
     months.forEach(mKey => {
-      // 1. Mensual
-      let mData = archiveMensual[mKey] || calculateLiveMensualForMonth(mKey);
-      if (mData) {
-        mensalAgg.totalWorks += mData.totalWorks || 0;
-        mensalAgg.cubaWorks += mData.cubaWorks || 0;
-        mensalAgg.foreignWorks += mData.foreignWorks || 0;
-        mensalAgg.totalAuthors += mData.totalAuthors || 0;
-        mensalAgg.cubaAuthors += mData.cubaAuthors || 0;
-        mensalAgg.foreignAuthors += mData.foreignAuthors || 0;
-        mensalAgg.totalPerformers += mData.totalPerformers || 0;
-        mensalAgg.cubaPerformers += mData.cubaPerformers || 0;
-        mensalAgg.foreignPerformers += mData.foreignPerformers || 0;
-      }
-
       // 2. Economia
       let eData = archiveEconomia[mKey];
       if (!eData) {
         const [yr, mn] = mKey.split('-').map(Number);
         const weekdays = countDaysInMonth(yr, mn, [1, 2, 3, 4, 5]);
-        const mVal = mData || calculateLiveMensualForMonth(mKey);
+        const mVal = archiveMensual[mKey] || calculateLiveMensualForMonth(mKey);
         const incStats = archiveIncidental[mKey] || getIncidentalStatsForMonth(yr, mn);
         eData = {
           completasCubana: mVal.cubaWorks,
@@ -1443,6 +1510,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     return {
       mensual: {
         totalWorks: mensalAgg.totalWorks || rawTotalWorksCount,
+        totalWorksPlays: mensalAgg.totalWorksPlays || rawTotalWorksFrequency,
         cubaWorks: mensalAgg.cubaWorks || rawTotalWorksCuba,
         foreignWorks: mensalAgg.foreignWorks || rawTotalWorksForeign,
         totalAuthors: mensalAgg.totalAuthors || rawTotalAuthorsCount,
@@ -1518,47 +1586,48 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   const getActiveRegionStats = () => {
     const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
     const aggRegions = {
-      'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Norteamericana': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Europa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Asia': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Africa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-      'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
+      'Latinoam. y del Caribe': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Norteamericana': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Europa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Asia': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Africa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
+      'Otras zonas': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 }
     };
 
-    months.forEach(mKey => {
-      const report = archiveMensual[mKey];
-      if (report && report.regions) {
-        Object.keys(aggRegions).forEach(reg => {
-          if (report.regions[reg]) {
-            const r = report.regions[reg];
-            aggRegions[reg as keyof typeof aggRegions].works += r.works || 0;
-            // Since report.regions has authors and performers count as numbers, we mock size
-            const autCount = typeof r.authors === 'number' ? r.authors : (r.authors?.size || 0);
-            const perfCount = typeof r.performers === 'number' ? r.performers : (r.performers?.size || 0);
-            for (let i = 0; i < autCount; i++) {
-              aggRegions[reg as keyof typeof aggRegions].authors.add(`unknown-author-${mKey}-${reg}-${i}`);
-            }
-            for (let i = 0; i < perfCount; i++) {
-              aggRegions[reg as keyof typeof aggRegions].performers.add(`unknown-performer-${mKey}-${reg}-${i}`);
-            }
-          }
-        });
-      } else {
-        const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mKey));
-        const tracks = prods.flatMap(p => p.tracks || []).filter(Boolean);
-        const foreignTracks = tracks.filter(t => !isCubaWork(t));
-
-        foreignTracks.forEach(t => {
-          const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof aggRegions;
-          if (aggRegions[region]) {
-            aggRegions[region].works++;
-            if (t.author) aggRegions[region].authors.add(t.author.toUpperCase());
-            if (t.performer) aggRegions[region].performers.add(t.performer.toUpperCase());
-          }
-        });
-      }
-    });
+    if (activePeriod !== 'mensual') {
+       // Recalculate everything from periodTracks for accuracy
+       periodTracks.filter(t => !isCubaWork(t)).forEach(t => {
+         const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof aggRegions;
+         if (aggRegions[region]) {
+           if (t.title) aggRegions[region].works.add(t.title.toUpperCase());
+           if (t.author) aggRegions[region].authors.add(t.author.toUpperCase());
+           if (t.performer) aggRegions[region].performers.add(t.performer.toUpperCase());
+           aggRegions[region].plays++;
+         }
+       });
+    } else {
+       // Monthly: use archive or current month tracks
+       const mData = archivedMensualData || calculateLiveMensualForMonth(selectedMonthStr);
+       if (mData && mData.regions) {
+         Object.keys(aggRegions).forEach(reg => {
+           if (mData.regions[reg]) {
+             const r = mData.regions[reg];
+             // If mData.regions has numbers (archived), we can't truly deduplicate if we don't have titles
+             // But for a single month, it's already "Quantity" from the source.
+             const worksCount = typeof r.works === 'number' ? r.works : (r.works?.size || 0);
+             const autCount = typeof r.authors === 'number' ? r.authors : (r.authors?.size || 0);
+             const perfCount = typeof r.performers === 'number' ? r.performers : (r.performers?.size || 0);
+             const playsCount = typeof r.plays === 'number' ? r.plays : (r.plays || worksCount);
+             
+             // Mocking sets for consistency
+             for (let i = 0; i < worksCount; i++) aggRegions[reg as keyof typeof aggRegions].works.add(`w-${i}`);
+             for (let i = 0; i < autCount; i++) aggRegions[reg as keyof typeof aggRegions].authors.add(`a-${i}`);
+             for (let i = 0; i < perfCount; i++) aggRegions[reg as keyof typeof aggRegions].performers.add(`p-${i}`);
+             aggRegions[reg as keyof typeof aggRegions].plays = playsCount;
+           }
+         });
+       }
+    }
 
     return aggRegions;
   };
@@ -1575,7 +1644,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   if (!isOpen) return null;
 
   // Resolve counts based on activePeriod stats
-  const totalWorksCount = activePeriod === 'mensual' ? rawTotalWorksCount : activePeriodStats.mensual.totalWorks;
+  const totalWorksQuantity = activePeriod === 'mensual' ? rawTotalWorksCount : activePeriodStats.mensual.totalWorks;
+  const totalWorksFrequency = activePeriod === 'mensual' ? rawTotalWorksFrequency : activePeriodStats.mensual.totalWorksPlays;
   const totalWorksCuba = activePeriod === 'mensual' ? rawTotalWorksCuba : activePeriodStats.mensual.cubaWorks;
   const totalWorksForeign = activePeriod === 'mensual' ? rawTotalWorksForeign : activePeriodStats.mensual.foreignWorks;
   const totalAuthorsCount = activePeriod === 'mensual' ? rawTotalAuthorsCount : activePeriodStats.mensual.totalAuthors;
@@ -1608,7 +1678,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
          }
        });
     } else {
-       foreignWorks.forEach(t => {
+       periodTracks.filter(t => !isCubaWork(t)).forEach(t => {
          const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStats;
          if (regionStats[region]) {
            regionStats[region].works++;
@@ -1621,11 +1691,11 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     // Trimestral, Semestral, Anual sum of region data
     const activeRegionSum = getActiveRegionStats();
     Object.keys(regionStats).forEach(reg => {
-      const r = activeRegionSum[reg as keyof typeof activeRegionSum] || { works: 0, authors: { size: 0 }, performers: { size: 0 } };
+      const r = activeRegionSum[reg as keyof typeof activeRegionSum] || { works: { size: 0 }, authors: { size: 0 }, performers: { size: 0 }, plays: 0 };
       regionStats[reg as keyof typeof regionStats] = {
-        works: r.works,
-        authors: { size: (r.authors as any).size || r.authors } as any,
-        performers: { size: (r.performers as any).size || r.performers } as any
+        works: (r.works as any).size || r.works || 0,
+        authors: { size: (r.authors as any).size || r.authors || 0 } as any,
+        performers: { size: (r.performers as any).size || r.performers || 0 } as any
       };
     });
   }
@@ -2145,7 +2215,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     const monthKey = selectedMonthStr;
     if (activeReportType === 'mensual') {
       const currentLiveM = {
-        totalWorks: totalWorksCount,
+        totalWorks: totalWorksQuantity,
+        totalWorksPlays: totalWorksFrequency,
         cubaWorks: totalWorksCuba,
         foreignWorks: totalWorksForeign,
         totalAuthors: totalAuthorsCount,
@@ -2167,7 +2238,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         currentLiveM.regions[reg] = {
           works: s.works,
           authors: s.authors.size,
-          performers: s.performers.size
+          performers: s.performers.size,
+          plays: (s as any).plays || 0
         };
       });
 
@@ -2177,7 +2249,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       const currentLiveE = {
         completasCubana: totalWorksCuba,
         completasExtranjera: totalWorksForeign,
-        completasTotal: totalWorksCount,
+        completasTotal: totalWorksQuantity,
         instrumentalesCubana: countDaysInMonth(selectedYear, selectedMonthNum, [1, 2, 3, 4, 5]),
         instrumentalesExtranjera: 0,
         instrumentalesTotal: countDaysInMonth(selectedYear, selectedMonthNum, [1, 2, 3, 4, 5]),
@@ -2204,17 +2276,21 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
       // Regional breakdown rows helper
       const makeRegionRow = (regionName: string) => {
-        const regObj = regionStatsAgg[regionName as keyof typeof regionStatsAgg] || { works: 0, authors: new Set(), performers: new Set() };
+        const regObj = regionStatsAgg[regionName as keyof typeof regionStatsAgg] || { works: 0, authors: new Set(), performers: new Set(), plays: 0 };
+        const wCount = typeof regObj.works === 'number' ? regObj.works : (regObj.works as any)?.size || 0;
+        const aCount = typeof regObj.authors === 'number' ? regObj.authors : (regObj.authors as any)?.size || 0;
+        const pCount = typeof regObj.performers === 'number' ? regObj.performers : (regObj.performers as any)?.size || 0;
+        
         return new TableRow({
           children: [
             docxCell(""),
             docxCell(regionName, false),
-            docxCell((regObj.works || 0).toString(), false, AlignmentType.CENTER),
-            docxCell(pct(regObj.works || 0, stats.totalWorks), false, AlignmentType.CENTER),
-            docxCell((regObj.authors?.size || 0).toString(), false, AlignmentType.CENTER),
-            docxCell(pct(regObj.authors?.size || 0, stats.totalAuthors), false, AlignmentType.CENTER),
-            docxCell((regObj.performers?.size || 0).toString(), false, AlignmentType.CENTER),
-            docxCell(pct(regObj.performers?.size || 0, stats.totalPerformers), false, AlignmentType.CENTER),
+            docxCell(wCount.toString(), false, AlignmentType.CENTER),
+            docxCell(pct(wCount, stats.totalWorks), false, AlignmentType.CENTER),
+            docxCell(aCount.toString(), false, AlignmentType.CENTER),
+            docxCell(pct(aCount, stats.totalAuthors), false, AlignmentType.CENTER),
+            docxCell(pCount.toString(), false, AlignmentType.CENTER),
+            docxCell(pct(pCount, stats.totalPerformers), false, AlignmentType.CENTER),
           ]
         });
       };
@@ -2398,8 +2474,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
                       docxCell((item.name || '').toUpperCase(), true),
                       docxCell(item.nac || '-', false, AlignmentType.CENTER),
-                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
-                      docxCell(pct(item.execs || 0, stats.totalWorks), true, AlignmentType.CENTER),
+                      docxCell((item.songs?.size || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), true, AlignmentType.CENTER),
                     ]
                   });
                 })
@@ -2433,8 +2509,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
                       docxCell((item.name || '').toUpperCase(), true),
                       docxCell(item.nac || '-', false, AlignmentType.CENTER),
-                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
-                      docxCell(pct(item.execs || 0, stats.totalWorks), true, AlignmentType.CENTER),
+                      docxCell((item.songs?.size || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), true, AlignmentType.CENTER),
                     ]
                   });
                 })
@@ -3071,7 +3147,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         <td className="p-1.5 border-r border-black/30 font-bold">1</td>
                         <td className="p-1.5 border-r border-black/30 text-left font-bold">Cuba</td>
                         <td className="p-1.5 border-r border-black/30">{totalWorksCuba}</td>
-                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksCuba, totalWorksCount)}</td>
+                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksCuba, totalWorksQuantity)}</td>
                         <td className="p-1.5 border-r border-black/30">{cubanAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">{pct(cubanAuthorsCount, totalAuthorsCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{cubanPerformersCount}</td>
@@ -3081,7 +3157,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         <td className="p-1.5 border-r border-black/30 font-bold">2</td>
                         <td className="p-1.5 border-r border-black/30 text-left font-bold">Extranjera</td>
                         <td className="p-1.5 border-r border-black/30">{totalWorksForeign}</td>
-                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksForeign, totalWorksCount)}</td>
+                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksForeign, totalWorksQuantity)}</td>
                         <td className="p-1.5 border-r border-black/30">{foreignAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">{pct(foreignAuthorsCount, totalAuthorsCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{foreignPerformersCount}</td>
@@ -3090,7 +3166,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       <tr className="border-b border-black/30 font-bold bg-black/5">
                         <td className="p-1.5 border-r border-black/30"></td>
                         <td className="p-1.5 border-r border-black/30 text-left">Total general</td>
-                        <td className="p-1.5 border-r border-black/30">{totalWorksCount}</td>
+                        <td className="p-1.5 border-r border-black/30">{totalWorksQuantity}</td>
                         <td className="p-1.5 border-r border-black/30">100</td>
                         <td className="p-1.5 border-r border-black/30">{totalAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">100</td>
@@ -3099,19 +3175,20 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       </tr>
                       {/* Foreign subcategories */}
                       {Object.keys(regionStats).map((regName) => {
-                        const s = regionStats[regName as keyof typeof regionStats];
+                        const s = (regionStats as any)[regName];
+                        const worksCount = typeof s.works === 'number' ? s.works : (s.works?.size || 0);
                         const authorCount = (typeof s.authors === 'number') ? s.authors : (s.authors?.size || 0);
                         const performerCount = (typeof s.performers === 'number') ? s.performers : (s.performers?.size || 0);
                         return (
                           <tr key={regName} className="border-b border-black/20 text-black/70">
                             <td className="p-1 border-r border-black/20"></td>
                             <td className="p-1 border-r border-black/20 text-left italic pl-4">{regName}</td>
-                            <td className="p-1 border-r border-black/20">{s.works}</td>
-                            <td className="p-1 border-r border-black/20">{pct(s.works, totalWorksCount)}</td>
+                            <td className="p-1 border-r border-black/20">{worksCount}</td>
+                            <td className="p-1 border-r border-black/20">{pct(worksCount, totalWorksForeign)}</td>
                             <td className="p-1 border-r border-black/20">{authorCount}</td>
-                            <td className="p-1 border-r border-black/20">{pct(authorCount, totalAuthorsCount)}</td>
+                            <td className="p-1 border-r border-black/20">{pct(authorCount, foreignAuthorsCount)}</td>
                             <td className="p-1 border-r border-black/20">{performerCount}</td>
-                            <td className="p-1">{pct(performerCount, totalPerformersCount)}</td>
+                            <td className="p-1">{pct(performerCount, foreignPerformersCount)}</td>
                           </tr>
                         );
                       })}
@@ -3181,8 +3258,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 text-center">{idx + 1}</td>
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name.toUpperCase()}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.nac}</td>
-                            <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
-                            <td className="p-1 font-bold text-center">{item.frec || pct(item.execs, totalWorksCount)}</td>
+                            <td className="p-1 border-r border-[gray]/20 text-center">{item.songs?.size || 0}</td>
+                            <td className="p-1 font-bold text-center">{item.execs}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3210,8 +3287,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 text-center">{idx + 1}</td>
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name.toUpperCase()}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.nac}</td>
-                            <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
-                            <td className="p-1 font-bold text-center">{item.frec || pct(item.execs, totalWorksCount)}</td>
+                            <td className="p-1 border-r border-[gray]/20 text-center">{item.songs?.size || 0}</td>
+                            <td className="p-1 font-bold text-center">{item.execs}</td>
                           </tr>
                         ))}
                       </tbody>
