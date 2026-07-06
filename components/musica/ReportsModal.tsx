@@ -2505,122 +2505,128 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   };
 
   const handleGenerateDOCX_Economy = async () => {
-    const stats = activePeriodStats.economia;
-    const periodStr = getPeriodName(selectedMonthNum, selectedYear, activePeriod);
+    try {
+      const stats = activePeriodStats.economia;
+      const periodStr = getPeriodName(selectedMonthNum, selectedYear, activePeriod);
 
-    const doc = new Document({
-      sections: [{
-        children: [
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ font: "Arial", text: "RADIO CIUDAD MONUMENTO", bold: true, size: 28 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ font: "Arial", text: "INFORME DE MÚSICA", bold: true, size: 24, underline: {} })
-            ]
-          }),
-          new Paragraph({ text: "" }),
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: [
-              new TextRun({ font: "Arial", text: periodStr, bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({ text: "" }),
+      const doc = new Document({
+        sections: [{
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ font: "Arial", text: "RADIO CIUDAD MONUMENTO", bold: true, size: 28 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ font: "Arial", text: "INFORME DE MÚSICA", bold: true, size: 24, underline: {} })
+              ]
+            }),
+            new Paragraph({ text: "" }),
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new TextRun({ font: "Arial", text: periodStr, bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({ text: "" }),
 
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  docxCell(""),
-                  docxCell("CUBANA", true, AlignmentType.CENTER),
-                  docxCell("EXTRANJERA", true, AlignmentType.CENTER),
-                  docxCell("TOTAL", true, AlignmentType.CENTER)
-                ]
-              }),
-              new TableRow({
-                children: [
-                  docxCell("OBRAS COMPLETAS", true),
-                  docxCell(stats.completasCubana.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.completasExtranjera.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.completasTotal.toString(), false, AlignmentType.CENTER)
-                ]
-              }),
-              new TableRow({
-                children: [
-                  docxCell("OBRAS INSTRUMENTALES", true),
-                  docxCell(stats.instrumentalesCubana.toString(), false, AlignmentType.CENTER),
-                  docxCell("-", false, AlignmentType.CENTER),
-                  docxCell(stats.instrumentalesTotal.toString(), false, AlignmentType.CENTER)
-                ]
-              }),
-              new TableRow({
-                children: [
-                  docxCell("OBRAS INCIDENTALES", true),
-                  docxCell(stats.incidentalesCubana.toString(), false, AlignmentType.CENTER),
-                  docxCell("-", false, AlignmentType.CENTER),
-                  docxCell(stats.incidentalesTotal.toString(), false, AlignmentType.CENTER)
-                ]
-              })
-            ]
-          }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    docxCell(""),
+                    docxCell("CUBANA", true, AlignmentType.CENTER),
+                    docxCell("EXTRANJERA", true, AlignmentType.CENTER),
+                    docxCell("TOTAL", true, AlignmentType.CENTER)
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    docxCell("OBRAS COMPLETAS", true),
+                    docxCell((stats.completasCubana || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell((stats.completasExtranjera || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell((stats.completasTotal || 0).toString(), false, AlignmentType.CENTER)
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    docxCell("OBRAS INSTRUMENTALES", true),
+                    docxCell((stats.instrumentalesCubana || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell("-", false, AlignmentType.CENTER),
+                    docxCell((stats.instrumentalesTotal || 0).toString(), false, AlignmentType.CENTER)
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    docxCell("OBRAS INCIDENTALES", true),
+                    docxCell((stats.incidentalesCubana || 0).toString(), false, AlignmentType.CENTER),
+                    docxCell("-", false, AlignmentType.CENTER),
+                    docxCell((stats.incidentalesTotal || 0).toString(), false, AlignmentType.CENTER)
+                  ]
+                })
+              ]
+            }),
 
-          new Paragraph({ text: "" }),
-          new Paragraph({ text: "" }),
-          new Paragraph({ text: "" }),
-          new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
 
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Elaborado por:", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: `${coordinadorMusical} ____________________________`, bold: false, size: 24 })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Especialista en Música.", bold: false, size: 24 })
-            ]
-          }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Elaborado por:", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: `${coordinadorMusical} ____________________________`, bold: false, size: 24 })
+              ]
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Especialista en Música.", bold: false, size: 24 })
+              ]
+            }),
 
-          new Paragraph({ text: "" }),
-          new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
+            new Paragraph({ text: "" }),
 
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Aprobado por:", bold: true, size: 24 })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: `${jefeProgramacion} ____________________________`, bold: false, size: 24 })
-            ]
-          }),
-          new Paragraph({
-            children: [
-              new TextRun({ font: "Arial", text: "Jefe de Programación", bold: false, size: 24 })
-            ]
-          })
-        ]
-      }]
-    });
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Aprobado por:", bold: true, size: 24 })
+              ]
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: `${jefeProgramacion} ____________________________`, bold: false, size: 24 })
+              ]
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ font: "Arial", text: "Jefe de Programación", bold: false, size: 24 })
+              ]
+            })
+          ]
+        }]
+      });
 
-    const blob = await Packer.toBlob(doc);
-    const filename = `INFORME_ECONOMIA_RCM_${activePeriod.toUpperCase()}_${selectedMonthStr}.docx`;
-    saveAs(blob, filename);
+      const blob = await Packer.toBlob(doc);
+      const filename = `INFORME_ECONOMIA_RCM_${activePeriod.toUpperCase()}_${selectedMonthStr}.docx`;
+      saveAs(blob, filename);
+    } catch (err: any) {
+      console.error("Error generating DOCX Economy Report:", err);
+      alert(`No se pudo generar el documento DOCX: ${err.message || 'Error desconocido'}`);
+    }
   };
 
   const handleGenerateDOCX_Incidental = async () => {
-    const stats = activePeriodStats.incidental;
+    try {
+      const stats = activePeriodStats.incidental;
     const periodStr = getPeriodName(selectedMonthNum, selectedYear, activePeriod);
 
     const doc = new Document({
@@ -2683,10 +2689,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 children: [
                   docxCell("1", false, AlignmentType.CENTER),
                   docxCell("CUBA", true),
-                  docxCell(stats.cubaWorksCount.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.cubaPct.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.cubaAuthors.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.cubaAuthorsPct.toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.cubaWorksCount || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.cubaPct || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.cubaAuthors || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.cubaAuthorsPct || 0).toString(), false, AlignmentType.CENTER),
                 ]
               }),
               // Foreigner row
@@ -2694,10 +2700,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 children: [
                   docxCell("2", false, AlignmentType.CENTER),
                   docxCell("Extranjera", true),
-                  docxCell(stats.foreignWorksCount.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.foreignPct.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.foreignAuthors.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.foreignAuthorsPct.toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.foreignWorksCount || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.foreignPct || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.foreignAuthors || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.foreignAuthorsPct || 0).toString(), false, AlignmentType.CENTER),
                 ]
               }),
               // Latin America row
@@ -2705,10 +2711,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 children: [
                   docxCell("1", false, AlignmentType.CENTER),
                   docxCell("   Latinoamérica y el Caribe", false),
-                  docxCell(stats.regions.latam.works.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.latam.pct.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.latam.authors.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.latam.authorsPct.toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.latam?.works || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.latam?.pct || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.latam?.authors || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.latam?.authorsPct || 0).toString(), false, AlignmentType.CENTER),
                 ]
               }),
               // North America row
@@ -2716,10 +2722,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 children: [
                   docxCell("2", false, AlignmentType.CENTER),
                   docxCell("   Norteamérica", false),
-                  docxCell(stats.regions.norte.works.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.norte.pct.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.norte.authors.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.norte.authorsPct.toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.norte?.works || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.norte?.pct || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.norte?.authors || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.norte?.authorsPct || 0).toString(), false, AlignmentType.CENTER),
                 ]
               }),
               // Europe row
@@ -2727,10 +2733,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 children: [
                   docxCell("3", false, AlignmentType.CENTER),
                   docxCell("   Europa", false),
-                  docxCell(stats.regions.europa.works.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.europa.pct.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.europa.authors.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.europa.authorsPct.toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.europa?.works || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.europa?.pct || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.europa?.authors || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.europa?.authorsPct || 0).toString(), false, AlignmentType.CENTER),
                 ]
               }),
               // Otras row
@@ -2738,10 +2744,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                 children: [
                   docxCell("6", false, AlignmentType.CENTER),
                   docxCell("   Otras Zonas", false),
-                  docxCell(stats.regions.otras.works.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.otras.pct.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.otras.authors.toString(), false, AlignmentType.CENTER),
-                  docxCell(stats.regions.otras.authorsPct.toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.otras?.works || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.otras?.pct || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.otras?.authors || 0).toString(), false, AlignmentType.CENTER),
+                  docxCell((stats.regions?.otras?.authorsPct || 0).toString(), false, AlignmentType.CENTER),
                 ]
               })
             ]
@@ -2767,6 +2773,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     const blob = await Packer.toBlob(doc);
     saveAs(blob, `INFORME_MUSICA_INCIDENTAL_${activePeriod.toUpperCase()}_${selectedMonthStr}.docx`);
+    } catch (err: any) {
+      console.error("Error generating DOCX Incidental Report:", err);
+      alert(`No se pudo generar el documento DOCX: ${err.message || 'Error desconocido'}`);
+    }
   };
 
   return (
