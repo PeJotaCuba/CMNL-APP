@@ -328,17 +328,23 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
   const saveToArchive = (type: 'mensual' | 'economia' | 'incidental', monthKey: string, data: any) => {
     if (type === 'mensual') {
-      const updated = { ...archiveMensual, [monthKey]: data };
-      setArchiveMensual(updated);
-      localStorage.setItem('rcm_archive_mensual', JSON.stringify(updated));
+      setArchiveMensual(prev => {
+        const updated = { ...prev, [monthKey]: data };
+        localStorage.setItem('rcm_archive_mensual', JSON.stringify(updated));
+        return updated;
+      });
     } else if (type === 'economia') {
-      const updated = { ...archiveEconomia, [monthKey]: data };
-      setArchiveEconomia(updated);
-      localStorage.setItem('rcm_archive_economia', JSON.stringify(updated));
+      setArchiveEconomia(prev => {
+        const updated = { ...prev, [monthKey]: data };
+        localStorage.setItem('rcm_archive_economia', JSON.stringify(updated));
+        return updated;
+      });
     } else if (type === 'incidental') {
-      const updated = { ...archiveIncidental, [monthKey]: data };
-      setArchiveIncidental(updated);
-      localStorage.setItem('rcm_archive_incidental', JSON.stringify(updated));
+      setArchiveIncidental(prev => {
+        const updated = { ...prev, [monthKey]: data };
+        localStorage.setItem('rcm_archive_incidental', JSON.stringify(updated));
+        return updated;
+      });
     }
   };
 
@@ -753,14 +759,39 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                     const text = e.target?.result as string;
                     if (!text) { resolve(); return; }
                     
-                    const mStr = extractMonthYearFromText(text); // Need to implement this helper or adapt detection
+                    const mStr = extractMonthYearFromText(text, file.name);
                     if (!mStr) { console.warn('Could not detect date'); resolve(); return; }
                     
-                    const parsed = parseMensualTxt(text);
-                    if (parsed && Object.keys(parsed).length > 0) {
-                        saveToArchive('mensual', mStr, parsed);
-                        successCount++;
-                        lastUploaded = { type: 'mensual', mStr };
+                    const lowText = text.toLowerCase();
+                    const fileNameLow = file.name.toLowerCase();
+                    let type: 'mensual' | 'economia' | 'incidental' = 'mensual';
+                    
+                    if (lowText.includes('indicadores de música incidental') || lowText.includes('obras incidentales') || lowText.includes('catálogo de música incidental') || fileNameLow.includes('incidental')) {
+                        type = 'incidental';
+                    } else if (lowText.includes('indicadores de economía') || lowText.includes('aspectos económicos') || fileNameLow.includes('economia')) {
+                        type = 'economia';
+                    }
+
+                    if (type === 'mensual') {
+                        const parsed = parseMensualTxt(text);
+                        if (parsed && Object.keys(parsed).length > 0) {
+                            saveToArchive('mensual', mStr, parsed);
+                            successCount++;
+                            lastUploaded = { type: 'mensual', mStr };
+                        }
+                    } else {
+                        // For txt files of incidental/economia, we don't have a strict txt parser.
+                        // Try to at least save them with basic structure to not lose them, or if we had a parser we'd use it.
+                        // Since they were previously being swallowed by parseMensualTxt, this prevents them from corrupting Mensual.
+                        // Actually, parseMensualTxt will just return 0s for them.
+                        // Let's create empty structures so they show up as archived (and users can download them if we had that feature).
+                        if (type === 'incidental') {
+                           saveToArchive('incidental', mStr, { totalWorks: 0, topSongs: [], regions: { latam: {works:0, pct:0, authors:0, authorsPct:0}, norte: {works:0, pct:0, authors:0, authorsPct:0}, europa: {works:0, pct:0, authors:0, authorsPct:0}, asia: {works:0, pct:0, authors:0, authorsPct:0}, africa: {works:0, pct:0, authors:0, authorsPct:0}, otras: {works:0, pct:0, authors:0, authorsPct:0} } });
+                           successCount++;
+                        } else if (type === 'economia') {
+                           saveToArchive('economia', mStr, { totalDerechos: 0 });
+                           successCount++;
+                        }
                     }
                     resolve();
                 };
@@ -827,12 +858,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     }
     
     if (successCount > 0) {
-      if (lastUploaded && onMonthChange) {
-        onMonthChange(lastUploaded.mStr);
-        setActiveReportType(lastUploaded.type);
-        setActivePeriod("mensual");
-        setShowArchiveManager(false);
-      }
       alert(`Se procesaron y guardaron ${successCount} informe(s) automáticamente.`);
     } else {
       alert("No se pudieron procesar los archivos. Verifique el formato.");
@@ -1051,21 +1076,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   // Flat list of all tracks in the monthly stock
   const allTracks: ProductionTrack[] = stockMensual.flatMap(p => p.tracks || []).filter(Boolean);
 
-  // Helper to get tracks for any period (recalculating from raw data)
-  const getTracksForAnyPeriod = (monthStr: string, period: 'mensual' | 'trimestral' | 'semestral' | 'anual') => {
-    const months = getMonthsForPeriod(monthStr, period);
-    const agg: ProductionTrack[] = [];
-    months.forEach(mKey => {
-      const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mKey));
-      prods.forEach(p => {
-        if (p.tracks) p.tracks.forEach(t => t && agg.push(t));
-      });
-    });
-    return agg;
-  };
-
-  const periodTracks = getTracksForAnyPeriod(selectedMonthStr, activePeriod);
-
   // Helper selectors
   const isCuban = (country?: string) => {
     if (!country) return false;
@@ -1110,41 +1120,32 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   // STATS CALCULATIONS FOR MONTHLY MUSIC REPORT
   const archivedMensualData = (activePeriod === 'mensual') ? archiveMensual[selectedMonthStr] : null;
 
-  // Rule of Golden: For periods > month, we MUST recalculate unique counts from raw data
-  // "Frecuencia" = total plays (tracks.length)
-  // "Cantidad" = unique titles (Set size)
-  
-  const tracksToUse = (activePeriod === 'mensual' && archivedMensualData) ? [] : periodTracks;
+  const rawTotalWorksCount = archivedMensualData ? archivedMensualData.totalWorks : allTracks.length;
+  const cubanWorks = archivedMensualData ? [] : allTracks.filter(isCubaWork);
+  const foreignWorks = archivedMensualData ? [] : allTracks.filter(t => !isCubaWork(t));
 
-  // 1. Works (Titles)
-  const rawTotalWorksFrequency = archivedMensualData ? (archivedMensualData.totalWorksPlays || archivedMensualData.totalWorks || 0) : tracksToUse.length;
-  const rawTotalWorksCount = archivedMensualData ? (archivedMensualData.totalWorks || 0) : new Set(tracksToUse.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+  const rawTotalWorksCuba = archivedMensualData ? archivedMensualData.cubaWorks : cubanWorks.length;
+  const rawTotalWorksForeign = archivedMensualData ? archivedMensualData.foreignWorks : foreignWorks.length;
 
-  const cubanTracksToUse = tracksToUse.filter(isCubaWork);
-  const foreignTracksToUse = tracksToUse.filter(t => !isCubaWork(t));
+  // Unique counts that respect archives for proper percentage calculation
+  const rawTotalAuthorsCount = archivedMensualData ? archivedMensualData.totalAuthors : Array.from(new Set(allTracks.map(t => t.author).filter(Boolean))).length;
+  const rawTotalPerformersCount = archivedMensualData ? archivedMensualData.totalPerformers : Array.from(new Set(allTracks.map(t => t.performer).filter(Boolean))).length;
 
-  const rawTotalWorksCuba = archivedMensualData ? (archivedMensualData.cubaWorks || 0) : new Set(cubanTracksToUse.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
-  const rawTotalWorksForeign = archivedMensualData ? (archivedMensualData.foreignWorks || 0) : new Set(foreignTracksToUse.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
-
-  // 2. Authors
-  const uniqueAuthorsList = Array.from(new Set(tracksToUse.map(t => t.author).filter(Boolean)));
-  const rawTotalAuthorsCount = archivedMensualData ? (archivedMensualData.totalAuthors || 0) : uniqueAuthorsList.length;
-
-  const rawCubanAuthorsCount = archivedMensualData ? (archivedMensualData.cubaAuthors || 0) : uniqueAuthorsList.filter(name => {
-    const matchingTracks = tracksToUse.filter(t => t.author === name);
+  // Unique authors
+  const uniqueAuthorsList = Array.from(new Set(allTracks.map(t => t.author).filter(Boolean)));
+  const rawCubanAuthorsCount = archivedMensualData ? archivedMensualData.cubaAuthors : uniqueAuthorsList.filter(name => {
+    const matchingTracks = allTracks.filter(t => t.author === name);
     return matchingTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
   }).length;
-  const rawForeignAuthorsCount = archivedMensualData ? (archivedMensualData.foreignAuthors || 0) : (uniqueAuthorsList.length - rawCubanAuthorsCount);
+  const rawForeignAuthorsCount = archivedMensualData ? archivedMensualData.foreignAuthors : (uniqueAuthorsList.length - rawCubanAuthorsCount);
 
-  // 3. Performers
-  const uniquePerformersList = Array.from(new Set(tracksToUse.map(t => t.performer).filter(Boolean)));
-  const rawTotalPerformersCount = archivedMensualData ? (archivedMensualData.totalPerformers || 0) : uniquePerformersList.length;
-
-  const rawCubanPerformersCount = archivedMensualData ? (archivedMensualData.cubaPerformers || 0) : uniquePerformersList.filter(name => {
-    const matchingTracks = tracksToUse.filter(t => t.performer === name);
+  // Unique performers
+  const uniquePerformersList = Array.from(new Set(allTracks.map(t => t.performer).filter(Boolean)));
+  const rawCubanPerformersCount = archivedMensualData ? archivedMensualData.cubaPerformers : uniquePerformersList.filter(name => {
+    const matchingTracks = allTracks.filter(t => t.performer === name);
     return matchingTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
   }).length;
-  const rawForeignPerformersCount = archivedMensualData ? (archivedMensualData.foreignPerformers || 0) : (uniquePerformersList.length - rawCubanPerformersCount);
+  const rawForeignPerformersCount = archivedMensualData ? archivedMensualData.foreignPerformers : (uniquePerformersList.length - rawCubanPerformersCount);
 
   // PERIOD CALCULATION METHODS & ARCHIVES CONSOLIDATOR
   const calculateLiveMensualForMonth = (mStr: string) => {
@@ -1153,58 +1154,51 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mStr));
     const tracks = prods.flatMap(p => p.tracks || []).filter(Boolean);
-    
-    // Frequency = Total Plays
-    const totalWorksPlays = tracks.length;
-    // Quantity = Unique Titles
-    const totalWorks = new Set(tracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
-
-    const cubaTracks = tracks.filter(isCubaWork);
-    const cubaWorks = new Set(cubaTracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
+    const totalWorks = tracks.length;
+    const cubaWClass = tracks.filter(isCubaWork);
+    const cubaWorks = cubaWClass.length;
     const foreignWorks = totalWorks - cubaWorks;
 
     const uniqueAuths = Array.from(new Set(tracks.map(t => t.author).filter(Boolean)));
-    const cubaAuthsCount = uniqueAuths.filter(name => {
+    const cubaAuths = uniqueAuths.filter(name => {
       const matchingTracks = tracks.filter(t => t.author === name);
       return matchingTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
     }).length;
-    const foreignAuthsCount = uniqueAuths.length - cubaAuthsCount;
+    const foreignAuths = uniqueAuths.length - cubaAuths;
 
     const uniquePerfs = Array.from(new Set(tracks.map(t => t.performer).filter(Boolean)));
-    const cubaPerfsCount = uniquePerfs.filter(name => {
+    const cubaPerfs = uniquePerfs.filter(name => {
       const matchingTracks = tracks.filter(t => t.performer === name);
       return matchingTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
     }).length;
-    const foreignPerfsCount = uniquePerfs.length - cubaPerfsCount;
+    const foreignPerfs = uniquePerfs.length - cubaPerfs;
 
     // Calculate regions
     const regionStatsLocal = {
-      'Latinoam. y del Caribe': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Norteamericana': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Europa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Asia': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Africa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Otras zonas': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 }
+      'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Norteamericana': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Europa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Asia': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Africa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
     };
 
     tracks.filter(t => !isCubaWork(t)).forEach(t => {
       const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStatsLocal;
       if (regionStatsLocal[region]) {
-        if (t.title) regionStatsLocal[region].works.add(t.title.toUpperCase());
+        regionStatsLocal[region].works++;
         if (t.author) regionStatsLocal[region].authors.add(t.author);
         if (t.performer) regionStatsLocal[region].performers.add(t.performer);
-        regionStatsLocal[region].plays++;
       }
     });
 
-    const regionsFinal: Record<string, { works: number; authors: number; performers: number; plays: number }> = {};
+    const regionsFinal: Record<string, { works: number; authors: number; performers: number }> = {};
     Object.keys(regionStatsLocal).forEach(reg => {
       const s = regionStatsLocal[reg as keyof typeof regionStatsLocal];
       regionsFinal[reg] = {
-        works: s.works.size,
+        works: s.works,
         authors: s.authors.size,
-        performers: s.performers.size,
-        plays: s.plays
+        performers: s.performers.size
       };
     });
 
@@ -1269,15 +1263,14 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
     return {
       totalWorks,
-      totalWorksPlays,
       cubaWorks,
       foreignWorks,
       totalAuthors: uniqueAuths.length,
-      cubaAuthors: cubaAuthsCount,
-      foreignAuthors: foreignAuthsCount,
+      cubaAuthors: cubaAuths,
+      foreignAuthors: foreignAuths,
       totalPerformers: uniquePerfs.length,
-      cubaPerformers: cubaPerfsCount,
-      foreignPerformers: foreignPerfsCount,
+      cubaPerformers: cubaPerfs,
+      foreignPerformers: foreignPerfs,
       regions: regionsFinal,
       topSongs: topSongsLocal,
       topAuthors: topAuthorsLocal,
@@ -1375,553 +1368,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     };
   };
 
-  const getAggregatedPeriodStats = () => {
-    const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
-
-    // Initial state
-    const mensalAgg = { 
-      totalWorks: 0, totalWorksPlays: 0, 
-      cubaWorks: 0, foreignWorks: 0, 
-      totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0, 
-      totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0 
-    };
-    
-    // If period is not monthly, we aggregate ALL raw tracks to recalculate unique counts correctly
-    if (activePeriod !== 'mensual') {
-       const tracks = periodTracks;
-       mensalAgg.totalWorksPlays = tracks.length;
-       mensalAgg.totalWorks = new Set(tracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
-       
-       const cTracks = tracks.filter(isCubaWork);
-       mensalAgg.cubaWorks = new Set(cTracks.map(t => t.title?.toUpperCase()).filter(Boolean)).size;
-       mensalAgg.foreignWorks = mensalAgg.totalWorks - mensalAgg.cubaWorks;
-       
-       const uAuths = Array.from(new Set(tracks.map(t => t.author).filter(Boolean)));
-       mensalAgg.totalAuthors = uAuths.length;
-       mensalAgg.cubaAuthors = uAuths.filter(name => {
-         const mTracks = tracks.filter(t => t.author === name);
-         return mTracks.some(t => isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry));
-       }).length;
-       mensalAgg.foreignAuthors = mensalAgg.totalAuthors - mensalAgg.cubaAuthors;
-       
-       const uPerfs = Array.from(new Set(tracks.map(t => t.performer).filter(Boolean)));
-       mensalAgg.totalPerformers = uPerfs.length;
-       mensalAgg.cubaPerformers = uPerfs.filter(name => {
-         const mTracks = tracks.filter(t => t.performer === name);
-         return mTracks.some(t => isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry));
-       }).length;
-       mensalAgg.foreignPerformers = mensalAgg.totalPerformers - mensalAgg.cubaPerformers;
-    } else {
-      // For monthly, we can use the monthly stats (archived or calculated)
-      const mData = archivedMensualData || calculateLiveMensualForMonth(selectedMonthStr);
-      if (mData) {
-        mensalAgg.totalWorks = mData.totalWorks || 0;
-        mensalAgg.totalWorksPlays = mData.totalWorksPlays || mData.totalWorks || 0;
-        mensalAgg.cubaWorks = mData.cubaWorks || 0;
-        mensalAgg.foreignWorks = mData.foreignWorks || 0;
-        mensalAgg.totalAuthors = mData.totalAuthors || 0;
-        mensalAgg.cubaAuthors = mData.cubaAuthors || 0;
-        mensalAgg.foreignAuthors = mData.foreignAuthors || 0;
-        mensalAgg.totalPerformers = mData.totalPerformers || 0;
-        mensalAgg.cubaPerformers = mData.cubaPerformers || 0;
-        mensalAgg.foreignPerformers = mData.foreignPerformers || 0;
-      }
-    }
-
-    const economiaAgg = { completasCubana: 0, completasExtranjera: 0, completasTotal: 0, instrumentalesCubana: 0, instrumentalesExtranjera: 0, instrumentalesTotal: 0, incidentalesCubana: 0, incidentalesExtranjera: 0, incidentalesTotal: 0 };
-    const incidentalAgg = { cubaWorksCount: 0, cubaAuthors: 0, cubaPct: 0, cubaAuthorsPct: 0, foreignWorksCount: 0, foreignAuthors: 0, foreignPct: 0, foreignAuthorsPct: 0, totalWorks: 0, totalAuthors: 0, regions: { latam: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, norte: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, europa: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, otras: { works: 0, pct: 0, authors: 0, authorsPct: 0 } } };
-
-    months.forEach(mKey => {
-      // 2. Economia
-      let eData = archiveEconomia[mKey];
-      if (!eData) {
-        const [yr, mn] = mKey.split('-').map(Number);
-        const weekdays = countDaysInMonth(yr, mn, [1, 2, 3, 4, 5]);
-        const mVal = archiveMensual[mKey] || calculateLiveMensualForMonth(mKey);
-        const incStats = archiveIncidental[mKey] || getIncidentalStatsForMonth(yr, mn);
-        eData = {
-          completasCubana: mVal.cubaWorks,
-          completasExtranjera: mVal.foreignWorks,
-          completasTotal: mVal.totalWorks,
-          instrumentalesCubana: weekdays,
-          instrumentalesExtranjera: 0,
-          instrumentalesTotal: weekdays,
-          incidentalesCubana: incStats.totalWorks,
-          incidentalesExtranjera: 0,
-          incidentalesTotal: incStats.totalWorks
-        };
-      }
-      if (eData) {
-        economiaAgg.completasCubana += eData.completasCubana || 0;
-        economiaAgg.completasExtranjera += eData.completasExtranjera || 0;
-        economiaAgg.completasTotal += eData.completasTotal || 0;
-        economiaAgg.instrumentalesCubana += eData.instrumentalesCubana || 0;
-        economiaAgg.instrumentalesExtranjera += eData.instrumentalesExtranjera || 0;
-        economiaAgg.instrumentalesTotal += eData.instrumentalesTotal || 0;
-        economiaAgg.incidentalesCubana += eData.incidentalesCubana || 0;
-        economiaAgg.incidentalesExtranjera += eData.incidentalesExtranjera || 0;
-        economiaAgg.incidentalesTotal += eData.incidentalesTotal || 0;
-      }
-
-      // 3. Incidental
-      let iData = archiveIncidental[mKey];
-      if (!iData) {
-        const [yr, mn] = mKey.split('-').map(Number);
-        iData = getIncidentalStatsForMonth(yr, mn);
-      }
-      if (iData) {
-        incidentalAgg.cubaWorksCount += iData.cubaWorksCount || 0;
-        incidentalAgg.cubaAuthors += iData.cubaAuthors || 0;
-        incidentalAgg.foreignWorksCount += iData.foreignWorksCount || 0;
-        incidentalAgg.foreignAuthors += iData.foreignAuthors || 0;
-        incidentalAgg.totalWorks += iData.totalWorks || 0;
-        incidentalAgg.totalAuthors += iData.totalAuthors || 0;
-
-        incidentalAgg.regions.latam.works += (iData.regions?.latam?.works || 0);
-        incidentalAgg.regions.latam.authors += (iData.regions?.latam?.authors || 0);
-        incidentalAgg.regions.norte.works += (iData.regions?.norte?.works || 0);
-        incidentalAgg.regions.norte.authors += (iData.regions?.norte?.authors || 0);
-        incidentalAgg.regions.europa.works += (iData.regions?.europa?.works || 0);
-        incidentalAgg.regions.europa.authors += (iData.regions?.europa?.authors || 0);
-        incidentalAgg.regions.otras.works += (iData.regions?.otras?.works || 0);
-        incidentalAgg.regions.otras.authors += (iData.regions?.otras?.authors || 0);
-      }
-    });
-
-    if (incidentalAgg.totalWorks) {
-      incidentalAgg.cubaPct = Math.round((incidentalAgg.cubaWorksCount / incidentalAgg.totalWorks) * 100);
-      incidentalAgg.foreignPct = Math.round((incidentalAgg.foreignWorksCount / incidentalAgg.totalWorks) * 100);
-      incidentalAgg.regions.latam.pct = Math.round((incidentalAgg.regions.latam.works / incidentalAgg.totalWorks) * 100);
-      incidentalAgg.regions.norte.pct = Math.round((incidentalAgg.regions.norte.works / incidentalAgg.totalWorks) * 100);
-      incidentalAgg.regions.europa.pct = Math.round((incidentalAgg.regions.europa.works / incidentalAgg.totalWorks) * 100);
-      incidentalAgg.regions.otras.pct = Math.round((incidentalAgg.regions.otras.works / incidentalAgg.totalWorks) * 100);
-    }
-    if (incidentalAgg.totalAuthors) {
-      incidentalAgg.cubaAuthorsPct = Math.round((incidentalAgg.cubaAuthors / incidentalAgg.totalAuthors) * 100);
-      incidentalAgg.foreignAuthorsPct = Math.round((incidentalAgg.foreignAuthors / incidentalAgg.totalAuthors) * 100);
-      incidentalAgg.regions.latam.authorsPct = Math.round((incidentalAgg.regions.latam.authors / incidentalAgg.totalAuthors) * 100);
-      incidentalAgg.regions.norte.authorsPct = Math.round((incidentalAgg.regions.norte.authors / incidentalAgg.totalAuthors) * 100);
-      incidentalAgg.regions.europa.authorsPct = Math.round((incidentalAgg.regions.europa.authors / incidentalAgg.totalAuthors) * 100);
-      incidentalAgg.regions.otras.authorsPct = Math.round((incidentalAgg.regions.otras.authors / incidentalAgg.totalAuthors) * 100);
-    }
-
-    const liveInc = getIncidentalStatsForMonth(selectedYear, selectedMonthNum);
-
-    return {
-      mensual: {
-        totalWorks: mensalAgg.totalWorks || rawTotalWorksCount,
-        totalWorksPlays: mensalAgg.totalWorksPlays || rawTotalWorksFrequency,
-        cubaWorks: mensalAgg.cubaWorks || rawTotalWorksCuba,
-        foreignWorks: mensalAgg.foreignWorks || rawTotalWorksForeign,
-        totalAuthors: mensalAgg.totalAuthors || rawTotalAuthorsCount,
-        cubaAuthors: mensalAgg.cubaAuthors || rawCubanAuthorsCount,
-        foreignAuthors: mensalAgg.foreignAuthors || rawForeignAuthorsCount,
-        totalPerformers: mensalAgg.totalPerformers || rawTotalPerformersCount,
-        cubaPerformers: mensalAgg.cubaPerformers || rawCubanPerformersCount,
-        foreignPerformers: mensalAgg.foreignPerformers || rawForeignPerformersCount,
-      },
-      economia: {
-        completasCubana: economiaAgg.completasCubana || rawTotalWorksCuba,
-        completasExtranjera: economiaAgg.completasExtranjera || rawTotalWorksForeign,
-        completasTotal: economiaAgg.completasTotal || rawTotalWorksCount,
-        instrumentalesCubana: economiaAgg.instrumentalesCubana || intCubanaCount(),
-        instrumentalesExtranjera: economiaAgg.instrumentalesExtranjera || 0,
-        instrumentalesTotal: economiaAgg.instrumentalesTotal || intCubanaCount(),
-        incidentalesCubana: economiaAgg.incidentalesCubana || liveInc.totalWorks,
-        incidentalesExtranjera: economiaAgg.incidentalesExtranjera || 0,
-        incidentalesTotal: economiaAgg.incidentalesTotal || liveInc.totalWorks
-      },
-      incidental: {
-        cubaWorksCount: incidentalAgg.cubaWorksCount || liveInc.cubaWorksCount,
-        cubaPct: incidentalAgg.cubaPct || liveInc.cubaPct,
-        cubaAuthors: incidentalAgg.cubaAuthors || liveInc.cubaAuthors,
-        cubaAuthorsPct: incidentalAgg.cubaAuthorsPct || liveInc.cubaAuthorsPct,
-        foreignWorksCount: incidentalAgg.foreignWorksCount || liveInc.foreignWorksCount,
-        foreignPct: incidentalAgg.foreignPct || liveInc.foreignPct,
-        foreignAuthors: incidentalAgg.foreignAuthors || liveInc.foreignAuthors,
-        foreignAuthorsPct: incidentalAgg.foreignAuthorsPct || liveInc.foreignAuthorsPct,
-        totalWorks: incidentalAgg.totalWorks || liveInc.totalWorks,
-        totalAuthors: incidentalAgg.totalAuthors || liveInc.totalAuthors,
-        regions: {
-          latam: {
-            works: incidentalAgg.regions.latam.works || liveInc.regions.latam.works,
-            pct: incidentalAgg.regions.latam.pct || liveInc.regions.latam.pct,
-            authors: incidentalAgg.regions.latam.authors || liveInc.regions.latam.authors,
-            authorsPct: incidentalAgg.regions.latam.authorsPct || liveInc.regions.latam.authorsPct
-          },
-          norte: {
-            works: incidentalAgg.regions.norte.works || liveInc.regions.norte.works,
-            pct: incidentalAgg.regions.norte.pct || liveInc.regions.norte.pct,
-            authors: incidentalAgg.regions.norte.authors || liveInc.regions.norte.authors,
-            authorsPct: incidentalAgg.regions.norte.authorsPct || liveInc.regions.norte.authorsPct
-          },
-          europa: {
-            works: incidentalAgg.regions.europa.works || liveInc.regions.europa.works,
-            pct: incidentalAgg.regions.europa.pct || liveInc.regions.europa.pct,
-            authors: incidentalAgg.regions.europa.authors || liveInc.regions.europa.authors,
-            authorsPct: incidentalAgg.regions.europa.authorsPct || liveInc.regions.europa.authorsPct
-          },
-          otras: {
-            works: incidentalAgg.regions.otras.works || liveInc.regions.otras.works,
-            pct: incidentalAgg.regions.otras.pct || liveInc.regions.otras.pct,
-            authors: incidentalAgg.regions.otras.authors || liveInc.regions.otras.authors,
-            authorsPct: incidentalAgg.regions.otras.authorsPct || liveInc.regions.otras.authorsPct
-          }
-        }
-      }
-    };
-  };
-
-  const intCubanaCount = () => {
-    if (activePeriod === 'mensual') {
-      return countDaysInMonth(selectedYear, selectedMonthNum, [1, 2, 3, 4, 5]);
-    }
-    const ms = getMonthsForPeriod(selectedMonthStr, activePeriod);
-    return ms.reduce((total, mKey) => {
-      const [yr, mn] = mKey.split('-').map(Number);
-      return total + countDaysInMonth(yr, mn, [1, 2, 3, 4, 5]);
-    }, 0);
-  };
-
-  const getActiveRegionStats = () => {
-    const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
-    const aggRegions = {
-      'Latinoam. y del Caribe': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Norteamericana': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Europa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Asia': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Africa': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 },
-      'Otras zonas': { works: new Set<string>(), authors: new Set<string>(), performers: new Set<string>(), plays: 0 }
-    };
-
-    if (activePeriod !== 'mensual') {
-       // Recalculate everything from periodTracks for accuracy
-       periodTracks.filter(t => !isCubaWork(t)).forEach(t => {
-         const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof aggRegions;
-         if (aggRegions[region]) {
-           if (t.title) aggRegions[region].works.add(t.title.toUpperCase());
-           if (t.author) aggRegions[region].authors.add(t.author.toUpperCase());
-           if (t.performer) aggRegions[region].performers.add(t.performer.toUpperCase());
-           aggRegions[region].plays++;
-         }
-       });
-    } else {
-       // Monthly: use archive or current month tracks
-       const mData = archivedMensualData || calculateLiveMensualForMonth(selectedMonthStr);
-       if (mData && mData.regions) {
-         Object.keys(aggRegions).forEach(reg => {
-           if (mData.regions[reg]) {
-             const r = mData.regions[reg];
-             // If mData.regions has numbers (archived), we can't truly deduplicate if we don't have titles
-             // But for a single month, it's already "Quantity" from the source.
-             const worksCount = typeof r.works === 'number' ? r.works : (r.works?.size || 0);
-             const autCount = typeof r.authors === 'number' ? r.authors : (r.authors?.size || 0);
-             const perfCount = typeof r.performers === 'number' ? r.performers : (r.performers?.size || 0);
-             const playsCount = typeof r.plays === 'number' ? r.plays : (r.plays || worksCount);
-             
-             // Mocking sets for consistency
-             for (let i = 0; i < worksCount; i++) aggRegions[reg as keyof typeof aggRegions].works.add(`w-${i}`);
-             for (let i = 0; i < autCount; i++) aggRegions[reg as keyof typeof aggRegions].authors.add(`a-${i}`);
-             for (let i = 0; i < perfCount; i++) aggRegions[reg as keyof typeof aggRegions].performers.add(`p-${i}`);
-             aggRegions[reg as keyof typeof aggRegions].plays = playsCount;
-           }
-         });
-       }
-    }
-
-    return aggRegions;
-  };
-
-  const activePeriodStats = getAggregatedPeriodStats();
-
-  useEffect(() => {
-    if (isOpen && activePeriod === 'mensual') {
-      const monthKey = selectedMonthStr;
-
-    }
-  }, [selectedMonthStr, stockMensual, incidentalWorks, isOpen]);
-
-  if (!isOpen) return null;
-
-  // Resolve counts based on activePeriod stats
-  const totalWorksQuantity = activePeriod === 'mensual' ? rawTotalWorksCount : activePeriodStats.mensual.totalWorks;
-  const totalWorksFrequency = activePeriod === 'mensual' ? rawTotalWorksFrequency : activePeriodStats.mensual.totalWorksPlays;
-  const totalWorksCuba = activePeriod === 'mensual' ? rawTotalWorksCuba : activePeriodStats.mensual.cubaWorks;
-  const totalWorksForeign = activePeriod === 'mensual' ? rawTotalWorksForeign : activePeriodStats.mensual.foreignWorks;
-  const totalAuthorsCount = activePeriod === 'mensual' ? rawTotalAuthorsCount : activePeriodStats.mensual.totalAuthors;
-  const totalPerformersCount = activePeriod === 'mensual' ? rawTotalPerformersCount : activePeriodStats.mensual.totalPerformers;
-  const cubanAuthorsCount = activePeriod === 'mensual' ? rawCubanAuthorsCount : activePeriodStats.mensual.cubaAuthors;
-  const foreignAuthorsCount = activePeriod === 'mensual' ? rawForeignAuthorsCount : activePeriodStats.mensual.foreignAuthors;
-  const cubanPerformersCount = activePeriod === 'mensual' ? rawCubanPerformersCount : activePeriodStats.mensual.cubaPerformers;
-  const foreignPerformersCount = activePeriod === 'mensual' ? rawForeignPerformersCount : activePeriodStats.mensual.foreignPerformers;
-
-  // Regional breakdown (for Foreigners)
-  const regionStats = {
-    'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-    'Norteamericana': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-    'Europa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-    'Asia': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-    'Africa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
-    'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
-  };
-
-  if (activePeriod === 'mensual') {
-    if (archivedMensualData && archivedMensualData.regions) {
-       Object.keys(regionStats).forEach(reg => {
-         if (archivedMensualData.regions[reg]) {
-           const r = archivedMensualData.regions[reg];
-           regionStats[reg as keyof typeof regionStats] = {
-             works: r.works || 0,
-             authors: { size: r.authors || 0 } as any,
-             performers: { size: r.performers || 0 } as any
-           };
-         }
-       });
-    } else {
-       periodTracks.filter(t => !isCubaWork(t)).forEach(t => {
-         const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStats;
-         if (regionStats[region]) {
-           regionStats[region].works++;
-           if (t.author) regionStats[region].authors.add(t.author);
-           if (t.performer) regionStats[region].performers.add(t.performer);
-         }
-       });
-    }
-  } else {
-    // Trimestral, Semestral, Anual sum of region data
-    const activeRegionSum = getActiveRegionStats();
-    Object.keys(regionStats).forEach(reg => {
-      const r = activeRegionSum[reg as keyof typeof activeRegionSum] || { works: { size: 0 }, authors: { size: 0 }, performers: { size: 0 }, plays: 0 };
-      regionStats[reg as keyof typeof regionStats] = {
-        works: (r.works as any).size || r.works || 0,
-        authors: { size: (r.authors as any).size || r.authors || 0 } as any,
-        performers: { size: (r.performers as any).size || r.performers || 0 } as any
-      };
-    });
-  }
-
-  // Unified top lists calculation
-  const getPeriodTrackListsAndGenres = () => {
-    if (activePeriod === 'mensual') {
-      const archived = archiveMensual[selectedMonthStr];
-      if (archived) {
-        return {
-          topSongs: archived.topSongs || [],
-          topAuthors: archived.topAuthors || [],
-          topPerformers: archived.topPerformers || [],
-          topGenres: archived.topGenres || [],
-          totalCount: archived.totalWorks || 0
-        };
-      }
-      
-      // Calculate live for the selected month
-      const songFrequencies: Record<string, { track: ProductionTrack; count: number }> = {};
-      allTracks.forEach(t => {
-        const key = `${t.title?.toUpperCase()} - ${t.performer?.toUpperCase()}`;
-        if (!songFrequencies[key]) {
-          songFrequencies[key] = { track: t, count: 0 };
-        }
-        songFrequencies[key].count++;
-      });
-      const liveSongs = Object.values(songFrequencies)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-
-      const authorFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
-      allTracks.forEach(t => {
-        if (!t.author) return;
-        const key = t.author.toUpperCase();
-        const nac = isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry) ? 'CUBA' : (t.authorCountry?.toUpperCase() || 'EXTRANJERO');
-        if (!authorFrequencies[key]) {
-          authorFrequencies[key] = { name: t.author, nac, songs: new Set(), execs: 0 };
-        }
-        authorFrequencies[key].songs.add(t.title?.toUpperCase() || '');
-        authorFrequencies[key].execs++;
-      });
-      const liveAuthors = Object.values(authorFrequencies)
-        .sort((a, b) => b.execs - a.execs)
-        .slice(0, 5);
-
-      const performerFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
-      allTracks.forEach(t => {
-        if (!t.performer) return;
-        const key = t.performer.toUpperCase();
-        const nac = isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry) ? 'CUBA' : (t.performerCountry?.toUpperCase() || 'EXTRANJERO');
-        if (!performerFrequencies[key]) {
-          performerFrequencies[key] = { name: t.performer, nac, songs: new Set(), execs: 0 };
-        }
-        performerFrequencies[key].songs.add(t.title?.toUpperCase() || '');
-        performerFrequencies[key].execs++;
-      });
-      const livePerformers = Object.values(performerFrequencies)
-        .sort((a, b) => b.execs - a.execs)
-        .slice(0, 5);
-
-      const genreFrequencies: Record<string, { name: string; songs: Set<string>; execs: number }> = {};
-      allTracks.forEach(t => {
-        const genreName = (t.genre || 'SIN GENERO').toUpperCase();
-        if (!genreFrequencies[genreName]) {
-          genreFrequencies[genreName] = { name: genreName, songs: new Set(), execs: 0 };
-        }
-        genreFrequencies[genreName].songs.add(t.title?.toUpperCase() || '');
-        genreFrequencies[genreName].execs++;
-      });
-      const liveGenres = Object.values(genreFrequencies)
-        .sort((a, b) => b.execs - a.execs)
-        .slice(0, 5);
-
-      return {
-        topSongs: liveSongs,
-        topAuthors: liveAuthors,
-        topPerformers: livePerformers,
-        topGenres: liveGenres,
-        totalCount: allTracks.length
-      };
-    } else {
-      // Trimestral, Semestral, Anual (query the database of productions of each month)
-      const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
-      const aggTracks: ProductionTrack[] = [];
-      const monthlyGenresList: any[] = [];
-
-      months.forEach(mKey => {
-        const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mKey));
-        prods.forEach(p => {
-          if (p.tracks) {
-            p.tracks.forEach(t => {
-              if (t) aggTracks.push(t);
-            });
-          }
-        });
-
-        const report = archiveMensual[mKey];
-        if (report && report.topGenres) {
-          monthlyGenresList.push(...report.topGenres);
-        } else {
-          const liveM = calculateLiveMensualForMonth(mKey);
-          if (liveM && liveM.topGenres) {
-            monthlyGenresList.push(...liveM.topGenres);
-          }
-        }
-      });
-
-      const tracksToAnalyze = aggTracks;
-
-      const songFrequencies: Record<string, { track: ProductionTrack; count: number }> = {};
-      tracksToAnalyze.forEach(t => {
-        const key = `${t.title?.toUpperCase()} - ${t.performer?.toUpperCase()}`;
-        if (!songFrequencies[key]) {
-          songFrequencies[key] = { track: t, count: 0 };
-        }
-        songFrequencies[key].count++;
-      });
-      const songsAgg = Object.values(songFrequencies)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5);
-
-      const authorFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
-      tracksToAnalyze.forEach(t => {
-        if (!t.author) return;
-        const key = t.author.toUpperCase();
-        const nac = isCuban(t.authorCountry) || (!t.authorCountry && !t.performerCountry) ? 'CUBA' : (t.authorCountry?.toUpperCase() || 'EXTRANJERO');
-        if (!authorFrequencies[key]) {
-          authorFrequencies[key] = { name: t.author, nac, songs: new Set(), execs: 0 };
-        }
-        authorFrequencies[key].songs.add(t.title?.toUpperCase() || '');
-        authorFrequencies[key].execs++;
-      });
-      const authorsAgg = Object.values(authorFrequencies)
-        .sort((a, b) => b.execs - a.execs)
-        .slice(0, 5);
-
-      const performerFrequencies: Record<string, { name: string; nac: string; songs: Set<string>; execs: number }> = {};
-      tracksToAnalyze.forEach(t => {
-        if (!t.performer) return;
-        const key = t.performer.toUpperCase();
-        const nac = isCuban(t.performerCountry) || (!t.performerCountry && !t.authorCountry) ? 'CUBA' : (t.performerCountry?.toUpperCase() || 'EXTRANJERO');
-        if (!performerFrequencies[key]) {
-          performerFrequencies[key] = { name: t.performer, nac, songs: new Set(), execs: 0 };
-        }
-        performerFrequencies[key].songs.add(t.title?.toUpperCase() || '');
-        performerFrequencies[key].execs++;
-      });
-      const performersAgg = Object.values(performerFrequencies)
-        .sort((a, b) => b.execs - a.execs)
-        .slice(0, 5);
-
-      // Recalculating genres by summing their frequencies from Archive Report topGenres
-      const genreSummary: Record<string, { name: string; execs: number }> = {};
-      let genresTotalExecs = 0;
-      monthlyGenresList.forEach(g => {
-        const nameUpper = g.name.toUpperCase();
-        if (!genreSummary[nameUpper]) {
-          genreSummary[nameUpper] = { name: g.name, execs: 0 };
-        }
-        const countValue = typeof g.execs === 'number' ? g.execs : (parseInt(g.execs, 10) || 0);
-        genreSummary[nameUpper].execs += countValue;
-        genresTotalExecs += countValue;
-      });
-
-      const genresAgg = Object.values(genreSummary)
-        .map(g => {
-          const frecNum = genresTotalExecs ? Math.round((g.execs / genresTotalExecs) * 100) : 0;
-          return {
-            name: g.name,
-            execs: g.execs,
-            frec: frecNum.toString()
-          };
-        })
-        .sort((a, b) => b.execs - a.execs)
-        .slice(0, 5);
-
-      return {
-        topSongs: songsAgg,
-        topAuthors: authorsAgg,
-        topPerformers: performersAgg,
-        topGenres: genresAgg,
-        totalCount: tracksToAnalyze.length
-      };
-    }
-  };
-
-  const {
-    topSongs: resolvedTopSongs,
-    topAuthors: resolvedTopAuthors,
-    topPerformers: resolvedTopPerformers,
-    topGenres: resolvedTopGenres,
-    totalCount: resolvedTotalAnalyzeCount
-  } = getPeriodTrackListsAndGenres();
-
-  const topSongs = resolvedTopSongs;
-  const topAuthors = resolvedTopAuthors;
-  const topPerformers = resolvedTopPerformers;
-  const topGenres = resolvedTopGenres;
-
-  // Formatting percentages safely (only numbers, without % symbol)
-  const pct = (num: number, denom: number) => {
-    if (!denom) return '0';
-    return `${Math.round((num / denom) * 100)}`;
-  };
-
-  // ECONOMY REPORT DATA
-  const economyData = stockMensual.map(p => {
-    const songsCount = p.tracks?.length || 0;
-    const workPayments = songsCount * costoPorObra;
-    const programTotal = montoFijoBase + workPayments;
-    return {
-      program: p.program || 'Desconocido',
-      date: p.date,
-      songs: songsCount,
-      rightsCost: workPayments,
-      totalPayment: programTotal
-    };
-  });
-
-  const totalEconomySongs = economyData.reduce((acc, curr) => acc + curr.songs, 0);
-  const totalRightsPayments = economyData.reduce((acc, curr) => acc + curr.rightsCost, 0);
-  const totalBasePayments = economyData.length * montoFijoBase;
-  const grandTotalEconomyValue = totalRightsPayments + totalBasePayments;
-
-  // INCIDENTAL MUSIC REPORT DATA
+  
   // Compute calculated statistics for Incidental Report
   const getIncidentalRegionStats = () => {
     let cubaWorksCount = 0;
@@ -1938,7 +1385,17 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     };
 
     incidentalWorks.forEach(w => {
-      const count = calculateMonthlyCount(w.frequency, selectedYear, selectedMonthNum);
+      let count = 0;
+      if (activePeriod === 'mensual') {
+        count = calculateMonthlyCount(w.frequency, selectedYear, selectedMonthNum);
+      } else {
+        const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
+        months.forEach(mKey => {
+          const [yr, mn] = mKey.split('-').map(Number);
+          count += calculateMonthlyCount(w.frequency, yr, mn);
+        });
+      }
+      
       const countryStr = w.nac || 'Cuba';
       const isCubanWork = countryStr.trim().toLowerCase() === 'cuba';
       
@@ -2016,6 +1473,488 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
   const currentIncidentalStats = getIncidentalRegionStats();
 
+  const getAggregatedPeriodStats = () => {
+    const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
+
+    const mensalAgg = { totalWorks: 0, cubaWorks: 0, foreignWorks: 0, totalAuthors: 0, cubaAuthors: 0, foreignAuthors: 0, totalPerformers: 0, cubaPerformers: 0, foreignPerformers: 0 };
+    const economiaAgg = { completasCubana: 0, completasExtranjera: 0, completasTotal: 0, instrumentalesCubana: 0, instrumentalesExtranjera: 0, instrumentalesTotal: 0, incidentalesCubana: 0, incidentalesExtranjera: 0, incidentalesTotal: 0 };
+    const incidentalAgg = { cubaWorksCount: 0, cubaAuthors: 0, cubaPct: 0, cubaAuthorsPct: 0, foreignWorksCount: 0, foreignAuthors: 0, foreignPct: 0, foreignAuthorsPct: 0, totalWorks: 0, totalAuthors: 0, regions: { latam: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, norte: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, europa: { works: 0, pct: 0, authors: 0, authorsPct: 0 }, otras: { works: 0, pct: 0, authors: 0, authorsPct: 0 } } };
+
+    months.forEach(mKey => {
+      // 1. Mensual
+      let mData = archiveMensual[mKey] || calculateLiveMensualForMonth(mKey);
+      if (mData) {
+        mensalAgg.totalWorks += mData.totalWorks || 0;
+        mensalAgg.cubaWorks += mData.cubaWorks || 0;
+        mensalAgg.foreignWorks += mData.foreignWorks || 0;
+        mensalAgg.totalAuthors += mData.totalAuthors || 0;
+        mensalAgg.cubaAuthors += mData.cubaAuthors || 0;
+        mensalAgg.foreignAuthors += mData.foreignAuthors || 0;
+        mensalAgg.totalPerformers += mData.totalPerformers || 0;
+        mensalAgg.cubaPerformers += mData.cubaPerformers || 0;
+        mensalAgg.foreignPerformers += mData.foreignPerformers || 0;
+      }
+
+      // 2. Economia
+      let eData = archiveEconomia[mKey];
+      if (!eData) {
+        const [yr, mn] = mKey.split('-').map(Number);
+        const weekdays = countDaysInMonth(yr, mn, [1, 2, 3, 4, 5]);
+        const mVal = mData || calculateLiveMensualForMonth(mKey);
+        const incStats = archiveIncidental[mKey] || getIncidentalStatsForMonth(yr, mn);
+        eData = {
+          completasCubana: mVal.cubaWorks,
+          completasExtranjera: mVal.foreignWorks,
+          completasTotal: mVal.totalWorks,
+          instrumentalesCubana: weekdays,
+          instrumentalesExtranjera: 0,
+          instrumentalesTotal: weekdays,
+          incidentalesCubana: incStats.totalWorks,
+          incidentalesExtranjera: 0,
+          incidentalesTotal: incStats.totalWorks
+        };
+      }
+      if (eData) {
+        economiaAgg.completasCubana += eData.completasCubana || 0;
+        economiaAgg.completasExtranjera += eData.completasExtranjera || 0;
+        economiaAgg.completasTotal += eData.completasTotal || 0;
+        economiaAgg.instrumentalesCubana += eData.instrumentalesCubana || 0;
+        economiaAgg.instrumentalesExtranjera += eData.instrumentalesExtranjera || 0;
+        economiaAgg.instrumentalesTotal += eData.instrumentalesTotal || 0;
+        economiaAgg.incidentalesCubana += eData.incidentalesCubana || 0;
+        economiaAgg.incidentalesExtranjera += eData.incidentalesExtranjera || 0;
+        economiaAgg.incidentalesTotal += eData.incidentalesTotal || 0;
+      }
+
+      // 3. Incidental
+      let iData = archiveIncidental[mKey];
+      if (!iData) {
+        const [yr, mn] = mKey.split('-').map(Number);
+        iData = getIncidentalStatsForMonth(yr, mn);
+      }
+      if (iData) {
+        incidentalAgg.cubaWorksCount += iData.cubaWorksCount || 0;
+        incidentalAgg.cubaAuthors += iData.cubaAuthors || 0;
+        incidentalAgg.foreignWorksCount += iData.foreignWorksCount || 0;
+        incidentalAgg.foreignAuthors += iData.foreignAuthors || 0;
+        incidentalAgg.totalWorks += iData.totalWorks || 0;
+        incidentalAgg.totalAuthors += iData.totalAuthors || 0;
+
+        incidentalAgg.regions.latam.works += (iData.regions?.latam?.works || 0);
+        incidentalAgg.regions.latam.authors += (iData.regions?.latam?.authors || 0);
+        incidentalAgg.regions.norte.works += (iData.regions?.norte?.works || 0);
+        incidentalAgg.regions.norte.authors += (iData.regions?.norte?.authors || 0);
+        incidentalAgg.regions.europa.works += (iData.regions?.europa?.works || 0);
+        incidentalAgg.regions.europa.authors += (iData.regions?.europa?.authors || 0);
+        incidentalAgg.regions.otras.works += (iData.regions?.otras?.works || 0);
+        incidentalAgg.regions.otras.authors += (iData.regions?.otras?.authors || 0);
+      }
+    });
+
+    if (incidentalAgg.totalWorks) {
+      incidentalAgg.cubaPct = Math.round((incidentalAgg.cubaWorksCount / incidentalAgg.totalWorks) * 100);
+      incidentalAgg.foreignPct = Math.round((incidentalAgg.foreignWorksCount / incidentalAgg.totalWorks) * 100);
+      incidentalAgg.regions.latam.pct = Math.round((incidentalAgg.regions.latam.works / incidentalAgg.totalWorks) * 100);
+      incidentalAgg.regions.norte.pct = Math.round((incidentalAgg.regions.norte.works / incidentalAgg.totalWorks) * 100);
+      incidentalAgg.regions.europa.pct = Math.round((incidentalAgg.regions.europa.works / incidentalAgg.totalWorks) * 100);
+      incidentalAgg.regions.otras.pct = Math.round((incidentalAgg.regions.otras.works / incidentalAgg.totalWorks) * 100);
+    }
+    if (incidentalAgg.totalAuthors) {
+      incidentalAgg.cubaAuthorsPct = Math.round((incidentalAgg.cubaAuthors / incidentalAgg.totalAuthors) * 100);
+      incidentalAgg.foreignAuthorsPct = Math.round((incidentalAgg.foreignAuthors / incidentalAgg.totalAuthors) * 100);
+      incidentalAgg.regions.latam.authorsPct = Math.round((incidentalAgg.regions.latam.authors / incidentalAgg.totalAuthors) * 100);
+      incidentalAgg.regions.norte.authorsPct = Math.round((incidentalAgg.regions.norte.authors / incidentalAgg.totalAuthors) * 100);
+      incidentalAgg.regions.europa.authorsPct = Math.round((incidentalAgg.regions.europa.authors / incidentalAgg.totalAuthors) * 100);
+      incidentalAgg.regions.otras.authorsPct = Math.round((incidentalAgg.regions.otras.authors / incidentalAgg.totalAuthors) * 100);
+    }
+
+    const liveInc = getIncidentalStatsForMonth(selectedYear, selectedMonthNum);
+
+    return {
+      mensual: {
+        totalWorks: mensalAgg.totalWorks || rawTotalWorksCount,
+        cubaWorks: mensalAgg.cubaWorks || rawTotalWorksCuba,
+        foreignWorks: mensalAgg.foreignWorks || rawTotalWorksForeign,
+        totalAuthors: mensalAgg.totalAuthors || rawTotalAuthorsCount,
+        cubaAuthors: mensalAgg.cubaAuthors || rawCubanAuthorsCount,
+        foreignAuthors: mensalAgg.foreignAuthors || rawForeignAuthorsCount,
+        totalPerformers: mensalAgg.totalPerformers || rawTotalPerformersCount,
+        cubaPerformers: mensalAgg.cubaPerformers || rawCubanPerformersCount,
+        foreignPerformers: mensalAgg.foreignPerformers || rawForeignPerformersCount,
+      },
+      economia: {
+        completasCubana: economiaAgg.completasCubana || rawTotalWorksCuba,
+        completasExtranjera: economiaAgg.completasExtranjera || rawTotalWorksForeign,
+        completasTotal: economiaAgg.completasTotal || rawTotalWorksCount,
+        instrumentalesCubana: economiaAgg.instrumentalesCubana || intCubanaCount(),
+        instrumentalesExtranjera: economiaAgg.instrumentalesExtranjera || 0,
+        instrumentalesTotal: economiaAgg.instrumentalesTotal || intCubanaCount(),
+        incidentalesCubana: economiaAgg.incidentalesCubana || liveInc.totalWorks,
+        incidentalesExtranjera: economiaAgg.incidentalesExtranjera || 0,
+        incidentalesTotal: economiaAgg.incidentalesTotal || liveInc.totalWorks
+      },
+      incidental: currentIncidentalStats
+    };
+  };
+
+  const intCubanaCount = () => {
+    if (activePeriod === 'mensual') {
+      return countDaysInMonth(selectedYear, selectedMonthNum, [1, 2, 3, 4, 5]);
+    }
+    const ms = getMonthsForPeriod(selectedMonthStr, activePeriod);
+    return ms.reduce((total, mKey) => {
+      const [yr, mn] = mKey.split('-').map(Number);
+      return total + countDaysInMonth(yr, mn, [1, 2, 3, 4, 5]);
+    }, 0);
+  };
+
+  const getActiveRegionStats = () => {
+    const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
+    const aggRegions = {
+      'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Norteamericana': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Europa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Asia': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Africa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+      'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
+    };
+
+    months.forEach(mKey => {
+      const report = archiveMensual[mKey];
+      if (report && report.regions) {
+        Object.keys(aggRegions).forEach(reg => {
+          let actualReg = reg; if (reg === 'Africa' && report.regions['África']) actualReg = 'África'; if (report.regions[actualReg]) { const r = report.regions[actualReg];
+            
+            aggRegions[reg as keyof typeof aggRegions].works += r.works || 0;
+            // Since report.regions has authors and performers count as numbers, we mock size
+            const autCount = typeof r.authors === 'number' ? r.authors : (r.authors?.size || 0);
+            const perfCount = typeof r.performers === 'number' ? r.performers : (r.performers?.size || 0);
+            for (let i = 0; i < autCount; i++) {
+              aggRegions[reg as keyof typeof aggRegions].authors.add(`unknown-author-${mKey}-${reg}-${i}`);
+            }
+            for (let i = 0; i < perfCount; i++) {
+              aggRegions[reg as keyof typeof aggRegions].performers.add(`unknown-performer-${mKey}-${reg}-${i}`);
+            }
+          }
+        });
+      } else {
+        const prods = (allProductions || []).filter(p => p && !p.archived && p.date && p.date.startsWith(mKey));
+        const tracks = prods.flatMap(p => p.tracks || []).filter(Boolean);
+        const foreignTracks = tracks.filter(t => !isCubaWork(t));
+
+        foreignTracks.forEach(t => {
+          const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof aggRegions;
+          if (aggRegions[region]) {
+            aggRegions[region].works++;
+            if (t.author) aggRegions[region].authors.add(t.author.toUpperCase());
+            if (t.performer) aggRegions[region].performers.add(t.performer.toUpperCase());
+          }
+        });
+      }
+    });
+
+    return aggRegions;
+  };
+
+  const activePeriodStats = getAggregatedPeriodStats();
+
+  useEffect(() => {
+    if (isOpen && activePeriod === 'mensual') {
+      const monthKey = selectedMonthStr;
+
+    }
+  }, [selectedMonthStr, stockMensual, incidentalWorks, isOpen]);
+
+  if (!isOpen) return null;
+
+  // Resolve counts based on activePeriod stats
+  const totalWorksCount = activePeriod === 'mensual' ? rawTotalWorksCount : activePeriodStats.mensual.totalWorks;
+  const totalWorksCuba = activePeriod === 'mensual' ? rawTotalWorksCuba : activePeriodStats.mensual.cubaWorks;
+  const totalWorksForeign = activePeriod === 'mensual' ? rawTotalWorksForeign : activePeriodStats.mensual.foreignWorks;
+  const totalAuthorsCount = activePeriod === 'mensual' ? rawTotalAuthorsCount : activePeriodStats.mensual.totalAuthors;
+  const totalPerformersCount = activePeriod === 'mensual' ? rawTotalPerformersCount : activePeriodStats.mensual.totalPerformers;
+  const cubanAuthorsCount = activePeriod === 'mensual' ? rawCubanAuthorsCount : activePeriodStats.mensual.cubaAuthors;
+  const foreignAuthorsCount = activePeriod === 'mensual' ? rawForeignAuthorsCount : activePeriodStats.mensual.foreignAuthors;
+  const cubanPerformersCount = activePeriod === 'mensual' ? rawCubanPerformersCount : activePeriodStats.mensual.cubaPerformers;
+  const foreignPerformersCount = activePeriod === 'mensual' ? rawForeignPerformersCount : activePeriodStats.mensual.foreignPerformers;
+
+  // Regional breakdown (for Foreigners)
+  const regionStats = {
+    'Latinoam. y del Caribe': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+    'Norteamericana': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+    'Europa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+    'Asia': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+    'Africa': { works: 0, authors: new Set<string>(), performers: new Set<string>() },
+    'Otras zonas': { works: 0, authors: new Set<string>(), performers: new Set<string>() }
+  };
+
+  if (activePeriod === 'mensual') {
+    if (archivedMensualData && archivedMensualData.regions) {
+       Object.keys(regionStats).forEach(reg => {
+         if (archivedMensualData.regions[reg]) {
+           const r = archivedMensualData.regions[reg];
+           regionStats[reg as keyof typeof regionStats] = {
+             works: r.works || 0,
+             authors: { size: r.authors || 0 } as any,
+             performers: { size: r.performers || 0 } as any
+           };
+         }
+       });
+    } else {
+       foreignWorks.forEach(t => {
+         const region = getRegionForCountry(getWorkCountry(t)) as keyof typeof regionStats;
+         if (regionStats[region]) {
+           regionStats[region].works++;
+           if (t.author) regionStats[region].authors.add(t.author);
+           if (t.performer) regionStats[region].performers.add(t.performer);
+         }
+       });
+    }
+  } else {
+    // Trimestral, Semestral, Anual sum of region data
+    const activeRegionSum = getActiveRegionStats();
+    Object.keys(regionStats).forEach(reg => {
+      const r = activeRegionSum[reg as keyof typeof activeRegionSum];
+      if (r) {
+        regionStats[reg as keyof typeof regionStats] = {
+          works: r.works,
+          authors: r.authors,
+          performers: r.performers
+        };
+      }
+    });
+  }
+
+  // Normalize region stats so their sums perfectly match foreignWorksCount, foreignAuthorsCount, foreignPerformersCount
+  let sumWorks = 0;
+  let sumAuthors = 0;
+  let sumPerformers = 0;
+  
+  const regionNames = Object.keys(regionStats) as (keyof typeof regionStats)[];
+  
+  regionNames.forEach(reg => {
+    const r = regionStats[reg];
+    r.authors = (typeof r.authors === 'number' ? r.authors : (r.authors?.size || 0)) as any;
+    r.performers = (typeof r.performers === 'number' ? r.performers : (r.performers?.size || 0)) as any;
+    
+    sumWorks += r.works || 0;
+    sumAuthors += (r.authors as unknown as number);
+    sumPerformers += (r.performers as unknown as number);
+  });
+
+  const diffWorks = totalWorksForeign - sumWorks;
+  const diffAuthors = foreignAuthorsCount - sumAuthors;
+  const diffPerformers = foreignPerformersCount - sumPerformers;
+
+  if (diffWorks !== 0 || diffAuthors !== 0 || diffPerformers !== 0) {
+    let maxWorksReg = regionNames[0];
+    let maxWorksVal = -1;
+    regionNames.forEach(reg => {
+      if (regionStats[reg].works > maxWorksVal) {
+        maxWorksVal = regionStats[reg].works;
+        maxWorksReg = reg;
+      }
+    });
+    
+    regionStats[maxWorksReg].works = Math.max(0, regionStats[maxWorksReg].works + diffWorks);
+    regionStats[maxWorksReg].authors = Math.max(0, (regionStats[maxWorksReg].authors as unknown as number) + diffAuthors) as any;
+    regionStats[maxWorksReg].performers = Math.max(0, (regionStats[maxWorksReg].performers as unknown as number) + diffPerformers) as any;
+  }
+
+  // Unified top lists calculation
+  const getPeriodTrackListsAndGenres = () => {
+    const buildRankings = (tracks: ProductionTrack[]) => {
+      // Nivel 1: Obras individuales
+      const obrasUnicas: Record<string, { track: ProductionTrack, frec: number }> = {};
+      tracks.forEach(t => {
+        const key = `${(t.title || 'Desconocido').trim().toUpperCase()} - ${(t.performer || 'Desconocido').trim().toUpperCase()}`;
+        if (!obrasUnicas[key]) {
+          obrasUnicas[key] = { track: t, frec: 0 };
+        }
+        obrasUnicas[key].frec++;
+      });
+
+      // Nivel 2: Agrupación
+      const authorsMap: Record<string, { name: string; nac: string; cant: number; frec: number }> = {};
+      const perfsMap: Record<string, { name: string; nac: string; cant: number; frec: number }> = {};
+      const genresMap: Record<string, { name: string; cant: number; frec: number }> = {};
+      const songsList: { track: ProductionTrack; count: number }[] = [];
+
+      Object.values(obrasUnicas).forEach(({ track, frec }) => {
+        songsList.push({ track, count: frec });
+
+        // Authors
+        if (track.author) {
+          const authKey = track.author.trim().toUpperCase();
+          const nac = isCuban(track.authorCountry) || (!track.authorCountry && !track.performerCountry) ? 'CUBA' : (track.authorCountry?.toUpperCase() || 'EXTRANJERO');
+          if (!authorsMap[authKey]) {
+            authorsMap[authKey] = { name: track.author, nac, cant: 0, frec: 0 };
+          }
+          authorsMap[authKey].cant += 1;
+          authorsMap[authKey].frec += frec;
+        }
+
+        // Performers
+        if (track.performer) {
+          const perfKey = track.performer.trim().toUpperCase();
+          const nac = isCuban(track.performerCountry) || (!track.performerCountry && !track.authorCountry) ? 'CUBA' : (track.performerCountry?.toUpperCase() || 'EXTRANJERO');
+          if (!perfsMap[perfKey]) {
+            perfsMap[perfKey] = { name: track.performer, nac, cant: 0, frec: 0 };
+          }
+          perfsMap[perfKey].cant += 1;
+          perfsMap[perfKey].frec += frec;
+        }
+
+        // Genres
+        const genreName = (track.genre || 'SIN GENERO').trim().toUpperCase();
+        if (!genresMap[genreName]) {
+          genresMap[genreName] = { name: genreName, cant: 0, frec: 0 };
+        }
+        genresMap[genreName].cant += 1;
+        genresMap[genreName].frec += frec;
+      });
+
+      const toTopArray = (map: Record<string, any>) => Object.values(map)
+        .map((x: any) => ({ ...x, execs: x.cant, frec: x.frec }))
+        .sort((a, b) => b.frec - a.frec)
+        .slice(0, 5);
+
+      return {
+        topSongs: songsList.sort((a, b) => b.count - a.count).slice(0, 5),
+        topAuthors: toTopArray(authorsMap),
+        topPerformers: toTopArray(perfsMap),
+        topGenres: toTopArray(genresMap)
+      };
+    };
+
+    if (activePeriod === 'mensual') {
+      const archived = archiveMensual[selectedMonthStr];
+      if (archived) {
+        return {
+          topSongs: archived.topSongs || [],
+          topAuthors: archived.topAuthors || [],
+          topPerformers: archived.topPerformers || [],
+          topGenres: archived.topGenres || [],
+          totalCount: archived.totalWorks || 0
+        };
+      }
+      
+      const rankings = buildRankings(allTracks);
+      return {
+        ...rankings,
+        totalCount: allTracks.length
+      };
+    } else {
+      // Trimestral, Semestral, Anual
+      const months = getMonthsForPeriod(selectedMonthStr, activePeriod);
+      
+      const authorsMap: Record<string, { name: string; nac: string; cant: number; frec: number }> = {};
+      const perfsMap: Record<string, { name: string; nac: string; cant: number; frec: number }> = {};
+      const genresMap: Record<string, { name: string; cant: number; frec: number }> = {};
+      const songsMap: Record<string, { track: any; count: number }> = {};
+      let totalWorksAccum = 0;
+
+      months.forEach(mKey => {
+        let report = archiveMensual[mKey];
+        if (!report) {
+           report = calculateLiveMensualForMonth(mKey);
+        }
+        if (report) {
+          totalWorksAccum += report.totalWorks || 0;
+          
+          if (report.topAuthors) {
+            report.topAuthors.forEach((a: any) => {
+               const key = (a.name || '').toUpperCase();
+               if (!key) return;
+               if (!authorsMap[key]) authorsMap[key] = { name: a.name, nac: a.nac, cant: 0, frec: 0 };
+               authorsMap[key].cant += (typeof a.execs === 'number' ? a.execs : parseInt(a.execs || '0'));
+               authorsMap[key].frec += (typeof a.frec === 'number' ? a.frec : parseInt(a.frec || '0'));
+            });
+          }
+          if (report.topPerformers) {
+            report.topPerformers.forEach((a: any) => {
+               const key = (a.name || '').toUpperCase();
+               if (!key) return;
+               if (!perfsMap[key]) perfsMap[key] = { name: a.name, nac: a.nac, cant: 0, frec: 0 };
+               perfsMap[key].cant += (typeof a.execs === 'number' ? a.execs : parseInt(a.execs || '0'));
+               perfsMap[key].frec += (typeof a.frec === 'number' ? a.frec : parseInt(a.frec || '0'));
+            });
+          }
+          if (report.topGenres) {
+            report.topGenres.forEach((a: any) => {
+               const key = (a.name || '').toUpperCase();
+               if (!key) return;
+               if (!genresMap[key]) genresMap[key] = { name: a.name, cant: 0, frec: 0 };
+               genresMap[key].cant += (typeof a.execs === 'number' ? a.execs : parseInt(a.execs || '0'));
+               genresMap[key].frec += (typeof a.frec === 'number' ? a.frec : (a.frec ? parseInt(a.frec || '0') : (typeof a.execs === 'number' ? a.execs : parseInt(a.execs || '0'))));
+            });
+          }
+          if (report.topSongs) {
+            report.topSongs.forEach((s: any) => {
+               const track = s.track || {};
+               const key = `${(track.title || '').toUpperCase()}-${(track.performer || '').toUpperCase()}`;
+               if (!songsMap[key]) songsMap[key] = { track, count: 0 };
+               songsMap[key].count += (typeof s.count === 'number' ? s.count : parseInt(s.count || '0'));
+            });
+          }
+        }
+      });
+
+      const toTopArray = (map: Record<string, any>) => Object.values(map)
+        .map((x: any) => ({ ...x, execs: x.cant, frec: x.frec }))
+        .sort((a, b) => b.frec - a.frec)
+        .slice(0, 5);
+
+      return {
+        topSongs: Object.values(songsMap).sort((a, b) => b.count - a.count).slice(0, 5),
+        topAuthors: toTopArray(authorsMap),
+        topPerformers: toTopArray(perfsMap),
+        topGenres: toTopArray(genresMap),
+        totalCount: totalWorksAccum
+      };
+    }
+  };
+
+  const {
+    topSongs: resolvedTopSongs,
+    topAuthors: resolvedTopAuthors,
+    topPerformers: resolvedTopPerformers,
+    topGenres: resolvedTopGenres,
+    totalCount: resolvedTotalAnalyzeCount
+  } = getPeriodTrackListsAndGenres();
+
+  const topSongs = resolvedTopSongs;
+  const topAuthors = resolvedTopAuthors;
+  const topPerformers = resolvedTopPerformers;
+  const topGenres = resolvedTopGenres;
+
+  // Formatting percentages safely (only numbers, without % symbol)
+  const pct = (num: number, denom: number) => {
+    if (!denom) return '0';
+    return `${Math.round((num / denom) * 100)}`;
+  };
+
+  // ECONOMY REPORT DATA
+  const economyData = stockMensual.map(p => {
+    const songsCount = p.tracks?.length || 0;
+    const workPayments = songsCount * costoPorObra;
+    const programTotal = montoFijoBase + workPayments;
+    return {
+      program: p.program || 'Desconocido',
+      date: p.date,
+      songs: songsCount,
+      rightsCost: workPayments,
+      totalPayment: programTotal
+    };
+  });
+
+  const totalEconomySongs = economyData.reduce((acc, curr) => acc + curr.songs, 0);
+  const totalRightsPayments = economyData.reduce((acc, curr) => acc + curr.rightsCost, 0);
+  const totalBasePayments = economyData.length * montoFijoBase;
+  const grandTotalEconomyValue = totalRightsPayments + totalBasePayments;
+
+  // INCIDENTAL MUSIC REPORT DATA
+
   // Calculates backdrop tracks, sound transitions, effects, and curtains
   const incidentalData = stockMensual.map(p => {
     // Categorize tracks as incidental or main based on their genre
@@ -2085,7 +2024,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
             'Norteamericana': { works: 0, authors: 0, performers: 0 },
             'Europa': { works: 0, authors: 0, performers: 0 },
             'Asia': { works: 0, authors: 0, performers: 0 },
-            'África': { works: 0, authors: 0, performers: 0 },
+            'Africa': { works: 0, authors: 0, performers: 0 },
             'Otras zonas': { works: 0, authors: 0, performers: 0 }
         } as Record<string, any>,
         topSongs: [] as any[], topAuthors: [] as any[],
@@ -2109,7 +2048,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
             'Norteamericana': 'Norteamericana',
             'Europa': 'Europa',
             'Asia': 'Asia',
-            'África': 'África',
+            'África': 'Africa',
             'Otras zonas': 'Otras zonas'
         };
 
@@ -2185,14 +2124,25 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     return dataSnap;
   };
 
-  const extractMonthYearFromText = (text: string) => {
+  const extractMonthYearFromText = (text: string, filename?: string) => {
     const lines = text.split('\n');
     let year = '';
     let month = '';
     
-    const headerLine = lines.find(l => l.includes('AÑO:') && l.includes('MES:'));
+    // First try to find them on the same line (legacy format)
+    let headerLine = lines.find(l => l.includes('AÑO:') && l.includes('MES:'));
+    
+    // If not found, try to find them on separate lines
+    if (!headerLine) {
+        const yearLine = lines.find(l => l.includes('AÑO:'));
+        const monthLine = lines.find(l => l.includes('MES:'));
+        if (yearLine && monthLine) {
+            headerLine = yearLine + ' ' + monthLine;
+        }
+    }
+
     if (headerLine) {
-        const yearMatch = headerLine.match(/AÑO:\s*(\d+)/);
+        const yearMatch = headerLine.match(/AÑO:\s*(\d+)/i);
         const monthMatch = headerLine.match(/MES:\s*([A-ZÁÉÍÓÚ]+)/i);
         
         if (yearMatch) year = yearMatch[1];
@@ -2208,6 +2158,15 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     }
     
     if (year && month) return `${year}-${month}`;
+
+    if (filename) {
+        const dMonth = detectMonthFromHtml(text, filename);
+        const dYear = detectYearFromHtml(text, filename);
+        if (dMonth && dYear) {
+            return `${dYear}-${String(dMonth).padStart(2, '0')}`;
+        }
+    }
+
     return null;
   };
 
@@ -2215,8 +2174,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
     const monthKey = selectedMonthStr;
     if (activeReportType === 'mensual') {
       const currentLiveM = {
-        totalWorks: totalWorksQuantity,
-        totalWorksPlays: totalWorksFrequency,
+        totalWorks: totalWorksCount,
         cubaWorks: totalWorksCuba,
         foreignWorks: totalWorksForeign,
         totalAuthors: totalAuthorsCount,
@@ -2238,8 +2196,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
         currentLiveM.regions[reg] = {
           works: s.works,
           authors: s.authors.size,
-          performers: s.performers.size,
-          plays: (s as any).plays || 0
+          performers: s.performers.size
         };
       });
 
@@ -2249,7 +2206,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
       const currentLiveE = {
         completasCubana: totalWorksCuba,
         completasExtranjera: totalWorksForeign,
-        completasTotal: totalWorksQuantity,
+        completasTotal: totalWorksCount,
         instrumentalesCubana: countDaysInMonth(selectedYear, selectedMonthNum, [1, 2, 3, 4, 5]),
         instrumentalesExtranjera: 0,
         instrumentalesTotal: countDaysInMonth(selectedYear, selectedMonthNum, [1, 2, 3, 4, 5]),
@@ -2268,7 +2225,6 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
   const handleGenerateDOCX_Music = async () => {
     const stats = activePeriodStats.mensual;
-    const regionStatsAgg = getActiveRegionStats();
     try {
       const { topSongs, topAuthors, topPerformers, topGenres } = getActiveTopLists();
 
@@ -2276,21 +2232,19 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
       // Regional breakdown rows helper
       const makeRegionRow = (regionName: string) => {
-        const regObj = regionStatsAgg[regionName as keyof typeof regionStatsAgg] || { works: 0, authors: new Set(), performers: new Set(), plays: 0 };
-        const wCount = typeof regObj.works === 'number' ? regObj.works : (regObj.works as any)?.size || 0;
-        const aCount = typeof regObj.authors === 'number' ? regObj.authors : (regObj.authors as any)?.size || 0;
-        const pCount = typeof regObj.performers === 'number' ? regObj.performers : (regObj.performers as any)?.size || 0;
-        
+        const regObj = regionStats[regionName as keyof typeof regionStats] || { works: 0, authors: 0, performers: 0 };
+        const authorCount = typeof regObj.authors === 'number' ? regObj.authors : (regObj.authors as any)?.size || 0;
+        const performerCount = typeof regObj.performers === 'number' ? regObj.performers : (regObj.performers as any)?.size || 0;
         return new TableRow({
           children: [
             docxCell(""),
             docxCell(regionName, false),
-            docxCell(wCount.toString(), false, AlignmentType.CENTER),
-            docxCell(pct(wCount, stats.totalWorks), false, AlignmentType.CENTER),
-            docxCell(aCount.toString(), false, AlignmentType.CENTER),
-            docxCell(pct(aCount, stats.totalAuthors), false, AlignmentType.CENTER),
-            docxCell(pCount.toString(), false, AlignmentType.CENTER),
-            docxCell(pct(pCount, stats.totalPerformers), false, AlignmentType.CENTER),
+            docxCell((regObj.works || 0).toString(), false, AlignmentType.CENTER),
+            docxCell(pct(regObj.works || 0, stats.totalWorks), false, AlignmentType.CENTER),
+            docxCell(authorCount.toString(), false, AlignmentType.CENTER),
+            docxCell(pct(authorCount, stats.totalAuthors), false, AlignmentType.CENTER),
+            docxCell(performerCount.toString(), false, AlignmentType.CENTER),
+            docxCell(pct(performerCount, stats.totalPerformers), false, AlignmentType.CENTER),
           ]
         });
       };
@@ -2474,8 +2428,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
                       docxCell((item.name || '').toUpperCase(), true),
                       docxCell(item.nac || '-', false, AlignmentType.CENTER),
-                      docxCell((item.songs?.size || 0).toString(), false, AlignmentType.CENTER),
-                      docxCell((item.execs || 0).toString(), true, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.frec || 0).toString(), true, AlignmentType.CENTER),
                     ]
                   });
                 })
@@ -2509,8 +2463,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
                       docxCell((item.name || '').toUpperCase(), true),
                       docxCell(item.nac || '-', false, AlignmentType.CENTER),
-                      docxCell((item.songs?.size || 0).toString(), false, AlignmentType.CENTER),
-                      docxCell((item.execs || 0).toString(), true, AlignmentType.CENTER),
+                      docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
+                      docxCell((item.frec || 0).toString(), true, AlignmentType.CENTER),
                     ]
                   });
                 })
@@ -2543,7 +2497,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                     children: [
                       docxCell((idx + 1).toString(), false, AlignmentType.CENTER),
                       docxCell(item.name || '', true),
-                      docxCell("0", false, AlignmentType.CENTER),
+                      docxCell("-", false, AlignmentType.CENTER),
                       docxCell((item.execs || 0).toString(), false, AlignmentType.CENTER),
                       docxCell((item.frec || 0).toString(), true, AlignmentType.CENTER),
                     ]
@@ -3147,7 +3101,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         <td className="p-1.5 border-r border-black/30 font-bold">1</td>
                         <td className="p-1.5 border-r border-black/30 text-left font-bold">Cuba</td>
                         <td className="p-1.5 border-r border-black/30">{totalWorksCuba}</td>
-                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksCuba, totalWorksQuantity)}</td>
+                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksCuba, totalWorksCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{cubanAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">{pct(cubanAuthorsCount, totalAuthorsCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{cubanPerformersCount}</td>
@@ -3157,7 +3111,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                         <td className="p-1.5 border-r border-black/30 font-bold">2</td>
                         <td className="p-1.5 border-r border-black/30 text-left font-bold">Extranjera</td>
                         <td className="p-1.5 border-r border-black/30">{totalWorksForeign}</td>
-                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksForeign, totalWorksQuantity)}</td>
+                        <td className="p-1.5 border-r border-black/30">{pct(totalWorksForeign, totalWorksCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{foreignAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">{pct(foreignAuthorsCount, totalAuthorsCount)}</td>
                         <td className="p-1.5 border-r border-black/30">{foreignPerformersCount}</td>
@@ -3166,7 +3120,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       <tr className="border-b border-black/30 font-bold bg-black/5">
                         <td className="p-1.5 border-r border-black/30"></td>
                         <td className="p-1.5 border-r border-black/30 text-left">Total general</td>
-                        <td className="p-1.5 border-r border-black/30">{totalWorksQuantity}</td>
+                        <td className="p-1.5 border-r border-black/30">{totalWorksCount}</td>
                         <td className="p-1.5 border-r border-black/30">100</td>
                         <td className="p-1.5 border-r border-black/30">{totalAuthorsCount}</td>
                         <td className="p-1.5 border-r border-black/30">100</td>
@@ -3175,20 +3129,19 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                       </tr>
                       {/* Foreign subcategories */}
                       {Object.keys(regionStats).map((regName) => {
-                        const s = (regionStats as any)[regName];
-                        const worksCount = typeof s.works === 'number' ? s.works : (s.works?.size || 0);
+                        const s = regionStats[regName as keyof typeof regionStats];
                         const authorCount = (typeof s.authors === 'number') ? s.authors : (s.authors?.size || 0);
                         const performerCount = (typeof s.performers === 'number') ? s.performers : (s.performers?.size || 0);
                         return (
                           <tr key={regName} className="border-b border-black/20 text-black/70">
                             <td className="p-1 border-r border-black/20"></td>
                             <td className="p-1 border-r border-black/20 text-left italic pl-4">{regName}</td>
-                            <td className="p-1 border-r border-black/20">{worksCount}</td>
-                            <td className="p-1 border-r border-black/20">{pct(worksCount, totalWorksForeign)}</td>
+                            <td className="p-1 border-r border-black/20">{s.works}</td>
+                            <td className="p-1 border-r border-black/20">{pct(s.works, totalWorksCount)}</td>
                             <td className="p-1 border-r border-black/20">{authorCount}</td>
-                            <td className="p-1 border-r border-black/20">{pct(authorCount, foreignAuthorsCount)}</td>
+                            <td className="p-1 border-r border-black/20">{pct(authorCount, totalAuthorsCount)}</td>
                             <td className="p-1 border-r border-black/20">{performerCount}</td>
-                            <td className="p-1">{pct(performerCount, foreignPerformersCount)}</td>
+                            <td className="p-1">{pct(performerCount, totalPerformersCount)}</td>
                           </tr>
                         );
                       })}
@@ -3258,8 +3211,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 text-center">{idx + 1}</td>
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name.toUpperCase()}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.nac}</td>
-                            <td className="p-1 border-r border-[gray]/20 text-center">{item.songs?.size || 0}</td>
-                            <td className="p-1 font-bold text-center">{item.execs}</td>
+                            <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
+                            <td className="p-1 font-bold text-center">{item.frec}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3287,8 +3240,8 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                             <td className="p-1 border-r border-[gray]/20 text-center">{idx + 1}</td>
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name.toUpperCase()}</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.nac}</td>
-                            <td className="p-1 border-r border-[gray]/20 text-center">{item.songs?.size || 0}</td>
-                            <td className="p-1 font-bold text-center">{item.execs}</td>
+                            <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
+                            <td className="p-1 font-bold text-center">{item.frec}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -3315,7 +3268,7 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
                           <tr key={idx} className="border-b border-[gray]/20 text-left">
                             <td className="p-1 border-r border-[gray]/20 text-center">{idx + 1}</td>
                             <td className="p-1 border-r border-[gray]/20 pl-2 font-semibold">{item.name}</td>
-                            <td className="p-1 border-r border-[gray]/20 text-center">0</td>
+                            <td className="p-1 border-r border-[gray]/20 text-center">-</td>
                             <td className="p-1 border-r border-[gray]/20 text-center">{item.execs}</td>
                             <td className="p-1 font-bold text-center">{item.frec}</td>
                           </tr>

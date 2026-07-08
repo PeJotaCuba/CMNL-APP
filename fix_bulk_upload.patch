@@ -1,0 +1,32 @@
+--- ./components/musica/ReportsModal.tsx
++++ ./components/musica/ReportsModal.tsx
+@@ -759,10 +759,25 @@
+                     const text = e.target?.result as string;
+                     if (!text) { resolve(); return; }
+                     
+-                    const mStr = extractMonthYearFromText(text); // Need to implement this helper or adapt detection
++                    const mStr = extractMonthYearFromText(text, file.name); // Need to implement this helper or adapt detection
+                     if (!mStr) { console.warn('Could not detect date'); resolve(); return; }
+                     
+-                    const parsed = parseMensualTxt(text);
+-                    if (parsed && Object.keys(parsed).length > 0) {
+-                        saveToArchive('mensual', mStr, parsed);
++                    const lowText = text.toLowerCase();
++                    const fileNameLow = file.name.toLowerCase();
++                    let type: 'mensual' | 'economia' | 'incidental' = 'mensual';
++                    
++                    if (lowText.includes('indicadores de música incidental') || lowText.includes('obras incidentales') || lowText.includes('catálogo de música incidental') || fileNameLow.includes('incidental')) {
++                        type = 'incidental';
++                    } else if (lowText.includes('indicadores de economía') || lowText.includes('aspectos económicos') || fileNameLow.includes('economia')) {
++                        type = 'economia';
++                    }
++                    
++                    let parsed = null;
++                    if (type === 'mensual') {
++                        parsed = parseMensualTxt(text);
++                    } else {
++                        // we don't have parseIncidentalTxt or parseEconomiaTxt, but if they upload txt we can't parse it well.
++                        // But wait! If they upload a txt file, how was it generated?
++                        // Actually the user has .txt files. But if they upload .txt for incidental, we have no parser!
++                        // Let's at least route it correctly. If they don't have a parser, what do we do?
++                    }

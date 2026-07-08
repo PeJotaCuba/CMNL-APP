@@ -396,17 +396,16 @@ export default function GuionFormatTool({
                  const arrayBuffer = await file.arrayBuffer();
                  const result = await mammoth.convertToHtml({ arrayBuffer });
                  let html = result.value;
-                 html = html.replace(/<p[^>]*>/gi, '').replace(/<\/p>/gi, '\n');
-                 html = html.replace(/<div[^>]*>/gi, '').replace(/<\/div>/gi, '\n');
-                 html = html.replace(/<tr[^>]*>/gi, '').replace(/<\/tr>/gi, '\n');
-                 html = html.replace(/<br\s*[\/]?>/gi, '\n');
+                 html = html.replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '\n');
+                 html = html.replace(/<div[^>]*>/gi, '\n').replace(/<\/div>/gi, '\n');
+                 html = html.replace(/<tr[^>]*>/gi, '\n').replace(/<\/tr>/gi, '\n');
+                 html = html.replace(/<br[^>]*>/gi, '\n');
                  extractedText = html
                      .replace(/&nbsp;/g, ' ')
                      .replace(/&amp;/g, '&')
                      .replace(/&lt;/g, '<')
                      .replace(/&gt;/g, '>')
                      .replace(/<(?!(\/)?(b|strong|i|em|u|span)\b)[^>]+>/gi, '') 
-                     .replace(/ +/g, ' ')
                      .trim();
             }
 

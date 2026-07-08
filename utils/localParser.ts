@@ -445,25 +445,27 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
         'EMISORA',
         'PROGRAMA',
         'EMISIÓN',
-        'FECHA',
-        'TEMA',
-        'ESCRIBE',
-        'ASESORA',
-        'DIRIGE',
-        'REALIZACIÓN DE SONIDO',
-        'LOCUCIÓN'
+        'ESCRITOR',
+        'ASESOR',
+        'DIRECTOR',
+        'REALIZADOR DE SONIDO',
+        'LOCUTOR',
+        'FECHA DE GRABACIÓN',
+        'FECHA DE TRANSMISIÓN',
+        'TEMA'
     ];
 
     // Helper to find and normalize labels
     const getGroup = (label: string) => {
         let cleanLabel = label.toUpperCase().trim();
-        if (/^(LOCUTOR|LOCUTORA|LOCUTORES|LOCUTORAS|LOC|LOCUCI[OÓ]N|ANIMADOR|ANIMADORA|PERIODISTA|NARRACI[OÓ]N|NARRADOR|NARRADORA)$/.test(cleanLabel)) return 'LOCUCIÓN';
-        if (/^(ESCRITOR|ESCRITORA|ESCRIBE|GUI[OÓ]N|GUION|REDACCI[OÓ]N)$/.test(cleanLabel)) return 'ESCRIBE';
-        if (/^(ASESOR|ASESORA)$/.test(cleanLabel)) return 'ASESORA';
-        if (/^(DIRECTOR|DIRECTORA|DIRIGE|DIRECCI[OÓ]N|DIRECCI[OÓ]N GENERAL|COORDINACI[OÓ]N)$/.test(cleanLabel)) return 'DIRIGE';
-        if (/^(REALIZADOR|REALIZADORA|REALIZACI[OÓ]N|GRABACI[OÓ]N)/.test(cleanLabel) || cleanLabel.includes('SONIDO')) return 'REALIZACIÓN DE SONIDO';
+        if (/^(LOCUTOR|LOCUTORA|LOCUTORES|LOCUTORAS|LOC|LOCUCI[OÓ]N|ANIMADOR|ANIMADORA|PERIODISTA|NARRACI[OÓ]N|NARRADOR|NARRADORA)$/.test(cleanLabel)) return 'LOCUTOR';
+        if (/^(ESCRITOR|ESCRITORA|ESCRIBE|GUI[OÓ]N|GUION|REDACCI[OÓ]N)$/.test(cleanLabel)) return 'ESCRITOR';
+        if (/^(ASESOR|ASESORA)$/.test(cleanLabel)) return 'ASESOR';
+        if (/^(DIRECTOR|DIRECTORA|DIRIGE|DIRECCI[OÓ]N|DIRECCI[OÓ]N GENERAL|COORDINACI[OÓ]N)$/.test(cleanLabel)) return 'DIRECTOR';
+        if (/^(REALIZADOR|REALIZADORA|REALIZACI[OÓ]N|GRABACI[OÓ]N)/.test(cleanLabel) || cleanLabel.includes('SONIDO')) return 'REALIZADOR DE SONIDO';
         if (/^(PRODUCCI[OÓ]N|ELENCO|REPARTO)$/.test(cleanLabel)) return 'TEMA'; // Group with Theme/General for context if not standard
-        if (/^(FECHA DE TRANSMISI[OÓ]N|FECHA DE GRABACI[OÓ]N|FECHA)$/.test(cleanLabel)) return 'FECHA';
+        if (/^(FECHA DE TRANSMISI[OÓ]N|FECHA)$/.test(cleanLabel)) return 'FECHA DE TRANSMISIÓN';
+        if (/^(FECHA DE GRABACI[OÓ]N)$/.test(cleanLabel)) return 'FECHA DE GRABACIÓN';
         if (/^PROGRAMA$/.test(cleanLabel)) return 'PROGRAMA';
         if (/^EMISI[OÓ]N$/.test(cleanLabel)) return 'EMISIÓN';
         if (/^EMISORA$/.test(cleanLabel)) return 'EMISORA';
@@ -487,20 +489,22 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
             }
         }
         
+        let finalLabel = templateOrder.includes(group) ? group : cleanLabel;
+
         // Preserve all original entries extracted
-        normalizedCredits.push({ label: cleanLabel, value: cleanValue, group });
+        normalizedCredits.push({ label: finalLabel, value: cleanValue, group });
         seenLabels.add(group);
     });
 
     // Ensure all core labels exist exactly as templateOrder
     templateOrder.forEach(label => {
         if (!seenLabels.has(label)) {
-            if (label === 'LOCUCIÓN') return;
+            // Condicional: si es FECHA DE GRABACIÓN o EMISIÓN y no estaban en el original, se omiten.
+            if (label === 'FECHA DE GRABACIÓN' || label === 'EMISIÓN') return;
+
             let defaultVal = '_________________________';
             if (label === 'EMISORA') defaultVal = 'CMNL RADIO CIUDAD MONUMENTO';
-            let finalLabel = label;
-            if (label === 'FECHA') finalLabel = 'FECHA DE TRANSMISIÓN';
-            normalizedCredits.push({ label: finalLabel, value: defaultVal, group: label });
+            normalizedCredits.push({ label: label, value: defaultVal, group: label });
             seenLabels.add(label);
         }
     });
