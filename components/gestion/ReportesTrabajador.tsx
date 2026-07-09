@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search, PenTool, Share2, Mail, Lock } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search, PenTool, Share2, Mail, Lock, ClipboardList } from 'lucide-react';
 import { User, FP02Report, ProgramFicha, ConsolidatedPayment, ProgramCatalog, WorkLog } from '../../types';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
@@ -49,6 +49,8 @@ export const ReportesTrabajador: React.FC<Props> = ({
   const [signingReport, setSigningReport] = useState<FP02Report | null>(null);
   const [signPass, setSignPass] = useState('');
   const [showSignDialog, setShowSignDialog] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [detailMode, setDetailMode] = useState<'autogestion' | 'oficial'>('autogestion');
   const ADMIN_EMAIL = 'emisora@cmnl.cu';
 
   // State for additional payments
@@ -815,11 +817,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
     
     setConsolidatedPayments(prev => [...prev.filter(c => !(c.userId === currentUser.username && c.month === viewedMonthPrefix && c.calculationMode === 'autogestionado')), newConsolidated]);
     
-    // Requirement 4: Notify admin via WhatsApp
-    const msg = `Hola Administrador, he finalizado mi reporte de autogestión semanal/mensual correspondiente a ${viewedMonthPrefix}.\n\nNombre: ${currentUser.name}\nTotal Bruto: $${autogestionMetrics.bruto.toFixed(2)}\nPago Neto: $${autogestionMetrics.neto.toFixed(2)}\nCant. Inserciones: ${autogestionMetrics.count}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-    
-    alert("Cierre de autogestión procesado. Se ha abierto WhatsApp para notificar al administrador.");
+    alert("Cierre de autogestión procesado y guardado en la sección de Pagos.");
     setActiveTab('pagos');
   };
 
@@ -857,6 +855,143 @@ export const ReportesTrabajador: React.FC<Props> = ({
           count
       }
   }, [reports, workLogDate, currentUser, userPaymentConfig, getProgramRate, calculateTax, isMatch]);
+
+  const getAutogestionLogs = () => {
+      if (!currentUser) return [];
+      const currentMonthPrefix = filterMonth;
+      const parts = currentMonthPrefix.split('-');
+      const yyyy = parseInt(parts[0]);
+      const mm = parseInt(parts[1]);
+      const daysInMonth = new Date(yyyy, mm, 0).getDate();
+      const today = new Date();
+      const [yearNow, monthNow] = [today.getFullYear(), today.getMonth() + 1];
+  
+      let endDay = daysInMonth;
+      if (yyyy === yearNow && mm === monthNow) {
+          endDay = Math.max(0, today.getDate() - 1);
+      }
+  
+      const member = equipoData.find(m => m.username === currentUser.username || m.name === currentUser.name);
+      const habitualPrograms = member?.habitualProgramsByRole || {};
+      const allPossiblePrograms = programsListRaw;
+      
+      const logs: {date: string, program: string}[] = [];
+  
+      if (userPaymentConfig) {
+          for (let day = 1; day <= endDay; day++) {
+               const dateStr = `${yyyy}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+               
+               userPaymentConfig.roles.forEach(role => {
+                   allPossiblePrograms.forEach(prog => {
+                       const isManual = workLogs.some(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr && l.type !== 'manual_delete');
+                       const isDeleted = workLogs.some(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr && l.type === 'manual_delete');
+                       
+                       let progsForRole: string[] = [];
+                       for (const [rName, plist] of Object.entries(habitualPrograms)) {
+                          if (normalize(rName).includes(normalize(role.role)) || normalize(role.role).includes(normalize(rName))) {
+                              progsForRole = plist as string[]; break;
+                          }
+                       }
+  
+                       const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
+                       const isHabitual = isHabitualAssigned && isProgramOnDay(prog, dateStr);
+                       const isWorked = isManual || (isHabitual && !isDeleted);
+  
+                       if (isWorked) {
+                           logs.push({ date: dateStr, program: prog });
+                       }
+                   });
+               });
+          }
+      }
+      return logs;
+  };
+
+  const getDetailData = () => {
+      if (!currentUser) return [];
+      
+      let baseLogs: {date: string, program: string}[] = [];
+      if (detailMode === 'oficial') {
+          baseLogs = reports
+            .filter(r => r.mes === filterMonth && r.especialidades.some(esp => isMatch(esp.nombre, currentUser.name)))
+            .map(r => ({ date: r.fecha, program: r.programa }));
+      } else {
+          baseLogs = getAutogestionLogs();
+      }
+  
+      const grouped: Record<string, { program: string, dates: string[], count: number }> = {};
+      baseLogs.forEach(log => {
+          if (!grouped[log.program]) {
+              grouped[log.program] = { program: log.program, dates: [], count: 0 };
+          }
+          if (!grouped[log.program].dates.includes(log.date)) {
+              grouped[log.program].dates.push(log.date);
+              grouped[log.program].count++;
+          }
+      });
+      return Object.values(grouped).sort((a, b) => b.count - a.count);
+  };
+  
+  const handleSendWhatsAppDetail = () => {
+      if (!currentUser) return;
+      const details = getDetailData();
+      let msg = `*Informe de Programas Realizados (${detailMode === 'oficial' ? 'Oficial' : 'Autogestión'})*\n*Usuario:* ${currentUser.name}\n*Mes:* ${filterMonth}\n\n`;
+      let total = 0;
+      details.forEach(d => {
+          msg += `🎙️ *${d.program}* (${d.count})\nFechas: ${d.dates.sort().map(dt => dt.substring(8)).join(', ')}\n\n`;
+          total += d.count;
+      });
+      msg += `*Total de Programas:* ${total}`;
+      
+      const phone = currentUser.telefono ? currentUser.telefono.replace(/\D/g,'') : '';
+      const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+      window.open(whatsappUrl, '_blank');
+  };
+  
+  const handleDownloadPDFDetail = () => {
+      if (!currentUser) return;
+      const doc = new jsPDF();
+      const details = getDetailData();
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(`Informe de Programas Realizados (${detailMode === 'oficial' ? 'Oficial' : 'Autogestión'})`, 14, 20);
+      
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Usuario: ${currentUser.name}`, 14, 30);
+      doc.text(`Mes: ${filterMonth}`, 14, 38);
+      
+      let total = 0;
+      const tableData = details.map(d => {
+          total += d.count;
+          return [
+              d.program,
+              d.count.toString(),
+              d.dates.sort().map(dt => dt.substring(8)).join(', ')
+          ];
+      });
+  
+      autoTable(doc, {
+          startY: 45,
+          head: [['Programa', 'Cantidad', 'Fechas']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: { fillColor: [158, 118, 73] },
+          styles: { fontSize: 10, cellPadding: 3 },
+          columnStyles: {
+              0: { cellWidth: 50 },
+              1: { cellWidth: 20, halign: 'center' },
+              2: { cellWidth: 'auto' }
+          }
+      });
+      
+      const finalY = (doc as any).lastAutoTable.finalY || 45;
+      doc.setFont("helvetica", "bold");
+      doc.text(`Total de programas en el mes: ${total}`, 14, finalY + 10);
+  
+      doc.save(`Detalle_Programas_${currentUser.name}_${filterMonth}.pdf`);
+  };
 
   const generateComparativa = () => {
       // Find differences in the current filterMonth between user insertions and official reports
@@ -1416,6 +1551,11 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                 </tbody>
                               </table>
                           </div>
+                          <div className="p-4 border-t border-[#9E7649]/20 bg-black/20 flex justify-end">
+                              <button onClick={() => { setDetailMode('autogestion'); setShowDetailModal(true); }} className="flex items-center gap-2 px-4 py-2 border border-green-500/40 text-green-400 font-bold rounded-lg hover:bg-green-500/10 transition-all text-sm">
+                                  <ClipboardList size={16} /> Detalle de Programas
+                              </button>
+                          </div>
                       </div>
 
                       {/* Oficiales */}
@@ -1446,20 +1586,93 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                 </tbody>
                               </table>
                           </div>
+                          <div className="p-4 border-t border-blue-900/30 bg-blue-900/5 flex justify-end">
+                              <button onClick={() => { setDetailMode('oficial'); setShowDetailModal(true); }} className="flex items-center gap-2 px-4 py-2 border border-blue-500/40 text-blue-400 font-bold rounded-lg hover:bg-blue-500/10 transition-all text-sm">
+                                  <ClipboardList size={16} /> Detalle de Programas
+                              </button>
+                          </div>
                       </div>
                   </div>
 
                   {/* Export Buttons */}
                   <div className="flex justify-end gap-4 mt-6">
-                      <button onClick={generateInforme} className="flex items-center gap-2 px-6 py-3 border border-[#9E7649]/40 text-[#9E7649] font-bold rounded-xl hover:bg-[#9E7649]/10 transition-all">
-                          <FileCode size={20} /> Informe 
-                      </button>
                       <button onClick={generateComparativa} className="flex items-center gap-2 px-6 py-3 bg-blue-900/40 text-blue-400 border border-blue-900/50 font-bold rounded-xl hover:bg-blue-900/60 shadow-lg transition-all">
                           <Search size={20} /> Comparativa
                       </button>
                   </div>
               </div>
           )}
+
+          {/* Modal de Detalle */}
+          {showDetailModal && createPortal(
+              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 sm:p-6" onClick={() => setShowDetailModal(false)}>
+                  <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-full overflow-hidden" onClick={e => e.stopPropagation()}>
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-6 border-b border-[#9E7649]/20 bg-[#2C1B15]">
+                          <div className="flex items-center gap-4">
+                              <div className="bg-[#9E7649]/20 p-3 rounded-xl border border-[#9E7649]/40 text-[#9E7649]">
+                                  <ClipboardList size={28} />
+                              </div>
+                              <div>
+                                  <h2 className="text-white font-bold text-xl leading-tight">Detalle de Programas</h2>
+                                  <span className="text-[#E8DCCF]/60 text-sm">Mes: {filterMonth}</span>
+                              </div>
+                          </div>
+                          <button onClick={() => setShowDetailModal(false)} className="text-[#E8DCCF]/40 hover:text-white transition-colors">
+                              ✕
+                          </button>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+                          <table className="w-full text-left border-collapse">
+                              <thead className="text-[10px] text-[#9E7649] uppercase tracking-widest bg-black/40 sticky top-0 z-10">
+                                  <tr>
+                                      <th className="px-4 py-3 border-b border-[#9E7649]/20">Programa</th>
+                                      <th className="px-4 py-3 border-b border-[#9E7649]/20 text-center">Cantidad</th>
+                                      <th className="px-4 py-3 border-b border-[#9E7649]/20 w-1/2">Fechas</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#9E7649]/10 text-sm">
+                                  {getDetailData().map(d => (
+                                      <tr key={d.program} className="hover:bg-[#2C1B15] transition-colors">
+                                          <td className="px-4 py-3 font-bold text-[#E8DCCF]">{d.program}</td>
+                                          <td className="px-4 py-3 text-center text-white">{d.count}</td>
+                                          <td className="px-4 py-3 text-[#E8DCCF]/60 font-mono text-xs">{d.dates.sort().map(dt => dt.substring(8)).join(', ')}</td>
+                                      </tr>
+                                  ))}
+                                  {getDetailData().length === 0 && (
+                                      <tr>
+                                          <td colSpan={3} className="px-4 py-8 text-center text-[#E8DCCF]/40 italic">
+                                              No hay programas registrados para este mes.
+                                          </td>
+                                      </tr>
+                                  )}
+                              </tbody>
+                              {getDetailData().length > 0 && (
+                                  <tfoot className="bg-black/20 text-[#9E7649] font-bold">
+                                      <tr>
+                                          <td className="px-4 py-3 border-t border-[#9E7649]/20 font-bold">TOTAL</td>
+                                          <td className="px-4 py-3 text-center border-t border-[#9E7649]/20 font-bold text-white">{getDetailData().reduce((acc, curr) => acc + curr.count, 0)}</td>
+                                          <td className="px-4 py-3 border-t border-[#9E7649]/20"></td>
+                                      </tr>
+                                  </tfoot>
+                              )}
+                          </table>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="p-6 border-t border-[#9E7649]/20 bg-[#2C1B15] flex justify-end gap-4 shrink-0">
+                          <button onClick={handleSendWhatsAppDetail} className="flex items-center gap-2 px-6 py-3 bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/50 font-bold rounded-xl hover:bg-[#25D366]/30 transition-all">
+                              <Share2 size={20} /> Enviar por WhatsApp
+                          </button>
+                          <button onClick={handleDownloadPDFDetail} className="flex items-center gap-2 px-6 py-3 bg-[#E8DCCF]/10 text-white border border-[#E8DCCF]/30 font-bold rounded-xl hover:bg-[#E8DCCF]/20 transition-all">
+                              <FileDown size={20} /> Descargar PDF
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          , document.body)}
       </div>
   );
 };
