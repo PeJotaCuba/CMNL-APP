@@ -559,6 +559,28 @@ const Editorial: React.FC<EditorialProps> = ({
              foundIndex = updatedPrograms.findIndex((p: Program) => matchProgramName(p, progNameInput));
          }
 
+         // Si el programa no existe en absoluto, lo creamos dinámicamente sobre la marcha
+         if (foundIndex === -1 && currentDayName) {
+             const newProgId = `dyn_${normalize(progNameInput).replace(/\s+/g, '_')}`;
+             const newProg: Program = {
+                 id: newProgId,
+                 name: progNameInput,
+                 days: [currentDayName],
+                 time: "12:00", // Horario por defecto
+                 active: true,
+                 dailyData: {}
+             };
+             updatedPrograms.push(newProg);
+             foundIndex = updatedPrograms.length - 1;
+             updatesCount++;
+         } else if (foundIndex !== -1 && currentDayName) {
+             // Si el programa existe pero el día parseado no está en sus días asignados, lo añadimos
+             if (!updatedPrograms[foundIndex].days.includes(currentDayName)) {
+                 updatedPrograms[foundIndex].days.push(currentDayName);
+                 updatesCount++;
+             }
+         }
+
          currentProgIndex = foundIndex;
          
          if (currentProgIndex !== -1 && currentKey) {

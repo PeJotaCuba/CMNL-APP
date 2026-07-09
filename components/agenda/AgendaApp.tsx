@@ -282,9 +282,208 @@ const AgendaApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, users: m
   const [programs, setPrograms] = useState<Program[]>(() => {
     try {
       const saved = localStorage.getItem('rcm_programs');
-      return saved ? JSON.parse(saved) : INITIAL_PROGRAMS;
-    } catch (e) { return INITIAL_PROGRAMS; }
+      let initialPrograms: Program[] = saved ? JSON.parse(saved) : [...INITIAL_PROGRAMS];
+
+      // Sincronizar con rcm_data_fichas al inicializar
+      try {
+        const savedFichasStr = localStorage.getItem('rcm_data_fichas');
+        if (savedFichasStr) {
+          const fichas = JSON.parse(savedFichasStr);
+          if (Array.isArray(fichas)) {
+            const normalizeStr = (name: string) => name.toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/[^\w\s]/g, '')
+              .trim();
+
+            const getDaysFromFicha = (ficha: any): string[] => {
+              const days: string[] = [];
+              const freq = (ficha.frequency || '').toLowerCase();
+              
+              if (freq.includes('lunes a viernes')) {
+                days.push('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes');
+              } else if (freq.includes('lunes a sábado') || freq.includes('lunes a sabado')) {
+                days.push('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado');
+              } else if (freq.includes('lunes a domingo')) {
+                days.push('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo');
+              } else {
+                if (freq.includes('lunes')) days.push('Lunes');
+                if (freq.includes('martes')) days.push('Martes');
+                if (freq.includes('miércoles') || freq.includes('miercoles')) days.push('Miércoles');
+                if (freq.includes('jueves')) days.push('Jueves');
+                if (freq.includes('viernes')) days.push('Viernes');
+                if (freq.includes('sábado') || freq.includes('sabado')) days.push('Sábado');
+                if (freq.includes('domingo')) days.push('Domingo');
+              }
+
+              if (days.length === 0) {
+                const sched = (ficha.schedule || '').toLowerCase();
+                if (sched.includes('lunes')) days.push('Lunes');
+                if (sched.includes('martes')) days.push('Martes');
+                if (sched.includes('miércoles') || sched.includes('miercoles')) days.push('Miércoles');
+                if (sched.includes('jueves')) days.push('Jueves');
+                if (sched.includes('viernes')) days.push('Viernes');
+                if (sched.includes('sábado') || sched.includes('sabado')) days.push('Sábado');
+                if (sched.includes('domingo')) days.push('Domingo');
+              }
+
+              return days.length > 0 ? Array.from(new Set(days)) : ['Lunes'];
+            };
+
+            const getTimeFromFicha = (ficha: any): string => {
+              const scheduleStr = ficha.schedule || '';
+              const match = scheduleStr.match(/(\d{1,2}):(\d{2})/);
+              if (match) {
+                let hour = parseInt(match[1], 10);
+                const minute = match[2];
+                const isPM = scheduleStr.toLowerCase().includes('pm') && hour < 12;
+                const isAM = scheduleStr.toLowerCase().includes('am') && hour === 12;
+                if (isPM) hour += 12;
+                if (isAM) hour = 0;
+                return `${hour.toString().padStart(2, '0')}:${minute}`;
+              }
+              return '12:00';
+            };
+
+            fichas.forEach((ficha: any) => {
+              const fNameNorm = normalizeStr(ficha.name);
+              if (!fNameNorm) return;
+
+              const existingIdx = initialPrograms.findIndex((p: Program) => normalizeStr(p.name) === fNameNorm);
+              if (existingIdx === -1) {
+                initialPrograms.push({
+                  id: `ficha_${fNameNorm.replace(/\s+/g, '_')}`,
+                  name: ficha.name,
+                  days: getDaysFromFicha(ficha),
+                  time: getTimeFromFicha(ficha),
+                  active: true,
+                  dailyData: {}
+                });
+              } else {
+                // Sincronizar los días y horario
+                const existing = initialPrograms[existingIdx];
+                existing.days = getDaysFromFicha(ficha);
+                existing.time = getTimeFromFicha(ficha);
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error synchronizing in programs useState init", err);
+      }
+
+      return initialPrograms;
+    } catch (e) { return [...INITIAL_PROGRAMS]; }
   });
+
+  // Efecto para sincronización automática en tiempo de ejecución con fichas de la app principal
+  useEffect(() => {
+    try {
+      const savedFichasStr = localStorage.getItem('rcm_data_fichas');
+      if (!savedFichasStr) return;
+      const fichas = JSON.parse(savedFichasStr);
+      if (!Array.isArray(fichas)) return;
+
+      const normalizeStr = (name: string) => name.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w\s]/g, '')
+        .trim();
+
+      const getDaysFromFicha = (ficha: any): string[] => {
+        const days: string[] = [];
+        const freq = (ficha.frequency || '').toLowerCase();
+        
+        if (freq.includes('lunes a viernes')) {
+          days.push('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes');
+        } else if (freq.includes('lunes a sábado') || freq.includes('lunes a sabado')) {
+          days.push('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado');
+        } else if (freq.includes('lunes a domingo')) {
+          days.push('Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo');
+        } else {
+          if (freq.includes('lunes')) days.push('Lunes');
+          if (freq.includes('martes')) days.push('Martes');
+          if (freq.includes('miércoles') || freq.includes('miercoles')) days.push('Miércoles');
+          if (freq.includes('jueves')) days.push('Jueves');
+          if (freq.includes('viernes')) days.push('Viernes');
+          if (freq.includes('sábado') || freq.includes('sabado')) days.push('Sábado');
+          if (freq.includes('domingo')) days.push('Domingo');
+        }
+
+        if (days.length === 0) {
+          const sched = (ficha.schedule || '').toLowerCase();
+          if (sched.includes('lunes')) days.push('Lunes');
+          if (sched.includes('martes')) days.push('Martes');
+          if (sched.includes('miércoles') || sched.includes('miercoles')) days.push('Miércoles');
+          if (sched.includes('jueves')) days.push('Jueves');
+          if (sched.includes('viernes')) days.push('Viernes');
+          if (sched.includes('sábado') || sched.includes('sabado')) days.push('Sábado');
+          if (sched.includes('domingo')) days.push('Domingo');
+        }
+
+        return days.length > 0 ? Array.from(new Set(days)) : ['Lunes'];
+      };
+
+      const getTimeFromFicha = (ficha: any): string => {
+        const scheduleStr = ficha.schedule || '';
+        const match = scheduleStr.match(/(\d{1,2}):(\d{2})/);
+        if (match) {
+          let hour = parseInt(match[1], 10);
+          const minute = match[2];
+          const isPM = scheduleStr.toLowerCase().includes('pm') && hour < 12;
+          const isAM = scheduleStr.toLowerCase().includes('am') && hour === 12;
+          if (isPM) hour += 12;
+          if (isAM) hour = 0;
+          return `${hour.toString().padStart(2, '0')}:${minute}`;
+        }
+        return '12:00';
+      };
+
+      setPrograms(prev => {
+        const updated = [...prev];
+        let hasChanges = false;
+
+        fichas.forEach((ficha: any) => {
+          const fNameNorm = normalizeStr(ficha.name);
+          if (!fNameNorm) return;
+
+          const existingIdx = updated.findIndex(p => normalizeStr(p.name) === fNameNorm);
+          if (existingIdx === -1) {
+            const newProg: Program = {
+              id: `ficha_${fNameNorm.replace(/\s+/g, '_')}`,
+              name: ficha.name,
+              days: getDaysFromFicha(ficha),
+              time: getTimeFromFicha(ficha),
+              active: true,
+              dailyData: {}
+            };
+            updated.push(newProg);
+            hasChanges = true;
+          } else {
+            const existing = updated[existingIdx];
+            const calculatedDays = getDaysFromFicha(ficha);
+            const calculatedTime = getTimeFromFicha(ficha);
+
+            const daysDiffer = JSON.stringify([...existing.days].sort()) !== JSON.stringify([...calculatedDays].sort());
+            const timeDiffers = existing.time !== calculatedTime;
+
+            if (daysDiffer || timeDiffers) {
+              updated[existingIdx] = {
+                ...existing,
+                days: calculatedDays,
+                time: calculatedTime
+              };
+              hasChanges = true;
+            }
+          }
+        });
+
+        return hasChanges ? updated : prev;
+      });
+    } catch (e) {
+      console.error("Error synchronizing programs with fichas in effect:", e);
+    }
+  }, []);
 
   const [efemerides, setEfemerides] = useState<EfemeridesData>(() => {
     try {
