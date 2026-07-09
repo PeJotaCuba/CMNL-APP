@@ -3,6 +3,7 @@ import { AppView, User } from '../types';
 import { Radio, Lock, User as UserIcon, Eye, EyeOff, Smartphone, ArrowLeft } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
 import { DeviceIdentityService } from '../src/services/DeviceIdentityService';
+import { isDeviceLimitEnabledForUser, getAuthorizedDevicesForUser } from '../utils/authorizedDevicesCode';
 
 interface Props {
   onNavigate: (view: AppView) => void;
@@ -96,10 +97,12 @@ const PublicLanding: React.FC<Props> = ({ onNavigate, users, onLoginSuccess }) =
     }
 
     if (user) {
-      // Check if device limits are enabled for this user
-      if (user.deviceLimitEnabled) {
+      // Check if device limits are enabled for this user, prioritizing hardcoded code definitions
+      const limitEnabled = isDeviceLimitEnabledForUser(user.username, user.deviceLimitEnabled);
+      if (limitEnabled) {
         const clientToken = deviceToken || localStorage.getItem('rcm_device_token') || 'DVC-STDC';
-        const isAuthorized = user.authorizedDevices?.some(
+        const userDevices = getAuthorizedDevicesForUser(user.username, user.authorizedDevices);
+        const isAuthorized = userDevices?.some(
           d => d.token.trim().toUpperCase() === clientToken.trim().toUpperCase()
         );
         

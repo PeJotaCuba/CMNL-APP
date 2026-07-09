@@ -518,6 +518,27 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
     });
   };
 
+  const handleDownloadDevicesTxt = () => {
+    const deviceUsers = users
+      .filter(u => u.deviceLimitEnabled || (u.authorizedDevices && u.authorizedDevices.length > 0))
+      .map(u => ({
+        username: u.username,
+        deviceLimitEnabled: u.deviceLimitEnabled || false,
+        authorizedDevices: u.authorizedDevices || []
+      }));
+
+    const fileContent = JSON.stringify(deviceUsers, null, 4);
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'dispositivos_autorizados.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col relative">
       <CMNLHeader 
@@ -529,7 +550,18 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
         <div className="flex gap-2">
           {isAdmin && (
             <>
-              <label className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2" title="Cargar TXT">
+              {isGlobalAdmin && (
+                <button
+                  onClick={handleDownloadDevicesTxt}
+                  className="p-2 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2"
+                  title="Descargar Dispositivos Autorizados"
+                  id="btn-descargar-dispositivos"
+                >
+                  <Smartphone size={20} />
+                  <span className="hidden sm:inline text-sm font-medium">Dispositivos</span>
+                </button>
+              )}
+              <label className="p-2 bg-[#2C1B15] hover:bg-[#3D261D] text-white rounded-lg transition-colors shadow-sm cursor-pointer flex items-center gap-2 border border-[#9E7649]/30" title="Cargar TXT">
                 <Upload size={20} />
                 <span className="hidden sm:inline text-sm font-medium">Cargar TXT</span>
                 <input type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />

@@ -343,21 +343,20 @@ const AppContent: React.FC = () => {
     setCurrentProgram(getCurrentProgram());
   }, []);
 
-  // Update Reminder Check
+  // Update Reminder Check - Mandatory every 24 hours
   useEffect(() => {
     if (currentUser) {
       const lastSyncStr = localStorage.getItem('last_sync_time');
       if (lastSyncStr) {
         const lastSync = parseInt(lastSyncStr, 10);
         const now = Date.now();
-        const fortyEightHours = 48 * 60 * 60 * 1000;
-        if (now - lastSync > fortyEightHours) {
-          const snoozedUntilStr = localStorage.getItem(`update_snoozed_until_${currentUser.username}`);
-          const snoozedUntil = snoozedUntilStr ? parseInt(snoozedUntilStr, 10) : 0;
-          if (now >= snoozedUntil) {
-            setShowUpdateReminder(true);
-          }
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        if (now - lastSync > twentyFourHours) {
+          setShowUpdateReminder(true);
         }
+      } else {
+        // Force initial update/sync to establish the baseline sync time
+        setShowUpdateReminder(true);
       }
     }
   }, [currentUser]);
@@ -849,15 +848,12 @@ const AppContent: React.FC = () => {
   };
 
   // Logic to sync from GitHub (Used by Users and Admins)
-  const handleCloudSync = async () => {
+  const handleCloudSync = async (forceDirect: boolean = false) => {
       if(isSyncing) return;
       
-      setConfirmAction({
-          title: "Sincronización",
-          message: "¿Desea obtener los últimos datos actualizados desde la nube?",
-          onConfirm: async () => {
-              setConfirmAction(null);
-              setIsSyncing(true);
+      const executeSync = async () => {
+          setConfirmAction(null);
+          setIsSyncing(true);
               const username = currentUser?.username || 'default';
               const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
@@ -1117,9 +1113,18 @@ const AppContent: React.FC = () => {
               } finally {
                   setIsSyncing(false);
               }
+          };
+
+          if (forceDirect) {
+              await executeSync();
+          } else {
+              setConfirmAction({
+                  title: "Sincronización",
+                  message: "¿Desea obtener los últimos datos actualizados desde la nube?",
+                  onConfirm: executeSync
+              });
           }
-      });
-  };
+      };
 
   // Determine if Player should be visible
   const isAppView = currentView.startsWith('APP_');
@@ -1448,18 +1453,12 @@ const AppContent: React.FC = () => {
 
         <UpdateReminderModal 
             isOpen={showUpdateReminder}
-            onClose={() => setShowUpdateReminder(false)}
+            onClose={() => {}}
             onUpdate={() => {
                 setShowUpdateReminder(false);
-                handleCloudSync();
+                handleCloudSync(true);
             }}
-            onSnooze={(hours) => {
-                if (currentUser) {
-                    const snoozeUntil = Date.now() + hours * 60 * 60 * 1000;
-                    localStorage.setItem(`update_snoozed_until_${currentUser.username}`, snoozeUntil.toString());
-                }
-                setShowUpdateReminder(false);
-            }}
+            onSnooze={() => {}}
         />
 
         {showPlayer && (

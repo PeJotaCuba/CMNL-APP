@@ -74,9 +74,7 @@ interface UpdateReminderModalProps {
 
 export const UpdateReminderModal: React.FC<UpdateReminderModalProps> = ({
     isOpen,
-    onClose,
-    onUpdate,
-    onSnooze
+    onUpdate
 }) => {
     if (!isOpen) return null;
 
@@ -86,57 +84,23 @@ export const UpdateReminderModal: React.FC<UpdateReminderModalProps> = ({
                initial={{ opacity: 0 }} 
                animate={{ opacity: 1 }} 
                exit={{ opacity: 0 }}
-               className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+               className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
             >
-                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden relative">
+                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative text-[#E8DCCF]">
                     <div className="p-6 text-center">
-                        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                        <div className="w-16 h-16 bg-[#9E7649]/20 rounded-full flex items-center justify-center mx-auto mb-4 text-[#9E7649]">
                             <AlertCircle size={32} />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-2">Recordatorio de Actualización</h2>
-                        <p className="text-gray-600 text-sm mb-6">
-                            Han pasado más de 48 horas desde tu última actualización de datos.
+                        <h2 className="text-xl font-bold text-white mb-2">Actualización Obligatoria</h2>
+                        <p className="text-[#E8DCCF]/80 text-sm mb-6 leading-relaxed">
+                            Han pasado más de 24 horas desde la última sincronización. Es obligatorio actualizar los datos para poder continuar utilizando la aplicación.
                         </p>
                         <div className="flex flex-col gap-3">
                             <button 
-                              onClick={() => {
-                                  onClose();
-                                  onUpdate();
-                              }}
-                              className="w-full bg-[#5D3A24] hover:bg-[#3E1E16] text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                              onClick={onUpdate}
+                              className="w-full bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md transform hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                Sí, actualizar ahora
-                            </button>
-
-                            <div className="mt-2 pt-3 border-t border-gray-100">
-                                <p className="text-[10px] text-gray-400 mb-2 font-bold uppercase tracking-wider text-left">No volver a mostrar en:</p>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <button 
-                                        onClick={() => onSnooze(24)}
-                                        className="py-2 px-1 bg-gray-50 hover:bg-[#5D3A24]/10 text-gray-700 hover:text-[#5D3A24] border border-gray-200 hover:border-[#5D3A24]/30 rounded-lg text-xs transition-all font-semibold"
-                                    >
-                                        24 horas
-                                    </button>
-                                    <button 
-                                        onClick={() => onSnooze(48)}
-                                        className="py-2 px-1 bg-gray-50 hover:bg-[#5D3A24]/10 text-gray-700 hover:text-[#5D3A24] border border-gray-200 hover:border-[#5D3A24]/30 rounded-lg text-xs transition-all font-semibold"
-                                    >
-                                        48 horas
-                                    </button>
-                                    <button 
-                                        onClick={() => onSnooze(72)}
-                                        className="py-2 px-1 bg-gray-50 hover:bg-[#5D3A24]/10 text-gray-700 hover:text-[#5D3A24] border border-gray-200 hover:border-[#5D3A24]/30 rounded-lg text-xs transition-all font-semibold"
-                                    >
-                                        72 horas
-                                    </button>
-                                </div>
-                            </div>
-
-                            <button 
-                              onClick={onClose}
-                              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-xl transition-colors"
-                            >
-                                Omitir por ahora
+                                Sincronizar y Actualizar Ahora
                             </button>
                         </div>
                     </div>

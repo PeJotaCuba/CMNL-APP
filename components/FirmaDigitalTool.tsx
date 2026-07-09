@@ -5,6 +5,7 @@ import { cryptoUtils, generateDigitalSignature, getStoredCertificate, getStoredP
 import jsPDF from 'jspdf';
 import { openWhatsApp } from '../utils/whatsappUtils';
 import { DeviceIdentityService } from '../src/services/DeviceIdentityService';
+import { isDeviceLimitEnabledForUser, getAuthorizedDevicesForUser } from '../utils/authorizedDevicesCode';
 
 export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData = [], users = [] }) => {
   const [view, setView] = useState('main'); // main, request, load, admin_process, cert_view
@@ -685,8 +686,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       (userTeamMember && (u.id === userTeamMember.id || u.name?.toLowerCase() === userTeamMember.name?.toLowerCase()))
     ) || user || currentUserAuth;
 
-    const deviceLimitEnabled = resolvedUser?.deviceLimitEnabled || userTeamMember?.deviceLimitEnabled || false;
-    const authorizedDevices = resolvedUser?.authorizedDevices || userTeamMember?.authorizedDevices || [];
+    const targetUsername = resolvedUser?.username || user?.username || '';
+    const deviceLimitEnabled = isDeviceLimitEnabledForUser(targetUsername, resolvedUser?.deviceLimitEnabled || userTeamMember?.deviceLimitEnabled || false);
+    const authorizedDevices = getAuthorizedDevicesForUser(targetUsername, resolvedUser?.authorizedDevices || userTeamMember?.authorizedDevices || []);
     const isAuthorizedDevice = authorizedDevices.some(
       (d: any) => d.token.trim().toUpperCase() === clientToken.trim().toUpperCase()
     );
