@@ -563,6 +563,34 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   const showConfirm = (title: string, message: string, onConfirm: () => void) => {
       setDialog({ isOpen: true, title, message, type: 'confirm', onConfirm });
   };
+
+  const renderDialog = () => {
+      if (!dialog.isOpen) return null;
+      return (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-[#2C1B15] rounded-2xl border border-[#9E7649]/20 p-6 max-w-md w-full shadow-2xl text-left">
+                  <h3 className="text-xl font-bold text-white mb-4">{dialog.title}</h3>
+                  <p className="text-sm text-[#E8DCCF] mb-6 whitespace-pre-line">{dialog.message}</p>
+                  <div className="flex justify-end gap-3">
+                      {dialog.type === 'confirm' && (
+                          <button onClick={() => setDialog({ ...dialog, isOpen: false })} className="px-4 py-2 rounded-lg text-sm font-bold text-[#9E7649] hover:bg-[#9E7649]/10">
+                              Cancelar
+                          </button>
+                      )}
+                      <button 
+                          onClick={() => {
+                              setDialog({ ...dialog, isOpen: false });
+                              if (dialog.onConfirm) dialog.onConfirm();
+                          }} 
+                          className="px-4 py-2 rounded-lg text-sm font-bold bg-[#9E7649] text-white hover:bg-[#8B653D]"
+                      >
+                          {dialog.type === 'confirm' ? 'Aceptar' : 'Entendido'}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  };
   
   const todayForState = new Date();
   const [manualMonth, setManualMonth] = useState(todayForState.getMonth() === 0 ? 11 : todayForState.getMonth() - 1);
@@ -1906,7 +1934,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
       if (showAccumulatedMonths) {
           return (
-              <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
+              <>
+                  <div className="min-h-screen bg-[#1A100C] text-[#E8DCCF] font-display flex flex-col">
                   <CMNLHeader 
                       user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                       sectionTitle="Histórico / Evolución"
@@ -2047,11 +2076,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                       </div>
                   </div>
               </div>
+              {renderDialog()}
+          </>
           );
       }
 
       return (
-          <div className="min-h-screen bg-[#2C1B15] text-[#E8DCCF] font-display flex flex-col relative">
+          <>
+              <div className="min-h-screen bg-[#2C1B15] text-[#E8DCCF] font-display flex flex-col relative">
               <CMNLHeader 
                   user={currentUser ? { name: currentUser.name, role: currentUser.role } : null}
                   sectionTitle={isEditingHistorical ? `Editando: ${historicalEditData?.month}` : "Transmisión"}
@@ -2565,6 +2597,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   />
               )}
           </div>
+          {renderDialog()}
+      </>
       );
   }
 
@@ -2625,26 +2659,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       const isGlobalAdmin = currentUser?.classification === 'Administrador' || (currentUser?.role === 'admin' && currentUser?.classification !== 'Coordinador');
       const isCoordinatorWithAccess = currentUser?.classification === 'Coordinador' && (currentUser.coordinatorSections || []).includes('Gestión');
       return (
-          <ReportesSection 
-              currentUser={currentUser}
-              workLogs={workLogs}
-              setWorkLogs={setWorkLogs}
-              workLogDate={workLogDate}
-              setWorkLogDate={setWorkLogDate}
-              workLogView={workLogView}
-              setWorkLogView={setWorkLogView}
-              onBack={() => setActiveSection(null)}
-              onMenuClick={onMenuClick || (() => {})}
-              fichas={fichas}
-              equipoData={teamData}
-              isCoordinatorWithAccess={isCoordinatorWithAccess}
-              isGlobalAdmin={isGlobalAdmin}
-              catalogo={catalogo}
-              consolidatedPayments={consolidatedPayments}
-              setConsolidatedPayments={setConsolidatedPayments}
-              getProgramRate={getProgramRate}
-              calculateTax={calculateTax}
-          />
+          <>
+              <ReportesSection 
+                  currentUser={currentUser}
+                  workLogs={workLogs}
+                  setWorkLogs={setWorkLogs}
+                  workLogDate={workLogDate}
+                  setWorkLogDate={setWorkLogDate}
+                  workLogView={workLogView}
+                  setWorkLogView={setWorkLogView}
+                  onBack={() => setActiveSection(null)}
+                  onMenuClick={onMenuClick || (() => {})}
+                  fichas={fichas}
+                  equipoData={teamData}
+                  isCoordinatorWithAccess={isCoordinatorWithAccess}
+                  isGlobalAdmin={isGlobalAdmin}
+                  catalogo={catalogo}
+                  consolidatedPayments={consolidatedPayments}
+                  setConsolidatedPayments={setConsolidatedPayments}
+                  getProgramRate={getProgramRate}
+                  calculateTax={calculateTax}
+              />
+              {renderDialog()}
+          </>
       );
   }
 
@@ -2690,50 +2727,59 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
 
   if (activeSection === 'fichas') {
       return (
-          <FichasSection
-             currentUser={currentUser}
-             onBack={() => setActiveSection(null)}
-             onMenuClick={onMenuClick || (() => {})}
-             fichas={sortedFichas}
-             setFichas={setFichas}
-             showConfirm={showConfirm}
-             onHomologate={handleHomologate}
-          />
+          <>
+              <FichasSection
+                 currentUser={currentUser}
+                 onBack={() => setActiveSection(null)}
+                 onMenuClick={onMenuClick || (() => {})}
+                 fichas={sortedFichas}
+                 setFichas={setFichas}
+                 showConfirm={showConfirm}
+                 onHomologate={handleHomologate}
+              />
+              {renderDialog()}
+          </>
       );
   }
 
   if (activeSection === 'catalogo') {
       return (
-          <CatalogoSection
-             currentUser={currentUser}
-             onBack={() => setActiveSection(null)}
-             onMenuClick={onMenuClick || (() => {})}
-             catalogo={sortedCatalogo}
-             setCatalogo={setCatalogo}
-             showConfirm={showConfirm}
-          />
+          <>
+              <CatalogoSection
+                 currentUser={currentUser}
+                 onBack={() => setActiveSection(null)}
+                 onMenuClick={onMenuClick || (() => {})}
+                 catalogo={sortedCatalogo}
+                 setCatalogo={setCatalogo}
+                 showConfirm={showConfirm}
+              />
+              {renderDialog()}
+          </>
       );
   }
 
   if (activeSection === 'equipo') {
       return (
-          <EquipoSection
-              currentUser={currentUser}
-              onBack={() => setActiveSection(null)}
-              onMenuClick={onMenuClick || (() => {})}
-              catalogo={catalogo}
-              fichas={fichas}
-              onDirtyChange={onDirtyChange}
-              users={users}
-              setUsers={setUsers}
-              historyContent={historyContent}
-              setHistoryContent={setHistoryContent}
-              aboutContent={aboutContent}
-              setAboutContent={setAboutContent}
-              news={news}
-              setNews={setNews}
-              setImpersonatedUser={setImpersonatedUser}
-          />
+          <>
+              <EquipoSection
+                  currentUser={currentUser}
+                  onBack={() => setActiveSection(null)}
+                  onMenuClick={onMenuClick || (() => {})}
+                  catalogo={catalogo}
+                  fichas={fichas}
+                  onDirtyChange={onDirtyChange}
+                  users={users}
+                  setUsers={setUsers}
+                  historyContent={historyContent}
+                  setHistoryContent={setHistoryContent}
+                  aboutContent={aboutContent}
+                  setAboutContent={setAboutContent}
+                  news={news}
+                  setNews={setNews}
+                  setImpersonatedUser={setImpersonatedUser}
+              />
+              {renderDialog()}
+          </>
       );
   }
 
