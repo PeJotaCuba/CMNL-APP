@@ -789,6 +789,30 @@ export const ReportesTrabajador: React.FC<Props> = ({
     };
   }, [workLogs, userPaymentConfig, currentUser, workLogDate.substring(0, 7), getProgramRate, calculateTax, equipoData, catalogo, isMatch, normalize, additionalPayments]);
 
+  const [showEditConsolidatedModal, setShowEditConsolidatedModal] = useState(false);
+
+  useEffect(() => {
+      const viewedMonthPrefix = workLogDate.substring(0, 7);
+      const existingConsolidation = consolidatedPayments.find(c => 
+          c.userId === currentUser?.username && 
+          c.month === viewedMonthPrefix && 
+          c.calculationMode === 'autogestionado'
+      );
+
+      if (existingConsolidation && autogestionMetrics) {
+          if (
+              Math.abs(existingConsolidation.amount - autogestionMetrics.neto) > 0.01 ||
+              existingConsolidation.reportCount !== autogestionMetrics.count
+          ) {
+              setShowEditConsolidatedModal(true);
+          } else {
+              setShowEditConsolidatedModal(false);
+          }
+      } else {
+          setShowEditConsolidatedModal(false);
+      }
+  }, [autogestionMetrics.neto, autogestionMetrics.count, consolidatedPayments, currentUser, workLogDate]);
+
   // Handle Autogestion Consolidate
   const handleConsolidateAutogestion = () => {
     // Only allow if today > last day of the shown month
@@ -819,6 +843,24 @@ export const ReportesTrabajador: React.FC<Props> = ({
     
     alert("Cierre de autogestión procesado y guardado en la sección de Pagos.");
     setActiveTab('pagos');
+  };
+
+  const handleSaveConsolidatedEdit = () => {
+      const viewedMonthPrefix = workLogDate.substring(0, 7);
+      if (!currentUser) return;
+      const newConsolidated: ConsolidatedPayment = {
+          id: Math.random().toString(36).substr(2, 9),
+          userId: currentUser.username,
+          month: viewedMonthPrefix,
+          amount: autogestionMetrics.neto,
+          grossAmount: autogestionMetrics.bruto,
+          taxAmount: autogestionMetrics.tax,
+          reportCount: autogestionMetrics.count,
+          dateConsolidated: new Date().toISOString(),
+          calculationMode: 'autogestionado'
+      };
+      setConsolidatedPayments(prev => [...prev.filter(c => !(c.userId === currentUser.username && c.month === viewedMonthPrefix && c.calculationMode === 'autogestionado')), newConsolidated]);
+      setShowEditConsolidatedModal(false);
   };
 
   // Oficiales Calculation (Current User Only)
@@ -875,7 +917,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
       const habitualPrograms = member?.habitualProgramsByRole || {};
       const allPossiblePrograms = programsListRaw;
       
-      const logs: {date: string, program: string}[] = [];
+      const logs: {date: string, program: string, amount: number}[] = [];
   
       if (userPaymentConfig) {
           for (let day = 1; day <= endDay; day++) {
@@ -898,7 +940,16 @@ export const ReportesTrabajador: React.FC<Props> = ({
                        const isWorked = isManual || (isHabitual && !isDeleted);
   
                        if (isWorked) {
-                           logs.push({ date: dateStr, program: prog });
+                           const baseRate = getProgramRate(prog, role.role, role.level || 'I');
+                           let currentAmount = 0;
+                           if (normalize(prog) === 'propaganda') {
+                               const log = workLogs.find(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr);
+                               const qty = log && log.hours ? log.hours : 1;
+                               currentAmount = baseRate * qty;
+                           } else {
+                               currentAmount = baseRate;
+                           }
+                           logs.push({ date: dateStr, program: prog, amount: currentAmount });
                        }
                    });
                });
@@ -910,26 +961,62 @@ export const ReportesTrabajador: React.FC<Props> = ({
   const getDetailData = () => {
       if (!currentUser) return [];
       
-      let baseLogs: {date: string, program: string}[] = [];
+      let baseLogs: {date: string, program: string, amount: number}[] = [];
       if (detailMode === 'oficial') {
           baseLogs = reports
             .filter(r => r.mes === filterMonth && r.especialidades.some(esp => isMatch(esp.nombre, currentUser.name)))
-            .map(r => ({ date: r.fecha, program: r.programa }));
+            .map(r => {
+                const esp = r.especialidades.find(e => isMatch(e.nombre, currentUser.name));
+                let amt = 0;
+                if (esp) {
+                    const roleConfig = userPaymentConfig?.roles.find(rc => normalize(rc.role).includes(normalize(esp.rol)));
+                    amt = getProgramRate(r.programa, esp.rol, roleConfig?.level || 'I');
+                }
+                return { date: r.fecha, program: r.programa, amount: amt };
+            });
       } else {
           baseLogs = getAutogestionLogs();
       }
   
-      const grouped: Record<string, { program: string, dates: string[], count: number }> = {};
+      const grouped: Record<string, { program: string, dates: string[], count: number, totalAmount: number }> = {};
       baseLogs.forEach(log => {
           if (!grouped[log.program]) {
-              grouped[log.program] = { program: log.program, dates: [], count: 0 };
+              grouped[log.program] = { program: log.program, dates: [], count: 0, totalAmount: 0 };
           }
           if (!grouped[log.program].dates.includes(log.date)) {
               grouped[log.program].dates.push(log.date);
               grouped[log.program].count++;
+              grouped[log.program].totalAmount += log.amount;
           }
       });
       return Object.values(grouped).sort((a, b) => b.count - a.count);
+  };
+  
+  const getDetailTotals = () => {
+      let totalBruto = 0;
+      const details = getDetailData();
+      details.forEach(d => {
+          totalBruto += d.totalAmount;
+      });
+
+      const existingConsolidation = consolidatedPayments.find(c => 
+          c.userId === currentUser?.username && 
+          c.month === filterMonth && 
+          c.calculationMode === (detailMode === 'oficial' ? 'oficial_from_reports' : 'autogestionado')
+      );
+
+      if (existingConsolidation) {
+          return {
+              bruto: existingConsolidation.grossAmount || existingConsolidation.amount,
+              neto: existingConsolidation.amount
+          };
+      } else {
+          const tax = calculateTax(totalBruto);
+          return {
+              bruto: totalBruto,
+              neto: totalBruto - tax
+          };
+      }
   };
   
   const handleSendWhatsAppDetail = () => {
@@ -938,10 +1025,11 @@ export const ReportesTrabajador: React.FC<Props> = ({
       let msg = `*Informe de Programas Realizados (${detailMode === 'oficial' ? 'Oficial' : 'Autogestión'})*\n*Usuario:* ${currentUser.name}\n*Mes:* ${filterMonth}\n\n`;
       let total = 0;
       details.forEach(d => {
-          msg += `🎙️ *${d.program}* (${d.count})\nFechas: ${d.dates.sort().map(dt => dt.substring(8)).join(', ')}\n\n`;
+          msg += `🎙️ *${d.program}*\nCant: ${d.count} | Importe: $${d.totalAmount.toFixed(2)}\nFechas: ${d.dates.sort().map(dt => dt.substring(8)).join(', ')}\n\n`;
           total += d.count;
       });
-      msg += `*Total de Programas:* ${total}`;
+      const totals = getDetailTotals();
+      msg += `*Total de Programas:* ${total}\n*BRUTO:* $${totals.bruto.toFixed(2)}  /  *NETO:* $${totals.neto.toFixed(2)}`;
       
       const phone = currentUser.telefono ? currentUser.telefono.replace(/\D/g,'') : '';
       const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
@@ -963,18 +1051,21 @@ export const ReportesTrabajador: React.FC<Props> = ({
       doc.text(`Mes: ${filterMonth}`, 14, 38);
       
       let total = 0;
+      let totalAmount = 0;
       const tableData = details.map(d => {
           total += d.count;
+          totalAmount += d.totalAmount;
           return [
               d.program,
               d.count.toString(),
+              `$${d.totalAmount.toFixed(2)}`,
               d.dates.sort().map(dt => dt.substring(8)).join(', ')
           ];
       });
   
       autoTable(doc, {
           startY: 45,
-          head: [['Programa', 'Cantidad', 'Fechas']],
+          head: [['Programa', 'Cantidad', 'Importe', 'Fechas']],
           body: tableData,
           theme: 'grid',
           headStyles: { fillColor: [158, 118, 73] },
@@ -982,13 +1073,15 @@ export const ReportesTrabajador: React.FC<Props> = ({
           columnStyles: {
               0: { cellWidth: 50 },
               1: { cellWidth: 20, halign: 'center' },
-              2: { cellWidth: 'auto' }
+              2: { cellWidth: 25, halign: 'right' },
+              3: { cellWidth: 'auto' }
           }
       });
       
       const finalY = (doc as any).lastAutoTable.finalY || 45;
       doc.setFont("helvetica", "bold");
-      doc.text(`Total de programas en el mes: ${total}`, 14, finalY + 10);
+      const totals = getDetailTotals();
+      doc.text(`Total de programas: ${total}   |   BRUTO: $${totals.bruto.toFixed(2)}  /  NETO: $${totals.neto.toFixed(2)}`, 14, finalY + 10);
   
       doc.save(`Detalle_Programas_${currentUser.name}_${filterMonth}.pdf`);
   };
@@ -1630,6 +1723,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                   <tr>
                                       <th className="px-4 py-3 border-b border-[#9E7649]/20">Programa</th>
                                       <th className="px-4 py-3 border-b border-[#9E7649]/20 text-center">Cantidad</th>
+                                      <th className="px-4 py-3 border-b border-[#9E7649]/20 text-right">Importe</th>
                                       <th className="px-4 py-3 border-b border-[#9E7649]/20 w-1/2">Fechas</th>
                                   </tr>
                               </thead>
@@ -1638,12 +1732,13 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                       <tr key={d.program} className="hover:bg-[#2C1B15] transition-colors">
                                           <td className="px-4 py-3 font-bold text-[#E8DCCF]">{d.program}</td>
                                           <td className="px-4 py-3 text-center text-white">{d.count}</td>
+                                          <td className="px-4 py-3 text-right text-green-400 font-mono">${d.totalAmount.toFixed(2)}</td>
                                           <td className="px-4 py-3 text-[#E8DCCF]/60 font-mono text-xs">{d.dates.sort().map(dt => dt.substring(8)).join(', ')}</td>
                                       </tr>
                                   ))}
                                   {getDetailData().length === 0 && (
                                       <tr>
-                                          <td colSpan={3} className="px-4 py-8 text-center text-[#E8DCCF]/40 italic">
+                                          <td colSpan={4} className="px-4 py-8 text-center text-[#E8DCCF]/40 italic">
                                               No hay programas registrados para este mes.
                                           </td>
                                       </tr>
@@ -1654,6 +1749,10 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                       <tr>
                                           <td className="px-4 py-3 border-t border-[#9E7649]/20 font-bold">TOTAL</td>
                                           <td className="px-4 py-3 text-center border-t border-[#9E7649]/20 font-bold text-white">{getDetailData().reduce((acc, curr) => acc + curr.count, 0)}</td>
+                                          <td className="px-4 py-3 text-right border-t border-[#9E7649]/20 font-bold text-green-400 font-mono text-xs">
+                                              <div className="whitespace-nowrap">BRUTO: ${getDetailTotals().bruto.toFixed(2)}</div>
+                                              <div className="whitespace-nowrap text-[#9E7649]">NETO: ${getDetailTotals().neto.toFixed(2)}</div>
+                                          </td>
                                           <td className="px-4 py-3 border-t border-[#9E7649]/20"></td>
                                       </tr>
                                   </tfoot>
@@ -1670,6 +1769,27 @@ export const ReportesTrabajador: React.FC<Props> = ({
                               <FileDown size={20} /> Descargar PDF
                           </button>
                       </div>
+                  </div>
+              </div>
+          , document.body)}
+
+          {/* Modal Edición de Mes Consolidado */}
+          {showEditConsolidatedModal && createPortal(
+              <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[200] p-4 sm:p-6 backdrop-blur-sm">
+                  <div className="bg-[#1A100C] border border-[#9E7649]/50 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col p-8 text-center" onClick={e => e.stopPropagation()}>
+                      <div className="w-16 h-16 rounded-full bg-yellow-500/20 text-yellow-500 mx-auto flex items-center justify-center mb-6">
+                          <Save size={32} />
+                      </div>
+                      <h2 className="text-white font-bold text-2xl mb-4">Mes Consolidado Editado</h2>
+                      <p className="text-[#E8DCCF]/70 mb-8 leading-relaxed">
+                          Has introducido cambios en la autogestión de un mes que ya estaba consolidado ({workLogDate.substring(0, 7)}). Debes guardar esta edición para que la información se actualice correctamente en la sección de Pagos y Detalles.
+                      </p>
+                      <button 
+                          onClick={handleSaveConsolidatedEdit} 
+                          className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#9E7649] text-white font-bold rounded-xl hover:bg-[#8B6840] transition-all shadow-lg"
+                      >
+                          <Save size={20} /> Guardar Edición del Mes
+                      </button>
                   </div>
               </div>
           , document.body)}

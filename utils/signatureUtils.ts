@@ -189,7 +189,26 @@ export const formatDigitalSignatureForDocuments = (signatureString: string): str
 };
 
 export const getStoredCertificate = (userId: string) => {
-    const certStr = localStorage.getItem(`cmnl_cert_${userId}`);
+    let certStr = localStorage.getItem(`cmnl_cert_${userId}`);
+    if (!certStr) {
+        const dbSignaturesStr = localStorage.getItem('cmnl_digital_signatures');
+        if (dbSignaturesStr) {
+            try {
+                const dbSignatures = JSON.parse(dbSignaturesStr);
+                const dbCert = dbSignatures.validated_users?.find((u: any) => u.userId === userId && u.status === 'signed');
+                if (dbCert) {
+                    const isExpired = dbCert.validUntil && new Date(dbCert.validUntil).getTime() < Date.now();
+                    if (!isExpired) {
+                        localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(dbCert));
+                        localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+                        certStr = JSON.stringify(dbCert);
+                    }
+                }
+            } catch (e) {
+                console.error("Error auto-syncing cert", e);
+            }
+        }
+    }
     return certStr ? JSON.parse(certStr) : null;
 };
 
@@ -198,11 +217,51 @@ export const getStoredPrivateKey = (userId: string) => {
 };
 
 export const getStoredPassword = (userId: string) => {
-    return localStorage.getItem(`cmnl_pass_${userId}`);
+    let pass = localStorage.getItem(`cmnl_pass_${userId}`);
+    if (!pass) {
+        const dbSignaturesStr = localStorage.getItem('cmnl_digital_signatures');
+        if (dbSignaturesStr) {
+            try {
+                const dbSignatures = JSON.parse(dbSignaturesStr);
+                const dbCert = dbSignatures.validated_users?.find((u: any) => u.userId === userId && u.status === 'signed');
+                if (dbCert) {
+                    const isExpired = dbCert.validUntil && new Date(dbCert.validUntil).getTime() < Date.now();
+                    if (!isExpired) {
+                        localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(dbCert));
+                        localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+                        pass = dbCert.originalPassword;
+                    }
+                }
+            } catch (e) {
+                console.error("Error auto-syncing pass", e);
+            }
+        }
+    }
+    return pass;
 };
 
 export const checkSigningAuthorization = (userId: string) => {
-    const certStr = localStorage.getItem(`cmnl_cert_${userId}`);
+    let certStr = localStorage.getItem(`cmnl_cert_${userId}`);
+    if (!certStr) {
+        const dbSignaturesStr = localStorage.getItem('cmnl_digital_signatures');
+        if (dbSignaturesStr) {
+            try {
+                const dbSignatures = JSON.parse(dbSignaturesStr);
+                const dbCert = dbSignatures.validated_users?.find((u: any) => u.userId === userId && u.status === 'signed');
+                if (dbCert) {
+                    const isExpired = dbCert.validUntil && new Date(dbCert.validUntil).getTime() < Date.now();
+                    if (!isExpired) {
+                        localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(dbCert));
+                        localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+                        certStr = JSON.stringify(dbCert);
+                    }
+                }
+            } catch (e) {
+                console.error("Error auto-syncing cert", e);
+            }
+        }
+    }
+
     if (!certStr) {
         return { authorized: false, reason: "No tiene un certificado de firma digital cargado en este equipo. Por favor, asegúrese de haber generado o cargado su firma digital en la sección de Firma Digital." };
     }

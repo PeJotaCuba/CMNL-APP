@@ -1085,11 +1085,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                     if (!raw.startsWith('DVC-')) {
                                         raw = 'DVC-' + raw.replace(/^DVC-?/, '');
                                     }
-                                    if (raw.length <= 8) {
+                                    if (raw.length <= 9) {
                                       setNewDeviceToken(raw);
                                     }
                                   }}
-                                  placeholder="Ej: DVC-XXXX"
+                                  placeholder="Ej: DVC-XXXXX"
                                   className="w-full bg-[#2C1B15] border border-[#9E7649]/30 rounded p-2 text-xs text-white font-mono uppercase focus:outline-none focus:border-[#9E7649]"
                                 />
                               </div>
@@ -1137,7 +1137,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                   const trimmedName = newDeviceName.trim();
                                   
                                   if (!trimmedToken || trimmedToken === 'DVC-' || trimmedToken.length < 5 || !trimmedName) {
-                                    showAlert('Por favor, ingresa el código completo (Ej: DVC-XXXX) y el nombre del dispositivo.', 'error');
+                                    showAlert('Por favor, ingresa el código completo (Ej: DVC-XXXXX) y el nombre del dispositivo.', 'error');
                                     return;
                                   }
 
