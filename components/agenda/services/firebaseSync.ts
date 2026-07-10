@@ -33,8 +33,9 @@ interface FirestoreErrorInfo {
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errMsg = error instanceof Error ? error.message : String(error);
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -44,10 +45,20 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   };
   
-  // Log but don't throw if it's a list/get to prevent app crash
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  if (operationType !== OperationType.LIST && operationType !== OperationType.GET) {
-    throw new Error(JSON.stringify(errInfo));
+  const isOfflineOrNetwork = 
+    errMsg.toLowerCase().includes('offline') || 
+    errMsg.toLowerCase().includes('could not reach') || 
+    errMsg.toLowerCase().includes('network') || 
+    errMsg.toLowerCase().includes('unavailable');
+
+  if (isOfflineOrNetwork) {
+    console.warn('Firestore (Offline/Network Status): ', JSON.stringify(errInfo));
+  } else {
+    // Log but don't throw if it's a list/get to prevent app crash
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    if (operationType !== OperationType.LIST && operationType !== OperationType.GET) {
+      throw new Error(JSON.stringify(errInfo));
+    }
   }
 }
 

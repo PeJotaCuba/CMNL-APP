@@ -24,6 +24,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         signInAnonymously(auth).catch(err => {
           if (err.code === 'auth/admin-restricted-operation') {
             console.warn("Firebase: Anonymous Auth is disabled in the Firebase Console. Basic sync may require public permissions or enabling this provider.");
+          } else if (err.code === 'auth/network-request-failed') {
+            console.warn("Firebase Auth: Operating in offline mode. Local state is active.");
           } else {
             console.error("Firebase Anonymous Login Error:", err);
           }

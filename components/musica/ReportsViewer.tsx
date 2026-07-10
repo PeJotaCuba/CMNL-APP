@@ -158,6 +158,49 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: true } } : r));
     };
 
+    const getGlobalUserExtraData = (username: string) => {
+        try {
+            const savedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+            if (savedEquipo) {
+                const equipo = JSON.parse(savedEquipo);
+                if (Array.isArray(equipo)) {
+                    const found = equipo.find((m: any) => 
+                        (m.username && m.username.toLowerCase() === username.toLowerCase()) || 
+                        (m.id && m.id.toLowerCase() === username.toLowerCase()) ||
+                        (m.designatedUserId && m.designatedUserId.toLowerCase() === username.toLowerCase())
+                    );
+                    if (found) {
+                        return {
+                            ci: found.ci || '',
+                            tomo: found.tomo || '0',
+                            folio: found.folio || '0',
+                            name: found.name || ''
+                        };
+                    }
+                }
+            }
+            
+            const savedUsers = localStorage.getItem('rcm_users') || localStorage.getItem('rcm_data_users');
+            if (savedUsers) {
+                const usersList = JSON.parse(savedUsers);
+                if (Array.isArray(usersList)) {
+                    const found = usersList.find((u: any) => u.username && u.username.toLowerCase() === username.toLowerCase());
+                    if (found) {
+                        return {
+                            ci: found.ci || '',
+                            tomo: found.tomo || '0',
+                            folio: found.folio || '0',
+                            name: found.name || found.fullName || ''
+                        };
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error retrieving global user extra data:", e);
+        }
+        return { ci: '', tomo: '0', folio: '0', name: '' };
+    };
+
     const confirmSignReport = async () => {
         try {
             if (!currentUser) {
@@ -180,20 +223,68 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
             const storedPass = getStoredPassword(globalUserId);
             const cert = getStoredCertificate(globalUserId);
-            
-            if (!cert) {
-                showAlert("No tiene un certificado de firma digital cargado en este equipo. Por favor, asegúrese de haber generado o cargado su firma digital en la sección de Firma Digital.");
+
+            // Fetch extra user info (like CI) for original password calculation
+            const extraData = getGlobalUserExtraData(currentUser.username);
+            const ciPart = extraData.ci || '';
+            const namePart = (extraData.name || currentUser.fullName || currentUser.username).split(' ')[0] || '';
+            const originalPass = (namePart.substring(0, 4) + ciPart.substring(0, 4)).toUpperCase().substring(0, 8);
+
+            const inputPassUpper = signPass.trim().toUpperCase();
+            const inputPassNormal = signPass.trim();
+
+            let isAuthorized = false;
+            let signature = '';
+
+            if (cert) {
+                // If they have a certificate, verify against stored certificate password, original certificate password, original generated pass, or local login password
+                const effectivePass = storedPass || cert.originalPassword || '';
+                const localPass = currentUser.password || '';
+
+                if (
+                    inputPassNormal === effectivePass.trim() ||
+                    inputPassUpper === originalPass ||
+                    (localPass && inputPassNormal === localPass.trim())
+                ) {
+                    isAuthorized = true;
+                    signature = generateDigitalSignature(cert);
+                } else {
+                    showAlert("Contraseña de firma incorrecta.");
+                    return;
+                }
+            } else {
+                // If they don't have a certificate, allow directors on authorized devices (which is any director access here)
+                // using original generated password or local login password
+                const localPass = currentUser.password || '';
+                
+                if (
+                    inputPassUpper === originalPass || 
+                    (localPass && inputPassNormal === localPass.trim()) ||
+                    (storedPass && inputPassNormal === storedPass.trim())
+                ) {
+                    isAuthorized = true;
+                    // Generate a stable signature using mock certificate
+                    const mockCert = { 
+                        userData: { 
+                            fullName: extraData.name || currentUser.fullName || currentUser.username, 
+                            ci: extraData.ci || '', 
+                            tomo: extraData.tomo || '0', 
+                            folio: extraData.folio || '0' 
+                        }, 
+                        contracts: {} 
+                    };
+                    signature = `[AUTH] ${generateDigitalSignature(mockCert)}`;
+                } else {
+                    showAlert("Contraseña incorrecta o firma digital no cargada.");
+                    return;
+                }
+            }
+
+            if (!isAuthorized) {
+                showAlert("Contraseña de firma incorrecta o dispositivo no autorizado.");
                 return;
             }
 
-            const effectivePass = storedPass || cert.originalPassword || '';
-
-            if (signPass.trim() !== effectivePass.trim()) {
-                showAlert("Contraseña de firma incorrecta.");
-                return;
-            }
-
-            const signature = generateDigitalSignature(cert);
             const userFullName = currentUser.fullName || currentUser.username;
             
             if (signingMode === 'single' && signingReport) {
