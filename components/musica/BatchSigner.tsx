@@ -6,11 +6,13 @@ import { saveAs } from 'file-saver';
 import { getStoredPassword, getStoredCertificate, generateDigitalSignature, formatDigitalSignatureForDocuments, checkSigningAuthorization } from '../../utils/signatureUtils';
 import { extractTextFromPDF } from './services/pdfService';
 import * as pdfjsLib from 'pdfjs-dist';
+// @ts-ignore
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
 const pdfjs = pdfjsLib;
 
 if (pdfjs.GlobalWorkerOptions) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.5.207/pdf.worker.min.js`;
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 }
 
 interface BatchSignerProps {
@@ -31,6 +33,11 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
     const [files, setFiles] = useState<LoadedPDF[]>([]);
     const [signPass, setSignPass] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [customAlert, setCustomAlert] = useState<string | null>(null);
+
+    const showAlert = (message: string) => {
+        setCustomAlert(message);
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -50,24 +57,42 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
     const processBatch = async () => {
         if (!currentUser) return;
         if (!signPass) {
-            alert("Ingrese su contraseña de certificado.");
+            showAlert("Ingrese su contraseña de certificado.");
             return;
         }
 
         const globalUserId = (currentUser as any).id || currentUser.username;
         const authCheck = checkSigningAuthorization(globalUserId);
         if (!authCheck.authorized) {
-            alert(authCheck.reason);
+            showAlert(authCheck.reason);
             return;
         }
 
         const storedPass = getStoredPassword(globalUserId);
         const cert = getStoredCertificate(globalUserId);
 
+        if (cert) {
+            const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
+            const isPast72Hours = (Date.now() - issueDate) > 72 * 60 * 60 * 1000;
+            if (isPast72Hours) {
+                const ciPart = (currentUser as any).ci || '';
+                const namePart = ((currentUser as any).fullName || (currentUser as any).name || currentUser.username).split(' ')[0] || '';
+                const originalPass = (namePart.substring(0, 4) + ciPart.substring(0, 4)).toUpperCase().substring(0, 8);
+                
+                const cleanInput = signPass.trim().toLowerCase();
+                const cleanOrigCert = (cert.originalPassword || '').trim().toLowerCase();
+                const cleanOrigGen = originalPass.trim().toLowerCase();
+                if (cleanInput === cleanOrigCert || cleanInput === cleanOrigGen) {
+                    showAlert("No puede utilizar la contraseña original del certificado después de 72 horas. Por favor, cambie su contraseña en la pestaña de Firma Digital.");
+                    return;
+                }
+            }
+        }
+
         const effectivePass = storedPass || (cert ? cert.originalPassword : '') || '';
 
         if (!cert || signPass !== effectivePass) {
-            alert("Contraseña de firma incorrecta.");
+            showAlert("Contraseña de firma incorrecta.");
             return;
         }
 
@@ -89,6 +114,36 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                 const pdfText = await extractTextFromPDF(item.file);
                 const currentUserName = currentUser.fullName || (currentUser as any).name || currentUser.username;
                 
+                const getLevenshteinSimilarity = (s1: string, s2: string): number => {
+                    const len1 = s1.length;
+                    const len2 = s2.length;
+                    if (len1 === 0) return len2 === 0 ? 1 : 0;
+                    if (len2 === 0) return 0;
+                    
+                    const matrix: number[][] = [];
+                    for (let i = 0; i <= len1; i++) {
+                        matrix[i] = [i];
+                    }
+                    for (let j = 0; j <= len2; j++) {
+                        matrix[0][j] = j;
+                    }
+                    
+                    for (let i = 1; i <= len1; i++) {
+                        for (let j = 1; j <= len2; j++) {
+                            const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+                            matrix[i][j] = Math.min(
+                                matrix[i - 1][j] + 1,      // deletion
+                                matrix[i][j - 1] + 1,      // insertion
+                                matrix[i - 1][j - 1] + cost // substitution
+                            );
+                        }
+                    }
+                    
+                    const distance = matrix[len1][len2];
+                    const maxLength = Math.max(len1, len2);
+                    return 1 - distance / maxLength;
+                };
+
                 const normalizeForCompare = (str: string) => {
                     return str
                         .toLowerCase()
@@ -111,6 +166,7 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
 
                 let isNameMatch = false;
                 let originalDirectorName = 'No especificado';
+                let matchPercentage = 0;
 
                 if (directorLine) {
                     const colonIndex = directorLine.indexOf(':');
@@ -128,21 +184,30 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                     // Direct match
                     const containsCheck = normalOriginalDir.includes(normalUser) || normalUser.includes(normalOriginalDir);
                     
-                    // Word overlap match (at least one word length >= 4 matches)
-                    const originalDirParts = normalOriginalDir.split(' ').filter(p => p.length > 2);
-                    const userParts = normalUser.split(' ').filter(p => p.length > 2);
-                    const intersection = originalDirParts.filter(part => userParts.includes(part));
+                    // Word overlap ratio
+                    const wordsOrig = normalOriginalDir.split(' ').filter(w => w.length > 2);
+                    const wordsUser = normalUser.split(' ').filter(w => w.length > 2);
+                    const matchingWords = wordsOrig.filter(w => wordsUser.includes(w));
+                    const wordRatio = wordsOrig.length > 0 ? (matchingWords.length / Math.max(wordsOrig.length, wordsUser.length)) : 0;
                     
-                    const partCheck = intersection.some(part => part.length >= 4);
+                    // Levenshtein similarity
+                    const levSimilarity = getLevenshteinSimilarity(normalOriginalDir, normalUser);
+                    
+                    matchPercentage = Math.max(levSimilarity, wordRatio) * 100;
+                    if (containsCheck) {
+                        matchPercentage = 100;
+                    }
 
-                    isNameMatch = containsCheck || partCheck;
+                    isNameMatch = matchPercentage >= 80 || containsCheck;
                 } else {
                     // Fallback to substring in full text
-                    isNameMatch = normalText.includes(normalUser);
+                    const containsCheck = normalText.includes(normalUser);
+                    isNameMatch = containsCheck;
+                    matchPercentage = containsCheck ? 100 : 0;
                 }
 
                 if (!isNameMatch) {
-                    const errorMsg = `El director del PDF original (${directorLine ? directorLine.trim() : originalDirectorName}) no coincide con el firmante actual (${currentUserName}).`;
+                    const errorMsg = `El director del PDF original (${directorLine ? directorLine.trim() : originalDirectorName}) no coincide con el firmante actual (${currentUserName}). Coincidencia: ${Math.round(matchPercentage)}% (mínimo 80% requerido).`;
                     throw new Error(errorMsg);
                 }
 
@@ -154,7 +219,7 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                 const { width, height } = lastPage.getSize();
 
                 // 3. Find old signature exact coordinates using pdfjs to draw white rectangles selectively
-                const pdfJsDoc = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+                const pdfJsDoc = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
                 const pdfJsPage = await pdfJsDoc.getPage(pages.length);
                 const textContent = await pdfJsPage.getTextContent();
                 const textItems = textContent.items as any[];
@@ -185,13 +250,13 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                     });
                 });
 
-                // Also double check a generic middle-bottom area just in case (e.g. from Y=120 to Y=320) if oldSignatureYCoords was empty
+                // Also double check a generic middle-bottom area just in case (e.g. from Y=60 to Y=320) if oldSignatureYCoords was empty
                 if (oldSignatureYCoords.length === 0) {
                     lastPage.drawRectangle({
                         x: 40,
-                        y: 120,
+                        y: 60,
                         width: width - 80,
-                        height: 200,
+                        height: 260,
                         color: rgb(1, 1, 1),
                     });
                 }
@@ -202,7 +267,7 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                 // standard A4 proportions: lineEndX = width * (190 / 210), lineStartX = width * (110 / 210)
                 const lineStartX = (110 / 210) * width;
                 const lineEndX = (190 / 210) * width;
-                const currentY = 150; // Sitting comfortably above the bottom edge to avoid cuts on page boundary
+                const currentY = 85; // Sitting comfortably above the bottom edge to avoid cuts on page boundary
 
                 // Draw solid right aligned signature line
                 lastPage.drawLine({
@@ -278,11 +343,11 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
             .join('\n');
 
         if (errorCount === 0 && doneCount > 0) {
-            alert(`¡Proceso completado con éxito!\n\nSe han firmado digitalmente ${doneCount} de ${doneCount} reportes.\nYa puede proceder a descargar el ZIP con sus archivos.`);
+            showAlert(`¡Proceso completado con éxito!\n\nSe han firmado digitalmente ${doneCount} de ${doneCount} reportes.\nYa puede proceder a descargar el ZIP con sus archivos.`);
         } else if (errorCount > 0) {
-            alert(`El proceso de firmas por lote finalizó con inconvenientes:\n\n- Reportes firmados con éxito: ${doneCount}\n- Reportes fallidos: ${errorCount}\n\nDetalles de errores:\n${errorDetails}`);
+            showAlert(`El proceso de firmas por lote finalizó con inconvenientes:\n\n- Reportes firmados con éxito: ${doneCount}\n- Reportes fallidos: ${errorCount}\n\nDetalles de errores:\n${errorDetails}`);
         } else {
-            alert("No se firmó ningún reporte. Asegúrese de que correspondan a su usuario director.");
+            showAlert("No se firmó ningún reporte. Asegúrese de que correspondan a su usuario director.");
         }
 
         setIsProcessing(false);
@@ -385,6 +450,27 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Custom Alert Overlay Modal perfectly aligned and superposed without scroll */}
+            {customAlert && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 font-sans" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-center text-[#9E7649]">
+                            <span className="material-symbols-outlined text-4xl animate-bounce">verified_user</span>
+                        </div>
+                        <h3 className="text-white text-sm font-bold uppercase tracking-wider">Centro de Notificaciones</h3>
+                        <p className="text-xs text-stone-200 font-semibold leading-relaxed whitespace-pre-line text-left bg-black/30 p-4 rounded-xl border border-[#9E7649]/10">
+                            {customAlert}
+                        </p>
+                        <button
+                            onClick={() => setCustomAlert(null)}
+                            className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold rounded-xl transition-all text-xs uppercase"
+                        >
+                            Aceptar
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

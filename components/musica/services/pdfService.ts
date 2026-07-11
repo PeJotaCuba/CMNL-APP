@@ -1,11 +1,13 @@
 import { jsPDF } from "jspdf";
 import * as pdfjsLib from 'pdfjs-dist';
+// @ts-ignore
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { formatDigitalSignatureForDocuments } from "../../../utils/signatureUtils";
 
 const pdfjs = pdfjsLib;
 
 if (pdfjs.GlobalWorkerOptions) {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.5.207/pdf.worker.min.js`;
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 } else {
     console.warn("PDF.js GlobalWorkerOptions no encontrado, la lectura de PDF podría fallar.");
 }
@@ -112,7 +114,7 @@ export const generateReportPDF = (data: ReportData): Blob => {
 export const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
         let fullText = '';
 
         for (let i = 1; i <= pdf.numPages; i++) {

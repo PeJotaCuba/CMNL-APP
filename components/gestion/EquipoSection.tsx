@@ -778,8 +778,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
       {/* Viewing Modal */}
       {viewingMember && (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-20" onClick={() => setViewingMember(null)}>
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative mt-10 animate-fade-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setViewingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-md w-full relative animate-fade-in" onClick={e => e.stopPropagation()}>
             <button onClick={() => setViewingMember(null)} className="absolute top-4 right-4 text-[#E8DCCF]/50 hover:text-white">
               ✕
             </button>
@@ -828,8 +828,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
       {/* Editing Modal - Unified Team & User */}
       {editingMember && isAdmin && (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-20 overflow-y-auto" onClick={() => setEditingMember(null)}>
-          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-lg w-full relative mt-10 mb-10 animate-fade-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto" onClick={() => setEditingMember(null)}>
+          <div className="bg-[#1A100C] border border-[#9E7649]/30 rounded-2xl p-6 max-w-lg w-full relative my-10 animate-fade-in" onClick={e => e.stopPropagation()}>
             <h2 className="text-xl font-bold text-white mb-4">Gestión de Personal: {editingMember.name}</h2>
             
             <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
@@ -1517,8 +1517,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
       {/* Custom Confirm Modal */}
       {customConfirm && (
-        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomConfirm(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
               <AlertTriangle className="text-4xl animate-pulse" />
             </div>
@@ -1549,8 +1549,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
       {/* Custom Alert Modal */}
       {customAlert && (
-        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomAlert(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className={`flex justify-center ${customAlert.type === 'error' ? 'text-red-500' : 'text-[#9E7649]'}`}>
               {customAlert.type === 'error' ? <AlertTriangle className="text-4xl" /> : <div className="text-4xl">ℹ️</div>}
             </div>
@@ -1569,8 +1569,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
 
       {/* Admin Password Prompt for linking user */}
       {adminPwdPrompt?.visible && (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-start justify-center z-[70] p-4 pt-20 font-sans animate-fade-in">
-          <div className="bg-[#1A100C] border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative mt-10">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4 font-sans animate-fade-in">
+          <div className="bg-[#1A100C] border border-amber-500/30 rounded-xl max-w-sm w-full p-6 shadow-2xl relative">
             <div className="flex flex-col mb-4 items-center">
               <Shield className="text-amber-500 w-8 h-8 mb-2" />
               <h3 className="text-white font-bold text-center">Autorización Requerida</h3>

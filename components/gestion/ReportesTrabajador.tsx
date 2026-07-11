@@ -178,6 +178,20 @@ export const ReportesTrabajador: React.FC<Props> = ({
     const namePart = currentUser.name.split(' ')[0] || '';
     const originalPass = (namePart.substring(0, 4) + ciPart.substring(0, 4)).toUpperCase().substring(0, 8);
 
+    if (cert) {
+        const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
+        const isPast72Hours = (Date.now() - issueDate) > 72 * 60 * 60 * 1000;
+        if (isPast72Hours) {
+            const cleanInput = signPass.trim().toLowerCase();
+            const cleanOrigCert = (cert.originalPassword || '').trim().toLowerCase();
+            const cleanOrigGen = originalPass.trim().toLowerCase();
+            if (cleanInput === cleanOrigCert || cleanInput === cleanOrigGen) {
+                alert("No puede utilizar la contraseña original del certificado después de 72 horas. Por favor, cambie su contraseña en la pestaña de Firma Digital.");
+                return;
+            }
+        }
+    }
+
     if (!cert) {
         if (isAuthorizedDevice) {
             if (signPass.toUpperCase() === originalPass) {

@@ -237,6 +237,18 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             let signature = '';
 
             if (cert) {
+                const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
+                const isPast72Hours = (Date.now() - issueDate) > 72 * 60 * 60 * 1000;
+                if (isPast72Hours) {
+                    const cleanInput = inputPassNormal.trim().toLowerCase();
+                    const cleanOrigCert = (cert.originalPassword || '').trim().toLowerCase();
+                    const cleanOrigGen = originalPass.trim().toLowerCase();
+                    if (cleanInput === cleanOrigCert || cleanInput === cleanOrigGen) {
+                        showAlert("No puede utilizar la contraseña original del certificado después de 72 horas. Por favor, cambie su contraseña en la pestaña de Firma Digital.");
+                        return;
+                    }
+                }
+
                 // If they have a certificate, verify against stored certificate password, original certificate password, original generated pass, or local login password
                 const effectivePass = storedPass || cert.originalPassword || '';
                 const localPass = currentUser.password || '';
@@ -605,8 +617,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             )}
 
             {showSummary && (
-                <div className="absolute inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setShowSummary(false)}>
-                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30 mt-10" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSummary(false)}>
+                    <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4 border-b border-[#9E7649]/20 pb-2">
                              <h3 className="text-lg font-bold text-white">Resumen Estadístico</h3>
                              <button onClick={() => setShowSummary(false)} className="text-[#E8DCCF]/40 hover:text-white"><span className="material-symbols-outlined">close</span></button>
@@ -640,8 +652,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             )}
 
             {showSignDialog && (signingMode === 'all' || signingReport) && (
-                <div className="absolute inset-0 z-50 flex items-start justify-center bg-black/80 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setShowSignDialog(false)}>
-                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 mt-10 font-sans" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSignDialog(false)}>
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 font-sans" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3 text-yellow-500 mb-4">
                             <span className="material-symbols-outlined text-3xl">draw</span>
                             <h3 className="text-xl font-bold text-white">
@@ -679,8 +691,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
             {/* Custom Alert Overlay Modal perfectly aligned to the director's screen view */}
             {customAlert && (
-                <div className="absolute inset-0 z-55 flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomAlert(null)}>
-                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 mt-10 font-sans" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 font-sans" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-center text-[#9E7649]">
                             <span className="material-symbols-outlined text-4xl animate-bounce">verified_user</span>
                         </div>

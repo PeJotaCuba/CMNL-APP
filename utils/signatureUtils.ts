@@ -293,8 +293,14 @@ export const checkSigningAuthorization = (userId: string) => {
             }
         }
 
+        // Check session-level bypass for 72h rule (changed original for local password in active session)
+        let isChangedInSession = false;
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+            isChangedInSession = window.sessionStorage.getItem(`cmnl_pass_session_changed_${userId}`) === 'true';
+        }
+
         // 2. 72-hour rule: If they are using original password and 72 hours passed since issue
-        if (!lastUpdate) {
+        if (!lastUpdate && !isChangedInSession) {
             if (Date.now() - issueDate > 72 * 60 * 60 * 1000) {
                 return { 
                     authorized: false, 
@@ -303,7 +309,7 @@ export const checkSigningAuthorization = (userId: string) => {
             }
         } else {
             // 3. 30-day rule: If 30 days passed since last password update
-            if (Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000) {
+            if (lastUpdate && Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000) {
                 return { 
                     authorized: false, 
                     reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 30 días desde la última actualización de su contraseña. Debe establecer una nueva contraseña local en la sección Firma Digital o no podrá seguir firmando reportes." 

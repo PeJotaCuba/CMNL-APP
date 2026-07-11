@@ -15,6 +15,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const [pendingResetRequest, setPendingResetRequest] = useState<any>(null);
   const [downloadedSemanal, setDownloadedSemanal] = useState<boolean>(false);
   const [redirectDialog, setRedirectDialog] = useState<{ visible: boolean; filename: string; msg: string } | null>(null);
+  const [passwordUpdatedTrigger, setPasswordUpdatedTrigger] = useState(0);
   const ADMIN_EMAIL = 'emisora@cmnl.cu'; // Administrator email
   const ADMIN_PHONE = '54413935'; // Direct administrator phone number
 
@@ -346,9 +347,16 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       setCertStatus('active');
       setLoadedCert(dbCert);
       localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(dbCert));
-      localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
       if (newlyAutoLoaded) {
+        localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+        localStorage.removeItem(`cmnl_pass_updated_${userId}`);
         localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userId}`);
+        sessionStorage.removeItem(`cmnl_pass_session_changed_${userId}`);
+      } else {
+        const currentLocalPass = localStorage.getItem(`cmnl_pass_${userId}`);
+        if (!currentLocalPass) {
+          localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+        }
       }
     } else {
       // If expired or missing, clean up and allow re-request
@@ -371,6 +379,13 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
   const isPasswordExpired = React.useMemo(() => {
     if (!loadedCert) return false;
+    
+    // Check session-level bypass (password was changed in active session)
+    const isChangedInSession = sessionStorage.getItem(`cmnl_pass_session_changed_${userId}`) === 'true';
+    if (isChangedInSession) {
+      return false; // Hide warning in current session
+    }
+
     const lastUpdate = localStorage.getItem(`cmnl_pass_updated_${userId}`);
     const issueDate = new Date(loadedCert.issueDate).getTime();
     if (!lastUpdate) {
@@ -380,7 +395,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
        // Updated before, must be changed monthly (30 days)
        return Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000;
     }
-  }, [loadedCert, userId]);
+  }, [loadedCert, userId, passwordUpdatedTrigger]);
 
   const [adminRevealTimer, setAdminRevealTimer] = useState<number>(0);
   const [adminTempPass, setAdminTempPass] = useState<string>('');
@@ -809,6 +824,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
     localStorage.setItem(`cmnl_pass_${userId}`, passForm.new);
     localStorage.setItem(`cmnl_pass_updated_${userId}`, Date.now().toString());
+    sessionStorage.setItem(`cmnl_pass_session_changed_${userId}`, 'true');
+    setPasswordUpdatedTrigger(prev => prev + 1);
     
     // Consume reset request if it was active
     if (isResetActive && dbSignaturesStr) {
@@ -829,7 +846,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   };
 
   // --- PASSWORD RECOVERY: HE OLVIDADO MI CONTRASEÑA ---
-  const handleForgotPassword = () => {
+  const handleForgotPassword = async () => {
     if (!loadedCert) {
       showAlert("No tiene un certificado cargado para poder regenerar la contraseña.", "error");
       return;
@@ -848,7 +865,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       timestamp: new Date().toISOString()
     };
     
-    const blob = new Blob([JSON.stringify(requestPayload, null, 2)], { type: 'application/octet-stream;charset=utf-8' });
+    const fileContent = JSON.stringify(requestPayload, null, 2);
+    const blob = new Blob([fileContent], { type: 'application/octet-stream;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -863,14 +881,40 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     const phone = adminUser?.phone || adminUser?.mobile || '5354413935';
     const cleanPhone = phone.startsWith('53') ? phone : '53' + phone;
     
-    showAlert("¡Archivo de regeneración .semanal descargado con éxito! Por favor envíselo al Administrador para autorizar su cambio.", "success");
-    
     const msg = `Hola Administrador, olvidé mi contraseña de firma digital para el usuario: *${nameForFile}*.\n\nLe adjunto mi archivo de solicitud .semanal generado por mi dispositivo para que me autorice la regeneración.`;
     
-    setTimeout(() => {
-       const u = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
-       window.open(u, '_blank');
-    }, 1500);
+    showAlert("¡Archivo de regeneración .semanal descargado con éxito! Por favor envíselo al Administrador para autorizar su cambio.", "success");
+    
+    try {
+      // Use text/plain so mobile browsers accept the file in Web Share API
+      const file = new File([fileContent], filename, { type: 'text/plain' });
+      
+      const shareData = {
+        files: [file],
+        title: 'Recuperar Contraseña .semanal',
+        text: msg
+      };
+
+      if (navigator.canShare && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        return; // Shared successfully
+      } else if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err: any) {
+      console.log("Share API falló o fue cancelada para recuperación de clave", err);
+      if (err.name === 'AbortError') {
+        return;
+      }
+    }
+
+    // Fallback for browsers that don't support file sharing
+    setRedirectDialog({
+      visible: true,
+      filename,
+      msg
+    });
   };
 
   // --- ADMINISTRATOR: REGENERATE USER PASSWORD ---
@@ -2460,8 +2504,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
       {/* MODAL: ADMIN CONFIRM SIGNING FOR DIRECT EMISSION */}
       {showAdminSignConfirmDialog && (
-        <div className="absolute inset-0 z-[100] flex items-start justify-center p-4 pt-20 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#2C1B15] border border-amber-500/30 p-8 rounded-3xl max-w-sm w-full shadow-2xl space-y-6 mt-10 animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#2C1B15] border border-amber-500/30 p-8 rounded-3xl max-w-sm w-full shadow-2xl space-y-6 animate-in zoom-in-95">
             <div className="text-center space-y-2">
               <div className="size-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-2 border border-amber-500/20">
                 <Key className="text-amber-500" size={32} />
@@ -2500,8 +2544,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
       {/* DIALOG BOX: DIRECTOR PASSWORDS AND SIGNATURE */}
       {showDirectorSignDialog && signingCert && (
-        <div className="absolute inset-0 z-50 flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setShowDirectorSignDialog(false)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 mt-10" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowDirectorSignDialog(false)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 text-yellow-500 mb-4">
               <Award className="text-3xl shrink-0" />
               <h3 className="text-lg font-bold text-white">Firmar Licencia de Equipo</h3>
@@ -2569,8 +2613,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
       {/* Custom Alert Modal */}
       {customAlert && (
-        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomAlert(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4 mt-10" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-amber-500">
               <Shield className="text-4xl animate-bounce" />
             </div>
@@ -2589,8 +2633,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
       {/* Custom Confirm Modal */}
       {customConfirm && (
-        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setCustomConfirm(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
               <AlertTriangle className="text-4xl animate-pulse" />
             </div>
@@ -2621,8 +2665,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
 
       {/* WhatsApp Redirect Explanation Dialog */}
       {redirectDialog?.visible && (
-        <div className="absolute inset-0 z-[100] flex items-start justify-center bg-black/85 backdrop-blur-sm p-4 pt-20 animate-fade-in" onClick={() => setRedirectDialog(null)}>
-          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-green-500/30 text-center space-y-4 mt-10 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setRedirectDialog(null)}>
+          <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-green-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-green-400">
               <Send className="text-4xl animate-pulse" />
             </div>
