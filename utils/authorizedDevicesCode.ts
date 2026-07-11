@@ -27,6 +27,12 @@ export const HARDCODED_DEVICES: HardcodedUserDevice[] = [
                 "name": "GIAS Lap",
                 "type": "PC",
                 "addedAt": "22/5/2026"
+            },
+            {
+                "token": "DVC-KT4J",
+                "name": "Admin-New",
+                "type": "PC",
+                "addedAt": "11/7/2026"
             }
         ]
     },
@@ -111,6 +117,12 @@ export const HARDCODED_DEVICES: HardcodedUserDevice[] = [
                 "name": "Laptop",
                 "type": "PC",
                 "addedAt": "7/6/2026"
+            },
+            {
+                "token": "DVC-KT4J",
+                "name": "Admin-New",
+                "type": "PC",
+                "addedAt": "11/7/2026"
             }
         ]
     }

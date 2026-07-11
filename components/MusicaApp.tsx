@@ -910,6 +910,38 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
       return parsedTracks;
   };
 
+  const getSimilarity = (s1: string, s2: string): number => {
+      const len1 = s1.length;
+      const len2 = s2.length;
+      if (len1 === 0) return len2 === 0 ? 1 : 0;
+      if (len2 === 0) return 0;
+      const matrix: number[][] = [];
+      for (let i = 0; i <= len1; i++) matrix[i] = [i];
+      for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+      for (let i = 1; i <= len1; i++) {
+          for (let j = 1; j <= len2; j++) {
+              const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+              matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+          }
+      }
+      return 1 - matrix[len1][len2] / Math.max(len1, len2);
+  };
+
+  const checkPerformerInPath = (path: string, performer: string): boolean => {
+      if (!path || !performer || path === 'Carga Externa' || path === 'Manual') return false;
+      const normalize = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const normalizedPerformer = normalize(performer);
+      if (!normalizedPerformer || normalizedPerformer === '---') return false;
+      const pathParts = path.split('/').filter(p => p.length > 0);
+      if (pathParts.length > 0) pathParts.pop(); // Remove filename
+      return pathParts.some(part => {
+          const normalizedPart = normalize(part);
+          if (normalizedPart.includes(normalizedPerformer) || normalizedPerformer.includes(normalizedPart)) return true;
+          if (getSimilarity(normalizedPart, normalizedPerformer) >= 0.8) return true;
+          return false;
+      });
+  };
+
   const handleProcessWishlist = () => {
       if (!wishlistText.trim()) return;
       const parsedList = parsePlaylistText(wishlistText);
@@ -970,9 +1002,12 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
               if (finalMetadata.album !== (originalMeta.album || '')) isUpdatedInDb = true;
               if (finalMetadata.year !== (originalMeta.year || '')) isUpdatedInDb = true;
 
+              const isPathValid = checkPerformerInPath(matchedDbTrack.path, finalMetadata.performer);
+              
               const resolvedTrack: Track = {
                   ...matchedDbTrack,
-                  metadata: finalMetadata
+                  metadata: finalMetadata,
+                  path: isPathValid ? matchedDbTrack.path : 'Carga Externa'
               };
 
               if (isUpdatedInDb) {
