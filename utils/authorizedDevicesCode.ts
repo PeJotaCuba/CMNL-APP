@@ -99,6 +99,18 @@ export const HARDCODED_DEVICES: HardcodedUserDevice[] = [
                 "name": "Laptop",
                 "type": "PC",
                 "addedAt": "25/5/2026"
+            },
+            {
+                "token": "DVC-U7K4",
+                "name": "GAISLap",
+                "type": "PC",
+                "addedAt": "7/6/2026"
+            },
+            {
+                "token": "DVC-ETN9",
+                "name": "Laptop",
+                "type": "PC",
+                "addedAt": "7/6/2026"
             }
         ]
     }
