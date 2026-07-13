@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Shield, Key, FileUp, FileCheck, Download, AlertTriangle, CheckCircle2, Lock, FileText, FileDown, FileCode, Users, Award, PlayCircle, Send } from 'lucide-react';
+import { Shield, Key, FileUp, FileCheck, Download, AlertTriangle, CheckCircle2, Lock, FileText, FileDown, FileCode, Users, Award, PlayCircle, Send, Eye, EyeOff } from 'lucide-react';
 import { cryptoUtils, generateDigitalSignature, getStoredCertificate, getStoredPrivateKey, getStoredPassword, formatDigitalSignatureForDocuments } from '../utils/signatureUtils';
 import jsPDF from 'jspdf';
 import { openWhatsApp } from '../utils/whatsappUtils';
@@ -8,17 +8,25 @@ import { DeviceIdentityService } from '../src/services/DeviceIdentityService';
 import { isDeviceLimitEnabledForUser, getAuthorizedDevicesForUser } from '../utils/authorizedDevicesCode';
 
 
-const PasswordCountdown = ({ userId, cert }: { userId: string, cert: any }) => {
-    const [timeLeft, setTimeLeft] = React.useState<{days: number, hours: number, minutes: number, seconds: number, expired: boolean} | null>(null);
+const PasswordCountdown = ({ userId, cert, digitalSignatures }: { userId: string, cert: any, digitalSignatures: any }) => {
+    const [timeLeft, setTimeLeft] = React.useState<{days: number, hours: number, minutes: number, seconds: number, expired: boolean, isReset: boolean} | null>(null);
 
     React.useEffect(() => {
         const updateTimer = () => {
             const lastUpdate = localStorage.getItem(`cmnl_pass_updated_${userId}`);
             const isChangedInSession = typeof window !== 'undefined' && window.sessionStorage.getItem(`cmnl_pass_session_changed_${userId}`) === 'true';
             
+            // Check if reset is active
+            const resets = digitalSignatures?.password_resets || [];
+            const activeReset = resets.find((r: any) => r.userId === userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
+            const isResetActive = !!activeReset;
+            
             let expirationTime = 0;
             
-            if (!lastUpdate && !isChangedInSession) {
+            if (isResetActive && activeReset) {
+                // If reset is active, countdown to validUntil or grantedAt + 24h
+                expirationTime = activeReset.validUntil || (activeReset.grantedAt + 24 * 60 * 60 * 1000);
+            } else if (!lastUpdate && !isChangedInSession) {
                 const issueDate = cert?.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
                 expirationTime = issueDate + (72 * 60 * 60 * 1000);
             } else {
@@ -30,7 +38,7 @@ const PasswordCountdown = ({ userId, cert }: { userId: string, cert: any }) => {
             const diff = expirationTime - now;
             
             if (diff <= 0) {
-                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: true });
+                setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: true, isReset: isResetActive });
                 return;
             }
             
@@ -39,13 +47,13 @@ const PasswordCountdown = ({ userId, cert }: { userId: string, cert: any }) => {
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((diff % (1000 * 60)) / 1000);
             
-            setTimeLeft({ days, hours, minutes, seconds, expired: false });
+            setTimeLeft({ days, hours, minutes, seconds, expired: false, isReset: isResetActive });
         };
         
         updateTimer();
         const interval = setInterval(updateTimer, 1000);
         return () => clearInterval(interval);
-    }, [userId, cert]);
+    }, [userId, cert, digitalSignatures]);
 
     if (!timeLeft) return null;
 
@@ -54,31 +62,40 @@ const PasswordCountdown = ({ userId, cert }: { userId: string, cert: any }) => {
             <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl flex items-center gap-3">
                 <AlertTriangle className="text-red-500" size={24} />
                 <div className="text-left">
-                    <p className="text-red-500 text-xs font-bold uppercase tracking-wide">Contraseña Caducada</p>
-                    <p className="text-red-400/80 text-[10px]">Cambie su contraseña inmediatamente.</p>
+                    <p className="text-red-500 text-xs font-bold uppercase tracking-wide">
+                        {timeLeft.isReset ? "Autorización Caducada" : "Contraseña Caducada"}
+                    </p>
+                    <p className="text-red-400/80 text-[10px]">
+                        {timeLeft.isReset ? "Su ventana de 24h para reiniciar expiró." : "Cambie su contraseña inmediatamente."}
+                    </p>
                 </div>
             </div>
         );
     }
 
-    const isWarning = timeLeft.days < 3;
-    const colorClass = isWarning ? "text-yellow-500" : "text-green-500";
-    const bgClass = isWarning ? "bg-yellow-500/10 border-yellow-500/20" : "bg-green-500/10 border-green-500/20";
+    const isReset = timeLeft.isReset;
+    const isWarning = timeLeft.days < 3 || isReset;
+    const colorClass = isReset ? "text-red-500 animate-pulse" : (isWarning ? "text-yellow-500" : "text-green-500");
+    const bgClass = isReset ? "bg-red-500/10 border-red-500/20" : (isWarning ? "bg-yellow-500/10 border-yellow-500/20" : "bg-green-500/10 border-green-500/20");
 
     return (
         <div className={`border p-4 rounded-2xl flex flex-col items-center justify-center space-y-2 ${bgClass}`}>
             <div className="flex items-center gap-2">
                 <Lock size={16} className={colorClass} />
                 <p className={`text-xs font-bold uppercase tracking-wider ${colorClass}`}>
-                    Vigencia de Contraseña
+                    {isReset ? "LÍMITE CAMBIO DE CLAVE (24H)" : "Vigencia de Contraseña"}
                 </p>
             </div>
             <div className="flex gap-3 text-center">
-                <div className="flex flex-col">
-                    <span className={`text-2xl font-bold font-mono ${colorClass}`}>{String(timeLeft.days).padStart(2, '0')}</span>
-                    <span className={`text-[8px] uppercase tracking-widest ${colorClass} opacity-80`}>Días</span>
-                </div>
-                <span className={`text-xl font-bold ${colorClass}`}>:</span>
+                {!isReset && timeLeft.days > 0 && (
+                    <>
+                        <div className="flex flex-col">
+                            <span className={`text-2xl font-bold font-mono ${colorClass}`}>{String(timeLeft.days).padStart(2, '0')}</span>
+                            <span className={`text-[8px] uppercase tracking-widest ${colorClass} opacity-80`}>Días</span>
+                        </div>
+                        <span className={`text-xl font-bold ${colorClass}`}>:</span>
+                    </>
+                )}
                 <div className="flex flex-col">
                     <span className={`text-2xl font-bold font-mono ${colorClass}`}>{String(timeLeft.hours).padStart(2, '0')}</span>
                     <span className={`text-[8px] uppercase tracking-widest ${colorClass} opacity-80`}>Hrs</span>
@@ -399,6 +416,11 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   const [customConfirm, setCustomConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [customAlert, setCustomAlert] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
 
+  // Password visibility states
+  const [showOldPass, setShowOldPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setCustomAlert({ message, type });
   };
@@ -420,6 +442,9 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     const dbPending = digitalSignatures.pending_requests?.find((r: any) => r.userId === userId);
     const isExpired = dbCert && dbCert.validUntil && new Date(dbCert.validUntil).getTime() < Date.now();
     
+    const resets = digitalSignatures?.password_resets || [];
+    const isUserResetActive = resets.some((r: any) => r.userId === userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
+
     if (dbCert && !isExpired) {
       const localCertStr = localStorage.getItem(`cmnl_cert_${userId}`);
       let newlyAutoLoaded = false;
@@ -438,7 +463,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       setCertStatus('active');
       setLoadedCert(dbCert);
       localStorage.setItem(`cmnl_cert_${userId}`, JSON.stringify(dbCert));
-      if (newlyAutoLoaded) {
+      
+      if (isUserResetActive) {
+        localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
+        localStorage.removeItem(`cmnl_pass_updated_${userId}`);
+        sessionStorage.removeItem(`cmnl_pass_session_changed_${userId}`);
+      } else if (newlyAutoLoaded) {
         localStorage.setItem(`cmnl_pass_${userId}`, dbCert.originalPassword);
         localStorage.removeItem(`cmnl_pass_updated_${userId}`);
         localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userId}`);
@@ -468,8 +498,15 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   // Check if loaded certificate is expired (1 year limit)
   const isCertExpired = loadedCert?.validUntil && new Date(loadedCert.validUntil).getTime() < Date.now();
 
+  const isResetActive = React.useMemo(() => {
+    if (!userId) return false;
+    const resets = digitalSignatures?.password_resets || [];
+    return resets.some((r: any) => r.userId === userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
+  }, [digitalSignatures, userId]);
+
   const isPasswordExpired = React.useMemo(() => {
     if (!loadedCert) return false;
+    if (isResetActive) return false; // Handled separately with prominent reset warning banner
     
     // Check session-level bypass (password was changed in active session)
     const isChangedInSession = sessionStorage.getItem(`cmnl_pass_session_changed_${userId}`) === 'true';
@@ -486,7 +523,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
        // Updated before, must be changed monthly (30 days)
        return Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000;
     }
-  }, [loadedCert, userId, passwordUpdatedTrigger]);
+  }, [loadedCert, userId, passwordUpdatedTrigger, isResetActive]);
 
   const [adminRevealTimer, setAdminRevealTimer] = useState<number>(0);
   const [adminTempPass, setAdminTempPass] = useState<string>('');
@@ -883,7 +920,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   // --- PASSWORD UPDATE FOR CERTIFICATE ---
   const handleUpdatePassword = () => {
     if (!loadedCert) return;
-    const currentStored = localStorage.getItem(`cmnl_pass_${userId}`);
+    const currentStored = getStoredPassword(userId) || loadedCert?.originalPassword;
     
     // Check if password reset is dynamically active for user
     let isResetActive = false;
@@ -1621,9 +1658,21 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
             <p className="text-stone-400 text-xs">Identificación criptográfica activa en este dispositivo</p>
           </div>
           <div className="flex-shrink-0 scale-90 origin-right">
-            <PasswordCountdown userId={userId} cert={loadedCert} />
+            <PasswordCountdown userId={userId} cert={loadedCert} digitalSignatures={digitalSignatures} />
           </div>
         </div>
+
+        {isResetActive && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl flex items-start gap-3 animate-pulse">
+            <AlertTriangle className="shrink-0 mt-0.5 text-red-500" />
+            <div className="text-xs space-y-1">
+              <p className="font-bold uppercase">REGENERACIÓN DE CONTRASEÑA EN CURSO (FIRMAS TEMPORALMENTE DESHABILITADAS)</p>
+              <p className="opacity-80">
+                El usuario ha manifestado haber olvidado su contraseña de firma digital corporativa. Al regenerar la contraseña, el usuario tendrá 24 horas para definir una nueva clave local usando la contraseña original provista en su certificado, pero no podrá firmar ningún documento usando dicha contraseña temporal u original.
+              </p>
+            </div>
+          </div>
+        )}
 
         {isCertExpired && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl flex items-center gap-3 animate-pulse">
@@ -1810,32 +1859,59 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 <div className="space-y-4 pt-2">
                   <div>
                     <label className="block text-[10px] text-stone-500 uppercase tracking-widest mb-1.5 font-bold">Contraseña Actual</label>
-                    <input 
-                      type="password"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm tracking-wider font-mono outline-none focus:border-amber-500"
-                      value={passForm.old}
-                      onChange={e => setPassForm({...passForm, old: e.target.value})}
-                      placeholder="La de su .semanal o contraseña actual"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showOldPass ? "text" : "password"}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 pr-10 text-white text-sm tracking-wider font-mono outline-none focus:border-amber-500"
+                        value={passForm.old}
+                        onChange={e => setPassForm({...passForm, old: e.target.value})}
+                        placeholder="La de su .semanal o contraseña actual"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOldPass(!showOldPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                      >
+                        {showOldPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] text-stone-500 uppercase mb-1.5 font-bold">Nueva Clave</label>
-                      <input 
-                        type="password"
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm font-mono outline-none focus:border-amber-500"
-                        value={passForm.new}
-                        onChange={e => setPassForm({...passForm, new: e.target.value})}
-                      />
+                      <div className="relative">
+                        <input 
+                          type={showNewPass ? "text" : "password"}
+                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 pr-10 text-white text-sm font-mono outline-none focus:border-amber-500"
+                          value={passForm.new}
+                          onChange={e => setPassForm({...passForm, new: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPass(!showNewPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                        >
+                          {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] text-stone-500 uppercase mb-1.5 font-bold">Confirmar</label>
-                      <input 
-                        type="password"
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm font-mono outline-none focus:border-amber-500"
-                        value={passForm.confirm}
-                        onChange={e => setPassForm({...passForm, confirm: e.target.value})}
-                      />
+                      <div className="relative">
+                        <input 
+                          type={showConfirmPass ? "text" : "password"}
+                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 pr-10 text-white text-sm font-mono outline-none focus:border-amber-500"
+                          value={passForm.confirm}
+                          onChange={e => setPassForm({...passForm, confirm: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPass(!showConfirmPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                        >
+                          {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <button 
@@ -1935,32 +2011,59 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 <div className="space-y-4 pt-2">
                   <div>
                     <label className="block text-[10px] text-stone-500 uppercase tracking-widest mb-1.5 font-bold">Contraseña Actual</label>
-                    <input 
-                      type="password"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm tracking-wider font-mono outline-none focus:border-blue-500"
-                      value={passForm.old}
-                      onChange={e => setPassForm({...passForm, old: e.target.value})}
-                      placeholder="La suministrada en su .semanal o la actual"
-                    />
+                    <div className="relative">
+                      <input 
+                        type={showOldPass ? "text" : "password"}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 pr-10 text-white text-sm tracking-wider font-mono outline-none focus:border-blue-500"
+                        value={passForm.old}
+                        onChange={e => setPassForm({...passForm, old: e.target.value})}
+                        placeholder="La suministrada en su .semanal o la actual"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOldPass(!showOldPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                      >
+                        {showOldPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] text-stone-500 uppercase mb-1.5 font-bold">Nueva Clave</label>
-                      <input 
-                        type="password"
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm font-mono outline-none focus:border-blue-500"
-                        value={passForm.new}
-                        onChange={e => setPassForm({...passForm, new: e.target.value})}
-                      />
+                      <div className="relative">
+                        <input 
+                          type={showNewPass ? "text" : "password"}
+                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 pr-10 text-white text-sm font-mono outline-none focus:border-blue-500"
+                          value={passForm.new}
+                          onChange={e => setPassForm({...passForm, new: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPass(!showNewPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                        >
+                          {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] text-stone-500 uppercase mb-1.5 font-bold">Confirmar</label>
-                      <input 
-                        type="password"
-                        className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-white text-sm font-mono outline-none focus:border-blue-500"
-                        value={passForm.confirm}
-                        onChange={e => setPassForm({...passForm, confirm: e.target.value})}
-                      />
+                      <div className="relative">
+                        <input 
+                          type={showConfirmPass ? "text" : "password"}
+                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 pr-10 text-white text-sm font-mono outline-none focus:border-blue-500"
+                          value={passForm.confirm}
+                          onChange={e => setPassForm({...passForm, confirm: e.target.value})}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPass(!showConfirmPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 hover:text-stone-300 transition-colors"
+                        >
+                          {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <button 
@@ -2525,68 +2628,79 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 <p className="text-xs text-stone-500 italic">No hay certificados registrados en la Base de Datos.</p>
               ) : (
                 <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {(digitalSignatures.validated_users || []).map((userCert: any, idx: number) => (
-                    <div key={userCert.userId || idx} className="p-4 bg-black/30 rounded-xl border border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div className="text-left space-y-1">
-                        <p className="text-white text-xs font-bold">{userCert.userData?.fullName}</p>
-                        <p className="text-[10px] text-stone-400 font-mono">CI: {userCert.userData?.ci}</p>
-                        <p className="text-[9px] text-stone-500 font-mono">
-                          Estado: <span className={userCert.status === 'signed' ? 'text-green-500 font-bold' : 'text-amber-400 font-bold'}>{userCert.status === 'signed' ? 'Certificado Oficial Emitido' : 'Validado sin firmar'}</span>
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        {userCert.status === 'signed' && (
+                  {(digitalSignatures.validated_users || []).map((userCert: any, idx: number) => {
+                    const resets = digitalSignatures?.password_resets || [];
+                    const isUserResetActive = resets.some((r: any) => r.userId === userCert.userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
+                    return (
+                      <div key={userCert.userId || idx} className="p-4 bg-black/30 rounded-xl border border-white/5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="text-left space-y-1">
+                          <p className="text-white text-xs font-bold flex flex-wrap items-center gap-2">
+                            {userCert.userData?.fullName}
+                            {isUserResetActive && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">
+                                <AlertTriangle size={10} /> Pendiente de cambiar contraseña
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-stone-400 font-mono">CI: {userCert.userData?.ci}</p>
+                          <p className="text-[9px] text-stone-500 font-mono">
+                            Estado: <span className={userCert.status === 'signed' ? 'text-green-500 font-bold' : 'text-amber-400 font-bold'}>{userCert.status === 'signed' ? 'Certificado Oficial Emitido' : 'Validado sin firmar'}</span>
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {userCert.status === 'signed' && (
+                            <button
+                              onClick={() => {
+                                const fileContent = JSON.stringify(userCert, null, 2);
+                                const blob = new Blob([fileContent], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `razon_${userCert.userData?.fullName.replace(/\s+/g, '_')}.razon`;
+                                a.click();
+                              }}
+                              className="p-1 px-2 text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/15 text-[10px] rounded font-bold transition-all uppercase"
+                              title="Descargar .razon"
+                            >
+                              RAZON
+                            </button>
+                          )}
                           <button
                             onClick={() => {
-                              const fileContent = JSON.stringify(userCert, null, 2);
-                              const blob = new Blob([fileContent], { type: 'application/json' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `razon_${userCert.userData?.fullName.replace(/\s+/g, '_')}.razon`;
-                              a.click();
-                            }}
-                            className="p-1 px-2 text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/15 text-[10px] rounded font-bold transition-all uppercase"
-                            title="Descargar .razon"
-                          >
-                            RAZON
-                          </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            showConfirm(
-                              `¿Estás seguro de que deseas eliminar y desvincular permanentemente el certificado de ${userCert.userData?.fullName}?`,
-                              () => {
-                                // Requirement: If deleting own admin certificate, reset state to allow re-creation
-                                if (userCert.userId === userId) {
-                                  localStorage.removeItem(`cmnl_sk_${userId}`);
-                                  localStorage.removeItem(`cmnl_cert_${userId}`);
-                                  localStorage.removeItem(`cmnl_pass_${userId}`);
-                                  setCertStatus('none');
-                                  setLoadedCert(null);
-                                  setView('main');
+                              showConfirm(
+                                `¿Estás seguro de que deseas eliminar y desvincular permanentemente el certificado de ${userCert.userData?.fullName}?`,
+                                () => {
+                                  // Requirement: If deleting own admin certificate, reset state to allow re-creation
+                                  if (userCert.userId === userId) {
+                                    localStorage.removeItem(`cmnl_sk_${userId}`);
+                                    localStorage.removeItem(`cmnl_cert_${userId}`);
+                                    localStorage.removeItem(`cmnl_pass_${userId}`);
+                                    setCertStatus('none');
+                                    setLoadedCert(null);
+                                    setView('main');
+                                  }
+
+                                  // Reset the limit of 3 views in 24 hours for the password when certificate is deleted
+                                  localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userCert.userId}`);
+
+                                  const updatedUsers = (digitalSignatures.validated_users || []).filter((u: any) => u.userId !== userCert.userId);
+                                  saveDigitalSignatures({
+                                    ...digitalSignatures,
+                                    validated_users: updatedUsers
+                                  });
+                                  showAlert("Certificado eliminado correctamente del sistema.", 'success');
                                 }
-
-                                // Reset the limit of 3 views in 24 hours for the password when certificate is deleted
-                                localStorage.removeItem(`cmnl_worker_cert_reveal_times_v5_${userCert.userId}`);
-
-                                const updatedUsers = (digitalSignatures.validated_users || []).filter((u: any) => u.userId !== userCert.userId);
-                                saveDigitalSignatures({
-                                  ...digitalSignatures,
-                                  validated_users: updatedUsers
-                                });
-                                showAlert("Certificado eliminado correctamente del sistema.", 'success');
-                              }
-                            );
-                          }}
-                          className="p-1 px-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/15 text-[10px] rounded font-bold transition-all uppercase"
-                          title="Eliminar Certificado"
-                        >
-                          Eliminar
-                        </button>
+                              );
+                            }}
+                            className="p-1 px-2 text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/15 text-[10px] rounded font-bold transition-all uppercase"
+                            title="Eliminar Certificado"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2706,7 +2820,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
       )}
 
       {/* Custom Alert Modal */}
-      {customAlert && (
+      {customAlert && typeof window !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 text-center space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-amber-500">
@@ -2722,11 +2836,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               Aceptar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Custom Confirm Modal */}
-      {customConfirm && (
+      {customConfirm && typeof window !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomConfirm(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-red-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-red-500">
@@ -2754,11 +2869,12 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* WhatsApp Redirect Explanation Dialog */}
-      {redirectDialog?.visible && (
+      {redirectDialog?.visible && typeof window !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setRedirectDialog(null)}>
           <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-green-500/30 text-center space-y-4 animate-scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex justify-center text-green-400">
@@ -2789,7 +2905,8 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
