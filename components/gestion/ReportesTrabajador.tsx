@@ -48,6 +48,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().substring(0, 7));
   const [signingReport, setSigningReport] = useState<FP02Report | null>(null);
   const [signPass, setSignPass] = useState('');
+    const [pendingSignWarning, setPendingSignWarning] = useState<string | null>(null);
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailMode, setDetailMode] = useState<'autogestion' | 'oficial'>('autogestion');
@@ -166,6 +167,10 @@ export const ReportesTrabajador: React.FC<Props> = ({
             alert(authCheck.reason);
             return;
         }
+        if (authCheck.warning && !sessionStorage.getItem(`warn_acked_${currentUser.id}`)) {
+            setPendingSignWarning(authCheck.warning);
+            return;
+        }
     }
 
     const effectivePass = storedPass || (cert ? cert.originalPassword : '') || '';
@@ -180,16 +185,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
 
     if (cert) {
         const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
-        const isPast72Hours = (Date.now() - issueDate) > 72 * 60 * 60 * 1000;
-        if (isPast72Hours) {
-            const cleanInput = signPass.trim().toLowerCase();
-            const cleanOrigCert = (cert.originalPassword || '').trim().toLowerCase();
-            const cleanOrigGen = originalPass.trim().toLowerCase();
-            if (cleanInput === cleanOrigCert || cleanInput === cleanOrigGen) {
-                alert("No puede utilizar la contraseña original del certificado después de 72 horas. Por favor, cambie su contraseña en la pestaña de Firma Digital.");
-                return;
-            }
-        }
+        
     }
 
     if (!cert) {

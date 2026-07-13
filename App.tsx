@@ -18,7 +18,7 @@ import { PlaceholderView, CMNLAppView } from './components/GenericViews';
 import InstallPWA from './components/InstallPWA';
 import { INITIAL_USERS, INITIAL_NEWS, INITIAL_HISTORY, INITIAL_ABOUT, getCurrentProgram, getCategoryVector } from './utils/scheduleData';
 import BackupDialog from './components/BackupDialog';
-import { UpdateDetailsModal, UpdateReminderModal } from './components/UpdateDialogs';
+import { UpdateDetailsModal } from './components/UpdateDialogs';
 import { loadReportsFromDB, loadProductionsFromDB, loadSelectionsFromDB, loadSavedSelectionsListFromDB } from './components/musica/services/db';
 import { Play, Pause, SkipBack, SkipForward, RefreshCw, BookOpen, X } from 'lucide-react';
 import { RADIAL_TERMS_BASE } from './components/radialTermsBase';
@@ -308,7 +308,7 @@ const AppContent: React.FC = () => {
   const [currentProgram, setCurrentProgram] = useState({ name: "Cargando...", time: "", image: "" });
 
   const [updateDetails, setUpdateDetails] = useState<{ show: boolean; content: string } | null>(null);
-  const [showUpdateReminder, setShowUpdateReminder] = useState(false);
+
   const [sabiasEstoTerm, setSabiasEstoTerm] = useState<any | null>(null);
 
   // Check for daily "¿Sabías esto?" pop-up on mount (first time in 24 hours)
@@ -343,22 +343,23 @@ const AppContent: React.FC = () => {
     setCurrentProgram(getCurrentProgram());
   }, []);
 
-  // Update Reminder Check - Mandatory every 24 hours
+  // Update Reminder Check - Mandatory every 48 hours
   useEffect(() => {
     if (currentUser) {
       const lastSyncStr = localStorage.getItem('last_sync_time');
       if (lastSyncStr) {
         const lastSync = parseInt(lastSyncStr, 10);
         const now = Date.now();
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        if (now - lastSync > twentyFourHours) {
-          setShowUpdateReminder(true);
+        const fortyEightHours = 48 * 60 * 60 * 1000;
+        if (now - lastSync > fortyEightHours) {
+          handleCloudSync(true);
         }
       } else {
         // Force initial update/sync to establish the baseline sync time
-        setShowUpdateReminder(true);
+        handleCloudSync(true);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   // 48-Hour Backup Reminder Effect
@@ -1451,15 +1452,7 @@ const AppContent: React.FC = () => {
             }}
         />
 
-        <UpdateReminderModal 
-            isOpen={showUpdateReminder}
-            onClose={() => {}}
-            onUpdate={() => {
-                setShowUpdateReminder(false);
-                handleCloudSync(true);
-            }}
-            onSnooze={() => {}}
-        />
+        
 
         {showPlayer && (
            <>

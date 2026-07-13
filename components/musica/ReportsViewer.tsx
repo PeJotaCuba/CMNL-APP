@@ -29,6 +29,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const [postSignAction, setPostSignAction] = useState<{ type: 'download' | 'whatsapp'; reportId: string } | null>(null);
     
     // Custom non-blocking modal alert replacement for sandboxed iframe viewport
+    const [pendingSignWarning, setPendingSignWarning] = useState<string | null>(null);
     const [customAlert, setCustomAlert] = useState<string | null>(null);
     const showAlert = (message: string) => {
         setCustomAlert(message);
@@ -220,6 +221,10 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 showAlert(authCheck.reason);
                 return;
             }
+            if (authCheck.warning && !sessionStorage.getItem(`warn_acked_${globalUserId}`)) {
+                 setPendingSignWarning(authCheck.warning);
+                 return;
+            }
 
             const storedPass = getStoredPassword(globalUserId);
             const cert = getStoredCertificate(globalUserId);
@@ -238,16 +243,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
             if (cert) {
                 const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
-                const isPast72Hours = (Date.now() - issueDate) > 72 * 60 * 60 * 1000;
-                if (isPast72Hours) {
-                    const cleanInput = inputPassNormal.trim().toLowerCase();
-                    const cleanOrigCert = (cert.originalPassword || '').trim().toLowerCase();
-                    const cleanOrigGen = originalPass.trim().toLowerCase();
-                    if (cleanInput === cleanOrigCert || cleanInput === cleanOrigGen) {
-                        showAlert("No puede utilizar la contraseña original del certificado después de 72 horas. Por favor, cambie su contraseña en la pestaña de Firma Digital.");
-                        return;
-                    }
-                }
+                
 
                 // If they have a certificate, verify against stored certificate password, original certificate password, original generated pass, or local login password
                 const effectivePass = storedPass || cert.originalPassword || '';
@@ -683,6 +679,45 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                             <button onClick={() => setShowSignDialog(false)} className="flex-1 py-3 rounded-xl border border-white/5 text-white hover:bg-white/5 transition-colors">CANCELAR</button>
                             <button onClick={confirmSignReport} className="flex-1 py-3 rounded-xl bg-yellow-600 text-white hover:bg-yellow-500 transition-colors">
                                 {signingMode === 'all' ? 'FIRMAR TODOS' : 'FIRMAR'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+                        {pendingSignWarning && (
+                <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 font-sans">
+                        <div className="flex justify-center text-[#EAB308]">
+                            <span className="material-symbols-outlined text-4xl">warning</span>
+                        </div>
+                        <h3 className="text-white text-sm font-bold uppercase tracking-wider">Aviso de Seguridad</h3>
+                        <p className="text-xs text-stone-200 font-semibold leading-relaxed whitespace-pre-line text-left bg-black/30 p-4 rounded-xl border border-[#9E7649]/10">
+                            {pendingSignWarning}
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => {
+                                    const globalUserId = (currentUser as any).id || currentUser.username;
+                                    sessionStorage.setItem(`warn_acked_${globalUserId}`, 'true');
+                                    setPendingSignWarning(null);
+                                    confirmSignReport();
+                                }}
+                                className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold rounded-xl transition-all text-xs uppercase"
+                            >
+                                Continuar y Firmar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const globalUserId = (currentUser as any).id || currentUser.username;
+                                    localStorage.setItem(`cmnl_pass_warn_dismissed_${globalUserId}`, 'true');
+                                    sessionStorage.setItem(`warn_acked_${globalUserId}`, 'true');
+                                    setPendingSignWarning(null);
+                                    confirmSignReport();
+                                }}
+                                className="w-full py-2 bg-transparent text-stone-400 hover:text-white font-semibold rounded-xl transition-all text-[10px] uppercase underline"
+                            >
+                                No mostrar de nuevo
                             </button>
                         </div>
                     </div>

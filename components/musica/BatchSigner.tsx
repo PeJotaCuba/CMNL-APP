@@ -33,6 +33,7 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
     const [files, setFiles] = useState<LoadedPDF[]>([]);
     const [signPass, setSignPass] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [pendingSignWarning, setPendingSignWarning] = useState<string | null>(null);
     const [customAlert, setCustomAlert] = useState<string | null>(null);
 
     const showAlert = (message: string) => {
@@ -67,26 +68,17 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
             showAlert(authCheck.reason);
             return;
         }
+        if (authCheck.warning && !sessionStorage.getItem(`warn_acked_${globalUserId}`)) {
+             setPendingSignWarning(authCheck.warning);
+             return;
+        }
 
         const storedPass = getStoredPassword(globalUserId);
         const cert = getStoredCertificate(globalUserId);
 
         if (cert) {
             const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
-            const isPast72Hours = (Date.now() - issueDate) > 72 * 60 * 60 * 1000;
-            if (isPast72Hours) {
-                const ciPart = (currentUser as any).ci || '';
-                const namePart = ((currentUser as any).fullName || (currentUser as any).name || currentUser.username).split(' ')[0] || '';
-                const originalPass = (namePart.substring(0, 4) + ciPart.substring(0, 4)).toUpperCase().substring(0, 8);
-                
-                const cleanInput = signPass.trim().toLowerCase();
-                const cleanOrigCert = (cert.originalPassword || '').trim().toLowerCase();
-                const cleanOrigGen = originalPass.trim().toLowerCase();
-                if (cleanInput === cleanOrigCert || cleanInput === cleanOrigGen) {
-                    showAlert("No puede utilizar la contraseña original del certificado después de 72 horas. Por favor, cambie su contraseña en la pestaña de Firma Digital.");
-                    return;
-                }
-            }
+            
         }
 
         const effectivePass = storedPass || (cert ? cert.originalPassword : '') || '';
@@ -452,6 +444,45 @@ const BatchSigner: React.FC<BatchSignerProps> = ({ currentUser, onFinish }) => {
             </div>
 
             {/* Custom Alert Overlay Modal perfectly aligned and superposed without scroll */}
+                        {pendingSignWarning && (
+                <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 font-sans">
+                        <div className="flex justify-center text-[#EAB308]">
+                            <span className="material-symbols-outlined text-4xl">warning</span>
+                        </div>
+                        <h3 className="text-white text-sm font-bold uppercase tracking-wider">Aviso de Seguridad</h3>
+                        <p className="text-xs text-stone-200 font-semibold leading-relaxed whitespace-pre-line text-left bg-black/30 p-4 rounded-xl border border-[#9E7649]/10">
+                            {pendingSignWarning}
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => {
+                                    const globalUserId = (currentUser as any).id || currentUser.username;
+                                    sessionStorage.setItem(`warn_acked_${globalUserId}`, 'true');
+                                    setPendingSignWarning(null);
+                                    processBatch();
+                                }}
+                                className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold rounded-xl transition-all text-xs uppercase"
+                            >
+                                Continuar y Firmar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const globalUserId = (currentUser as any).id || currentUser.username;
+                                    localStorage.setItem(`cmnl_pass_warn_dismissed_${globalUserId}`, 'true');
+                                    sessionStorage.setItem(`warn_acked_${globalUserId}`, 'true');
+                                    setPendingSignWarning(null);
+                                    processBatch();
+                                }}
+                                className="w-full py-2 bg-transparent text-stone-400 hover:text-white font-semibold rounded-xl transition-all text-[10px] uppercase underline"
+                            >
+                                No mostrar de nuevo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {customAlert && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setCustomAlert(null)}>
                     <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 text-center space-y-4 font-sans" onClick={e => e.stopPropagation()}>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { openWhatsApp } from '../utils/whatsappUtils';
-import { Share2, AlertCircle } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface UpdateDetailsModalProps {
@@ -65,47 +65,3 @@ export const UpdateDetailsModal: React.FC<UpdateDetailsModalProps> = ({
     );
 };
 
-interface UpdateReminderModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onUpdate: () => void;
-    onSnooze: (hours: number) => void;
-}
-
-export const UpdateReminderModal: React.FC<UpdateReminderModalProps> = ({
-    isOpen,
-    onUpdate
-}) => {
-    if (!isOpen) return null;
-
-    return (
-        <AnimatePresence>
-            <motion.div 
-               initial={{ opacity: 0 }} 
-               animate={{ opacity: 1 }} 
-               exit={{ opacity: 0 }}
-               className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
-            >
-                <div className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative text-[#E8DCCF]">
-                    <div className="p-6 text-center">
-                        <div className="w-16 h-16 bg-[#9E7649]/20 rounded-full flex items-center justify-center mx-auto mb-4 text-[#9E7649]">
-                            <AlertCircle size={32} />
-                        </div>
-                        <h2 className="text-xl font-bold text-white mb-2">Actualización Obligatoria</h2>
-                        <p className="text-[#E8DCCF]/80 text-sm mb-6 leading-relaxed">
-                            Han pasado más de 24 horas desde la última sincronización. Es obligatorio actualizar los datos para poder continuar utilizando la aplicación.
-                        </p>
-                        <div className="flex flex-col gap-3">
-                            <button 
-                              onClick={onUpdate}
-                              className="w-full bg-[#9E7649] hover:bg-[#8B653D] text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md transform hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                Sincronizar y Actualizar Ahora
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </motion.div>
-        </AnimatePresence>
-    );
-};

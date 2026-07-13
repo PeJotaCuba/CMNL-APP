@@ -188,6 +188,7 @@ export const formatDigitalSignatureForDocuments = (signatureString: string): str
   ].filter(Boolean);
 };
 
+
 export const getStoredCertificate = (userId: string) => {
     let certStr = localStorage.getItem(`cmnl_cert_${userId}`);
     if (!certStr) {
@@ -272,7 +273,7 @@ export const checkSigningAuthorization = (userId: string) => {
             return { authorized: false, reason: "Su certificado de firma digital ha caducado. Venció el " + new Date(cert.validUntil).toLocaleDateString() + ". Solicite una renovación con el administrador para poder firmar." };
         }
         
-        const lastUpdate = localStorage.getItem(`cmnl_pass_updated_${userId}`);
+        let lastUpdate = localStorage.getItem(`cmnl_pass_updated_${userId}`);
         const issueDate = cert.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
         
         // 1. Password Reset state is Checked first:
@@ -293,6 +294,14 @@ export const checkSigningAuthorization = (userId: string) => {
             }
         }
 
+        // ONE-TIME MIGRATION: Start the 30-day count from TODAY if they already changed their password before.
+        if (lastUpdate && !localStorage.getItem(`cmnl_pass_migrated_30d_${userId}`)) {
+            const nowTime = Date.now().toString();
+            localStorage.setItem(`cmnl_pass_updated_${userId}`, nowTime);
+            localStorage.setItem(`cmnl_pass_migrated_30d_${userId}`, 'true');
+            lastUpdate = nowTime;
+        }
+
         // Check session-level bypass for 72h rule (changed original for local password in active session)
         let isChangedInSession = false;
         if (typeof window !== 'undefined' && window.sessionStorage) {
@@ -303,17 +312,28 @@ export const checkSigningAuthorization = (userId: string) => {
         if (!lastUpdate && !isChangedInSession) {
             if (Date.now() - issueDate > 72 * 60 * 60 * 1000) {
                 return { 
-                    authorized: false, 
-                    reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 72 horas desde la emisión del certificado sin cambiar la contraseña original. No podrá firmar ningún reporte con la contraseña original; debe cambiarla en cada dispositivo para guardar la nueva de forma local." 
-                };
+                     authorized: false, 
+                     reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 72 horas desde la emisión del certificado sin cambiar la contraseña original. No podrá firmar ningún reporte con la contraseña original; debe cambiarla en la sección de Firma Digital." 
+                 };
             }
         } else {
             // 3. 30-day rule: If 30 days passed since last password update
-            if (lastUpdate && Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000) {
+            const msSinceLastUpdate = Date.now() - parseInt(lastUpdate || Date.now().toString());
+            if (msSinceLastUpdate > 30 * 24 * 60 * 60 * 1000) {
                 return { 
-                    authorized: false, 
-                    reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 30 días desde la última actualización de su contraseña. Debe establecer una nueva contraseña local en la sección Firma Digital o no podrá seguir firmando reportes." 
-                };
+                     authorized: false, 
+                     reason: "Actualización de contraseña obligatoria vencida. Han transcurrido más de 30 días desde la última actualización de su contraseña. Debe establecer una nueva contraseña local en la sección Firma Digital o no podrá seguir firmando reportes." 
+                 };
+            }
+            
+            // Warning for 3 days before 30 days expire
+            if (msSinceLastUpdate > 27 * 24 * 60 * 60 * 1000 && msSinceLastUpdate <= 30 * 24 * 60 * 60 * 1000) {
+                if (localStorage.getItem(`cmnl_pass_warn_dismissed_${userId}`) !== 'true') {
+                    return {
+                        authorized: true,
+                        warning: "Su contraseña de firma caducará en menos de 3 días. Le recomendamos cambiarla pronto en la sección de Firma Digital para evitar bloqueos."
+                    };
+                }
             }
         }
         
