@@ -12,6 +12,7 @@ export interface DailyContent {
   theme: string;
   ideas?: string;
   instructions?: string; // Mantenido por compatibilidad legacy si fuera necesario
+  order?: number;
 }
 
 export interface DayThemeData {

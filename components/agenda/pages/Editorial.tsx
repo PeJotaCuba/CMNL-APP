@@ -389,6 +389,22 @@ const Editorial: React.FC<EditorialProps> = ({
       return "";
   };
 
+  const sortProgramsByTxtOrder = (a: Program, b: Program, weekId: string, dayName: string) => {
+      const dataA = getEffectiveData(a, weekId, dayName);
+      const dataB = getEffectiveData(b, weekId, dayName);
+      
+      const orderA = dataA?.order;
+      const orderB = dataB?.order;
+      
+      if (orderA !== undefined && orderB !== undefined) {
+          return orderA - orderB;
+      }
+      if (orderA !== undefined) return -1;
+      if (orderB !== undefined) return 1;
+      
+      return a.time.localeCompare(b.time);
+  };
+
   // --- NAVEGACIÓN ---
   const handleMonthSelect = (index: number) => {
     setTargetDate(new Date(new Date().getFullYear(), index, 1));
@@ -503,6 +519,7 @@ const Editorial: React.FC<EditorialProps> = ({
     let currentKey: string | null = null; 
     let capturing: 'ideas' | null = null;
     let updatesCount = 0;
+    let programOrderInDay = 0;
 
     const ensureDailyData = (progIndex: number, key: string) => {
         if (!updatedPrograms[progIndex].dailyData) updatedPrograms[progIndex].dailyData = {};
@@ -532,6 +549,7 @@ const Editorial: React.FC<EditorialProps> = ({
         }
         currentProgIndex = -1;
         capturing = null;
+        programOrderInDay = 0;
         return;
       }
       
@@ -545,6 +563,7 @@ const Editorial: React.FC<EditorialProps> = ({
       const progMatch = clean.match(/^\*\*?Programa:\*\*?\s*(.*)/i) || clean.match(/^Programa:\s*(.*)/i);
       if (progMatch) {
          const progNameInput = progMatch[1].trim();
+         programOrderInDay++;
          
          // Prioridad 1: Buscar programa que coincida en nombre Y que se emita ese día
          let foundIndex = -1;
@@ -585,6 +604,7 @@ const Editorial: React.FC<EditorialProps> = ({
          
          if (currentProgIndex !== -1 && currentKey) {
              ensureDailyData(currentProgIndex, currentKey!);
+             updatedPrograms[currentProgIndex].dailyData[currentKey].order = programOrderInDay;
          } else {
              currentProgIndex = -1;
          }
@@ -736,8 +756,12 @@ const Editorial: React.FC<EditorialProps> = ({
           });
           if (!conmemoStr) conmemoStr = "No se reportan conmemoraciones";
 
-          const dayProgs = searchablePrograms.filter(p => p.days.includes(day.name));
-          dayProgs.sort((a,b) => a.time.localeCompare(b.time));
+          const dayProgs = searchablePrograms.filter(p => {
+              if (!p.days.includes(day.name)) return false;
+              const data = getEffectiveData(p, selectedWeekId!, day.name);
+              return !!(data && data.theme?.trim() && data.ideas?.trim());
+          });
+          dayProgs.sort((a,b) => sortProgramsByTxtOrder(a, b, selectedWeekId!, day.name));
 
           const progBody = dayProgs.length > 0 ? dayProgs.map(p => {
               const data = getEffectiveData(p, selectedWeekId!, day.name);
@@ -808,9 +832,16 @@ const Editorial: React.FC<EditorialProps> = ({
   if (selectedWeekId && selectedDay) {
     const dayProgs = searchablePrograms.filter(p => {
         const matchesDay = p.days.includes(selectedDay.name);
+        if (!matchesDay) return false;
+
+        const data = getEffectiveData(p, selectedWeekId, selectedDay.name);
+        const hasCompleteData = !!(data && data.theme?.trim() && data.ideas?.trim());
+        if (!hasCompleteData) return false;
+
         const matchesSearch = progSearch === '' || normalize(p.name).includes(normalize(progSearch));
-        return matchesDay && matchesSearch;
+        return matchesSearch;
     });
+    dayProgs.sort((a, b) => sortProgramsByTxtOrder(a, b, selectedWeekId, selectedDay.name));
     
     const currentTheme = getEffectiveTheme(selectedWeekId, selectedDay.name);
 
@@ -1017,10 +1048,12 @@ const Editorial: React.FC<EditorialProps> = ({
       const filteredDays = visibleDays.filter(d => {
           if(!d) return false;
           if(!progSearch) return true;
-          return searchablePrograms.some(p => 
-              p.days.includes(d.name) && 
-              normalize(p.name).includes(normalize(progSearch))
-          );
+          return searchablePrograms.some(p => {
+              if (!p.days.includes(d.name)) return false;
+              const data = getEffectiveData(p, selectedWeekId, d.name);
+              const hasCompleteData = !!(data && data.theme?.trim() && data.ideas?.trim());
+              return hasCompleteData && normalize(p.name).includes(normalize(progSearch));
+          });
       });
 
       return (
@@ -1068,13 +1101,19 @@ const Editorial: React.FC<EditorialProps> = ({
                                     {progSearch ? (
                                         <div className="space-y-1">
                                             {searchablePrograms
-                                                .filter(p => p.days.includes(d.name) && normalize(p.name).includes(normalize(progSearch)))
+                                                .filter(p => {
+                                                    if (!p.days.includes(d.name)) return false;
+                                                    const data = getEffectiveData(p, selectedWeekId, d.name);
+                                                    const hasCompleteData = !!(data && data.theme?.trim() && data.ideas?.trim());
+                                                    return hasCompleteData && normalize(p.name).includes(normalize(progSearch));
+                                                })
+                                                .sort((a, b) => sortProgramsByTxtOrder(a, b, selectedWeekId, d.name))
                                                 .map(p => {
                                                     const pData = getEffectiveData(p, selectedWeekId, d.name);
                                                     return (
                                                         <div key={p.id} className="text-left">
                                                             <span className="text-primary text-[9px] font-bold uppercase tracking-wider">{p.name}</span>
-                                                            <p className="text-white/90 text-[10px] line-clamp-2 leading-tight">{pData.theme || "Sin tema asignado"}</p>
+                                                            <p className="text-white/90 text-[10px] line-clamp-2 leading-tight">{pData.theme}</p>
                                                         </div>
                                                     );
                                                 })
@@ -1266,6 +1305,22 @@ const ShareAgendaModal: React.FC<{
     // modal alert state if needed
     const [modalAlert, setModalAlert] = useState<string | null>(null);
 
+    const sortProgramsByTxtOrder = (a: Program, b: Program, dayName: string) => {
+        const dataA = getEffectiveData(a, selectedWeekId, dayName);
+        const dataB = getEffectiveData(b, selectedWeekId, dayName);
+        
+        const orderA = dataA?.order;
+        const orderB = dataB?.order;
+        
+        if (orderA !== undefined && orderB !== undefined) {
+            return orderA - orderB;
+        }
+        if (orderA !== undefined) return -1;
+        if (orderB !== undefined) return 1;
+        
+        return a.time.localeCompare(b.time);
+    };
+
     const targetUsers = useMemo(() => {
         return users.filter(u => {
             const classification = normalize((u as any).classification || '');
@@ -1280,14 +1335,22 @@ const ShareAgendaModal: React.FC<{
 
     const uniquePrograms = useMemo(() => {
         const map = new Map<string, Program>();
-        programs.forEach(p => {
+        const validPrograms = programs.filter(p => {
+            return activeWeek.days.some((day: any) => {
+                if (!day) return false;
+                if (!p.days.includes(day.name)) return false;
+                const data = getEffectiveData(p, selectedWeekId, day.name);
+                return !!(data && data.theme?.trim() && data.ideas?.trim());
+            });
+        });
+        validPrograms.forEach(p => {
             const normName = normalize(p.name);
             if (!map.has(normName)) {
                 map.set(normName, p);
             }
         });
         return Array.from(map.values());
-    }, [programs]);
+    }, [programs, activeWeek, selectedWeekId]);
 
     const handleToggleAllRecipients = () => {
         if (selectedRecipients.length === targetUsers.length) setSelectedRecipients([]);
@@ -1309,7 +1372,12 @@ const ShareAgendaModal: React.FC<{
 
         activeWeek.days.forEach((day: any) => {
             if (!day) return;
-            let dayProgs = filteredProgs.filter(p => p.days.includes(day.name));
+            let dayProgs = filteredProgs.filter(p => {
+                if (!p.days.includes(day.name)) return false;
+                const data = getEffectiveData(p, selectedWeekId, day.name);
+                return !!(data && data.theme?.trim() && data.ideas?.trim());
+            });
+            dayProgs.sort((a, b) => sortProgramsByTxtOrder(a, b, day.name));
             
             // If we have a target user, filter by their habitual programs and days for their roles
             if (targetUser) {
