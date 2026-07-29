@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import CMNLHeader from '../CMNLHeader';
-import { ProgramCatalog, RolePaymentInfo } from '../../types';
+import { ProgramCatalog, RolePaymentInfo, ProgramFicha } from '../../types';
 import { openWhatsApp } from '../../utils/whatsappUtils';
-import { Edit2, Upload, Save, X, Share2, Download, Eraser, Trash2 } from 'lucide-react';
+import { Edit2, Upload, Save, X, Share2, Download, Eraser, Trash2, Plus } from 'lucide-react';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -13,11 +13,13 @@ interface Props {
   catalogo: ProgramCatalog[];
   setCatalogo: React.Dispatch<React.SetStateAction<ProgramCatalog[]>>;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  fichas?: ProgramFicha[];
+  setFichas?: React.Dispatch<React.SetStateAction<ProgramFicha[]>>;
 }
 
 const normalizeStr = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 
-const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, catalogo, setCatalogo, showConfirm }) => {
+const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, catalogo, setCatalogo, showConfirm, fichas, setFichas }) => {
   const [selectedCatalogItem, setSelectedCatalogItem] = useState<ProgramCatalog | null>(null);
   const [isEditingCatalogo, setIsEditingCatalogo] = useState(false);
   const [editingProg, setEditingProg] = useState<ProgramCatalog | null>(null);
@@ -78,19 +80,86 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
   };
 
   const handleEditCatalogo = (prog: ProgramCatalog) => {
+      setSelectedCatalogItem(prog);
       setEditingProg(JSON.parse(JSON.stringify(prog))); // Deep clone
       setIsEditingCatalogo(true);
   };
 
   const handleSaveEditCatalogo = () => {
       if (editingProg && selectedCatalogItem) {
+          if (!editingProg.name || !editingProg.name.trim()) {
+              alert('El nombre del programa no puede estar vacío.');
+              return;
+          }
           const updatedCatalogo = catalogo.map(c => c.name === selectedCatalogItem.name ? editingProg : c);
           setCatalogo(updatedCatalogo);
           localStorage.setItem('rcm_data_catalogo', JSON.stringify(updatedCatalogo));
+
+          // Auto-synchronize Fichas
+          if (fichas && setFichas) {
+              const updatedFichas = fichas.map(f => f.name === selectedCatalogItem.name ? { ...f, name: editingProg.name } : f);
+              setFichas(updatedFichas);
+              localStorage.setItem('rcm_data_fichas', JSON.stringify(updatedFichas));
+          }
+
+          // Auto-synchronize manual programming
+          try {
+              const manualData = localStorage.getItem('rcm_manual_programming');
+              if (manualData) {
+                  let updatedManual = JSON.parse(manualData);
+                  if (Array.isArray(updatedManual)) {
+                      updatedManual = updatedManual.map((item: any) => 
+                          item.name === selectedCatalogItem.name ? { ...item, name: editingProg.name } : item
+                      );
+                      localStorage.setItem('rcm_manual_programming', JSON.stringify(updatedManual));
+                  }
+              }
+          } catch (e) {
+              console.error("Error auto-synchronizing manual programming from catalog:", e);
+          }
+
           setIsEditingCatalogo(false);
           setEditingProg(null);
-          setSelectedCatalogItem(editingProg);
+          setSelectedCatalogItem(null);
       }
+  };
+
+  const handleAddRole = () => {
+      if (!editingProg) return;
+      const newRole: RolePaymentInfo = {
+          role: 'Nuevo Rol',
+          percentage: '',
+          tr: '',
+          salaries: [
+              { level: 'I', amount: '0' },
+              { level: 'II', amount: '0' },
+              { level: 'III', amount: '0' },
+              { level: 'IV', amount: '0' },
+              { level: 'V', amount: '0' },
+              { level: 'VI', amount: '0' },
+              { level: 'SR', amount: '0' },
+          ],
+          rates: [
+              { level: 'I', amount: '0' },
+              { level: 'II', amount: '0' },
+              { level: 'III', amount: '0' },
+              { level: 'IV', amount: '0' },
+              { level: 'V', amount: '0' },
+              { level: 'VI', amount: '0' },
+              { level: 'SR', amount: '0' },
+          ]
+      };
+      setEditingProg({ ...editingProg, roles: [...editingProg.roles, newRole] });
+  };
+
+  const handleRemoveRole = (roleIndex: number) => {
+      if (!editingProg) return;
+      if (editingProg.roles.length <= 1) {
+          alert('El programa debe tener al menos un rol.');
+          return;
+      }
+      const newRoles = editingProg.roles.filter((_, idx) => idx !== roleIndex);
+      setEditingProg({ ...editingProg, roles: newRoles });
   };
 
   const handleRoleChange = (roleIndex: number, field: keyof RolePaymentInfo, value: any) => {
@@ -368,8 +437,17 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
 
                   <div className="space-y-8">
                       {editingProg.roles.map((role, rIdx) => (
-                          <div key={rIdx} className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/20">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div key={rIdx} className="bg-[#2C1B15] p-5 rounded-xl border border-[#9E7649]/20 relative">
+                              {editingProg.roles.length > 1 && (
+                                  <button 
+                                      onClick={() => handleRemoveRole(rIdx)}
+                                      className="absolute top-4 right-4 text-red-400 hover:text-red-300 p-1.5 bg-red-900/30 rounded-lg border border-red-500/20"
+                                      title="Eliminar este rol"
+                                  >
+                                      <Trash2 size={16} />
+                                  </button>
+                              )}
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pr-10">
                                   <div>
                                       <label className="block text-xs uppercase text-[#9E7649] tracking-widest mb-1">Nombre del Rol</label>
                                       <input 
@@ -435,6 +513,12 @@ const CatalogoSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, ca
                               </div>
                           </div>
                       ))}
+                      <button 
+                          onClick={handleAddRole}
+                          className="w-full py-3 bg-[#2C1B15] text-[#9E7649] border border-dashed border-[#9E7649]/40 hover:border-[#9E7649] hover:text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                      >
+                          <Plus size={18} /> Agregar Rol al Programa
+                      </button>
                   </div>
 
                   <div className="mt-8 flex justify-end gap-3">

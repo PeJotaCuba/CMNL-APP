@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import CMNLHeader from '../CMNLHeader';
-import { ProgramFicha } from '../../types';
+import { ProgramFicha, ProgramCatalog } from '../../types';
 import { openWhatsApp } from '../../utils/whatsappUtils';
-import { Edit2, Upload, Save, X, Trash2, Plus, Share2, Download, Eraser } from 'lucide-react';
+import { Edit2, Upload, Save, X, Trash2, Plus, Share2, Download, Eraser, RefreshCw } from 'lucide-react';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -14,9 +14,11 @@ interface Props {
   setFichas: React.Dispatch<React.SetStateAction<ProgramFicha[]>>;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
   onHomologate?: () => void;
+  catalogo?: ProgramCatalog[];
+  setCatalogo?: React.Dispatch<React.SetStateAction<ProgramCatalog[]>>;
 }
 
-const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fichas, setFichas, showConfirm, onHomologate }) => {
+const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fichas, setFichas, showConfirm, onHomologate, catalogo, setCatalogo }) => {
   const [selectedFicha, setSelectedFicha] = useState<ProgramFicha | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<ProgramFicha | null>(null);
@@ -151,6 +153,30 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
           const updatedFichas = fichas.map(f => f.name === selectedFicha.name ? editForm : f);
           setFichas(updatedFichas);
           localStorage.setItem('rcm_data_fichas', JSON.stringify(updatedFichas));
+
+          // Auto-synchronize Catalogo
+          if (catalogo && setCatalogo) {
+              const updatedCatalogo = catalogo.map(c => c.name === selectedFicha.name ? { ...c, name: editForm.name } : c);
+              setCatalogo(updatedCatalogo);
+              localStorage.setItem('rcm_data_catalogo', JSON.stringify(updatedCatalogo));
+          }
+
+          // Auto-synchronize manual programming
+          try {
+              const manualData = localStorage.getItem('rcm_manual_programming');
+              if (manualData) {
+                  let updatedManual = JSON.parse(manualData);
+                  if (Array.isArray(updatedManual)) {
+                      updatedManual = updatedManual.map((item: any) => 
+                          item.name === selectedFicha.name ? { ...item, name: editForm.name } : item
+                      );
+                      localStorage.setItem('rcm_manual_programming', JSON.stringify(updatedManual));
+                  }
+              }
+          } catch (e) {
+              console.error("Error auto-synchronizing manual programming from fichas:", e);
+          }
+
           setSelectedFicha(editForm);
           setIsEditing(false);
           setEditForm(null);
@@ -291,7 +317,7 @@ const FichasSection: React.FC<Props> = ({ onBack, onMenuClick, currentUser, fich
                              onClick={onHomologate}
                              className="bg-blue-900/40 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-blue-900/60 transition-colors flex-1 md:flex-none justify-center"
                          >
-                             <Plus size={20} />
+                             <RefreshCw size={20} />
                              <span>Homologar</span>
                          </button>
                      )}

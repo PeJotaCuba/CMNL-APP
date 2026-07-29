@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Wrench, 
@@ -12,7 +12,9 @@ import {
   Briefcase,
   Bell,
   Shield,
-  GripVertical
+  GripVertical,
+  Calculator,
+  MessageSquare
 } from 'lucide-react';
 import CMNLHeader from './CMNLHeader';
 import DataExtractionTool from './DataExtractionTool';
@@ -21,6 +23,7 @@ import GuionesGestionTool from './GuionesGestionTool';
 import FirmaDigitalTool from './FirmaDigitalTool';
 import GuionFormatTool from './GuionFormatTool';
 import DiccionarioTool from './DiccionarioTool';
+import { SalarySimulatorTool } from './SalarySimulatorTool';
 
 interface ToolsSectionProps {
   onBack: () => void;
@@ -32,7 +35,33 @@ interface ToolsSectionProps {
 }
 
 const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, currentUser, equipoData = [], users = [], onSaveCMNL }) => {
-  const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<string | null>(() => {
+    const saved = localStorage.getItem('rcm_active_tool');
+    if (saved) {
+      localStorage.removeItem('rcm_active_tool');
+      return saved;
+    }
+    return null;
+  });
+
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState(() => {
+    return localStorage.getItem('rcm_whatsapp_group_url') || 'https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v';
+  });
+
+  const [floatingTools, setFloatingTools] = useState<string[]>(() => {
+    const saved = localStorage.getItem('rcm_floating_tools');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const initialToolsList = [
     {
@@ -124,6 +153,15 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
       color: 'from-blue-600/20 to-blue-700/20',
       textColor: 'text-blue-300',
       borderColor: 'border-blue-500/30'
+    },
+    {
+      id: 'salary-simulator',
+      title: 'Simulador de Salario',
+      description: 'Simula los ingresos de realizadores en un día, una semana o un mes seleccionado, sincronizando datos del Catálogo de Pagos, Fichas de salida y Equipo.',
+      icon: Calculator,
+      color: 'from-emerald-600/20 to-emerald-700/20',
+      textColor: 'text-emerald-400',
+      borderColor: 'border-emerald-500/30'
     }
   ];
 
@@ -166,13 +204,20 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const isGuionista = specialtyStr.includes('guionista') || classificationStr.includes('guionista');
   const isAsesor = specialtyStr.includes('asesor') || classificationStr.includes('asesor');
   
+  const isDirector = specialtyStr.includes('director') || classificationStr.includes('director');
+  const isLocutor = specialtyStr.includes('locutor') || classificationStr.includes('locutor');
+  const isRealizadorSonido = specialtyStr.includes('realizador') || specialtyStr.includes('sonido') || specialtyStr.includes('efectos') || specialtyStr.includes('operador') || specialtyStr.includes('grabador') || classificationStr.includes('realizador') || classificationStr.includes('sonido') || classificationStr.includes('efectos') || classificationStr.includes('operador') || classificationStr.includes('grabador');
+
+  const isSalarySimulatorAllowed = isDirector || isAsesor || isLocutor || isRealizadorSonido;
+
   // Filter according to user privileges, preserving ordered state
   const tools = isAdmin ? orderedTools : orderedTools.filter(t => 
     userTools.includes(t.id) || 
     t.id === 'inst-docs' || 
     t.id === 'digital-signature' ||
     t.id === 'diccionario' ||
-    (t.id === 'script-format' && (isGuionista || isAsesor))
+    (t.id === 'script-format' && (isGuionista || isAsesor)) ||
+    (t.id === 'salary-simulator' && isSalarySimulatorAllowed)
   );
 
   // HTML5 Drag & Drop handlers
@@ -374,6 +419,22 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
     );
   }
 
+  if (activeTool === 'salary-simulator') {
+    return (
+      <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
+        <CMNLHeader 
+          user={currentUser}
+          sectionTitle="Simulador de Salario" 
+          onBack={() => setActiveTool(null)}
+          onMenuClick={onMenuClick}
+        />
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <SalarySimulatorTool onBack={() => setActiveTool(null)} currentUser={currentUser} />
+        </main>
+      </div>
+    );
+  }
+
   if (activeTool && currentTool) {
     return (
       <div className="min-h-screen bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-20">
@@ -461,6 +522,103 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
             </div>
           )}
         </motion.div>
+
+        {isAdmin && (
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 p-6 rounded-2xl bg-[#231510] border border-[#9E7649]/30 shadow-xl"
+          >
+            <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2 uppercase tracking-wider font-mono">
+              <MessageSquare className="text-[#25D366]" size={18} />
+              Ajustes del Botón Flotante (Exclusivo Administrador)
+            </h3>
+            <p className="text-xs text-stone-400 mb-5 font-mono leading-relaxed">
+              Configure el enlace del grupo de WhatsApp y seleccione las herramientas que aparecerán como accesos rápidos en el botón flotante para todos los usuarios.
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* WhatsApp group URL field */}
+              <div className="flex flex-col gap-2">
+                <label className="block text-[11px] uppercase text-stone-300 tracking-wider font-mono font-bold">
+                  Enlace del Grupo de WhatsApp
+                </label>
+                <input
+                  type="url"
+                  value={whatsappGroupUrl}
+                  onChange={(e) => setWhatsappGroupUrl(e.target.value)}
+                  placeholder="https://chat.whatsapp.com/..."
+                  className="w-full h-10 px-3 bg-[#1A100C] text-white border border-[#9E7649]/20 rounded-xl text-xs font-mono focus:outline-none focus:border-[#9E7649]/50 transition-all"
+                />
+                <p className="text-[10px] text-stone-500 font-mono">
+                  Enlace nativo del botón flotante para redirección directa.
+                </p>
+              </div>
+
+              {/* Tools selection */}
+              <div className="flex flex-col gap-2">
+                <label className="block text-[11px] uppercase text-stone-300 tracking-wider font-mono font-bold">
+                  Accesos Rápidos en el Botón Flotante
+                </label>
+                <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-[#1A100C] border border-[#9E7649]/10">
+                  {initialToolsList.map(tool => {
+                    const isSelected = floatingTools.includes(tool.id);
+                    return (
+                      <button
+                        key={tool.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setFloatingTools(floatingTools.filter(id => id !== tool.id));
+                          } else {
+                            setFloatingTools([...floatingTools, tool.id]);
+                          }
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                          isSelected
+                            ? 'bg-[#9E7649] text-white border-transparent'
+                            : 'bg-[#2C1B15] text-stone-400 border-[#9E7649]/20 hover:text-white hover:border-[#9E7649]/40'
+                        }`}
+                      >
+                        {tool.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 pt-4 border-t border-[#9E7649]/10 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <span className="text-[11px] font-mono text-stone-500">
+                {floatingTools.length} herramientas seleccionadas para el botón flotante.
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsSavingConfig(true);
+                  localStorage.setItem('rcm_whatsapp_group_url', whatsappGroupUrl);
+                  localStorage.setItem('rcm_floating_tools', JSON.stringify(floatingTools));
+                  if (onSaveCMNL) {
+                    await onSaveCMNL();
+                  }
+                  setIsSavingConfig(false);
+                  setSaveSuccess(true);
+                  setTimeout(() => setSaveSuccess(false), 3000);
+                }}
+                disabled={isSavingConfig}
+                className="px-5 py-2.5 bg-[#9E7649] hover:bg-[#b28757] disabled:opacity-50 text-white rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-black/30"
+              >
+                {isSavingConfig ? (
+                  <>Guardando...</>
+                ) : saveSuccess ? (
+                  <>¡Guardado con éxito! ✓</>
+                ) : (
+                  <>Guardar Configuración</>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
           {tools.map((tool, index) => {

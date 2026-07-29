@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AppView, NewsItem, User, ProgramItem } from '../types';
 import { CalendarDays, Music, FileText, Podcast, LogOut, User as UserIcon, MessageSquare, ChevronLeft, ChevronRight, RefreshCw, Menu, Play, Pause, Download, Upload, Save } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
+import { FloatingMenu } from './FloatingMenu';
 import Sidebar from './Sidebar';
 import { loadSelectionsFromDB, loadSavedSelectionsListFromDB, loadReportsFromDB, loadProductionsFromDB, saveSelectionsToDB, saveSavedSelectionsListToDB, saveReportToDB, saveProductionToDB, clearReportsDB, clearProductionsDB } from './musica/services/db';
 import { saveAs } from 'file-saver';
@@ -521,16 +522,7 @@ const WorkerHome: React.FC<Props> = ({
       </div>
       
       {/* Worker Group FAB */}
-      <a 
-         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
-         target="_blank" 
-         rel="noopener noreferrer"
-         className="fixed right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
-         style={{ bottom: 'calc(6rem + var(--sab))' }}
-         title="Grupo de Trabajo WhatsApp"
-      >
-         <MessageSquare size={28} fill="white" />
-      </a>
+      <FloatingMenu onNavigate={onNavigate} currentUser={currentUser} />
     </div>
   );
 };

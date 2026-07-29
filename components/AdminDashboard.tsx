@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AppView, NewsItem, User, ProgramItem } from '../types';
 import { Settings, ChevronRight, ChevronLeft, CalendarDays, Music, FileText, Podcast, LogOut, MessageSquare, Menu, ScrollText, Mic, Users, RefreshCw, Play, Pause, Upload } from 'lucide-react';
 import { LOGO_URL } from '../utils/scheduleData';
+import { FloatingMenu } from './FloatingMenu';
 import Sidebar from './Sidebar';
 
 interface Props {
@@ -300,16 +301,7 @@ const AdminDashboard: React.FC<Props> = ({
       </main>
 
       {/* FAB - Worker Group */}
-      <a 
-         href="https://chat.whatsapp.com/BBalNMYSJT9CHQybLUVg5v" 
-         target="_blank" 
-         rel="noopener noreferrer"
-         className="fixed right-5 z-40 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-xl shadow-black/20 flex items-center justify-center border-2 border-white/10 hover:scale-105 active:scale-95 transition-all"
-         style={{ bottom: 'calc(6rem + var(--sab))' }}
-         title="Grupo de Trabajo WhatsApp"
-      >
-         <MessageSquare size={28} fill="white" />
-      </a>
+      <FloatingMenu onNavigate={onNavigate} currentUser={currentUser} />
       
       <style>{`
         @keyframes fade-in-up {

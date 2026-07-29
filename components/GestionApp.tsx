@@ -2736,6 +2736,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                  setFichas={setFichas}
                  showConfirm={showConfirm}
                  onHomologate={handleHomologate}
+                 catalogo={sortedCatalogo}
+                 setCatalogo={setCatalogo}
               />
               {renderDialog()}
           </>
@@ -2752,6 +2754,8 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                  catalogo={sortedCatalogo}
                  setCatalogo={setCatalogo}
                  showConfirm={showConfirm}
+                 fichas={sortedFichas}
+                 setFichas={setFichas}
               />
               {renderDialog()}
           </>

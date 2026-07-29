@@ -776,6 +776,8 @@ const AppContent: React.FC = () => {
       dataToExport.transmissionInterruptions = getLocal('rcm_transmission_interruptions') || [];
       dataToExport.transmissionHistorical = getLocal('rcm_transmission_historical') || [];
       dataToExport.toolsOrder = getLocal('rcm_tools_order') || [];
+      dataToExport.whatsappGroupUrl = getLocal('rcm_whatsapp_group_url') || "";
+      dataToExport.floatingTools = getLocal('rcm_floating_tools') || [];
       
       dataToExport.paymentConfigs = {
           rcm_payment_config: getLocal('rcm_payment_config'),
@@ -986,6 +988,8 @@ const AppContent: React.FC = () => {
                   if (json.allConsolidatedPayments) setLocal('rcm_all_consolidated_payments', json.allConsolidatedPayments);
                   if (json.radialDictionary && Array.isArray(json.radialDictionary)) setLocal('rcm_diccionario_radial', json.radialDictionary);
                   if (json.toolsOrder && Array.isArray(json.toolsOrder)) setLocal('rcm_tools_order', json.toolsOrder);
+                  if (typeof json.whatsappGroupUrl === 'string' && json.whatsappGroupUrl) setLocal('rcm_whatsapp_group_url', json.whatsappGroupUrl);
+                  if (json.floatingTools && Array.isArray(json.floatingTools)) setLocal('rcm_floating_tools', json.floatingTools);
                   if (json.userData) {
                       Object.entries(json.userData).forEach(([key, value]) => setLocal(key, value));
                   }
