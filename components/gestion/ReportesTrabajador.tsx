@@ -7,6 +7,8 @@ import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, Tab
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getStoredCertificate, getStoredPassword, generateDigitalSignature, checkSigningAuthorization } from '../../utils/signatureUtils';
+import { isDoubleSalaryDay, getHolidayName } from '../../utils/holidays';
+import { calculateCESS, calculateISIP } from '../../utils/taxUtils';
 
 interface Props {
   currentUser: User | null;
@@ -762,7 +764,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                      const isWorked = isManual || (isHabitual && !isDeleted);
 
                      if (isWorked) {
-                         const baseRate = getProgramRate(prog, role.role, role.level || 'I');
+                         const baseRate = getProgramRate(prog, role.role, role.level || 'I') * (isDoubleSalaryDay(dateStr) ? 2 : 1);
                          if (normalize(prog) === 'propaganda') {
                              const log = workLogs.find(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr);
                              const qty = log && log.hours ? log.hours : 1;
@@ -798,6 +800,44 @@ export const ReportesTrabajador: React.FC<Props> = ({
         count
     };
   }, [workLogs, userPaymentConfig, currentUser, workLogDate.substring(0, 7), getProgramRate, calculateTax, equipoData, catalogo, isMatch, normalize, additionalPayments]);
+
+  const getDailyEarnings = React.useCallback((dateStr: string) => {
+    let income = 0;
+    if (userPaymentConfig && currentUser) {
+        const member = equipoData.find(m => m.username === currentUser.username || m.name === currentUser.name);
+        const habitualPrograms = member?.habitualProgramsByRole || {};
+
+        programsByRole.forEach(roleData => {
+            let progsForRole: string[] = [];
+            for (const [rName, plist] of Object.entries(habitualPrograms)) {
+                if (normalize(rName).includes(normalize(roleData.role)) || normalize(roleData.role).includes(normalize(rName))) {
+                    progsForRole = plist as string[]; break;
+                }
+            }
+
+            roleData.programs.forEach(prog => {
+                const isManual = workLogs.some(l => l.userId === currentUser.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === dateStr && l.type !== 'manual_delete');
+                const isDeleted = workLogs.some(l => l.userId === currentUser.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === dateStr && l.type === 'manual_delete');
+                
+                const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
+                const isHabitual = isHabitualAssigned && isProgramOnDay(prog, dateStr);
+                const isWorked = isManual || (isHabitual && !isDeleted);
+
+                if (isWorked) {
+                    const baseRate = getProgramRate(prog, roleData.role, roleData.level || 'I') * (isDoubleSalaryDay(dateStr) ? 2 : 1);
+                    if (normalize(prog) === 'propaganda') {
+                        const log = workLogs.find(l => l.userId === currentUser.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === dateStr);
+                        const qty = log && log.hours ? log.hours : 1;
+                        income += baseRate * qty;
+                    } else {
+                        income += baseRate;
+                    }
+                }
+            });
+        });
+    }
+    return income;
+  }, [userPaymentConfig, currentUser, equipoData, programsByRole, workLogs, isMatch, normalize, getProgramRate]);
 
   const [showEditConsolidatedModal, setShowEditConsolidatedModal] = useState(false);
 
@@ -894,7 +934,9 @@ export const ReportesTrabajador: React.FC<Props> = ({
           );
           if (esp) {
               const roleConfig = userPaymentConfig?.roles.find(r => normalize(r.role).includes(normalize(esp.rol)));
-              income += getProgramRate(rep.programa, esp.rol, roleConfig?.level || 'I');
+              const rate = getProgramRate(rep.programa, esp.rol, roleConfig?.level || 'I');
+              const mult = isDoubleSalaryDay(rep.fecha) ? 2 : 1;
+              income += rate * mult;
               count++;
           }
       });
@@ -950,7 +992,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                        const isWorked = isManual || (isHabitual && !isDeleted);
   
                        if (isWorked) {
-                           const baseRate = getProgramRate(prog, role.role, role.level || 'I');
+                           const baseRate = getProgramRate(prog, role.role, role.level || 'I') * (isDoubleSalaryDay(dateStr) ? 2 : 1);
                            let currentAmount = 0;
                            if (normalize(prog) === 'propaganda') {
                                const log = workLogs.find(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr);
@@ -980,7 +1022,9 @@ export const ReportesTrabajador: React.FC<Props> = ({
                 let amt = 0;
                 if (esp) {
                     const roleConfig = userPaymentConfig?.roles.find(rc => normalize(rc.role).includes(normalize(esp.rol)));
-                    amt = getProgramRate(r.programa, esp.rol, roleConfig?.level || 'I');
+                    const baseRate = getProgramRate(r.programa, esp.rol, roleConfig?.level || 'I');
+                    const mult = isDoubleSalaryDay(r.fecha) ? 2 : 1;
+                    amt = baseRate * mult;
                 }
                 return { date: r.fecha, program: r.programa, amount: amt };
             });
@@ -1227,6 +1271,10 @@ export const ReportesTrabajador: React.FC<Props> = ({
                              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><ArrowRight size={48} /></div>
                              <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider mb-1">Impuestos a Descontar</p>
                              <div className="text-3xl font-display font-bold text-red-400">-${autogestionMetrics.tax.toFixed(2)}</div>
+                             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#E8DCCF]/60">
+                                 <div><span className="font-bold">CESS (5/10%):</span> -${calculateCESS(autogestionMetrics.bruto).toFixed(2)}</div>
+                                 <div><span className="font-bold">ISIP (3/5%):</span> -${calculateISIP(autogestionMetrics.bruto).toFixed(2)}</div>
+                             </div>
                          </div>
                          <div className="bg-[#1A100C] p-4 rounded-xl border border-green-500/20 relative overflow-hidden group">
                              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><CheckCircle2 size={48} /></div>
@@ -1242,11 +1290,25 @@ export const ReportesTrabajador: React.FC<Props> = ({
                         <thead className="text-[10px] text-[#9E7649] uppercase tracking-widest bg-[#3E1E16] border-y border-[#9E7649]/10">
                             <tr>
                                 <th className="px-4 py-3 border-r border-[#9E7649]/10 w-1/3">Programa (Parrilla)</th>
-                                {dates.map(date => (
-                                    <th key={date} className="px-2 py-3 text-center border-r border-[#9E7649]/10 last:border-r-0 min-w-[80px]">
-                                        {new Date(date + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
-                                    </th>
-                                ))}
+                                {dates.map(date => {
+                                    const isFeriado = isDoubleSalaryDay(date);
+                                    const dayTotal = getDailyEarnings(date);
+                                    return (
+                                        <th key={date} className="px-2 py-3 text-center border-r border-[#9E7649]/10 last:border-r-0 min-w-[110px]">
+                                            <div className="text-white font-bold text-xs uppercase tracking-wider">
+                                                {new Date(date + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}
+                                            </div>
+                                            {isFeriado && (
+                                                <div className="text-[9px] text-amber-400 font-extrabold mt-0.5 tracking-wider" title="Día Feriado (Salario Duplicado)">
+                                                    🇨🇺 Feriado x2
+                                                </div>
+                                            )}
+                                            <div className="text-xs font-mono font-bold text-green-400 mt-1.5 bg-black/45 py-1 px-2.5 rounded-lg border border-green-500/25 inline-block shadow-[0_0_8px_rgba(34,197,94,0.15)]">
+                                                ${dayTotal.toFixed(2)}
+                                             </div>
+                                        </th>
+                                    );
+                                })}
                             </tr>
                         </thead>
                          <tbody className="divide-y divide-[#9E7649]/10">
@@ -1267,30 +1329,49 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                                 Especialidad: {roleData.role} ({roleData.level})
                                             </td>
                                         </tr>
-                                        {roleData.programs.map(prog => (
-                                            <tr key={prog} className="hover:bg-white/5 transition-colors">
-                                                <td className="px-4 py-3 font-medium text-white/90 border-r border-[#9E7649]/10">
-                                                    <div>{prog}</div>
-                                                    {progsForRole.some(p => isMatch(p, prog)) && (
-                                                        <div className="text-[9px] text-green-500/70 font-bold uppercase mt-0.5">Habitual</div>
-                                                    )}
-                                                </td>
-                                                {dates.map(date => {
-                                                    const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
-                                                    const isHabitual = isHabitualAssigned && isProgramOnDay(prog, date);
-                                                    const hasManualEdit = workLogs.some(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date && l.type !== 'manual_delete');
-                                                    const isDeleted = workLogs.some(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date && l.type === 'manual_delete');
-                                                    const isWorked = hasManualEdit || (isHabitual && !isDeleted);
-                                                    
-                                                    return (
-                                                        <td key={date} className="px-2 py-3 text-center border-r border-[#9E7649]/10 last:border-r-0">
-                                                            <div className="flex flex-col items-center justify-center gap-1.5 whitespace-nowrap">
-                                                                <button 
-                                                                    onClick={() => toggleWorkLog(date, prog, roleData.role)}
-                                                                    className={`w-8 h-8 rounded flex items-center justify-center mx-auto transition-all ${isWorked ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-black/40 text-[#E8DCCF]/20 border border-[#9E7649]/20 hover:border-[#9E7649]/50 hover:text-[#E8DCCF]/50'}`}
-                                                                >
-                                                                    {isWorked ? <CheckCircle2 size={18} /> : <div className="w-2 h-2 rounded-full bg-current opacity-50" />}
-                                                                </button>
+                                        {roleData.programs.map(prog => {
+                                            const baseProgramRate = getProgramRate(prog, roleData.role, roleData.level || 'I');
+                                            return (
+                                                <tr key={prog} className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-4 py-3 font-medium text-white/90 border-r border-[#9E7649]/10">
+                                                        <div className="font-bold text-[#E8DCCF]">{prog}</div>
+                                                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-center mt-1">
+                                                            {progsForRole.some(p => isMatch(p, prog)) && (
+                                                                <span className="text-[9px] text-green-400 bg-green-500/10 px-1 py-0.2 rounded font-bold uppercase border border-green-500/20">Habitual</span>
+                                                            )}
+                                                            <span className="text-[10px] text-[#9E7649] font-mono">
+                                                                Tarifa: ${baseProgramRate.toFixed(2)}/emisión
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    {dates.map(date => {
+                                                        const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
+                                                        const isHabitual = isHabitualAssigned && isProgramOnDay(prog, date);
+                                                        const hasManualEdit = workLogs.some(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date && l.type !== 'manual_delete');
+                                                        const isDeleted = workLogs.some(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date && l.type === 'manual_delete');
+                                                        const isWorked = hasManualEdit || (isHabitual && !isDeleted);
+                                                        
+                                                        const isFeriado = isDoubleSalaryDay(date);
+                                                        const currentRate = baseProgramRate * (isFeriado ? 2 : 1);
+                                                        const propagandaLog = workLogs.find(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date);
+                                                        const qty = propagandaLog && propagandaLog.hours ? propagandaLog.hours : 1;
+                                                        const activeAmount = isWorked ? currentRate * (normalize(prog) === 'propaganda' ? qty : 1) : 0;
+
+                                                        return (
+                                                            <td key={date} className="px-2 py-3 text-center border-r border-[#9E7649]/10 last:border-r-0">
+                                                                <div className="flex flex-col items-center justify-center gap-1.5 whitespace-nowrap">
+                                                                    <button 
+                                                                        onClick={() => toggleWorkLog(date, prog, roleData.role)}
+                                                                        className={`w-8 h-8 rounded flex items-center justify-center mx-auto transition-all ${isWorked ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-black/40 text-[#E8DCCF]/20 border border-[#9E7649]/20 hover:border-[#9E7649]/50 hover:text-[#E8DCCF]/50'}`}
+                                                                    >
+                                                                        {isWorked ? <CheckCircle2 size={18} /> : <div className="w-2 h-2 rounded-full bg-current opacity-50" />}
+                                                                    </button>
+                                                                    
+                                                                    <div className="mt-1">
+                                                                        <span className={`text-[11px] font-mono font-bold ${isWorked ? 'text-green-400' : 'text-stone-500/50'}`}>
+                                                                            {isWorked ? `+$${activeAmount.toFixed(2)}` : `$0.00`}
+                                                                        </span>
+                                                                    </div>
                                                                 {isWorked && normalize(prog) === 'propaganda' && (
                                                                     <div className="flex items-center gap-1 mt-1 bg-black/40 px-1.5 py-0.5 rounded border border-[#9E7649]/30">
                                                                         <span className="text-[10px] text-[#E8DCCF]/65 font-bold">Cant:</span>
@@ -1316,7 +1397,8 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                                     );
                                                 })}
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                         {/* Row for Additional Payments */}
                                         <tr className="bg-[#1A100C]/60">
                                             <td colSpan={dates.length + 1} className="px-4 py-4 border-t border-[#9E7649]/10">
@@ -1481,6 +1563,10 @@ export const ReportesTrabajador: React.FC<Props> = ({
                          <div className="bg-[#1A100C] p-4 rounded-xl border border-[#9E7649]/10">
                              <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider mb-1">Impuestos a Descontar</p>
                              <div className="text-3xl font-display font-bold text-red-400">-${(oficialesMetrics?.tax || 0).toFixed(2)}</div>
+                             <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-[#E8DCCF]/60 leading-tight">
+                                 <div><span className="font-bold">CESS (5/10%):</span> -${calculateCESS(oficialesMetrics?.bruto || 0).toFixed(2)}</div>
+                                 <div><span className="font-bold">ISIP (3/5%):</span> -${calculateISIP(oficialesMetrics?.bruto || 0).toFixed(2)}</div>
+                             </div>
                          </div>
                          <div className="bg-[#1A100C] p-4 rounded-xl border border-blue-500/20">
                              <p className="text-[10px] text-blue-400 uppercase font-bold tracking-wider mb-1">Ingreso Neto (A Pagar)</p>
@@ -1743,7 +1829,24 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                           <td className="px-4 py-3 font-bold text-[#E8DCCF]">{d.program}</td>
                                           <td className="px-4 py-3 text-center text-white">{d.count}</td>
                                           <td className="px-4 py-3 text-right text-green-400 font-mono">${d.totalAmount.toFixed(2)}</td>
-                                          <td className="px-4 py-3 text-[#E8DCCF]/60 font-mono text-xs">{d.dates.sort().map(dt => dt.substring(8)).join(', ')}</td>
+                                          <td className="px-4 py-3 text-[#E8DCCF]/60 font-mono text-xs">
+                                              {d.dates.sort().map((dt, idx) => {
+                                                  const dayNum = dt.substring(8);
+                                                  const isHoliday = isDoubleSalaryDay(dt);
+                                                  if (isHoliday) {
+                                                      return (
+                                                          <span 
+                                                              key={idx} 
+                                                              className="inline-block bg-[#E07A5F]/20 text-[#E07A5F] border border-[#E07A5F]/30 px-1.5 py-0.5 rounded font-bold mr-1.5 mb-1 cursor-help"
+                                                              title={`Feriado (Salario Duplicado): ${getHolidayName(dt)}`}
+                                                          >
+                                                              {dayNum} 🇨🇺
+                                                          </span>
+                                                      );
+                                                  }
+                                                  return <span key={idx} className="mr-1.5 inline-block mb-1">{dayNum}</span>;
+                                              })}
+                                          </td>
                                       </tr>
                                   ))}
                                   {getDetailData().length === 0 && (

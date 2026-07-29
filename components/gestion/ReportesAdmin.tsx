@@ -7,6 +7,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx-js-style';
 import { formatDigitalSignatureForDocuments } from '../../utils/signatureUtils';
+import { isDoubleSalaryDay, getHolidayName } from '../../utils/holidays';
+import { calculateCESS, calculateISIP } from '../../utils/taxUtils';
 
 // [NOTE]: Extracted Admin section to preserve all existing logic safely
 interface Props {
@@ -228,7 +230,9 @@ export const ReportesAdmin: React.FC<Props> = ({
         const esp = rep.especialidades.find(e => isMatch(e.nombre, filterMember));
         if (esp) {
             const level = getMemberRoleLevel(memberData, esp.rol);
-            bruto += getProgramRate(rep.programa, esp.rol, level);
+            const rate = getProgramRate(rep.programa, esp.rol, level);
+            const mult = isDoubleSalaryDay(rep.fecha) ? 2 : 1;
+            bruto += rate * mult;
         }
     });
 
@@ -735,6 +739,10 @@ export const ReportesAdmin: React.FC<Props> = ({
                         <div className="p-2">
                             <p className="text-[10px] text-[#9E7649] uppercase">Impuestos</p>
                             <p className="text-xl font-bold text-red-400">-${metrics.tax.toFixed(2)}</p>
+                            <div className="text-[9px] text-[#E8DCCF]/50 flex flex-col font-mono mt-0.5 leading-none">
+                                <span>CESS: -${calculateCESS(metrics.bruto).toFixed(2)}</span>
+                                <span className="mt-0.5">ISIP: -${calculateISIP(metrics.bruto).toFixed(2)}</span>
+                            </div>
                         </div>
                         <div className="p-2">
                             <p className="text-[10px] text-[#9E7649] uppercase">Pago Neto</p>
@@ -786,7 +794,7 @@ export const ReportesAdmin: React.FC<Props> = ({
                        <h3 className="font-bold text-white text-lg">{rep.programa}</h3>
                        <div className="flex items-center gap-2 text-xs text-[#9E7649]">
                            <Calendar size={12} />
-                           <span>{rep.fecha}</span>
+                           <span>{rep.fecha}</span>{isDoubleSalaryDay(rep.fecha) && <span className="ml-2 inline-flex items-center gap-1 bg-[#E07A5F]/20 text-[#E07A5F] px-1.5 py-0.5 rounded text-[10px] font-bold border border-[#E07A5F]/30" title={getHolidayName(rep.fecha) || "Receso Laboral"}>🇨🇺 Feriado x2</span>}
                        </div>
                      </div>
                      <div className="flex items-center gap-1">

@@ -14,6 +14,8 @@ import EquipoSection from './gestion/EquipoSection';
 import ReportesSection from './gestion/ReportesSection';
 import FichasSection from './gestion/FichasSection';
 import CatalogoSection from './gestion/CatalogoSection';
+import { isDoubleSalaryDay } from '../utils/holidays';
+import { calculateTotalTax, calculateCESS, calculateISIP } from '../utils/taxUtils';
 
 const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
 
@@ -1052,13 +1054,14 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
       }
 
           const amount = getProgramRate(programName, role, roleConfig.level);
+          const finalAmount = isDoubleSalaryDay(date) ? amount * 2 : amount;
           setWorkLogs([...workLogs, {
               id: Date.now().toString() + Math.random(),
               userId,
               role,
               programName,
               date,
-              amount
+              amount: finalAmount
           }]);
       }
   };
@@ -1109,10 +1112,11 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
               const { isAutoMarked } = getHabitualStatus(prog.name, role.role, dateStr);
               
               if (isAutoMarked && !logsSet.has(`${dateStr}|${prog.name}|${role.role}`)) {
+                const dayAmount = isDoubleSalaryDay(dateStr) ? amount * 2 : amount;
                 if (dates.includes(dateStr)) {
-                  periodTotal += amount;
+                  periodTotal += dayAmount;
                 }
-                monthTotal += amount;
+                monthTotal += dayAmount;
               }
             }
           }
@@ -1124,26 +1128,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
   };
 
   const calculateTax = React.useCallback((amount: number) => {
-      // 1. 5% Initial Deduction (Social Security)
-      const tax5Percent = amount * 0.05;
-      const baseAmount = amount - tax5Percent;
-
-      // 2. Personal Income Tax Scale on Base Amount
-      let scaleTax = 0;
-
-      if (baseAmount > 3260) {
-          if (baseAmount <= 9510) {
-              // Only 3% bracket on the excess over 3260
-              scaleTax = (baseAmount - 3260) * 0.03;
-          } else {
-              // Full 3% bracket (3260 to 9510) + 5% on excess over 9510
-              const firstBracketTax = (9510 - 3260) * 0.03; // 187.5
-              const secondBracketTax = (baseAmount - 9510) * 0.05;
-              scaleTax = firstBracketTax + secondBracketTax;
-          }
-      }
-
-      return tax5Percent + scaleTax;
+      return calculateTotalTax(amount);
   }, []);
 
   const handleSaveHabitualSelection = () => {

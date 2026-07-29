@@ -200,13 +200,14 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
   const equipoMember = equipoData?.find(m => m.id === currentUser?.id || m.id === currentUser?.username || m.name === currentUser?.fullName);
   const specialtyStr = (currentUser?.specialty || equipoMember?.specialty || '').toLowerCase();
   const classificationStr = (currentUser?.classification || '').toLowerCase();
+  const memberRoles = Array.isArray(equipoMember?.roles) ? equipoMember.roles.map((r: any) => String(r).toLowerCase()) : [];
   
   const isGuionista = specialtyStr.includes('guionista') || classificationStr.includes('guionista');
-  const isAsesor = specialtyStr.includes('asesor') || classificationStr.includes('asesor');
+  const isAsesor = specialtyStr.includes('asesor') || classificationStr.includes('asesor') || memberRoles.some((r: string) => r.includes('asesor'));
   
-  const isDirector = specialtyStr.includes('director') || classificationStr.includes('director');
-  const isLocutor = specialtyStr.includes('locutor') || classificationStr.includes('locutor');
-  const isRealizadorSonido = specialtyStr.includes('realizador') || specialtyStr.includes('sonido') || specialtyStr.includes('efectos') || specialtyStr.includes('operador') || specialtyStr.includes('grabador') || classificationStr.includes('realizador') || classificationStr.includes('sonido') || classificationStr.includes('efectos') || classificationStr.includes('operador') || classificationStr.includes('grabador');
+  const isDirector = specialtyStr.includes('director') || classificationStr.includes('director') || memberRoles.some((r: string) => r.includes('director'));
+  const isLocutor = specialtyStr.includes('locutor') || classificationStr.includes('locutor') || memberRoles.some((r: string) => r.includes('locutor'));
+  const isRealizadorSonido = specialtyStr.includes('realizador') || specialtyStr.includes('sonido') || specialtyStr.includes('efectos') || specialtyStr.includes('operador') || specialtyStr.includes('grabador') || classificationStr.includes('realizador') || classificationStr.includes('sonido') || classificationStr.includes('efectos') || classificationStr.includes('operador') || classificationStr.includes('grabador') || memberRoles.some((r: string) => r.includes('realizador') || r.includes('sonido'));
 
   const isSalarySimulatorAllowed = isDirector || isAsesor || isLocutor || isRealizadorSonido;
 
