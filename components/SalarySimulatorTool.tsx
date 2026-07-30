@@ -29,6 +29,7 @@ interface TeamMember {
   level: string;
   habitualPrograms?: string[];
   habitualProgramsByRole?: Record<string, string[]>;
+  habitualProgramsDays?: Record<string, Record<string, string[]>>;
 }
 
 interface ProgramFicha {
@@ -98,6 +99,7 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
   const [programDaysOverride, setProgramDaysOverride] = useState<Record<string, string[]>>({});
   const [programRatesOverride, setProgramRatesOverride] = useState<Record<string, number>>({});
+  const [propagandaMonthlyCounts, setPropagandaMonthlyCounts] = useState<Record<string, number>>({});
   const [searchProgramQuery, setSearchProgramQuery] = useState<string>('');
 
   // Load data from localStorage on mount
@@ -114,7 +116,7 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
     } catch (e) {
       console.error("Error parsing localStorage values in Salary Simulator:", e);
     }
-  }, []);
+  }, [currentUser]);
 
   // Find current logged in user's team member profile
   const currentUserMember = React.useMemo(() => {
@@ -238,23 +240,129 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
     return [];
   }, [isRestrictedWorker, currentUserRoles, activeSyncMember]);
 
-  const getHabitualProgramsForRole = (member: TeamMember, roleId: string): string[] => {
+  const normalize = (s: string) => s ? s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : "";
+  const isMatch = (a: string, b: string) => normalize(a) === normalize(b);
+  const isPropaganda = (progName: string): boolean => normalize(progName).includes('propaganda');
+
+  // Get distinct programs from combined Catalogo and Fichas, ordered as they are in Programacion
+  const allProgramNames = React.useMemo(() => {
+    // Generate programming
+    let allPrograms: any[] = [];
+    try {
+      const manualData = localStorage.getItem('rcm_manual_programming');
+      if (manualData && manualData !== '[]') {
+        allPrograms = JSON.parse(manualData);
+      } else {
+        allPrograms = generateProgramming(fichas);
+      }
+    } catch (e) {
+      allPrograms = generateProgramming(fichas);
+    }
+
+    if (!allPrograms || allPrograms.length === 0) {
+      allPrograms = generateProgramming(fichas);
+    }
+
+    // Sort by time
+    const getMinutes = (time: string) => {
+        const match = (time || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (match) {
+            let h = parseInt(match[1], 10);
+            const m = parseInt(match[2], 10);
+            const ampm = match[3].toUpperCase();
+            if (ampm === 'PM' && h < 12) h += 12;
+            if (ampm === 'AM' && h === 12) h = 0;
+            return h * 60 + m;
+        }
+        const [h, m] = (time || '').split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+    };
+
+    allPrograms.sort((a, b) => {
+        if (a.name.toLowerCase().includes('cómplices') && a.days.includes(0) && b.days.includes(0)) return -1;
+        if (b.name.toLowerCase().includes('cómplices') && b.days.includes(0) && a.days.includes(0)) return 1;
+        return getMinutes(a.start) - getMinutes(b.start);
+    });
+
+    const monFri = allPrograms.filter(p => p.days && p.days.some((d: number) => [1, 2, 3, 4, 5].includes(d)));
+    const saturday = allPrograms.filter(p => p.days && p.days.includes(6));
+    const sunday = allPrograms.filter(p => p.days && p.days.includes(0));
+
+    const orderedSet = new Set<string>();
+
+    const allAvailableNames = Array.from(
+      new Set([
+        ...fichas.map(f => f.name),
+        ...catalogo.map(c => c.name),
+        'Propaganda'
+      ])
+    );
+
+    const findMatch = (name: string): string | null => {
+      return allAvailableNames.find(n => isMatch(n, name)) || null;
+    };
+
+    // Add Mon-Fri
+    monFri.forEach(p => {
+      const match = findMatch(p.name);
+      if (match) orderedSet.add(match);
+    });
+
+    // Add Saturday
+    saturday.forEach(p => {
+      const match = findMatch(p.name);
+      if (match) orderedSet.add(match);
+    });
+
+    // Add Sunday
+    sunday.forEach(p => {
+      const match = findMatch(p.name);
+      if (match) orderedSet.add(match);
+    });
+
+    // Add any leftovers
+    allAvailableNames.forEach(name => {
+      if (!orderedSet.has(name)) {
+        orderedSet.add(name);
+      }
+    });
+
+    return Array.from(orderedSet);
+  }, [fichas, catalogo]);
+
+  const getHabitualProgramsForRole = (
+    member: TeamMember, 
+    roleId: string
+  ): { programs: string[]; daysMap: Record<string, string[]> } => {
     const habitualProgramsByRole = member.habitualProgramsByRole || {};
+    const habitualProgramsDays = member.habitualProgramsDays || {};
     const roleDef = ROLES.find(r => r.id === roleId);
-    if (!roleDef) return [];
-    
-    const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    if (!roleDef) return { programs: [], daysMap: {} };
     
     const matchedKey = Object.keys(habitualProgramsByRole).find(key => {
       const normKey = normalize(key);
-      return roleDef.keywords.some(k => normKey.includes(k) || k.includes(normKey));
+      return roleDef.keywords.some(k => normKey.includes(k) || k.includes(normKey)) ||
+             normKey === normalize(roleDef.label) ||
+             normKey.includes(roleId);
     });
     
+    let progs: string[] = [];
+    let daysMap: Record<string, string[]> = {};
+
     if (matchedKey && habitualProgramsByRole[matchedKey]) {
-      return habitualProgramsByRole[matchedKey];
+      progs = habitualProgramsByRole[matchedKey];
+      if (habitualProgramsDays[matchedKey]) {
+        daysMap = habitualProgramsDays[matchedKey];
+      }
+    } else if (member.habitualPrograms && member.habitualPrograms.length > 0) {
+      progs = member.habitualPrograms;
+      const firstDaysKey = Object.keys(habitualProgramsDays)[0];
+      if (firstDaysKey && habitualProgramsDays[firstDaysKey]) {
+        daysMap = habitualProgramsDays[firstDaysKey];
+      }
     }
-    
-    return member.habitualPrograms || [];
+
+    return { programs: progs, daysMap };
   };
 
   // State to track last synced member and role to avoid redundant resets
@@ -284,16 +392,24 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
         setSelectedLevel(activeRoleConfig.level);
 
         if (activeSyncMember) {
-          const roleProgs = getHabitualProgramsForRole(activeSyncMember, targetRole);
-          const validProgs = roleProgs.filter(pName => 
-            fichas.some(f => f.name.toLowerCase() === pName.toLowerCase()) || 
-            catalogo.some(c => c.name.toLowerCase() === pName.toLowerCase())
-          );
-          setSelectedPrograms(validProgs);
+          const { programs: roleProgs, daysMap } = getHabitualProgramsForRole(activeSyncMember, targetRole);
+          
+          const validProgs = roleProgs.map(pName => {
+            const match = allProgramNames.find(apn => isMatch(apn, pName) || apn.toLowerCase().trim() === pName.toLowerCase().trim());
+            return match || pName.trim();
+          });
+          
+          const uniqueValidProgs = Array.from(new Set(validProgs));
+          setSelectedPrograms(uniqueValidProgs);
 
           const newDaysOverride: Record<string, string[]> = {};
-          validProgs.forEach(p => {
-            newDaysOverride[p] = getProgramDefaultDays(p);
+          uniqueValidProgs.forEach(p => {
+            const matchedDaysKey = Object.keys(daysMap).find(k => isMatch(k, p));
+            if (matchedDaysKey && daysMap[matchedDaysKey] && daysMap[matchedDaysKey].length > 0) {
+              newDaysOverride[p] = daysMap[matchedDaysKey];
+            } else {
+              newDaysOverride[p] = getProgramDefaultDays(p);
+            }
           });
           setProgramDaysOverride(newDaysOverride);
         } else {
@@ -318,6 +434,7 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
     syncMemberRoles,
     fichas,
     catalogo,
+    allProgramNames,
     isRestrictedWorker,
     currentUser,
     lastSyncedMemberKey,
@@ -341,7 +458,7 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
 
   // Extract default weekdays of airing for a program
   const getProgramDefaultDays = (progName: string): string[] => {
-    const ficha = fichas.find(f => f.name.toLowerCase() === progName.toLowerCase());
+    const ficha = fichas.find(f => isMatch(f.name, progName) || f.name.toLowerCase() === progName.toLowerCase());
     if (!ficha) return ['Lunes']; // Default fallback
 
     const freq = ficha.frequency.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -367,6 +484,27 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
     return result.length > 0 ? result : ['Lunes'];
   };
 
+  // Music production rate lookup for Directors
+  const getMusicProductionRate = (progName: string, level: string): number => {
+    const catItem = catalogo.find(c => isMatch(c.name, progName));
+    if (!catItem) return 0;
+
+    const musicRole = catItem.roles.find(r => {
+      const normR = normalize(r.role);
+      return normR.includes('produccion musical') || normR.includes('seleccion musical') || normR.includes('produccion');
+    });
+
+    if (musicRole) {
+      const musicRateObj = musicRole.rates?.find(r => r.level.toUpperCase() === level.toUpperCase())
+                        || musicRole.salaries?.find(s => s.level.toUpperCase() === level.toUpperCase());
+      if (musicRateObj && musicRateObj.amount) {
+        const cleanVal = parseFloat(String(musicRateObj.amount).replace(/[^0-9.]/g, ''));
+        return isNaN(cleanVal) ? 0 : cleanVal;
+      }
+    }
+    return 0;
+  };
+
   // Find payment rate for program, role, and level
   const getProgramRate = (progName: string, roleId: string, level: string): number => {
     // If overriden on the fly, return that
@@ -375,31 +513,38 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
     }
 
     // Find in Catalog
-    const catItem = catalogo.find(c => c.name.toLowerCase() === progName.toLowerCase());
+    const catItem = catalogo.find(c => isMatch(c.name, progName));
     if (!catItem) return 0;
 
     // Find role match
     const roleDef = ROLES.find(r => r.id === roleId);
     if (!roleDef) return 0;
 
-    const catRole = catItem.roles.find(r => 
-      roleDef.keywords.some(k => r.role.toLowerCase().includes(k))
-    );
-    if (!catRole) return 0;
+    let totalRate = 0;
 
-    // Find rate for level
-    const rateObj = catRole.rates?.find(r => r.level.toUpperCase() === level.toUpperCase());
-    if (rateObj && rateObj.amount && !isNaN(parseFloat(rateObj.amount))) {
-      return parseFloat(rateObj.amount);
+    const catRole = catItem.roles.find(r => {
+      const normR = normalize(r.role);
+      return roleDef.keywords.some(k => normR.includes(k) || k.includes(normR));
+    });
+
+    if (catRole) {
+      const rateObj = catRole.rates?.find(r => r.level.toUpperCase() === level.toUpperCase());
+      if (rateObj && rateObj.amount && !isNaN(parseFloat(String(rateObj.amount).replace(/[^0-9.]/g, '')))) {
+        totalRate += parseFloat(String(rateObj.amount).replace(/[^0-9.]/g, ''));
+      } else {
+        const salaryObj = catRole.salaries?.find(s => s.level.toUpperCase() === level.toUpperCase());
+        if (salaryObj && salaryObj.amount && !isNaN(parseFloat(String(salaryObj.amount).replace(/[^0-9.]/g, '')))) {
+          totalRate += parseFloat(String(salaryObj.amount).replace(/[^0-9.]/g, ''));
+        }
+      }
     }
 
-    // Fallback to salary level
-    const salaryObj = catRole.salaries?.find(s => s.level.toUpperCase() === level.toUpperCase());
-    if (salaryObj && salaryObj.amount && !isNaN(parseFloat(salaryObj.amount))) {
-      return parseFloat(salaryObj.amount);
+    // Feature: If role is Director, add "Producción Musical" payment for programs that have it in Catalog
+    if (roleId === 'director' || roleDef.keywords.some(k => k.includes('director'))) {
+      totalRate += getMusicProductionRate(progName, level);
     }
 
-    return 0;
+    return totalRate;
   };
 
   // Date counting math: Number of times a weekday appears in a specific month
@@ -508,19 +653,31 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
     const items = selectedPrograms.map(pName => {
       const rate = getProgramRate(pName, selectedRole, selectedLevel);
       const activeDays = programDaysOverride[pName] || [];
+      const isProp = isPropaganda(pName);
       let occurrences = 0;
 
-      if (timeframe === 'day') {
-        // If program airs on the selected day of the week, count is 1, else 0
-        occurrences = activeDays.includes(selectedDayOfWeek) ? 1 : 0;
-      } else if (timeframe === 'week') {
-        // Typical week is 1 count for each active day
-        occurrences = activeDays.length;
-      } else if (timeframe === 'month') {
-        // Count actual occurrences of each active day in that month
-        activeDays.forEach(day => {
-          occurrences += countWeekdayInMonth(selectedYear, selectedMonth, day);
-        });
+      if (isProp) {
+        const qty = propagandaMonthlyCounts[pName] !== undefined ? propagandaMonthlyCounts[pName] : 30;
+        if (timeframe === 'day') {
+          occurrences = qty / 30;
+        } else if (timeframe === 'week') {
+          occurrences = qty / 4;
+        } else if (timeframe === 'month') {
+          occurrences = qty;
+        }
+      } else {
+        if (timeframe === 'day') {
+          // If program airs on the selected day of the week, count is 1, else 0
+          occurrences = activeDays.includes(selectedDayOfWeek) ? 1 : 0;
+        } else if (timeframe === 'week') {
+          // Typical week is 1 count for each active day
+          occurrences = activeDays.length;
+        } else if (timeframe === 'month') {
+          // Count actual occurrences of each active day in that month
+          activeDays.forEach(day => {
+            occurrences += countWeekdayInMonth(selectedYear, selectedMonth, day);
+          });
+        }
       }
 
       const subtotal = rate * occurrences;
@@ -531,7 +688,8 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
         rate,
         activeDays,
         occurrences,
-        subtotal
+        subtotal,
+        isPropaganda: isProp
       };
     });
 
@@ -561,97 +719,21 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
 
     results.items.forEach(item => {
       if (item.occurrences > 0) {
-        text += `- *${item.programName}*: $${item.rate.toFixed(2)} x ${item.occurrences} emisiones = *$${item.subtotal.toFixed(2)}*\n`;
-        text += `  _(Días: ${item.activeDays.join(', ')})_\n`;
+        if (item.isPropaganda) {
+          const mCount = propagandaMonthlyCounts[item.programName] !== undefined ? propagandaMonthlyCounts[item.programName] : 30;
+          const formattedOcc = item.occurrences % 1 === 0 ? item.occurrences : item.occurrences.toFixed(2);
+          text += `- *${item.programName}*: $${item.rate.toFixed(2)} x ${formattedOcc} propagandas = *$${item.subtotal.toFixed(2)}*\n`;
+          text += `  _(Cantidad mensual: ${mCount})_\n`;
+        } else {
+          text += `- *${item.programName}*: $${item.rate.toFixed(2)} x ${item.occurrences} emisiones = *$${item.subtotal.toFixed(2)}*\n`;
+          text += `  _(Días: ${item.activeDays.join(', ')})_\n`;
+        }
       }
     });
 
     text += `\n💰 *INGRESO TOTAL ESTIMADO: $${results.totalEarnings.toFixed(2)}*`;
     openWhatsApp(text);
   };
-
-  // Get distinct programs from combined Catalogo and Fichas, ordered as they are in Programacion
-  const allProgramNames = React.useMemo(() => {
-    // Generate programming
-    let allPrograms: any[] = [];
-    try {
-      const manualData = localStorage.getItem('rcm_manual_programming');
-      if (manualData && manualData !== '[]') {
-        allPrograms = JSON.parse(manualData);
-      } else {
-        allPrograms = generateProgramming(fichas);
-      }
-    } catch (e) {
-      allPrograms = generateProgramming(fichas);
-    }
-
-    if (!allPrograms || allPrograms.length === 0) {
-      allPrograms = generateProgramming(fichas);
-    }
-
-    // Sort by time
-    const getMinutes = (time: string) => {
-        const match = (time || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
-        if (match) {
-            let h = parseInt(match[1], 10);
-            const m = parseInt(match[2], 10);
-            const ampm = match[3].toUpperCase();
-            if (ampm === 'PM' && h < 12) h += 12;
-            if (ampm === 'AM' && h === 12) h = 0;
-            return h * 60 + m;
-        }
-        const [h, m] = (time || '').split(':').map(Number);
-        return (h || 0) * 60 + (m || 0);
-    };
-
-    allPrograms.sort((a, b) => {
-        if (a.name.toLowerCase().includes('cómplices') && a.days.includes(0) && b.days.includes(0)) return -1;
-        if (b.name.toLowerCase().includes('cómplices') && b.days.includes(0) && a.days.includes(0)) return 1;
-        return getMinutes(a.start) - getMinutes(b.start);
-    });
-
-    const monFri = allPrograms.filter(p => p.days && p.days.some((d: number) => [1, 2, 3, 4, 5].includes(d)));
-    const saturday = allPrograms.filter(p => p.days && p.days.includes(6));
-    const sunday = allPrograms.filter(p => p.days && p.days.includes(0));
-
-    const orderedSet = new Set<string>();
-
-    // Helper to add names (comparing case-insensitively but keeping original casing from fichas/catalogo)
-    const allAvailableNames = Array.from(
-      new Set([
-        ...fichas.map(f => f.name),
-        ...catalogo.map(c => c.name)
-      ])
-    );
-
-    const findMatch = (name: string): string | null => {
-      return allAvailableNames.find(n => n.toLowerCase() === name.toLowerCase()) || null;
-    };
-
-    // Add Mon-Fri
-    monFri.forEach(p => {
-      const match = findMatch(p.name);
-      if (match) orderedSet.add(match);
-    });
-
-    // Add Saturday
-    saturday.forEach(p => {
-      const match = findMatch(p.name);
-      if (match) orderedSet.add(match);
-    });
-
-    // Add Sunday
-    sunday.forEach(p => {
-      const match = findMatch(p.name);
-      if (match) orderedSet.add(match);
-    });
-
-    // Add any leftovers
-    const remaining = allAvailableNames.filter(name => !orderedSet.has(name));
-    remaining.sort().forEach(name => orderedSet.add(name));
-
-    return Array.from(orderedSet);
-  }, [fichas, catalogo]);
 
   return (
     <div className="bg-[#1A0F0A] text-[#E8DCCF] font-sans pb-10">
@@ -957,6 +1039,7 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
                   .map(progName => {
                     const isSelected = selectedPrograms.includes(progName);
                     const defaultDays = getProgramDefaultDays(progName);
+                    const isProp = isPropaganda(progName);
                     return (
                       <div 
                         key={progName}
@@ -976,7 +1059,7 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
                           <span className="text-xs font-bold uppercase tracking-wide truncate">{progName}</span>
                         </div>
                         <div className="text-[10px] text-[#9E7649] font-mono uppercase bg-[#2C1B15] px-2 py-0.5 rounded border border-[#9E7649]/10 shrink-0">
-                          {defaultDays.length} días/sem
+                          {isProp ? 'Mensual' : `${defaultDays.length} días/sem`}
                         </div>
                       </div>
                     );
@@ -989,16 +1072,25 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
               {/* Active Program configuration cards */}
               {selectedPrograms.length > 0 && (
                 <div className="mt-4 border-t border-[#9E7649]/10 pt-4 space-y-4">
-                  <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Ajuste de días y tarifas de programas seleccionados</h4>
+                  <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-1">Ajuste de días, cantidades y tarifas de programas seleccionados</h4>
                   <div className="space-y-3 max-h-72 overflow-y-auto custom-scrollbar pr-1">
                     {selectedPrograms.map(pName => {
                       const activeDays = programDaysOverride[pName] || [];
                       const defaultRate = getProgramRate(pName, selectedRole, selectedLevel);
+                      const isProp = isPropaganda(pName);
+                      const musicRate = selectedRole === 'director' ? getMusicProductionRate(pName, selectedLevel) : 0;
                       
                       return (
                         <div key={pName} className="p-3.5 bg-[#1A100C] rounded-lg border border-[#9E7649]/15">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-[#9E7649]/10">
-                            <span className="text-xs font-bold text-white uppercase tracking-wide">{pName}</span>
+                            <div>
+                              <span className="text-xs font-bold text-white uppercase tracking-wide">{pName}</span>
+                              {musicRate > 0 && programRatesOverride[pName] === undefined && (
+                                <span className="ml-2 text-[10px] text-amber-400/90 font-mono">
+                                  (Incluye +${musicRate.toFixed(2)} Prod. Musical)
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5">
                               <span className="text-[10px] text-[#9E7649] font-mono uppercase">Tarifa ($):</span>
                               <input
@@ -1011,30 +1103,54 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
                             </div>
                           </div>
 
-                          {/* Days toggler */}
-                          <div>
-                            <span className="block text-[9px] uppercase text-stone-400 mb-1">Días de salida aplicables para este realizador:</span>
-                            <div className="flex flex-wrap gap-1">
-                              {WEEKDAYS.map(day => {
-                                const isDefault = getProgramDefaultDays(pName).includes(day);
-                                const isChecked = activeDays.includes(day);
-                                return (
-                                  <button
-                                    key={day}
-                                    onClick={() => handleToggleProgramDay(pName, day)}
-                                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
-                                      isChecked 
-                                        ? 'bg-[#9E7649]/20 text-[#9E7649] border-[#9E7649]/30 font-bold'
-                                        : 'bg-[#2C1B15] text-stone-500 border-transparent hover:text-stone-300'
-                                    }`}
-                                  >
-                                    {day.substring(0, 3)}
-                                    {isDefault && <span className="text-[7px] text-[#9E7649] ml-0.5">•</span>}
-                                  </button>
-                                );
-                              })}
+                          {/* Days or Propaganda Quantity Input */}
+                          {isProp ? (
+                            <div className="mt-2">
+                              <label className="block text-[10px] uppercase text-[#9E7649] font-bold mb-1">
+                                Cantidad de propagandas en un mes:
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={propagandaMonthlyCounts[pName] !== undefined ? propagandaMonthlyCounts[pName] : 30}
+                                  onChange={e => {
+                                    const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setPropagandaMonthlyCounts({
+                                      ...propagandaMonthlyCounts,
+                                      [pName]: val
+                                    });
+                                  }}
+                                  className="bg-[#2C1B15] border border-[#9E7649]/30 rounded-lg px-3 py-1 text-xs text-white font-mono font-bold w-28 focus:outline-none focus:border-[#9E7649]"
+                                />
+                                <span className="text-xs text-stone-400 font-mono">propagandas / mes</span>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div>
+                              <span className="block text-[9px] uppercase text-stone-400 mb-1">Días de salida aplicables para este realizador:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {WEEKDAYS.map(day => {
+                                  const isDefault = getProgramDefaultDays(pName).includes(day);
+                                  const isChecked = activeDays.includes(day);
+                                  return (
+                                    <button
+                                      key={day}
+                                      onClick={() => handleToggleProgramDay(pName, day)}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
+                                        isChecked 
+                                          ? 'bg-[#9E7649]/20 text-[#9E7649] border-[#9E7649]/30 font-bold'
+                                          : 'bg-[#2C1B15] text-stone-500 border-transparent hover:text-stone-300'
+                                      }`}
+                                    >
+                                      {day.substring(0, 3)}
+                                      {isDefault && <span className="text-[7px] text-[#9E7649] ml-0.5">•</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1086,19 +1202,36 @@ export const SalarySimulatorTool: React.FC<SalarySimulatorProps> = ({ onBack, cu
 
                       {/* Table Rows */}
                       <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                        {results.items.map(item => (
-                          <div 
-                            key={item.programName}
-                            className={`grid grid-cols-12 p-2.5 border-b border-[#9E7649]/5 items-center ${
-                              item.occurrences === 0 ? 'opacity-30' : ''
-                            }`}
-                          >
-                            <div className="col-span-5 truncate text-white uppercase font-bold text-[11px]">{item.programName}</div>
-                            <div className="col-span-3 text-right">${item.rate.toFixed(2)}</div>
-                            <div className="col-span-2 text-center text-stone-400">{item.occurrences} {timeframe === 'day' ? 'em.' : timeframe === 'week' ? 'd/s' : 'em.'}</div>
-                            <div className="col-span-2 text-right font-bold text-green-400">${item.subtotal.toFixed(2)}</div>
-                          </div>
-                        ))}
+                        {results.items.map(item => {
+                          const isProp = item.isPropaganda;
+                          let occurrencesStr = '';
+                          if (isProp) {
+                            if (timeframe === 'month') occurrencesStr = `${item.occurrences} prop.`;
+                            else if (timeframe === 'week') occurrencesStr = `${item.occurrences % 1 === 0 ? item.occurrences : item.occurrences.toFixed(1)} prop/s`;
+                            else occurrencesStr = `${item.occurrences % 1 === 0 ? item.occurrences : item.occurrences.toFixed(2)} prop/d`;
+                          } else {
+                            occurrencesStr = `${item.occurrences} ${timeframe === 'day' ? 'em.' : timeframe === 'week' ? 'd/s' : 'em.'}`;
+                          }
+
+                          return (
+                            <div 
+                              key={item.programName}
+                              className={`grid grid-cols-12 p-2.5 border-b border-[#9E7649]/5 items-center ${
+                                item.occurrences === 0 ? 'opacity-30' : ''
+                              }`}
+                            >
+                              <div className="col-span-5 truncate text-white uppercase font-bold text-[11px] flex items-center gap-1">
+                                <span>{item.programName}</span>
+                                {isProp && (
+                                  <span className="text-[8px] bg-[#9E7649]/20 text-[#9E7649] px-1 py-0.2 rounded font-sans">Prop.</span>
+                                )}
+                              </div>
+                              <div className="col-span-3 text-right">${item.rate.toFixed(2)}</div>
+                              <div className="col-span-2 text-center text-stone-400">{occurrencesStr}</div>
+                              <div className="col-span-2 text-right font-bold text-green-400">${item.subtotal.toFixed(2)}</div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>

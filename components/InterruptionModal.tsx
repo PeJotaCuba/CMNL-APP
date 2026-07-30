@@ -24,23 +24,62 @@ interface Props {
 }
 
 const CABINA_SEGMENTS = [
-    { name: 'Cabina 12:00-12:30', duration: 30, category: 'variados' as keyof TransmissionBreakdown, schedule: '12:00 - 12:30' },
-    { name: 'Cabina 13:00-13:30', duration: 30, category: 'variados' as keyof TransmissionBreakdown, schedule: '13:00 - 13:30' }
+    { name: 'Cabina 12:00-12:30', duration: 30, category: 'variados' as keyof TransmissionBreakdown, schedule: '12:00 PM - 12:30 PM' },
+    { name: 'Cabina 13:00-13:30', duration: 30, category: 'variados' as keyof TransmissionBreakdown, schedule: '01:00 PM - 01:30 PM' }
 ];
 
-const parseTimeToMinutes = (timeStr: string) => {
-    if (!timeStr) return 0;
-    const parts = timeStr.split(':');
-    if (parts.length < 2) return 0;
-    const hours = parseInt(parts[0]);
-    const minutes = parseInt(parts[1]);
-    return hours * 60 + minutes;
+const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
+
+const isMatch = (name1: string, name2: string) => {
+    if (!name1 || !name2) return false;
+    const n1 = normalize(name1);
+    const n2 = normalize(name2);
+    if (n1 === n2) return true;
+    if (n1.replace(/\s+/g, '') === n2.replace(/\s+/g, '')) return true;
+    if (n1.replace('del', 'de') === n2.replace('del', 'de')) return true;
+    return false;
 };
 
-const formatMinutesToTime = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
+const formatMinutesTo12h = (minutes: number): string => {
+    let h = Math.floor(minutes / 60);
     const m = minutes % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    const period = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${period}`;
+};
+
+const parseTimeToMinutes = (timeStr: string, defaultPeriod?: 'AM' | 'PM'): number => {
+    if (!timeStr) return 0;
+    const str = timeStr.trim().toLowerCase();
+    
+    const isPM = str.includes('pm') || (defaultPeriod === 'PM' && !str.includes('am'));
+    const isAM = str.includes('am') || (defaultPeriod === 'AM' && !str.includes('pm'));
+
+    const match = str.match(/(\d{1,2})[:.](\d{2})/);
+    if (!match) {
+        const hourOnlyMatch = str.match(/(\d{1,2})/);
+        if (!hourOnlyMatch) return 0;
+        let h = parseInt(hourOnlyMatch[1], 10);
+        if (isPM && h < 12) h += 12;
+        if (isAM && h === 12) h = 0;
+        return h * 60;
+    }
+
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+
+    if (isPM && h < 12) {
+        h += 12;
+    } else if (isAM && h === 12) {
+        h = 0;
+    } else if (!str.includes('am') && !str.includes('pm') && !defaultPeriod) {
+        if (h >= 1 && h <= 6) {
+            h += 12;
+        }
+    }
+
+    return h * 60 + m;
 };
 
 export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, categories, categoryLabels, categoryPrograms }) => {
@@ -51,15 +90,19 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
     const [iFin, setIFin] = useState(480);
 
     const getProgramDetails = (name: string) => {
-        const cabina = CABINA_SEGMENTS.find(c => c.name === name);
+        const cabina = CABINA_SEGMENTS.find(c => isMatch(c.name, name));
         if (cabina) {
+            const parts = cabina.schedule.split(/[-–a]/);
+            const startPart = parts[0] ? parts[0].trim() : '';
+            const endPart = parts[1] ? parts[1].trim() : '';
+            const endPeriod = endPart.toLowerCase().includes('pm') ? 'PM' : (endPart.toLowerCase().includes('am') ? 'AM' : undefined);
             return {
                 dTotal: cabina.duration,
                 category: cabina.category,
-                tInicio: parseTimeToMinutes(cabina.schedule.split('-')[0].trim())
+                tInicio: parseTimeToMinutes(startPart, endPeriod)
             };
         }
-        const ficha = fichas.find(f => f.name === name);
+        const ficha = fichas.find(f => isMatch(f.name, name));
         if (ficha) {
             const lower = (ficha.duration || '').toLowerCase();
             let totalMinutes = 0;
@@ -72,14 +115,21 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
                 if (match) totalMinutes = parseInt(match[1]);
             }
             const dTotal = totalMinutes || 60;
-            const scheduleParts = ficha.schedule.split('-');
-            const tInicio = scheduleParts.length > 0 ? parseTimeToMinutes(scheduleParts[0].trim()) : 0;
             
+            let tInicio = 0;
+            if (ficha.schedule) {
+                const parts = ficha.schedule.split(/[-–a]/);
+                const startPart = parts[0] ? parts[0].trim() : '';
+                const endPart = parts[1] ? parts[1].trim() : '';
+                const endPeriod = endPart.toLowerCase().includes('pm') ? 'PM' : (endPart.toLowerCase().includes('am') ? 'AM' : undefined);
+                tInicio = parseTimeToMinutes(startPart, endPeriod);
+            }
+
             // Find category for this program
             let category: keyof TransmissionBreakdown = 'variados';
             if (categoryPrograms) {
                 for (const [cat, programs] of Object.entries(categoryPrograms)) {
-                    if ((programs as string[]).includes(name)) {
+                    if ((programs as string[]).some(p => isMatch(p, name))) {
                         category = cat as keyof TransmissionBreakdown;
                         break;
                     }
@@ -134,15 +184,19 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
 
         // Check Cabina Segments
         CABINA_SEGMENTS.forEach(cabina => {
-            const tInicio = parseTimeToMinutes(cabina.schedule.split('-')[0].trim());
-            const tFin = tInicio + cabina.duration;
+            const details = getProgramDetails(cabina.name);
+            if (!details) return;
+            const { dTotal, category, tInicio } = details;
+            const tFin = tInicio + dTotal;
             
             const ruleA = iInicio >= (tInicio + 5);
-            const ruleB = iFin <= (tInicio + (0.75 * cabina.duration));
+            const ruleB = iFin <= (tInicio + (0.75 * dTotal));
             const hasOverlap = Math.max(iInicio, tInicio) < Math.min(iFin, tFin);
 
             if (hasOverlap && !ruleA && !ruleB) {
-                affected.push({ name: cabina.name, minutes: cabina.duration, category: cabina.category });
+                if (!affected.some(p => isMatch(p.name, cabina.name))) {
+                    affected.push({ name: cabina.name, minutes: dTotal, category });
+                }
             }
         });
 
@@ -161,7 +215,9 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
             const hasOverlap = Math.max(iInicio, tInicio) < Math.min(iFin, tFin);
 
             if (hasOverlap && !ruleA && !ruleB) {
-                affected.push({ name: ficha.name, minutes: dTotal, category });
+                if (!affected.some(p => isMatch(p.name, ficha.name))) {
+                    affected.push({ name: ficha.name, minutes: dTotal, category });
+                }
             }
         });
 
@@ -173,13 +229,12 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
     const handleSave = () => {
         if (affectedPrograms.length === 0) return;
 
-        const hasComplices = affectedPrograms.some(p => p.name.toLowerCase() === 'cómplices' || p.name.toLowerCase() === 'complices');
+        const hasComplices = affectedPrograms.some(p => isMatch(p.name, 'cómplices') || isMatch(p.name, 'complices'));
         const timestamp = Date.now();
 
         const newInterruptions: Interruption[] = affectedPrograms.map(p => {
             let finalMinutes = p.minutes;
-            const pNameLower = p.name.toLowerCase();
-            if (hasComplices && (pNameLower === 'alba y crisol' || pNameLower === 'coloreando melodías' || pNameLower === 'coloreando melodias')) {
+            if (hasComplices && (isMatch(p.name, 'alba y crisol') || isMatch(p.name, 'coloreando melodías') || isMatch(p.name, 'coloreando melodias'))) {
                 finalMinutes = 0;
             }
 
@@ -190,24 +245,35 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
                 category: p.category,
                 affectedMinutes: finalMinutes,
                 percentage: 100,
-                startTime: formatMinutesToTime(iInicio),
-                endTime: formatMinutesToTime(iFin)
+                startTime: formatMinutesTo12h(iInicio),
+                endTime: formatMinutesTo12h(iFin)
             };
         });
 
         onSave(newInterruptions);
     };
 
-    const handleManualTimeChange = (type: 'inicio' | 'fin', field: 'h' | 'm', value: number) => {
-        if (type === 'inicio') {
-            const h = field === 'h' ? value : Math.floor(iInicio / 60);
-            const m = field === 'm' ? value : iInicio % 60;
-            setIInicio(Math.min(900, Math.max(420, h * 60 + m)));
-        } else {
-            const h = field === 'h' ? value : Math.floor(iFin / 60);
-            const m = field === 'm' ? value : iFin % 60;
-            setIFin(Math.min(900, Math.max(420, h * 60 + m)));
-        }
+    const get12Hour = (totalMinutes: number) => {
+        let h = Math.floor(totalMinutes / 60) % 12;
+        return h === 0 ? 12 : h;
+    };
+
+    const handle12hTimeChange = (type: 'inicio' | 'fin', field: 'h' | 'm' | 'period', value: any) => {
+        const current = type === 'inicio' ? iInicio : iFin;
+        let currentH12 = get12Hour(current);
+        let currentM = current % 60;
+        let currentPeriod = current >= 720 ? 'PM' : 'AM';
+
+        if (field === 'h') currentH12 = Math.min(12, Math.max(1, Number(value) || 12));
+        if (field === 'm') currentM = Math.min(59, Math.max(0, Number(value) || 0));
+        if (field === 'period') currentPeriod = value;
+
+        let h24 = currentH12 % 12;
+        if (currentPeriod === 'PM') h24 += 12;
+
+        const newTotal = Math.min(900, Math.max(420, h24 * 60 + currentM));
+        if (type === 'inicio') setIInicio(newTotal);
+        else setIFin(newTotal);
     };
 
     return (
@@ -233,29 +299,37 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
 
                     <div className="space-y-4 bg-[#1A100C] p-4 rounded-xl border border-[#9E7649]/10">
                         <div className="flex justify-between items-center">
-                            <span className="text-sm font-bold text-[#9E7649]">Rango de Interrupción</span>
+                            <span className="text-sm font-bold text-[#9E7649]">Rango de Interrupción (12 Horas)</span>
                             <span className="text-xs text-[#E8DCCF]/40">07:00 AM - 03:00 PM</span>
                         </div>
 
                         <div className="space-y-6">
-                            {/* Inicio Slider */}
+                            {/* Inicio Control */}
                             <div className="space-y-2">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-[#E8DCCF]/60">Inicio: {formatMinutesToTime(iInicio)}</span>
-                                    <div className="flex gap-2">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-[#E8DCCF]/80 font-bold">Inicio: {formatMinutesTo12h(iInicio)}</span>
+                                    <div className="flex items-center gap-1">
                                         <input 
-                                            type="number" min="7" max="15" 
-                                            value={Math.floor(iInicio / 60)}
-                                            onChange={e => handleManualTimeChange('inicio', 'h', parseInt(e.target.value) || 0)}
-                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs"
+                                            type="number" min="1" max="12" 
+                                            value={get12Hour(iInicio)}
+                                            onChange={e => handle12hTimeChange('inicio', 'h', e.target.value)}
+                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs text-white"
                                         />
                                         <span className="text-[#E8DCCF]/30">:</span>
                                         <input 
                                             type="number" min="0" max="59" 
                                             value={iInicio % 60}
-                                            onChange={e => handleManualTimeChange('inicio', 'm', parseInt(e.target.value) || 0)}
-                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs"
+                                            onChange={e => handle12hTimeChange('inicio', 'm', e.target.value)}
+                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs text-white"
                                         />
+                                        <select
+                                            value={iInicio >= 720 ? 'PM' : 'AM'}
+                                            onChange={e => handle12hTimeChange('inicio', 'period', e.target.value)}
+                                            className="bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-xs text-amber-300 font-bold"
+                                        >
+                                            <option value="AM">AM</option>
+                                            <option value="PM">PM</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <input 
@@ -266,24 +340,32 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
                                 />
                             </div>
 
-                            {/* Fin Slider */}
+                            {/* Fin Control */}
                             <div className="space-y-2">
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-[#E8DCCF]/60">Fin: {formatMinutesToTime(iFin)}</span>
-                                    <div className="flex gap-2">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-[#E8DCCF]/80 font-bold">Fin: {formatMinutesTo12h(iFin)}</span>
+                                    <div className="flex items-center gap-1">
                                         <input 
-                                            type="number" min="7" max="15" 
-                                            value={Math.floor(iFin / 60)}
-                                            onChange={e => handleManualTimeChange('fin', 'h', parseInt(e.target.value) || 0)}
-                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs"
+                                            type="number" min="1" max="12" 
+                                            value={get12Hour(iFin)}
+                                            onChange={e => handle12hTimeChange('fin', 'h', e.target.value)}
+                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs text-white"
                                         />
                                         <span className="text-[#E8DCCF]/30">:</span>
                                         <input 
                                             type="number" min="0" max="59" 
                                             value={iFin % 60}
-                                            onChange={e => handleManualTimeChange('fin', 'm', parseInt(e.target.value) || 0)}
-                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs"
+                                            onChange={e => handle12hTimeChange('fin', 'm', e.target.value)}
+                                            className="w-12 bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-center text-xs text-white"
                                         />
+                                        <select
+                                            value={iFin >= 720 ? 'PM' : 'AM'}
+                                            onChange={e => handle12hTimeChange('fin', 'period', e.target.value)}
+                                            className="bg-[#2C1B15] border border-[#9E7649]/30 rounded p-1 text-xs text-amber-300 font-bold"
+                                        >
+                                            <option value="AM">AM</option>
+                                            <option value="PM">PM</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <input 
@@ -303,7 +385,7 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
                                 <ul className="space-y-2">
                                     {affectedPrograms.map(p => (
                                         <li key={p.name} className="flex justify-between items-center text-sm">
-                                            <span className="text-white">{p.name}</span>
+                                            <span className="text-white font-medium">{p.name}</span>
                                             <span className="text-red-400 font-mono font-bold">{p.minutes} min</span>
                                         </li>
                                     ))}
@@ -329,3 +411,4 @@ export const InterruptionModal: React.FC<Props> = ({ onClose, onSave, fichas, ca
         </div>
     );
 };
+

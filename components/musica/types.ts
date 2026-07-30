@@ -107,7 +107,7 @@ export interface SearchFilters {
 export type AuthMode = 'user' | 'director' | 'admin' | null;
 
 export const DEFAULT_PROGRAMS_LIST = [
-  "Buenos Días, Bayamo",
+  "Buenos Días Bayamo",
   "La Cumbancha",
   "Todos en Casa",
   "Arte Bayamo",
@@ -118,5 +118,5 @@ export const DEFAULT_PROGRAMS_LIST = [
   "Cómplices",
   "Coloreando Melodías",
   "Estación 95.3",
-  "Palco de Domingo"
+  "Palco de domingo"
 ];

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CMNLHeader from './CMNLHeader';
 import { User as GlobalUser } from '../types';
 import { Track, ViewState, AuthMode, User, DEFAULT_PROGRAMS_LIST, Report, ExportItem, SavedSelection } from './musica/types';
+import { sortAndStandardizePrograms, getActiveProgramsFromStorage } from './musica/programUtils';
 import { parseTxtDatabase, GENRES_LIST, COUNTRIES_LIST } from './musica/constants';
 import TrackList from './musica/TrackList';
 import TrackDetail from './musica/TrackDetail';
@@ -36,11 +37,12 @@ interface MusicaAppProps {
   onBack: () => void;
   onMenuClick: () => void;
   onDirtyChange: (dirty: boolean) => void;
+  onSaveCMNL?: () => void;
 }
 
 
 // ...
-const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, onMenuClick, onDirtyChange }) => {
+const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, onMenuClick, onDirtyChange, onSaveCMNL }) => {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [view, setView] = useState<ViewState>(ViewState.LIST);
   const [users, setUsers] = useState<User[]>([]);
@@ -155,8 +157,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
   const [whatsAppPromptPayload, setWhatsAppPromptPayload] = useState<string | null>(null);
   
   const [programs, setPrograms] = useState<string[]>(() => {
-      const saved = localStorage.getItem(PROGRAMS_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_PROGRAMS_LIST;
+      return getActiveProgramsFromStorage();
   });
 
   useEffect(() => {
@@ -1402,7 +1403,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                                 <div>
                                     <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
                                     <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
-                                        {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                                        {(programs.length > 0 ? programs : DEFAULT_PROGRAMS_LIST).map(p => <option key={p} value={p}>{p}</option>)}
                                     </select>
                                 </div>
                                 <div>
@@ -1494,7 +1495,19 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                 </div>
             )}
 
-            {view === ViewState.SETTINGS && authMode === 'admin' && <Settings tracks={tracks} users={users} onAddUser={() => {}} onEditUser={() => {}} onDeleteUser={() => {}} onExportUsers={handleExportUsersDB} onImportUsers={() => {}} currentUser={currentUser} />}
+            {view === ViewState.SETTINGS && authMode === 'admin' && (
+              <Settings 
+                tracks={tracks} 
+                currentUser={currentUser} 
+                onSaveCMNL={onSaveCMNL}
+                programs={programs}
+                onProgramsChange={(newProgs) => {
+                  setPrograms(newProgs);
+                  localStorage.setItem('rcm_programs_list', JSON.stringify(newProgs));
+                  if (onSaveCMNL) onSaveCMNL();
+                }}
+              />
+            )}
             {view === ViewState.PRODUCTIONS && authMode === 'admin' && <Productions onUpdateTracks={updateTracks} allTracks={tracks} />}
             {view === ViewState.REPORTS && authMode === 'director' && <ReportsViewer onEdit={handleEditReport} currentUser={currentUser} users={users} refreshTrigger={reportsRefreshKey} />}
             {view === ViewState.GUIDE && authMode !== 'admin' && <Guide />}
@@ -1653,7 +1666,7 @@ const MusicaApp: React.FC<MusicaAppProps> = ({ currentUser: globalUser, onBack, 
                         <div>
                             <label className="text-xs font-bold text-[#E8DCCF]/60 block mb-1">Programa</label>
                             <select value={programName} onChange={e => setProgramName(e.target.value)} className="w-full p-2 border border-[#9E7649]/30 rounded bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]">
-                                {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                                {(programs.length > 0 ? programs : DEFAULT_PROGRAMS_LIST).map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
                         <div>

@@ -9,6 +9,8 @@ import * as XLSX from 'xlsx-js-style';
 import { formatDigitalSignatureForDocuments } from '../../utils/signatureUtils';
 import { isDoubleSalaryDay, getHolidayName } from '../../utils/holidays';
 import { calculateCESS, calculateISIP } from '../../utils/taxUtils';
+import { ParrillaModificationModal } from './ParrillaModificationModal';
+import { getStoredInterruptions, TransmissionInterruption } from '../../src/services/parrillaService';
 
 // [NOTE]: Extracted Admin section to preserve all existing logic safely
 interface Props {
@@ -64,6 +66,39 @@ export const ReportesAdmin: React.FC<Props> = ({
   const [loadResult, setLoadResult] = useState<{ message: string, success: boolean } | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ message: string, onConfirm: () => void } | null>(null);
   const [isManualProcessing, setIsManualProcessing] = useState(false);
+  const [showParrillaModal, setShowParrillaModal] = useState(false);
+  const [interruptions, setInterruptions] = useState<TransmissionInterruption[]>(() => getStoredInterruptions());
+
+  useEffect(() => {
+    const handleStorage = () => setInterruptions(getStoredInterruptions());
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const isProgramInterrupted = React.useCallback((progName: string, dateStr: string) => {
+    return interruptions.some(i => i.date === dateStr && isMatch(i.programName, progName));
+  }, [interruptions, isMatch]);
+
+  const canModifyParrilla = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin' || currentUser.classification === 'Administrador') return true;
+
+    const mem = equipoData.find(m => 
+      (m.username && m.username === currentUser.username) || 
+      (m.name && m.name === currentUser.name) ||
+      (m.email && currentUser.email && m.email === currentUser.email)
+    );
+
+    if (mem) {
+      const spec = (normalize(mem.role || '') + ' ' + normalize(mem.specialty || '') + ' ' + (mem.specialties ? mem.specialties.map((s: string) => normalize(s)).join(' ') : ''));
+      if (spec.includes('jefe') && spec.includes('programacion')) return true;
+      if (spec.includes('admin') || spec.includes('director')) return true;
+    }
+
+    if (currentUser.role === 'jefe_programacion' || normalize(currentUser.role || '').includes('programacion')) return true;
+
+    return false;
+  }, [currentUser, equipoData, normalize]);
 
   const isProgramOnDay = (program: ProgramFicha, dateStr: string) => {
       const date = new Date(dateStr + 'T12:00:00');
@@ -136,11 +171,24 @@ export const ReportesAdmin: React.FC<Props> = ({
   };
 
   const processNewReports = (newReports: FP02Report[], manual = false) => {
+    const interruptedReports = newReports.filter(nR => isProgramInterrupted(nR.programa, nR.fecha));
+    const validReports = newReports.filter(nR => !isProgramInterrupted(nR.programa, nR.fecha));
+
+    if (interruptedReports.length > 0) {
+      const names = Array.from(new Set(interruptedReports.map(r => `"${r.programa}" (${r.fecha})`))).join(', ');
+      alert(`Atención: No se procesaron los siguientes reportes por tener interrupción técnica ese día:\n${names}`);
+    }
+
+    if (validReports.length === 0) {
+      if (!manual) setLoadResult({ message: "No se procesaron reportes (los programas indicados fueron inhabilitados por interrupción técnica).", success: false });
+      return;
+    }
+
     const conflicts: { existing: FP02Report, newReport: FP02Report }[] = [];
     const okReports: FP02Report[] = [];
 
-    newReports.forEach(nR => {
-       const existing = reports.find(r => r.fecha === nR.fecha && r.programa === nR.programa);
+    validReports.forEach(nR => {
+       const existing = reports.find(r => r.fecha === nR.fecha && isMatch(r.programa, nR.programa));
        if (existing) {
           conflicts.push({ existing, newReport: nR });
        } else {
@@ -222,6 +270,7 @@ export const ReportesAdmin: React.FC<Props> = ({
     
     const userReportsInMonth = reports.filter(r => 
         r.mes === filterMonth && 
+        !isProgramInterrupted(r.programa, r.fecha) &&
         r.especialidades.some(esp => isMatch(esp.nombre, filterMember))
     );
 
@@ -671,25 +720,35 @@ export const ReportesAdmin: React.FC<Props> = ({
 
   return (
       <div className="flex-1 w-full flex flex-col">
-          <div className="flex gap-4 border-b border-[#9E7649]/30 mb-6 overflow-x-auto no-scrollbar">
-              <button 
-                className={`pb-2 px-4 font-bold text-xs md:text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === 'registro' ? 'border-[#9E7649] text-white' : 'border-transparent text-[#E8DCCF]/50 hover:text-[#E8DCCF]'}`}
-                onClick={() => setActiveTab('registro')}
-              >
-                Registro
-              </button>
-              <button 
-                className={`pb-2 px-4 font-bold text-xs md:text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === 'reportes' ? 'border-[#9E7649] text-white' : 'border-transparent text-[#E8DCCF]/50 hover:text-[#E8DCCF]'}`}
-                onClick={() => setActiveTab('reportes')}
-              >
-                Reportes
-              </button>
-              <button 
-                className={`pb-2 px-4 font-bold text-xs md:text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === 'pagosRealizados' ? 'border-[#9E7649] text-white' : 'border-transparent text-[#E8DCCF]/50 hover:text-[#E8DCCF]'}`}
-                onClick={() => setActiveTab('pagosRealizados')}
-              >
-                Pagos
-              </button>
+          <div className="flex justify-between items-center border-b border-[#9E7649]/30 mb-6 pb-1">
+              <div className="flex gap-4 overflow-x-auto no-scrollbar">
+                  <button 
+                    className={`pb-2 px-4 font-bold text-xs md:text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === 'registro' ? 'border-[#9E7649] text-white' : 'border-transparent text-[#E8DCCF]/50 hover:text-[#E8DCCF]'}`}
+                    onClick={() => setActiveTab('registro')}
+                  >
+                    Registro
+                  </button>
+                  <button 
+                    className={`pb-2 px-4 font-bold text-xs md:text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === 'reportes' ? 'border-[#9E7649] text-white' : 'border-transparent text-[#E8DCCF]/50 hover:text-[#E8DCCF]'}`}
+                    onClick={() => setActiveTab('reportes')}
+                  >
+                    Reportes
+                  </button>
+                  <button 
+                    className={`pb-2 px-4 font-bold text-xs md:text-sm border-b-2 whitespace-nowrap transition-colors ${activeTab === 'pagosRealizados' ? 'border-[#9E7649] text-white' : 'border-transparent text-[#E8DCCF]/50 hover:text-[#E8DCCF]'}`}
+                    onClick={() => setActiveTab('pagosRealizados')}
+                  >
+                    Pagos
+                  </button>
+              </div>
+              {canModifyParrilla && (
+                  <button
+                      onClick={() => setShowParrillaModal(true)}
+                      className="flex items-center gap-2 bg-[#9E7649]/30 text-amber-300 hover:bg-[#9E7649]/50 px-3 py-1.5 rounded-lg border border-[#9E7649]/50 transition-all font-bold text-xs whitespace-nowrap"
+                  >
+                      <Calendar size={16} /> Modificar Parrilla
+                  </button>
+              )}
           </div>
 
           {activeTab === 'reportes' && (
@@ -1177,6 +1236,14 @@ export const ReportesAdmin: React.FC<Props> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {showParrillaModal && (
+        <ParrillaModificationModal
+          fichas={fichas}
+          catalogo={catalogo}
+          onClose={() => setShowParrillaModal(false)}
+        />
       )}
       </div>
   );

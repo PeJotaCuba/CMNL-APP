@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search, PenTool, Share2, Mail, Lock, ClipboardList } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle2, ChevronLeft, ChevronRight, Save, Clock, ArrowRight, FileCode, FileDown, Search, PenTool, Share2, Mail, Lock, ClipboardList, Calendar } from 'lucide-react';
 import { User, FP02Report, ProgramFicha, ConsolidatedPayment, ProgramCatalog, WorkLog } from '../../types';
 import { saveAs } from 'file-saver';
 import { Document, Packer, Paragraph, Table as DocTable, TableRow as DocRow, TableCell as DocCell, TextRun, AlignmentType, WidthType } from 'docx';
@@ -9,6 +9,8 @@ import autoTable from 'jspdf-autotable';
 import { getStoredCertificate, getStoredPassword, generateDigitalSignature, checkSigningAuthorization } from '../../utils/signatureUtils';
 import { isDoubleSalaryDay, getHolidayName } from '../../utils/holidays';
 import { calculateCESS, calculateISIP } from '../../utils/taxUtils';
+import { ParrillaModification, TransmissionInterruption, getStoredInterruptions, getStoredParrillaModifications } from '../../src/services/parrillaService';
+import { ParrillaModificationModal } from './ParrillaModificationModal';
 
 interface Props {
   currentUser: User | null;
@@ -55,6 +57,45 @@ export const ReportesTrabajador: React.FC<Props> = ({
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailMode, setDetailMode] = useState<'autogestion' | 'oficial'>('autogestion');
   const ADMIN_EMAIL = 'emisora@cmnl.cu';
+
+  // Parrilla Modification & Interruption States
+  const [showParrillaModal, setShowParrillaModal] = useState(false);
+  const [parrillaMods, setParrillaMods] = useState<ParrillaModification[]>(() => getStoredParrillaModifications());
+  const [interruptions, setInterruptions] = useState<TransmissionInterruption[]>(() => getStoredInterruptions());
+
+  const refreshParrillaAndInterruptions = React.useCallback(() => {
+    setParrillaMods(getStoredParrillaModifications());
+    setInterruptions(getStoredInterruptions());
+  }, []);
+
+  useEffect(() => {
+    refreshParrillaAndInterruptions();
+  }, [workLogDate, activeTab, refreshParrillaAndInterruptions]);
+
+  const canModifyParrilla = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin' || currentUser.classification === 'Administrador') return true;
+
+    const mem = equipoData.find(m => 
+      (m.username && m.username === currentUser.username) || 
+      (m.name && m.name === currentUser.name) ||
+      (m.email && currentUser.email && m.email === currentUser.email)
+    );
+
+    if (mem) {
+      const spec = (normalize(mem.role || '') + ' ' + normalize(mem.specialty || '') + ' ' + (mem.specialties ? mem.specialties.map((s: string) => normalize(s)).join(' ') : ''));
+      if (spec.includes('jefe') && spec.includes('programacion')) return true;
+      if (spec.includes('admin') || spec.includes('director')) return true;
+    }
+
+    if (currentUser.role === 'jefe_programacion' || normalize(currentUser.role || '').includes('programacion')) return true;
+
+    return false;
+  }, [currentUser, equipoData, normalize]);
+
+  const isProgramInterrupted = React.useCallback((progName: string, dateStr: string) => {
+    return interruptions.some(i => i.date === dateStr && isMatch(i.programName, progName));
+  }, [interruptions, isMatch]);
 
   // State for additional payments
   const [additionalPayments, setAdditionalPayments] = useState<AdditionalPayment[]>(() => {
@@ -409,6 +450,11 @@ export const ReportesTrabajador: React.FC<Props> = ({
   const toggleWorkLog = (date: string, programName: string, role: string) => {
       if (!currentUser) return;
 
+      if (isProgramInterrupted(programName, date)) {
+          alert(`El programa "${programName}" fue inhabilitado por interrupción técnica el ${date} y no se puede marcar.`);
+          return;
+      }
+
       // Rule: Director and Asesor cannot coincide in the same program on the same day
       const normalizedRole = normalize(role);
       const isDirector = normalizedRole.includes('director');
@@ -658,6 +704,25 @@ export const ReportesTrabajador: React.FC<Props> = ({
       return daysMap[day].some(d => freqWords.some(w => w.includes(d) || (d.includes(w) && w.length >= 3)));
   };
 
+  const isProgramOnDayWithParrilla = React.useCallback((programName: string, dateStr: string) => {
+      const modsOnDate = parrillaMods.filter(m => m.date === dateStr);
+      const isReplaced = modsOnDate.some(m => m.replacedProgram && isMatch(m.replacedProgram, programName));
+      if (isReplaced) return false;
+
+      const isAddedSpecial = modsOnDate.some(m => isMatch(m.specialProgram, programName));
+      if (isAddedSpecial) return true;
+
+      return isProgramOnDay(programName, dateStr);
+  }, [parrillaMods, isMatch]);
+
+  const isProgramHabitualOnDay = React.useCallback((programName: string, dateStr: string) => {
+      const modsOnDate = parrillaMods.filter(m => m.date === dateStr);
+      const isSpecialMod = modsOnDate.some(m => isMatch(m.specialProgram, programName));
+      if (isSpecialMod) return false;
+
+      return isProgramOnDay(programName, dateStr);
+  }, [parrillaMods, isMatch]);
+
   const programsListRaw = React.useMemo(() => {
       const uniqueCanonical = new Map<string, string>();
       catalogo.forEach(c => {
@@ -666,15 +731,22 @@ export const ReportesTrabajador: React.FC<Props> = ({
               uniqueCanonical.set(norm, c.name);
           }
       });
+      // Include programs from fichas as well
+      fichas.forEach(f => {
+          const norm = normalize(f.name);
+          if (!uniqueCanonical.has(norm)) {
+              uniqueCanonical.set(norm, f.name);
+          }
+      });
       if (!uniqueCanonical.has(normalize('Propaganda'))) {
           uniqueCanonical.set(normalize('Propaganda'), 'Propaganda');
       }
       return Array.from(uniqueCanonical.values());
-  }, [catalogo, normalize]);
+  }, [catalogo, fichas, normalize]);
 
   const programsListFilteredByDay = React.useMemo(() => {
-      return programsListRaw.filter(prog => dates.some(date => isProgramOnDay(prog, date)));
-  }, [programsListRaw, dates, isProgramOnDay]);
+      return programsListRaw.filter(prog => dates.some(date => isProgramOnDayWithParrilla(prog, date)));
+  }, [programsListRaw, dates, isProgramOnDayWithParrilla]);
 
 
   const sortedPrograms = (list: string[]) => {
@@ -749,6 +821,10 @@ export const ReportesTrabajador: React.FC<Props> = ({
 
              userPaymentConfig.roles.forEach(role => {
                  allPossiblePrograms.forEach(prog => {
+                     if (isProgramInterrupted(prog, dateStr)) {
+                         return;
+                     }
+
                      const isManual = workLogs.some(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr && l.type !== 'manual_delete');
                      const isDeleted = workLogs.some(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr && l.type === 'manual_delete');
                      
@@ -760,7 +836,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                      }
 
                      const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
-                     const isHabitual = isHabitualAssigned && isProgramOnDay(prog, dateStr);
+                     const isHabitual = isHabitualAssigned && isProgramHabitualOnDay(prog, dateStr);
                      const isWorked = isManual || (isHabitual && !isDeleted);
 
                      if (isWorked) {
@@ -816,11 +892,15 @@ export const ReportesTrabajador: React.FC<Props> = ({
             }
 
             roleData.programs.forEach(prog => {
+                if (isProgramInterrupted(prog, dateStr)) {
+                    return;
+                }
+
                 const isManual = workLogs.some(l => l.userId === currentUser.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === dateStr && l.type !== 'manual_delete');
                 const isDeleted = workLogs.some(l => l.userId === currentUser.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === dateStr && l.type === 'manual_delete');
                 
                 const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
-                const isHabitual = isHabitualAssigned && isProgramOnDay(prog, dateStr);
+                const isHabitual = isHabitualAssigned && isProgramHabitualOnDay(prog, dateStr);
                 const isWorked = isManual || (isHabitual && !isDeleted);
 
                 if (isWorked) {
@@ -921,6 +1001,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
       
       const userReports = reports.filter(r => 
         r.mes === workLogDate.substring(0, 7) && 
+        !isProgramInterrupted(r.programa, r.fecha) &&
         r.especialidades.some(esp => 
           isMatch(esp.nombre, currentUser.name) || 
           (currentUser.username && esp.nombre.toLowerCase().includes(currentUser.username.toLowerCase()))
@@ -977,6 +1058,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
                
                userPaymentConfig.roles.forEach(role => {
                    allPossiblePrograms.forEach(prog => {
+                       if (isProgramInterrupted(prog, dateStr)) return;
                        const isManual = workLogs.some(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr && l.type !== 'manual_delete');
                        const isDeleted = workLogs.some(l => l.userId === currentUser.username && l.role === role.role && isMatch(l.programName, prog) && l.date === dateStr && l.type === 'manual_delete');
                        
@@ -1016,7 +1098,7 @@ export const ReportesTrabajador: React.FC<Props> = ({
       let baseLogs: {date: string, program: string, amount: number}[] = [];
       if (detailMode === 'oficial') {
           baseLogs = reports
-            .filter(r => r.mes === filterMonth && r.especialidades.some(esp => isMatch(esp.nombre, currentUser.name)))
+            .filter(r => r.mes === filterMonth && !isProgramInterrupted(r.programa, r.fecha) && r.especialidades.some(esp => isMatch(esp.nombre, currentUser.name)))
             .map(r => {
                 const esp = r.especialidades.find(e => isMatch(e.nombre, currentUser.name));
                 let amt = 0;
@@ -1238,6 +1320,14 @@ export const ReportesTrabajador: React.FC<Props> = ({
                            </div>
                         </div>
                         <div className="flex items-center gap-4">
+                            {canModifyParrilla && (
+                                <button
+                                    onClick={() => setShowParrillaModal(true)}
+                                    className="flex items-center gap-2 bg-[#9E7649]/30 text-amber-300 hover:bg-[#9E7649]/50 px-3 py-1.5 rounded-lg border border-[#9E7649]/50 transition-all font-bold text-xs"
+                                >
+                                    <Calendar size={16} /> Modificar Parrilla
+                                </button>
+                            )}
                             <div className="flex items-center gap-2 bg-black/40 p-1.5 rounded-lg border border-[#9E7649]/30">
                                 <button onClick={handlePrevDay} className="p-1 text-[#9E7649] hover:bg-[#9E7649]/20 rounded transition-colors"><ChevronLeft size={18} /></button>
                                 <input 
@@ -1345,11 +1435,12 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                                         </div>
                                                     </td>
                                                     {dates.map(date => {
+                                                        const interrupted = isProgramInterrupted(prog, date);
                                                         const isHabitualAssigned = progsForRole.some((p: string) => isMatch(p, prog));
-                                                        const isHabitual = isHabitualAssigned && isProgramOnDay(prog, date);
+                                                        const isHabitual = isHabitualAssigned && isProgramHabitualOnDay(prog, date);
                                                         const hasManualEdit = workLogs.some(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date && l.type !== 'manual_delete');
                                                         const isDeleted = workLogs.some(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date && l.type === 'manual_delete');
-                                                        const isWorked = hasManualEdit || (isHabitual && !isDeleted);
+                                                        const isWorked = !interrupted && (hasManualEdit || (isHabitual && !isDeleted));
                                                         
                                                         const isFeriado = isDoubleSalaryDay(date);
                                                         const currentRate = baseProgramRate * (isFeriado ? 2 : 1);
@@ -1360,42 +1451,58 @@ export const ReportesTrabajador: React.FC<Props> = ({
                                                         return (
                                                             <td key={date} className="px-2 py-3 text-center border-r border-[#9E7649]/10 last:border-r-0">
                                                                 <div className="flex flex-col items-center justify-center gap-1.5 whitespace-nowrap">
-                                                                    <button 
-                                                                        onClick={() => toggleWorkLog(date, prog, roleData.role)}
-                                                                        className={`w-8 h-8 rounded flex items-center justify-center mx-auto transition-all ${isWorked ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-black/40 text-[#E8DCCF]/20 border border-[#9E7649]/20 hover:border-[#9E7649]/50 hover:text-[#E8DCCF]/50'}`}
-                                                                    >
-                                                                        {isWorked ? <CheckCircle2 size={18} /> : <div className="w-2 h-2 rounded-full bg-current opacity-50" />}
-                                                                    </button>
-                                                                    
-                                                                    <div className="mt-1">
-                                                                        <span className={`text-[11px] font-mono font-bold ${isWorked ? 'text-green-400' : 'text-stone-500/50'}`}>
-                                                                            {isWorked ? `+$${activeAmount.toFixed(2)}` : `$0.00`}
-                                                                        </span>
-                                                                    </div>
-                                                                {isWorked && normalize(prog) === 'propaganda' && (
-                                                                    <div className="flex items-center gap-1 mt-1 bg-black/40 px-1.5 py-0.5 rounded border border-[#9E7649]/30">
-                                                                        <span className="text-[10px] text-[#E8DCCF]/65 font-bold">Cant:</span>
-                                                                        <select 
-                                                                            value={(() => {
-                                                                                const log = workLogs.find(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date);
-                                                                                return log && log.hours ? log.hours : 1;
-                                                                            })()}
-                                                                            onChange={(e) => {
-                                                                                const qty = parseInt(e.target.value);
-                                                                                updatePropagandaQuantity(date, prog, roleData.role, qty);
-                                                                            }}
-                                                                            className="bg-[#1A100C] text-[#E8DCCF] text-[10px] font-bold rounded px-1 py-0.5 border border-[#9E7649]/20 outline-none focus:border-[#9E7649] cursor-pointer"
-                                                                        >
-                                                                            <option value={1} className="bg-[#1A100C]">1</option>
-                                                                            <option value={2} className="bg-[#1A100C]">2</option>
-                                                                            <option value={3} className="bg-[#1A100C]">3</option>
-                                                                        </select>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                })}
+                                                                    {interrupted ? (
+                                                                        <div className="flex flex-col items-center gap-1">
+                                                                            <div className="w-8 h-8 rounded bg-red-500/10 text-red-400 border border-red-500/30 flex items-center justify-center opacity-60 cursor-not-allowed" title="Inhabilitado por interrupción técnica">
+                                                                                <Lock size={16} />
+                                                                            </div>
+                                                                            <span className="text-[9px] text-red-400 font-bold bg-red-500/10 px-1 py-0.5 rounded border border-red-500/30">
+                                                                                Inhabilitado por interrupción
+                                                                            </span>
+                                                                            <span className="text-[10px] font-mono font-bold text-red-400/60 line-through">
+                                                                                $0.00
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            <button 
+                                                                                onClick={() => toggleWorkLog(date, prog, roleData.role)}
+                                                                                className={`w-8 h-8 rounded flex items-center justify-center mx-auto transition-all ${isWorked ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]' : 'bg-black/40 text-[#E8DCCF]/20 border border-[#9E7649]/20 hover:border-[#9E7649]/50 hover:text-[#E8DCCF]/50'}`}
+                                                                            >
+                                                                                {isWorked ? <CheckCircle2 size={18} /> : <div className="w-2 h-2 rounded-full bg-current opacity-50" />}
+                                                                            </button>
+                                                                            
+                                                                            <div className="mt-1">
+                                                                                <span className={`text-[11px] font-mono font-bold ${isWorked ? 'text-green-400' : 'text-stone-500/50'}`}>
+                                                                                    {isWorked ? `+$${activeAmount.toFixed(2)}` : `$0.00`}
+                                                                                </span>
+                                                                            </div>
+                                                                            {isWorked && normalize(prog) === 'propaganda' && (
+                                                                                <div className="flex items-center gap-1 mt-1 bg-black/40 px-1.5 py-0.5 rounded border border-[#9E7649]/30">
+                                                                                    <span className="text-[10px] text-[#E8DCCF]/65 font-bold">Cant:</span>
+                                                                                    <select 
+                                                                                        value={(() => {
+                                                                                            const log = workLogs.find(l => l.userId === currentUser?.username && l.role === roleData.role && isMatch(l.programName, prog) && l.date === date);
+                                                                                            return log && log.hours ? log.hours : 1;
+                                                                                        })()}
+                                                                                        onChange={(e) => {
+                                                                                            const qty = parseInt(e.target.value);
+                                                                                            updatePropagandaQuantity(date, prog, roleData.role, qty);
+                                                                                        }}
+                                                                                        className="bg-[#1A100C] text-[#E8DCCF] text-[10px] font-bold rounded px-1 py-0.5 border border-[#9E7649]/20 outline-none focus:border-[#9E7649] cursor-pointer"
+                                                                                    >
+                                                                                        <option value={1} className="bg-[#1A100C]">1</option>
+                                                                                        <option value={2} className="bg-[#1A100C]">2</option>
+                                                                                        <option value={3} className="bg-[#1A100C]">3</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
                                             </tr>
                                             );
                                         })}
@@ -1906,6 +2013,17 @@ export const ReportesTrabajador: React.FC<Props> = ({
                   </div>
               </div>
           , document.body)}
+
+          {showParrillaModal && (
+              <ParrillaModificationModal
+                  fichas={fichas}
+                  catalogo={catalogo}
+                  onClose={() => {
+                      setShowParrillaModal(false);
+                      refreshParrillaAndInterruptions();
+                  }}
+              />
+          )}
       </div>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Track, Production, DEFAULT_PROGRAMS_LIST } from './types';
+import { sortAndStandardizePrograms, getActiveProgramsFromStorage } from './programUtils';
 import { openWhatsApp } from '../../utils/whatsappUtils';
 import { GENRES_LIST, COUNTRIES_LIST } from './constants';
 import { ProgramFicha } from '../../types';
@@ -41,7 +42,21 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
   const [date, setDate] = useState(localDateStr);
   const [selectedMonthStr, setSelectedMonthStr] = useState<string>(localMonthStr);
   const [monthInputValue, setMonthInputValue] = useState(MONTH_NAMES[now.getMonth()]);
-  const [program, setProgram] = useState(DEFAULT_PROGRAMS_LIST[0]);
+  const [activeProgramsList, setActiveProgramsList] = useState<string[]>(() => {
+    return getActiveProgramsFromStorage();
+  });
+
+  const [program, setProgram] = useState(() => activeProgramsList[0] || DEFAULT_PROGRAMS_LIST[0]);
+
+  useEffect(() => {
+    const list = getActiveProgramsFromStorage();
+    if (list && list.length > 0) {
+      setActiveProgramsList(list);
+      if (!list.includes(program)) {
+        setProgram(list[0]);
+      }
+    }
+  }, []);
 
   useEffect(() => {
       const monthIndex = parseInt(selectedMonthStr.split('-')[1], 10) - 1;
@@ -983,7 +998,7 @@ const Productions: React.FC<ProductionsProps> = ({ }) => {
                                 onChange={e => setProgram(e.target.value)} 
                                 className="w-full p-2 border border-[#9E7649]/30 rounded-lg bg-[#1A100C] text-white text-sm outline-none focus:border-[#9E7649]"
                             >
-                                {DEFAULT_PROGRAMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                                {activeProgramsList.map(p => <option key={p} value={p}>{p}</option>)}
                             </select>
                         </div>
                     </div>
