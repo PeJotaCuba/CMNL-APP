@@ -1083,7 +1083,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                       <p className="text-[10px] text-[#E8DCCF]/50 font-mono">Código: {dev.token}</p>
                                     </div>
                                   </div>
-                                  {editingMember.id !== 'admin_app_static' && (
+                                  {editingMember.id && (
                                     <button 
                                       type="button"
                                       onClick={() => {
@@ -1102,7 +1102,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                         </div>
 
                         {/* Add Device Form */}
-                        {editingMember.id !== 'admin_app_static' && (
+                        {editingMember.id && (
                           <div className="bg-[#1C0F0A] rounded-lg p-3 border border-[#9E7649]/20 space-y-3">
                             <p className="text-[10px] text-[#9E7649] uppercase font-bold tracking-wider">Autorizar Nuevo Dispositivo</p>
                             
@@ -1438,7 +1438,8 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                       habitualProgramsDays: editingMember.habitualProgramsDays || {},
                       contracts: editingMember.contracts || [],
-                      designatedUserId: editingMember.designatedUserId
+                      designatedUserId: editingMember.designatedUserId,
+                      authorizedDevices: editingMember.authorizedDevices || []
                     } : m);
                     saveTeam(updatedTeam);
 
