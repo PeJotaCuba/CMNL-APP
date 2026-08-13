@@ -22,8 +22,7 @@ function formatTextForVoice(text: string): string {
         if (!parts[i].startsWith('<')) {
             let res = parts[i];
             
-            // Replace quotes and specific guillemets with empty strings
-            res = res.replace(/["«»]/g, '');
+            // Do not strip quotes or guillemets
 
             // Format years from 19xx and 20xx
             res = res.replace(/\b19(\d{2})\b/g, 'Mil 9$1');
@@ -134,9 +133,11 @@ export function normalizeScriptNumbering(script: RadioScript, formatMode: 'all' 
             
             // Rule A: Metadata never gets numbered and shouldn't be treated as a speaker block
             if (isMetadata(cleanName)) {
+                const firstP = item.text[0] || '';
+                const restP = item.text.slice(1);
                 normalizedBody.push({
                     type: 'text',
-                    text: [`${rawName}: ${item.text.join(' ')}`]
+                    text: [firstP ? `${rawName}: ${firstP}` : `${rawName}:`, ...restP]
                 });
                 return;
             }
@@ -168,10 +169,11 @@ export function normalizeScriptNumbering(script: RadioScript, formatMode: 'all' 
             );
 
             if (isProbablyInstruction && cleanName !== standardSpeaker && !isLoc) {
-                 const textJoined = item.text.join(' ').trim();
+                 const firstP = item.text[0] || '';
+                 const restP = item.text.slice(1);
                  normalizedBody.push({
                     type: 'text',
-                    text: [textJoined ? `${rawName}: ${textJoined}` : `${rawName}:`]
+                    text: [firstP ? `${rawName}: ${firstP}` : `${rawName}:`, ...restP]
                 });
                 return;
             }

@@ -398,7 +398,19 @@ export function parseScriptLocally(inputText: string): RadioScript | null {
 
             if (body.length > 0) {
                 if (body[body.length - 1].type === 'speaker') {
-                    body[body.length - 1].text.push(applyRadioTransformations(p));
+                    const lastSpeaker = body[body.length - 1];
+                    if (lastSpeaker.text.length === 1 && lastSpeaker.text[0] === '') {
+                        lastSpeaker.text[0] = applyRadioTransformations(p);
+                    } else {
+                        lastSpeaker.text.push(applyRadioTransformations(p));
+                    }
+                } else if (body[body.length - 1].type === 'sound') {
+                    const lastSound = body[body.length - 1];
+                    if (lastSound.text.length === 1 && lastSound.text[0] === '') {
+                        lastSound.text[0] = p;
+                    } else {
+                        lastSound.text.push(p);
+                    }
                 } else {
                     body[body.length - 1].text.push(p);
                 }
@@ -551,8 +563,7 @@ function applyRadioTransformations(text: string): string {
         if (!parts[i].startsWith('<')) {
             let s = parts[i];
 
-            // Remove quotes globally (only outside tags)
-            s = s.replace(/["«»]/g, '');
+            // Do not remove quotes or guillemets
 
             // Rule 1898 -> Mil 898
             s = s.replace(/\b18(\d{2})\b/g, 'Mil 8$1');
@@ -582,24 +593,8 @@ function applyRadioTransformations(text: string): string {
                     }
                 }
                 
-                // Protect specific uppercase words followed by a digit. 
-                // We'll replace them with a temporary token, then restore.
-                const protectedTokens: string[] = [];
-                let pText = subParts[j].replace(/\b(MUSICAL|SON|SONIDO|EFECTO|OP|PISTA|CORTE|TRACK)\s+([0-9])\b/gi, (match) => {
-                    protectedTokens.push(match);
-                    const index = protectedTokens.length - 1;
-                    const indexLetters = String(index).split('').map(d => String.fromCharCode(65 + parseInt(d))).join('');
-                    return `__PROTECTED_TOKEN_${indexLetters}__`;
-                });
-
-                // For non-protected parts, apply 0-9 rule
-                pText = pText.replace(/(?<![0-9])([0-9])(?![0-9])/g, (match, p1) => digitToWordMap[p1]);
-
-                // Restore protected tokens
-                for (let k = 0; k < protectedTokens.length; k++) {
-                    const indexLetters = String(k).split('').map(d => String.fromCharCode(65 + parseInt(d))).join('');
-                    pText = pText.replace(`__PROTECTED_TOKEN_${indexLetters}__`, protectedTokens[k]);
-                }
+                // Do not convert single digits automatically to preserve original text content
+                let pText = subParts[j];
 
                 subParts[j] = pText;
             }
