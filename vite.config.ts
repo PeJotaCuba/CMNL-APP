@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      optimizeDeps: {
+        exclude: ['firebase', 'firebase/app', 'firebase/auth', 'firebase/firestore']
+      },
       build: {
         chunkSizeWarningLimit: 1500,
         rollupOptions: {
