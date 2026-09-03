@@ -39,6 +39,12 @@ export const HARDCODED_DEVICES: HardcodedUserDevice[] = [
                 "name": "Nuevo Disp Admin",
                 "type": "PC",
                 "addedAt": "3/8/2026"
+            },
+            {
+                "token": "DVC-5KYA",
+                "name": "Admin 5KYA",
+                "type": "PC",
+                "addedAt": "3/9/2026"
             }
         ]
     },
@@ -141,6 +147,12 @@ export const HARDCODED_DEVICES: HardcodedUserDevice[] = [
                 "name": "Admin WM6D",
                 "type": "PC",
                 "addedAt": "20/8/2026"
+            },
+            {
+                "token": "DVC-5KYA",
+                "name": "Admin 5KYA",
+                "type": "PC",
+                "addedAt": "3/9/2026"
             }
         ]
     }
