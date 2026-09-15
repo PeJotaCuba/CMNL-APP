@@ -278,9 +278,10 @@ export const checkSigningAuthorization = (userId: string) => {
         
         // 1. Password Reset state is Checked first:
         const dbSignaturesStr = localStorage.getItem('cmnl_digital_signatures');
+        let dbSignatures: any = null;
         if (dbSignaturesStr) {
             try {
-                const dbSignatures = JSON.parse(dbSignaturesStr);
+                dbSignatures = JSON.parse(dbSignaturesStr);
                 const resets = dbSignatures.password_resets || [];
                 const activeReset = resets.find((r: any) => r.userId === userId && (Date.now() - r.grantedAt) < 24 * 60 * 60 * 1000);
                 if (activeReset) {
@@ -293,6 +294,9 @@ export const checkSigningAuthorization = (userId: string) => {
                 console.error("Error reading password_resets", e);
             }
         }
+
+        // Check if 30-day temporal expiration is enabled in system configuration
+        const isExpirationEnabled = dbSignatures ? (dbSignatures.password_expiration_enabled !== false) : true;
 
         // ONE-TIME MIGRATION: Start the 30-day count from TODAY if they already changed their password before.
         if (lastUpdate && !localStorage.getItem(`cmnl_pass_migrated_30d_${userId}`)) {
@@ -317,8 +321,16 @@ export const checkSigningAuthorization = (userId: string) => {
                  };
             }
         } else {
-            // 3. 30-day rule: If 30 days passed since last password update
-            const msSinceLastUpdate = Date.now() - parseInt(lastUpdate || Date.now().toString());
+            // If administrator has deactivated 30-day temporality, signatures never expire by 30 days
+            if (!isExpirationEnabled) {
+                return { authorized: true };
+            }
+
+            // 3. 30-day rule: If 30 days passed since last password update or admin activation day
+            const activationTime = dbSignatures?.password_expiration_activated_at || 0;
+            const effectiveLastUpdate = Math.max(parseInt(lastUpdate || Date.now().toString(), 10), activationTime);
+            const msSinceLastUpdate = Date.now() - effectiveLastUpdate;
+
             if (msSinceLastUpdate > 30 * 24 * 60 * 60 * 1000) {
                 return { 
                      authorized: false, 

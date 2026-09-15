@@ -379,11 +379,15 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
             isAdmin={isAdmin} 
             equipoData={equipoData}
             users={users}
-            onUpdateDatabase={(newCert) => {
-               const saved = localStorage.getItem('cmnl_digital_signatures');
-               const data = saved ? JSON.parse(saved) : { validated_users: [] };
-               data.validated_users.push(newCert);
-               localStorage.setItem('cmnl_digital_signatures', JSON.stringify(data));
+            onUpdateDatabase={(newDataOrCert) => {
+               if (newDataOrCert && newDataOrCert.validated_users) {
+                 localStorage.setItem('cmnl_digital_signatures', JSON.stringify(newDataOrCert));
+               } else {
+                 const saved = localStorage.getItem('cmnl_digital_signatures');
+                 const data = saved ? JSON.parse(saved) : { validated_users: [] };
+                 if (newDataOrCert) data.validated_users.push(newDataOrCert);
+                 localStorage.setItem('cmnl_digital_signatures', JSON.stringify(data));
+               }
                onSaveCMNL?.();
             }}
           />

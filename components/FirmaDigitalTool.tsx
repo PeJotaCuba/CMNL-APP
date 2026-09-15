@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Shield, Key, FileUp, FileCheck, Download, AlertTriangle, CheckCircle2, Lock, FileText, FileDown, FileCode, Users, Award, PlayCircle, Send, Eye, EyeOff } from 'lucide-react';
+import { Shield, Key, FileUp, FileCheck, Download, AlertTriangle, CheckCircle2, Lock, Unlock, FileText, FileDown, FileCode, Users, Award, PlayCircle, Send, Eye, EyeOff } from 'lucide-react';
 import { cryptoUtils, generateDigitalSignature, getStoredCertificate, getStoredPrivateKey, getStoredPassword, formatDigitalSignatureForDocuments } from '../utils/signatureUtils';
 import jsPDF from 'jspdf';
 import { openWhatsApp } from '../utils/whatsappUtils';
@@ -9,7 +9,7 @@ import { isDeviceLimitEnabledForUser, getAuthorizedDevicesForUser } from '../uti
 
 
 const PasswordCountdown = ({ userId, cert, digitalSignatures }: { userId: string, cert: any, digitalSignatures: any }) => {
-    const [timeLeft, setTimeLeft] = React.useState<{days: number, hours: number, minutes: number, seconds: number, expired: boolean, isReset: boolean} | null>(null);
+    const [timeLeft, setTimeLeft] = React.useState<{days: number, hours: number, minutes: number, seconds: number, expired: boolean, isReset: boolean, isPermanent?: boolean} | null>(null);
 
     React.useEffect(() => {
         const updateTimer = () => {
@@ -30,7 +30,13 @@ const PasswordCountdown = ({ userId, cert, digitalSignatures }: { userId: string
                 const issueDate = cert?.issueDate ? new Date(cert.issueDate).getTime() : Date.now();
                 expirationTime = issueDate + (72 * 60 * 60 * 1000);
             } else {
-                const baseTime = parseInt(lastUpdate || Date.now().toString(), 10);
+                const isExpirationEnabled = digitalSignatures ? (digitalSignatures.password_expiration_enabled !== false) : true;
+                if (!isExpirationEnabled) {
+                    setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: false, isReset: false, isPermanent: true });
+                    return;
+                }
+                const activationTime = digitalSignatures?.password_expiration_activated_at || 0;
+                const baseTime = Math.max(parseInt(lastUpdate || Date.now().toString(), 10), activationTime);
                 expirationTime = baseTime + (30 * 24 * 60 * 60 * 1000);
             }
             
@@ -56,6 +62,22 @@ const PasswordCountdown = ({ userId, cert, digitalSignatures }: { userId: string
     }, [userId, cert, digitalSignatures]);
 
     if (!timeLeft) return null;
+
+    if (timeLeft.isPermanent) {
+        return (
+            <div className="border p-3.5 px-4 rounded-2xl flex items-center gap-3 bg-green-500/10 border-green-500/20 text-green-400">
+                <CheckCircle2 size={18} className="text-green-500 shrink-0" />
+                <div className="text-left">
+                    <p className="text-xs font-bold uppercase tracking-wider text-green-400">
+                        Vigencia Permanente
+                    </p>
+                    <p className="text-[10px] text-stone-300 opacity-80">
+                        Temporalidad desactivada por Administración
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     if (timeLeft.expired) {
         return (
@@ -187,7 +209,7 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
   // State for Digital Signatures Database (.json sync)
   const [digitalSignatures, setDigitalSignatures] = useState<any>(() => {
     const saved = localStorage.getItem('cmnl_digital_signatures');
-    const defaultData = { validated_users: [], pending_requests: [] };
+    const defaultData = { validated_users: [], pending_requests: [], password_expiration_enabled: true };
     if (!saved) return defaultData;
     try {
       const parsed = JSON.parse(saved);
@@ -520,10 +542,17 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
        // Never updated, must be changed within 72 hours of issue
        return Date.now() - issueDate > 72 * 60 * 60 * 1000;
     } else {
+       // Check if temporal expiration is enabled in system
+       const isExpirationEnabled = digitalSignatures ? (digitalSignatures.password_expiration_enabled !== false) : true;
+       if (!isExpirationEnabled) {
+          return false;
+       }
+       const activationTime = digitalSignatures?.password_expiration_activated_at || 0;
+       const effectiveBase = Math.max(parseInt(lastUpdate, 10), activationTime);
        // Updated before, must be changed monthly (30 days)
-       return Date.now() - parseInt(lastUpdate) > 30 * 24 * 60 * 60 * 1000;
+       return Date.now() - effectiveBase > 30 * 24 * 60 * 60 * 1000;
     }
-  }, [loadedCert, userId, passwordUpdatedTrigger, isResetActive]);
+  }, [loadedCert, userId, passwordUpdatedTrigger, isResetActive, digitalSignatures]);
 
   const [adminRevealTimer, setAdminRevealTimer] = useState<number>(0);
   const [adminTempPass, setAdminTempPass] = useState<string>('');
@@ -1325,6 +1354,44 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     };
     reader.readAsText(file);
     e.target.value = ''; // Reset input
+  };
+
+  // --- ADMINISTRATOR: TOGGLE 30-DAY PASSWORD EXPIRATION ---
+  const isExpirationActive = digitalSignatures?.password_expiration_enabled !== false;
+
+  const handleTogglePasswordExpiration = () => {
+    if (isExpirationActive) {
+      showConfirm(
+        "¿Desea DESACTIVAR la temporalidad de 30 días para las contraseñas locales?\n\nAl desactivarla, el sistema no contará los días ni exigirá el cambio de contraseña cada 30 días. Todas las firmas existentes que se hayan vencido volverán a ser válidas inmediatamente.",
+        () => {
+          const updatedSignatures = {
+            ...digitalSignatures,
+            password_expiration_enabled: false
+          };
+          saveDigitalSignatures(updatedSignatures);
+          setPasswordUpdatedTrigger(prev => prev + 1);
+          showAlert("Temporalidad de contraseñas DESACTIVADA. Las firmas existentes vuelven a ser válidas y no vencerán a los 30 días.", 'success');
+        }
+      );
+    } else {
+      showConfirm(
+        "¿Desea ACTIVAR la temporalidad de 30 días para las contraseñas locales?\n\nSe tomará la fecha de hoy como DÍA 1 para todas las firmas locales existentes, otorgando 30 días de vigencia antes de requerir un nuevo cambio.",
+        () => {
+          const now = Date.now();
+          const updatedSignatures = {
+            ...digitalSignatures,
+            password_expiration_enabled: true,
+            password_expiration_activated_at: now
+          };
+          if (userId && localStorage.getItem(`cmnl_pass_updated_${userId}`)) {
+            localStorage.setItem(`cmnl_pass_updated_${userId}`, now.toString());
+          }
+          saveDigitalSignatures(updatedSignatures);
+          setPasswordUpdatedTrigger(prev => prev + 1);
+          showAlert("Temporalidad de 30 días ACTIVADA. Se ha tomado el día de hoy como Día 1 para todas las firmas locales existentes.", 'success');
+        }
+      );
+    }
   };
 
   // --- ADMINISTRATOR: SELF GENERATE CERTIFICATE ---
@@ -2603,6 +2670,63 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
                 </div>
                 <input type="file" className="hidden" accept=".razon" onChange={handleLoadSignedCertificateAdmin} />
               </label>
+            </div>
+
+            {/* CONTROL DE TEMPORALIDAD DE CONTRASEÑAS LOCALES (30 DÍAS) */}
+            <div className="p-5 rounded-2xl border transition-all bg-black/40 border-white/10 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className={`p-2.5 rounded-xl border shrink-0 ${isExpirationActive ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-green-500/10 border-green-500/30 text-green-400'}`}>
+                    <Lock size={18} />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-white text-xs font-bold uppercase tracking-wider">
+                        Temporalidad de Contraseñas Locales (30 Días)
+                      </p>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                        isExpirationActive 
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
+                          : 'bg-green-500/20 text-green-300 border-green-500/30'
+                      }`}>
+                        {isExpirationActive ? 'ACTIVADA (30 DÍAS)' : 'DESACTIVADA (PERMANENTE)'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      {isExpirationActive 
+                        ? 'Las contraseñas locales caducan a los 30 días. Los usuarios deben cambiarlas periódicamente para seguir firmando.'
+                        : 'Las contraseñas locales no caducan. No se exige cambio a los 30 días y todas las firmas existentes permanecen válidas.'}
+                    </p>
+                    {isExpirationActive && digitalSignatures?.password_expiration_activated_at && (
+                      <p className="text-[10px] text-stone-500 font-mono">
+                        Día 1 de activación: {new Date(digitalSignatures.password_expiration_activated_at).toLocaleDateString()} a las {new Date(digitalSignatures.password_expiration_activated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTogglePasswordExpiration}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border shrink-0 shadow-lg ${
+                    isExpirationActive
+                      ? 'bg-stone-800 hover:bg-stone-700 text-stone-200 border-white/10 hover:border-amber-500/30'
+                      : 'bg-amber-600 hover:bg-amber-500 text-black border-amber-400 font-black'
+                  }`}
+                >
+                  {isExpirationActive ? (
+                    <>
+                      <Unlock size={14} className="text-amber-400" />
+                      Desactivar Temporalidad
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={14} />
+                      Activar Temporalidad
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-white/5 pt-6 space-y-4">
