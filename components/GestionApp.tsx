@@ -56,6 +56,7 @@ interface Props {
   news: NewsItem[];
   setNews: React.Dispatch<React.SetStateAction<NewsItem[]>>;
   setImpersonatedUser: React.Dispatch<React.SetStateAction<User | null>>;
+  onSaveCMNL?: () => void;
 }
 
 
@@ -93,7 +94,7 @@ interface ConsolidatedMonth {
     interruptionDetails?: Interruption[];
 }
 
-const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
+const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirtyChange, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser, onSaveCMNL }) => {
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const isInitialMount = React.useRef(true);
 
@@ -2766,6 +2767,7 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
                   news={news}
                   setNews={setNews}
                   setImpersonatedUser={setImpersonatedUser}
+                  onSaveCMNL={onSaveCMNL}
               />
               {renderDialog()}
           </>

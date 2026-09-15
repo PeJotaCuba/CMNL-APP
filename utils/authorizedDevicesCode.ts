@@ -159,21 +159,36 @@ export const HARDCODED_DEVICES: HardcodedUserDevice[] = [
 ];
 
 /**
- * Determina si un usuario tiene habilitado el control de dispositivos, priorizando el código sellado.
+ * Determina si un usuario tiene habilitado el control de dispositivos, priorizando el valor dinámico del Administrador (base de datos / JSON).
  */
 export function isDeviceLimitEnabledForUser(username: string, dbUserValue?: boolean): boolean {
+    if (typeof dbUserValue === 'boolean') {
+        return dbUserValue;
+    }
     const hardcoded = HARDCODED_DEVICES.find(u => u.username.toLowerCase() === username.toLowerCase());
-    if (hardcoded) {
+    if (hardcoded && typeof hardcoded.deviceLimitEnabled === 'boolean') {
         return hardcoded.deviceLimitEnabled;
     }
-    return dbUserValue || false;
+    return false;
 }
 
 /**
- * Retorna la lista de dispositivos autorizados para un usuario, priorizando el código sellado.
+ * Retorna la lista de dispositivos autorizados para un usuario, combinando los de base de datos con los sellados en código.
  */
 export function getAuthorizedDevicesForUser(username: string, dbDevicesValue?: any[]): any[] {
     const hardcoded = HARDCODED_DEVICES.find(u => u.username.toLowerCase() === username.toLowerCase());
+    const hardcodedList = hardcoded ? hardcoded.authorizedDevices : [];
+    
+    if (Array.isArray(dbDevicesValue) && dbDevicesValue.length > 0) {
+        const combined = [...dbDevicesValue];
+        hardcodedList.forEach(hd => {
+            if (!combined.some(d => d.token === hd.token)) {
+                combined.push(hd);
+            }
+        });
+        return combined;
+    }
+    
     if (hardcoded) {
         return hardcoded.authorizedDevices;
     }

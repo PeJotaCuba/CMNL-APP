@@ -37,6 +37,7 @@ interface EquipoSectionProps {
   news: any[];
   setNews: React.Dispatch<React.SetStateAction<any[]>>;
   setImpersonatedUser: React.Dispatch<React.SetStateAction<User | null>>;
+  onSaveCMNL?: () => void;
 }
 
 const EQUIPO_URL = 'https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json';
@@ -48,7 +49,7 @@ const isStationDirectorSpecialty = (spStr?: string) => {
   return hasDir && hasEmisora;
 };
 
-const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, fichas, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser }) => {
+const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMenuClick, catalogo, fichas, onDirtyChange, onTeamUpdate, users, setUsers, historyContent, setHistoryContent, aboutContent, setAboutContent, news, setNews, setImpersonatedUser, onSaveCMNL }) => {
   const [team, setTeam] = useState<TeamMember[]>([]);
 
   const getProgramDays = (progName: string): string[] => {
@@ -685,8 +686,12 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                                 coordinatorSections: isStaticAdmin ? [] : (linkedUser?.coordinatorSections || []),
                                 tools: isStaticAdmin ? [] : (linkedUser?.tools || []),
                                 habitualProgramsDays: isStaticAdmin ? {} : (linkedUser?.habitualProgramsDays || member.habitualProgramsDays || {}),
-                                deviceLimitEnabled: isStaticAdmin ? (adminUser?.deviceLimitEnabled || false) : (linkedUser?.deviceLimitEnabled || false),
-                                authorizedDevices: linkedUser?.authorizedDevices || []
+                                deviceLimitEnabled: isStaticAdmin 
+                                  ? (adminUser?.deviceLimitEnabled ?? false) 
+                                  : (linkedUser?.deviceLimitEnabled !== undefined 
+                                      ? Boolean(linkedUser.deviceLimitEnabled) 
+                                      : (member.deviceLimitEnabled !== undefined ? Boolean(member.deviceLimitEnabled) : false)),
+                                authorizedDevices: isStaticAdmin ? (adminUser?.authorizedDevices || []) : (linkedUser?.authorizedDevices || member.authorizedDevices || [])
                               });  
                             }}
                             className="w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-[#9E7649] text-white rounded-lg transition-all shadow-lg border border-[#9E7649]/30"
@@ -1439,6 +1444,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       habitualProgramsDays: editingMember.habitualProgramsDays || {},
                       contracts: editingMember.contracts || [],
                       designatedUserId: editingMember.designatedUserId,
+                      deviceLimitEnabled: editingMember.deviceLimitEnabled === true ? true : false,
                       authorizedDevices: editingMember.authorizedDevices || []
                     } : m);
                     saveTeam(updatedTeam);
@@ -1461,7 +1467,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                       tools: editingMember.tools || [],
                       habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                       habitualProgramsDays: editingMember.habitualProgramsDays || {},
-                      deviceLimitEnabled: editingMember.deviceLimitEnabled,
+                      deviceLimitEnabled: editingMember.deviceLimitEnabled === true ? true : false,
                       authorizedDevices: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.authorizedDevices : (editingMember.authorizedDevices || [])
                     } : u);
                     
@@ -1482,7 +1488,7 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                         tools: editingMember.tools || [],
                         habitualProgramsByRole: editingMember.habitualProgramsByRole || {},
                         habitualProgramsDays: editingMember.habitualProgramsDays || {},
-                        deviceLimitEnabled: editingMember.deviceLimitEnabled,
+                        deviceLimitEnabled: editingMember.deviceLimitEnabled === true ? true : false,
                         authorizedDevices: mappedUserId === 'admin' && adminLinkedUser ? adminLinkedUser.authorizedDevices : (editingMember.authorizedDevices || [])
                       });
                     }
@@ -1500,6 +1506,11 @@ const EquipoSection: React.FC<EquipoSectionProps> = ({ currentUser, onBack, onMe
                     
                     setUsers(updatedUsers);
                     localStorage.setItem('rcm_users', JSON.stringify(updatedUsers));
+                    localStorage.setItem('rcm_data_users', JSON.stringify(updatedUsers));
+                    
+                    if (onSaveCMNL) {
+                      onSaveCMNL();
+                    }
                     
                     setEditingMember(null);
                   } catch (error: any) {

@@ -604,7 +604,8 @@ const AppContent: React.FC = () => {
       };
 
       // Map local keys to the structure expected by handleCloudSync or from live states
-      dataToExport.users = users;
+      const latestUsers = getLocal('rcm_data_users') || getLocal('rcm_users') || users;
+      dataToExport.users = latestUsers;
       dataToExport.historyContent = getLocal('rcm_data_history') || "";
       dataToExport.aboutContent = getLocal('rcm_data_about') || "";
       dataToExport.news = getLocal('rcm_data_news') || [];
@@ -619,7 +620,7 @@ const AppContent: React.FC = () => {
       const allHabitualExclusions: any[] = [];
       const allHabitualModes: any[] = [];
       
-      users.forEach(user => {
+      latestUsers.forEach((user: User) => {
           const u = user.username;
           const userWorklogs = getLocal(`user_${u}_rcm_data_worklogs`);
           const userConsolidated = getLocal(`user_${u}_rcm_data_consolidated`);
@@ -680,7 +681,7 @@ const AppContent: React.FC = () => {
       dataToExport.agendaEfemerides = getLocal('rcm_efemerides') || {};
       dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones') || {};
       dataToExport.agendaDayThemes = getLocal('rcm_day_themes') || {};
-      dataToExport.agendaUsers = users;
+      dataToExport.agendaUsers = latestUsers;
       dataToExport.agendaPropaganda = getLocal('rcm_propaganda') || {};
       dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options') || {};
 
@@ -734,7 +735,8 @@ const AppContent: React.FC = () => {
           try { return JSON.parse(val); } catch (e) { return val; }
       };
 
-      dataToExport.users = users;
+      const latestUsers = getLocal('rcm_data_users') || getLocal('rcm_users') || users;
+      dataToExport.users = latestUsers;
       dataToExport.historyContent = getLocal('rcm_data_history') || "";
       dataToExport.aboutContent = getLocal('rcm_data_about') || "";
       dataToExport.news = getLocal('rcm_data_news') || [];
@@ -748,7 +750,7 @@ const AppContent: React.FC = () => {
       const allHabitualExclusions: any[] = [];
       const allHabitualModes: any[] = [];
       
-      users.forEach(user => {
+      latestUsers.forEach((user: User) => {
           const u = user.username;
           const userWorklogs = getLocal(`user_${u}_rcm_data_worklogs`);
           const userConsolidated = getLocal(`user_${u}_rcm_data_consolidated`);
@@ -808,7 +810,7 @@ const AppContent: React.FC = () => {
       dataToExport.agendaEfemerides = getLocal('rcm_efemerides') || {};
       dataToExport.agendaConmemoraciones = getLocal('rcm_conmemoraciones') || {};
       dataToExport.agendaDayThemes = getLocal('rcm_day_themes') || {};
-      dataToExport.agendaUsers = users;
+      dataToExport.agendaUsers = latestUsers;
       dataToExport.agendaPropaganda = getLocal('rcm_propaganda') || {};
       dataToExport.agendaCulturalOptions = getLocal('rcm_cultural_options') || {};
 
@@ -924,6 +926,7 @@ const AppContent: React.FC = () => {
                   if (json.users && Array.isArray(json.users)) {
                     setUsers(json.users);
                     setLocal('rcm_data_users', json.users);
+                    setLocal('rcm_users', json.users);
                   }
                   if (typeof json.historyContent === 'string') {
                     setHistoryContent(json.historyContent);
@@ -1238,6 +1241,7 @@ const AppContent: React.FC = () => {
             news={news}
             setNews={setNews}
             setImpersonatedUser={setImpersonatedUser}
+            onSaveCMNL={saveActualCMNLToServer}
           />
         );
 
