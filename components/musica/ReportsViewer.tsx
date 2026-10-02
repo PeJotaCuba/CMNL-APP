@@ -659,44 +659,62 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
             const dateStr = new Date().toLocaleDateString('es-ES');
 
-            const messageText = `Hola Administrador, le adjunto el paquete ZIP con los reportes musicales (${count} reportes empaquetados) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}`;
+            const messageText = `Hola Administrador, le adjunto el paquete ZIP (${fileName}) con los reportes musicales (${count} reportes empaquetados) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}`;
 
             const zipFile = new File([blob], fileName, { type: 'application/zip', lastModified: Date.now() });
 
-            // Adjuntar automáticamente el archivo ZIP al mensaje usando Web Share API nativa
-            if (typeof navigator !== 'undefined' && navigator.share) {
+            // 1. Descargar el archivo ZIP al dispositivo para que esté listo en Descargas
+            try {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(url);
+                a.remove();
+            } catch (dlErr) {
+                console.warn("Auto-downloading ZIP error:", dlErr);
+            }
+
+            // 2. Intentar adjuntar directamente usando Web Share API si el dispositivo lo soporta con archivos
+            let sharedWithNativeFiles = false;
+            if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
                 try {
-                    if (navigator.canShare && navigator.canShare({ files: [zipFile] })) {
+                    if (navigator.canShare({ files: [zipFile] })) {
                         await navigator.share({
                             files: [zipFile],
                             title: 'Reportes Musicales ZIP',
                             text: messageText
                         });
-                        setShowZipModal(false);
-                        setShowPostZipArchivePrompt({
-                            show: true,
-                            reportsToArchive: [...activeReports],
-                            message: `Envío de paquete ZIP completado.\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
-                        });
-                        return;
+                        sharedWithNativeFiles = true;
                     }
                 } catch (err: any) {
                     if (err && err.name === 'AbortError') {
-                        // El usuario canceló la ventana de compartir
+                        // El usuario canceló
+                        setIsZipping(false);
+                        setShowZipModal(false);
                         return;
                     }
                     console.warn("navigator.share no completado:", err);
                 }
             }
 
-            // En caso de que el navegador web de escritorio no soporte adjuntar archivos vía Web Share:
-            openWhatsApp(messageText, phone);
+            // 3. Abrir WhatsApp (en el teléfono o WhatsApp Web en PC) hacia el chat del Administrador
+            if (!sharedWithNativeFiles) {
+                openWhatsApp(messageText, phone);
+            }
+
             setShowZipModal(false);
-            setShowPostZipArchivePrompt({
-                show: true,
-                reportsToArchive: [...activeReports],
-                message: `Envío de paquete ZIP iniciado.\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
-            });
+
+            // 4. Preguntar si se pasan estos mismos reportes para archivo
+            setTimeout(() => {
+                setShowPostZipArchivePrompt({
+                    show: true,
+                    reportsToArchive: [...activeReports],
+                    message: `Se ha generado el archivo ZIP (${fileName}) y se ha abierto WhatsApp para el envío al Administrador (+${phone}).\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
+                });
+            }, 800);
         } catch (e: any) {
             console.error("Error sending ZIP via WhatsApp:", e);
             showAlert("Error al procesar el envío de ZIP por WhatsApp: " + (e?.message || e));

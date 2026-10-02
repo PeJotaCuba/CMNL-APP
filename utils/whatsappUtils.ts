@@ -1,7 +1,7 @@
 
 /**
- * Utility to open WhatsApp or WhatsApp Business in a flexible way.
- * Works on both mobile and desktop.
+ * Utility to open WhatsApp or WhatsApp Business in a flexible and reliable way.
+ * Works on both mobile and desktop (PC).
  */
 export const openWhatsApp = (text: string, phone: string = '') => {
   const encodedText = encodeURIComponent(text);
@@ -14,8 +14,8 @@ export const openWhatsApp = (text: string, phone: string = '') => {
   
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  const universalUrl = cleanPhone 
-    ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
+  const waMeUrl = cleanPhone 
+    ? `https://wa.me/${cleanPhone}?text=${encodedText}`
     : `https://api.whatsapp.com/send?text=${encodedText}`;
 
   if (isMobile) {
@@ -23,32 +23,42 @@ export const openWhatsApp = (text: string, phone: string = '') => {
       ? `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`
       : `whatsapp://send?text=${encodedText}`;
     
-    // Use intent URL first via an anchor click to break out of iframe safely on mobile
-    const a = document.createElement('a');
-    a.href = protocolUrl;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    // Add a backup in case intent URL is not handled
-    setTimeout(() => {
-        if (document.visibilityState === 'visible') {
-            const backupAnchor = document.createElement('a');
-            backupAnchor.href = universalUrl;
-            backupAnchor.target = '_blank';
-            document.body.appendChild(backupAnchor);
-            backupAnchor.click();
-            document.body.removeChild(backupAnchor);
-        }
-    }, 1500);
+    // Attempt opening native app scheme directly
+    try {
+      window.location.href = protocolUrl;
+      setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = waMeUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, 700);
+    } catch (e) {
+      window.open(waMeUrl, '_blank', 'noopener,noreferrer');
+    }
   } else {
-    // Desktop: use api.whatsapp.com
-    const a = document.createElement('a');
-    a.href = universalUrl;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    // Desktop / PC: Open WhatsApp Web / App directly
+    try {
+      const opened = window.open(waMeUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        const a = document.createElement('a');
+        a.href = waMeUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch (e) {
+      const a = document.createElement('a');
+      a.href = waMeUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
   }
 };
