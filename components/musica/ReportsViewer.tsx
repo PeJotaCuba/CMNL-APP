@@ -154,29 +154,11 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             }
         }
         
-        // Si no está soportado, procedemos a descargar el archivo de respaldo:
-        if (report.pdfBlob) {
-            try {
-                const url = URL.createObjectURL(report.pdfBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                URL.revokeObjectURL(url);
-                a.remove();
-            } catch (downloadErr) {
-                console.error("Error download automatically:", downloadErr);
-            }
-        }
-
-        // Informar al usuario y enviarlo directo al chat de WhatsApp del administrador
-        showAlert(`Su firma digital se ha verificado con éxito.\nDado que este navegador no soporta adjuntar archivos directamente a WhatsApp (por regulaciones de sandbox), el PDF se ha descargado a su dispositivo.\n\nA continuación abriremos el chat directo de WhatsApp con el Administrador. Registre el archivo PDF que acabamos de descargar en dicho chat.`);
-
+        // Abrir directamente el chat de WhatsApp con el Administrador
         openWhatsApp(text, phone);
         
-        await updateReportStatus(report.id, { sent: true, downloaded: true });
-        setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true, downloaded: true } } : r));
+        await updateReportStatus(report.id, { sent: true });
+        setReports(prev => prev.map(r => r.id === report.id ? { ...r, status: { ...r.status, sent: true } } : r));
     };
 
     const getGlobalUserExtraData = (username: string) => {
@@ -646,80 +628,41 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
     };
 
-    const handleSendZipWhatsApp = async () => {
+    const handleSendZipWhatsApp = () => {
         if (hasUnsignedReports) {
-            showAlert("Todos los reportes deben estar firmados digitalmente antes de poder empaquetarlos y enviarlos por WhatsApp.");
+            showAlert("Todos los reportes deben estar firmados digitalmente antes de poder enviarlos por WhatsApp.");
             return;
         }
 
         try {
-            setIsZipping(true);
-            const { blob, fileName, count } = await createZipBlob();
             const phone = getAdminPhone();
             const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
             const dateStr = new Date().toLocaleDateString('es-ES');
+            const nowStr = new Date().toISOString().split('T')[0];
+            const fileName = `Reportes_Musicales_${nowStr}.zip`;
 
-            const messageText = `Hola Administrador, le adjunto el paquete ZIP (${fileName}) con los reportes musicales (${count} reportes empaquetados) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}`;
+            let messageText = `Hola Administrador, le adjunto el paquete de reportes musicales (${activeReports.length} reportes: ${fileName}) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}\n\n*LISTADO DE REPORTES:*\n`;
 
-            const zipFile = new File([blob], fileName, { type: 'application/zip', lastModified: Date.now() });
+            activeReports.forEach((r, idx) => {
+                messageText += `${idx + 1}. ${r.program} (${r.date.split('T')[0]}) - Firmado por: ${r.generatedBy || senderName}\n`;
+            });
 
-            // 1. Descargar el archivo ZIP al dispositivo para que esté listo en Descargas
-            try {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                URL.revokeObjectURL(url);
-                a.remove();
-            } catch (dlErr) {
-                console.warn("Auto-downloading ZIP error:", dlErr);
-            }
-
-            // 2. Intentar adjuntar directamente usando Web Share API si el dispositivo lo soporta con archivos
-            let sharedWithNativeFiles = false;
-            if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-                try {
-                    if (navigator.canShare({ files: [zipFile] })) {
-                        await navigator.share({
-                            files: [zipFile],
-                            title: 'Reportes Musicales ZIP',
-                            text: messageText
-                        });
-                        sharedWithNativeFiles = true;
-                    }
-                } catch (err: any) {
-                    if (err && err.name === 'AbortError') {
-                        // El usuario canceló
-                        setIsZipping(false);
-                        setShowZipModal(false);
-                        return;
-                    }
-                    console.warn("navigator.share no completado:", err);
-                }
-            }
-
-            // 3. Abrir WhatsApp (en el teléfono o WhatsApp Web en PC) hacia el chat del Administrador
-            if (!sharedWithNativeFiles) {
-                openWhatsApp(messageText, phone);
-            }
+            // Abrir WhatsApp directamente hacia el chat del Administrador (en app móvil o WhatsApp Web en PC)
+            openWhatsApp(messageText, phone);
 
             setShowZipModal(false);
 
-            // 4. Preguntar si se pasan estos mismos reportes para archivo
+            // Preguntar si se pasan estos mismos reportes para archivo
             setTimeout(() => {
                 setShowPostZipArchivePrompt({
                     show: true,
                     reportsToArchive: [...activeReports],
-                    message: `Se ha generado el archivo ZIP (${fileName}) y se ha abierto WhatsApp para el envío al Administrador (+${phone}).\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
+                    message: `Se ha abierto WhatsApp para el envío de los reportes al Administrador (+${phone}).\n\n¿Deseas pasar estos ${activeReports.length} reportes para el Archivo?`
                 });
-            }, 800);
+            }, 600);
         } catch (e: any) {
-            console.error("Error sending ZIP via WhatsApp:", e);
-            showAlert("Error al procesar el envío de ZIP por WhatsApp: " + (e?.message || e));
-        } finally {
-            setIsZipping(false);
+            console.error("Error opening WhatsApp:", e);
+            showAlert("Error al procesar la apertura de WhatsApp: " + (e?.message || e));
         }
     };
 
