@@ -654,11 +654,58 @@ async function startServer() {
     res.json({ status: "ok" });
   });
 
+  let cachedActualCMNL: any = null;
+  let lastCachedTime = 0;
+
+  app.get("/api/actualcmnl", async (req, res) => {
+    try {
+      const filePath = path.join(process.cwd(), "actualcmnl.json");
+      // 1. If in memory cache and fresh (< 60s), serve immediately
+      if (cachedActualCMNL && (Date.now() - lastCachedTime < 60000)) {
+        res.setHeader("Cache-Control", "no-cache");
+        return res.json(cachedActualCMNL);
+      }
+      // 2. If exists on disk, read and cache
+      if (fs.existsSync(filePath)) {
+        const fileContent = fs.readFileSync(filePath, "utf8");
+        const json = JSON.parse(fileContent);
+        cachedActualCMNL = json;
+        lastCachedTime = Date.now();
+        res.setHeader("Cache-Control", "no-cache");
+        return res.json(json);
+      }
+      // 3. Fallback: fetch from GitHub raw and cache
+      const GITHUB_RAW_URL = "https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json";
+      const remoteRes = await fetch(GITHUB_RAW_URL, { signal: AbortSignal.timeout(6000) });
+      if (remoteRes.ok) {
+        const data = await remoteRes.json();
+        cachedActualCMNL = data;
+        lastCachedTime = Date.now();
+        try {
+          fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+        } catch (wErr) {
+          console.warn("Could not cache actualcmnl.json to disk:", wErr);
+        }
+        res.setHeader("Cache-Control", "no-cache");
+        return res.json(data);
+      }
+      res.status(404).json({ error: "actualcmnl.json no disponible" });
+    } catch (err: any) {
+      console.error("Error al obtener actualcmnl:", err.message);
+      if (cachedActualCMNL) {
+        return res.json(cachedActualCMNL);
+      }
+      res.status(500).json({ error: `Error al obtener actualcmnl: ${err.message}` });
+    }
+  });
+
   app.post("/api/save-actualcmnl", (req, res) => {
     try {
       const data = req.body;
       const filePath = path.join(process.cwd(), "actualcmnl.json");
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+      cachedActualCMNL = data;
+      lastCachedTime = Date.now();
       res.json({ success: true, message: "Datos guardados en actualcmnl.json con éxito." });
     } catch (err: any) {
       console.error("Error al guardar en actualcmnl.json:", err.message);

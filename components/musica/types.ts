@@ -79,6 +79,8 @@ export interface Report {
     pdfBlob: Blob; 
     items?: ExportItem[];
     status?: ReportStatus;
+    archived?: boolean;
+    archivedAt?: string;
 }
 
 export enum ViewState {

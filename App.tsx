@@ -190,11 +190,11 @@ const AppContent: React.FC = () => {
           // Update last backup timestamp
           localStorage.setItem(`last_backup_${username}`, new Date().getTime().toString());
 
-          // Automatically snooze the reminder for 24 hours, or keep existing snooze if it's longer
+          // Automatically snooze the reminder for 48 hours, or keep existing snooze if it's longer
           const existingSnoozeStr = localStorage.getItem(`backup_snoozed_until_${username}`);
           const previousSnooze = existingSnoozeStr ? parseInt(existingSnoozeStr, 10) : 0;
-          const twentyFourHoursFromNow = Date.now() + 24 * 60 * 60 * 1000;
-          const newSnooze = Math.max(previousSnooze, twentyFourHoursFromNow);
+          const fortyEightHoursFromNow = Date.now() + 48 * 60 * 60 * 1000;
+          const newSnooze = Math.max(previousSnooze, fortyEightHoursFromNow);
           localStorage.setItem(`backup_snoozed_until_${username}`, newSnooze.toString());
       }
 
@@ -346,16 +346,24 @@ const AppContent: React.FC = () => {
   // Update Reminder Check - Mandatory every 48 hours
   useEffect(() => {
     if (currentUser) {
+      const username = currentUser.username;
+      const snoozeStr = localStorage.getItem(`update_snoozed_until_${username}`);
+      if (snoozeStr && Date.now() < parseInt(snoozeStr, 10)) {
+        return;
+      }
       const lastSyncStr = localStorage.getItem('last_sync_time');
+      const fortyEightHours = 48 * 60 * 60 * 1000;
       if (lastSyncStr) {
         const lastSync = parseInt(lastSyncStr, 10);
         const now = Date.now();
-        const fortyEightHours = 48 * 60 * 60 * 1000;
         if (now - lastSync > fortyEightHours) {
           handleCloudSync(true);
         }
       } else {
         // Force initial update/sync to establish the baseline sync time
+        localStorage.setItem('last_sync_time', Date.now().toString());
+        const fortyEightHoursFromNow = Date.now() + fortyEightHours;
+        localStorage.setItem(`update_snoozed_until_${username}`, fortyEightHoursFromNow.toString());
         handleCloudSync(true);
       }
     }
@@ -863,10 +871,27 @@ const AppContent: React.FC = () => {
               const GITHUB_RAW_URL = `https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`;
 
               try {
-                  const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
-                  if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+                  let json: any = null;
+                  // 1. Ultra-fast local server proxy with timeout (avoids direct international raw GitHub network latency)
+                  try {
+                      const controller = new AbortController();
+                      const timeoutId = setTimeout(() => controller.abort(), 3500);
+                      const localRes = await fetch(`/api/actualcmnl?t=${Date.now()}`, { signal: controller.signal });
+                      clearTimeout(timeoutId);
+                      if (localRes.ok) {
+                          json = await localRes.json();
+                      }
+                  } catch (proxyErr) {
+                      // Silent fallback to direct GitHub raw
+                  }
+
+                  // 2. Direct fallback to GitHub raw if local proxy did not respond
+                  if (!json) {
+                      const response = await fetch(GITHUB_RAW_URL, { cache: "no-store" });
+                      if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+                      json = await response.json();
+                  }
                   
-                  const json = await response.json();
                   const pendingUpdates: Record<string, string> = {};
                   
                   const setLocal = (key: string, value: any) => {
@@ -1000,21 +1025,23 @@ const AppContent: React.FC = () => {
                   if (json.equipo && Array.isArray(json.equipo)) {
                       setLocal('rcm_equipo_cmnl', json.equipo);
                   } else {
-                      try {
-                          const equipoResponse = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
-                          if (equipoResponse.ok) {
-                              const equipoData = await equipoResponse.json();
-                              if (Array.isArray(equipoData)) {
-                                  setLocal('rcm_equipo_cmnl', equipoData);
-                                  setLocal('rcm_equipo_last_update', Date.now().toString());
+                      const localSavedEquipo = localStorage.getItem('rcm_equipo_cmnl');
+                      // Only attempt secondary network fetch if local equipo is completely empty
+                      if (!localSavedEquipo || localSavedEquipo === '[]') {
+                          try {
+                              const controller = new AbortController();
+                              const timeoutId = setTimeout(() => controller.abort(), 3000);
+                              const equipoResponse = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/equipocmnl.json?t=${Date.now()}`, { signal: controller.signal, cache: "no-store" });
+                              clearTimeout(timeoutId);
+                              if (equipoResponse.ok) {
+                                  const equipoData = await equipoResponse.json();
+                                  if (Array.isArray(equipoData)) {
+                                      setLocal('rcm_equipo_cmnl', equipoData);
+                                      setLocal('rcm_equipo_last_update', Date.now().toString());
+                                  }
                               }
-                          }
-                      } catch (equipoError: any) {
-                          const errorMsg = equipoError?.message || String(equipoError);
-                          if (errorMsg.includes('fetch') || errorMsg.includes('Failed to fetch')) {
-                              console.warn("Could not fetch remote sync equipo data:", errorMsg);
-                          } else {
-                              console.error("Error fetching equipo data during sync:", equipoError);
+                          } catch (equipoError: any) {
+                              console.warn("Could not fetch remote sync equipo data:", equipoError);
                           }
                       }
                   }
@@ -1094,13 +1121,13 @@ const AppContent: React.FC = () => {
                   
                   localStorage.setItem('last_sync_time', Date.now().toString());
 
-                  // Automatically snooze the update reminder for 24 hours, or keep existing snooze if it's longer
+                  // Automatically snooze the update reminder for 48 hours, or keep existing snooze if it's longer
                   if (currentUser) {
                       const username = currentUser.username;
                       const existingSnoozeStr = localStorage.getItem(`update_snoozed_until_${username}`);
                       const previousSnooze = existingSnoozeStr ? parseInt(existingSnoozeStr, 10) : 0;
-                      const twentyFourHoursFromNow = Date.now() + 24 * 60 * 60 * 1000;
-                      const newSnooze = Math.max(previousSnooze, twentyFourHoursFromNow);
+                      const fortyEightHoursFromNow = Date.now() + 48 * 60 * 60 * 1000;
+                      const newSnooze = Math.max(previousSnooze, fortyEightHoursFromNow);
                       localStorage.setItem(`update_snoozed_until_${username}`, newSnooze.toString());
                   }
 

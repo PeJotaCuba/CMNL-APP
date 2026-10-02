@@ -380,11 +380,11 @@ const ToolsSection: React.FC<ToolsSectionProps> = ({ onBack, onMenuClick, curren
             equipoData={equipoData}
             users={users}
             onUpdateDatabase={(newDataOrCert) => {
-               if (newDataOrCert && newDataOrCert.validated_users) {
+               if (newDataOrCert && (Array.isArray(newDataOrCert.validated_users) || 'password_expiration_enabled' in newDataOrCert || 'pending_requests' in newDataOrCert)) {
                  localStorage.setItem('cmnl_digital_signatures', JSON.stringify(newDataOrCert));
                } else {
                  const saved = localStorage.getItem('cmnl_digital_signatures');
-                 const data = saved ? JSON.parse(saved) : { validated_users: [] };
+                 const data = saved ? JSON.parse(saved) : { validated_users: [], password_expiration_enabled: true };
                  if (newDataOrCert) data.validated_users.push(newDataOrCert);
                  localStorage.setItem('cmnl_digital_signatures', JSON.stringify(data));
                }

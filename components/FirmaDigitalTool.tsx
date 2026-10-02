@@ -859,7 +859,10 @@ export const FirmaDigitalTool = ({ user, isAdmin, onUpdateDatabase, equipoData =
     ) || user || currentUserAuth;
 
     const targetUsername = resolvedUser?.username || user?.username || '';
-    const deviceLimitEnabled = isDeviceLimitEnabledForUser(targetUsername, resolvedUser?.deviceLimitEnabled || userTeamMember?.deviceLimitEnabled || false);
+    const targetDeviceLimit = resolvedUser?.deviceLimitEnabled !== undefined 
+      ? resolvedUser.deviceLimitEnabled 
+      : (userTeamMember?.deviceLimitEnabled !== undefined ? userTeamMember.deviceLimitEnabled : undefined);
+    const deviceLimitEnabled = isDeviceLimitEnabledForUser(targetUsername, targetDeviceLimit);
     const authorizedDevices = getAuthorizedDevicesForUser(targetUsername, resolvedUser?.authorizedDevices || userTeamMember?.authorizedDevices || []);
     const isAuthorizedDevice = authorizedDevices.some(
       (d: any) => d.token.trim().toUpperCase() === clientToken.trim().toUpperCase()

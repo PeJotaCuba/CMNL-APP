@@ -328,13 +328,29 @@ const GestionApp: React.FC<Props> = ({ onBack, onMenuClick, currentUser, onDirty
           }
 
           try {
-              const response = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
-              if (response.ok) {
-                  const data = await response.json();
-                  if (data && Array.isArray(data.catalogo)) {
-                      setCatalogo(data.catalogo);
-                      localStorage.setItem('rcm_data_catalogo', JSON.stringify(data.catalogo));
+              let data: any = null;
+              try {
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 3500);
+                  const localRes = await fetch(`/api/actualcmnl?t=${Date.now()}`, { signal: controller.signal });
+                  clearTimeout(timeoutId);
+                  if (localRes.ok) {
+                      data = await localRes.json();
                   }
+              } catch (localErr) {
+                  // Fallback to GitHub raw
+              }
+
+              if (!data) {
+                  const response = await fetch(`https://raw.githubusercontent.com/PeJotaCuba/Bases-de-datos-CMNL/refs/heads/almacen/actualcmnl.json?t=${new Date().getTime()}`, { cache: "no-store" });
+                  if (response.ok) {
+                      data = await response.json();
+                  }
+              }
+
+              if (data && Array.isArray(data.catalogo)) {
+                  setCatalogo(data.catalogo);
+                  localStorage.setItem('rcm_data_catalogo', JSON.stringify(data.catalogo));
               }
           } catch (error: any) {
               const errorMsg = error?.message || String(error);

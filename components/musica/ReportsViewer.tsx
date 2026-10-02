@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import JSZip from 'jszip';
 import { Report, User } from './types';
 import { loadReportsFromDB, deleteReportFromDB, updateReportStatus, clearReportsDB, saveReportToDB } from './services/db';
 import { openWhatsApp } from '../../utils/whatsappUtils';
@@ -21,6 +22,25 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const [showBatchSigner, setShowBatchSigner] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
     
+    // View mode: 'active' (Pantalla principal) vs 'archive' (Archivo organizado por meses)
+    const [viewMode, setViewMode] = useState<'active' | 'archive'>('active');
+    const [archiveSearchQuery, setArchiveSearchQuery] = useState('');
+    const [consultingReport, setConsultingReport] = useState<Report | null>(null);
+
+    // ZIP Generation modal state
+    const [showZipModal, setShowZipModal] = useState(false);
+    const [isZipping, setIsZipping] = useState(false);
+
+    // Prompt for concluded months reports on entering Reportes
+    const [showConcludedPrompt, setShowConcludedPrompt] = useState(false);
+
+    // Prompt for archiving reports after ZIP download or WhatsApp send
+    const [showPostZipArchivePrompt, setShowPostZipArchivePrompt] = useState<{
+        show: boolean;
+        reportsToArchive: Report[];
+        message: string;
+    }>({ show: false, reportsToArchive: [], message: '' });
+
     // Signing state
     const [signingReport, setSigningReport] = useState<Report | null>(null);
     const [signPass, setSignPass] = useState('');
@@ -49,7 +69,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const handleSignAllClick = () => {
-        const unsigned = reports.filter(r => !r.status?.signed);
+        const unsigned = activeReports.filter(r => !r.status?.signed);
         if (unsigned.length === 0) {
             showAlert("No hay reportes pendientes de firma.");
             return;
@@ -326,7 +346,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                     showAlert("Reporte firmado correctamente con su certificado digital.");
                 }
             } else if (signingMode === 'all') {
-                const unsigned = reports.filter(r => !r.status?.signed);
+                const unsigned = activeReports.filter(r => !r.status?.signed);
                 let successCount = 0;
                 const newReports = [...reports];
 
@@ -370,12 +390,333 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
     };
 
+    const isMonthConcluded = (dateStr: string): boolean => {
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return false;
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth();
+            const repYear = d.getFullYear();
+            const repMonth = d.getMonth();
+            return repYear < currentYear || (repYear === currentYear && repMonth < currentMonth);
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // Un reporte solo pasa a archivo si el usuario decide explícitamente archivarlo (no de forma automática)
+    const isArchived = (r: Report): boolean => {
+        return r.archived === true;
+    };
+
+    const activeReports = React.useMemo(() => {
+        return reports.filter(r => !isArchived(r));
+    }, [reports]);
+
+    const unsignedReports = React.useMemo(() => {
+        return activeReports.filter(r => !r.status?.signed);
+    }, [activeReports]);
+
+    const hasUnsignedReports = unsignedReports.length > 0;
+
+    // Reportes activos en pantalla que pertenecen a meses concluidos pero aún no han sido archivados
+    const concludedUnarchivedReports = React.useMemo(() => {
+        return reports.filter(r => !r.archived && isMonthConcluded(r.date));
+    }, [reports]);
+
+    const archivedReports = React.useMemo(() => {
+        return reports.filter(r => isArchived(r));
+    }, [reports]);
+
+    const handleArchiveConcludedReports = async () => {
+        const toArchive = reports.filter(r => !r.archived && isMonthConcluded(r.date));
+        const now = new Date().toISOString();
+        const updated = reports.map(r => {
+            if (!r.archived && isMonthConcluded(r.date)) {
+                return { ...r, archived: true, archivedAt: now };
+            }
+            return r;
+        });
+        for (const r of toArchive) {
+            await saveReportToDB({ ...r, archived: true, archivedAt: now });
+        }
+        setReports(updated);
+        setShowConcludedPrompt(false);
+        showAlert(`Se han trasladado ${toArchive.length} reportes de meses concluidos al Archivo.`);
+    };
+
+    const handleConfirmPostZipArchive = async () => {
+        const toArchive = showPostZipArchivePrompt.reportsToArchive;
+        const targetIds = new Set(toArchive.map(r => r.id));
+        const now = new Date().toISOString();
+        const updated = reports.map(r => {
+            if (targetIds.has(r.id)) {
+                return { ...r, archived: true, archivedAt: now };
+            }
+            return r;
+        });
+        for (const r of toArchive) {
+            await saveReportToDB({ ...r, archived: true, archivedAt: now });
+        }
+        setReports(updated);
+        setShowPostZipArchivePrompt({ show: false, reportsToArchive: [], message: '' });
+        showAlert(`Se han trasladado ${toArchive.length} reportes empaquetados al Archivo.`);
+    };
+
+    const groupedArchivedReports = React.useMemo(() => {
+        const groups: Record<string, { label: string; dateSort: number; reports: Report[] }> = {};
+        const monthNames = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+        
+        const filtered = archiveSearchQuery.trim()
+            ? archivedReports.filter(r => 
+                (r.program && r.program.toLowerCase().includes(archiveSearchQuery.toLowerCase())) ||
+                (r.fileName && r.fileName.toLowerCase().includes(archiveSearchQuery.toLowerCase())) ||
+                (r.date && r.date.includes(archiveSearchQuery)) ||
+                (r.generatedBy && r.generatedBy.toLowerCase().includes(archiveSearchQuery.toLowerCase()))
+              )
+            : archivedReports;
+
+        filtered.forEach(r => {
+            let year = 2026;
+            let monthIndex = 0;
+            try {
+                const d = new Date(r.date);
+                if (!isNaN(d.getTime())) {
+                    year = d.getFullYear();
+                    monthIndex = d.getMonth();
+                }
+            } catch(e) {}
+            
+            const key = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+            const label = `${monthNames[monthIndex]} ${year}`;
+            const dateSort = year * 100 + monthIndex;
+            
+            if (!groups[key]) {
+                groups[key] = { label, dateSort, reports: [] };
+            }
+            groups[key].reports.push(r);
+        });
+        
+        return Object.entries(groups)
+            .sort((a, b) => b[1].dateSort - a[1].dateSort)
+            .map(([key, data]) => ({
+                key,
+                label: data.label,
+                reports: data.reports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            }));
+    }, [archivedReports, archiveSearchQuery]);
+
+    const handleArchiveAdvance = async (report: Report) => {
+        if (window.confirm(`¿Enviar el reporte "${report.fileName || report.program}" al Archivo de forma adelantada?`)) {
+            const updated: Report = {
+                ...report,
+                archived: true,
+                archivedAt: new Date().toISOString()
+            };
+            await saveReportToDB(updated);
+            showAlert(`El reporte "${report.fileName || report.program}" se ha enviado al Archivo.`);
+            loadData();
+        }
+    };
+
+    const handleRestoreReport = async (report: Report) => {
+        const updated: Report = {
+            ...report,
+            archived: false
+        };
+        delete (updated as any).archivedAt;
+        await saveReportToDB(updated);
+        showAlert(`El reporte "${report.fileName || report.program}" ha sido restaurado a la lista de reportes activos.`);
+        loadData();
+    };
+
+    const getAdminPhone = (): string => {
+        let admin = users.find(u => u.role === 'admin' || (u as any).classification === 'Administrador' || u.username === 'admin');
+        if (!admin) {
+            try {
+                const raw = localStorage.getItem('rcm_users') || localStorage.getItem('rcm_data_users');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        admin = parsed.find((u: any) => u.role === 'admin' || u.classification === 'Administrador' || u.username === 'admin');
+                    }
+                }
+            } catch(e) {}
+        }
+        if (!admin) {
+            try {
+                const raw = localStorage.getItem('rcm_equipo_cmnl');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        admin = parsed.find((u: any) => u.role === 'admin' || (u.cargo && u.cargo.toLowerCase().includes('administrador')) || u.username === 'admin');
+                    }
+                }
+            } catch(e) {}
+        }
+
+        let phone = (admin as any)?.phone || (admin as any)?.mobile || (admin as any)?.telefono || '54413935';
+        phone = phone.replace(/[^0-9]/g, '');
+        if (phone.length === 8 && !phone.startsWith('53')) {
+            phone = '53' + phone;
+        }
+        return phone || '5354413935';
+    };
+
+    const handleOpenZipModal = () => {
+        if (activeReports.length === 0) {
+            showAlert("No hay reportes musicales en esta pantalla para empaquetar en ZIP.");
+            return;
+        }
+        setShowZipModal(true);
+    };
+
+    const createZipBlob = async (): Promise<{ blob: Blob; fileName: string; count: number }> => {
+        const zip = new JSZip();
+        let count = 0;
+
+        for (let idx = 0; idx < activeReports.length; idx++) {
+            const r = activeReports[idx];
+            const safeProgram = (r.program || 'Programa').replace(/[^a-zA-Z0-9_-]/g, '_');
+            const datePart = r.date ? r.date.split('T')[0] : `reporte-${idx + 1}`;
+            const filename = `PM-${safeProgram}-${datePart}${activeReports.length > 1 ? `-${idx + 1}` : ''}.pdf`;
+
+            if (r.pdfBlob) {
+                zip.file(filename, r.pdfBlob);
+                count++;
+            } else {
+                try {
+                    const userFullName = r.generatedBy || currentUser?.fullName || currentUser?.username || 'Dirección de Programa';
+                    const signature = r.status?.signed ? `[REG] ${r.id}` : '';
+                    const generatedBlob = generateReportPDF({
+                        userFullName,
+                        userUniqueId: signature,
+                        program: r.program,
+                        date: r.date,
+                        items: r.items || []
+                    });
+                    zip.file(filename, generatedBlob);
+                    count++;
+                } catch (err) {
+                    console.error(`Error generating PDF blob for report ${r.id}:`, err);
+                }
+            }
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const nowStr = new Date().toISOString().split('T')[0];
+        const fileName = `Reportes_Musicales_${nowStr}.zip`;
+        return { blob, fileName, count };
+    };
+
+    const handleDownloadZip = async () => {
+        if (hasUnsignedReports) {
+            showAlert("Todos los reportes deben estar firmados digitalmente antes de poder empaquetarlos y descargarlos en ZIP.");
+            return;
+        }
+
+        try {
+            setIsZipping(true);
+            const { blob, fileName, count } = await createZipBlob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            URL.revokeObjectURL(url);
+            a.remove();
+            setShowZipModal(false);
+            
+            // Preguntar si se pasan estos mismos reportes para archivo
+            setShowPostZipArchivePrompt({
+                show: true,
+                reportsToArchive: [...activeReports],
+                message: `Archivo ZIP descargado exitosamente en su dispositivo (${fileName}).\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
+            });
+        } catch (e: any) {
+            console.error("Error creating ZIP:", e);
+            showAlert("Error al generar el archivo ZIP: " + (e?.message || e));
+        } finally {
+            setIsZipping(false);
+        }
+    };
+
+    const handleSendZipWhatsApp = async () => {
+        if (hasUnsignedReports) {
+            showAlert("Todos los reportes deben estar firmados digitalmente antes de poder empaquetarlos y enviarlos por WhatsApp.");
+            return;
+        }
+
+        try {
+            setIsZipping(true);
+            const { blob, fileName, count } = await createZipBlob();
+            const phone = getAdminPhone();
+            const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
+            const dateStr = new Date().toLocaleDateString('es-ES');
+
+            const messageText = `Hola Administrador, le adjunto el paquete ZIP con los reportes musicales (${count} reportes empaquetados) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}`;
+
+            const zipFile = new File([blob], fileName, { type: 'application/zip', lastModified: Date.now() });
+
+            // Adjuntar automáticamente el archivo ZIP al mensaje usando Web Share API nativa
+            if (typeof navigator !== 'undefined' && navigator.share) {
+                try {
+                    if (navigator.canShare && navigator.canShare({ files: [zipFile] })) {
+                        await navigator.share({
+                            files: [zipFile],
+                            title: 'Reportes Musicales ZIP',
+                            text: messageText
+                        });
+                        setShowZipModal(false);
+                        setShowPostZipArchivePrompt({
+                            show: true,
+                            reportsToArchive: [...activeReports],
+                            message: `Envío de paquete ZIP completado.\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
+                        });
+                        return;
+                    }
+                } catch (err: any) {
+                    if (err && err.name === 'AbortError') {
+                        // El usuario canceló la ventana de compartir
+                        return;
+                    }
+                    console.warn("navigator.share no completado:", err);
+                }
+            }
+
+            // En caso de que el navegador web de escritorio no soporte adjuntar archivos vía Web Share:
+            openWhatsApp(messageText, phone);
+            setShowZipModal(false);
+            setShowPostZipArchivePrompt({
+                show: true,
+                reportsToArchive: [...activeReports],
+                message: `Envío de paquete ZIP iniciado.\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
+            });
+        } catch (e: any) {
+            console.error("Error sending ZIP via WhatsApp:", e);
+            showAlert("Error al procesar el envío de ZIP por WhatsApp: " + (e?.message || e));
+        } finally {
+            setIsZipping(false);
+        }
+    };
+
     const loadData = async () => {
         setIsLoading(true);
         const filterUser = currentUser ? currentUser.username : undefined;
         const data = await loadReportsFromDB(filterUser);
         setReports(data);
         setIsLoading(false);
+
+        // Si al entrar a Reportes hay reportes de meses concluidos sin archivar, mostrar cuadro de diálogo
+        const unarchivedConcluded = data.filter((r: Report) => !r.archived && isMonthConcluded(r.date));
+        if (unarchivedConcluded.length > 0) {
+            setShowConcludedPrompt(true);
+        }
     };
 
     const handleDownload = async (report: Report) => {
@@ -392,7 +733,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm("¿Eliminar este reporte permanentemente?")) {
+        if (window.confirm("¿Eliminar este reporte permanentemente del sistema? Esta acción no se puede deshacer.")) {
             await deleteReportFromDB(id);
             loadData();
         }
@@ -408,7 +749,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const summaryData = React.useMemo(() => {
         const stats: Record<string, { total: number, downloaded: number }> = {};
         
-        reports.forEach(r => {
+        activeReports.forEach(r => {
             if (!stats[r.program]) {
                 stats[r.program] = { total: 0, downloaded: 0 };
             }
@@ -417,7 +758,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         });
         
         return Object.entries(stats).map(([program, data]) => ({ program, ...data }));
-    }, [reports]);
+    }, [activeReports]);
 
     if (showBatchSigner) {
         return (
@@ -438,180 +779,663 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
     return (
         <div className="flex flex-col h-full bg-[#1A100C] p-6 overflow-y-auto pb-24 relative">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[#9E7649]">description</span>
-                    Reportes Musicales
-                </h2>
-                {reports.length > 0 && (
-                    <button 
-                        onClick={() => setShowSummary(true)}
-                        className="text-[#9E7649] hover:text-[#BCA387] flex items-center gap-1.5 text-xs font-bold transition-all"
-                        title="Ver resumen estadístico"
-                    >
-                        <span className="material-symbols-outlined text-sm">analytics</span>
-                        <span className="hidden sm:inline">Resumen</span>
-                    </button>
-                )}
-            </div>
-
-            {/* Contenedor de Botones de Acción (Reacomodados debajo del título, solo con acciones de firma y limpieza) */}
-            {reports.length > 0 && (
-                <div className="flex gap-3 w-full mb-6 bg-[#2C1B15]/30 p-2.5 rounded-2xl border border-[#9E7649]/15">
-                    {/* Firmar Todo */}
-                    {currentUser?.role === 'director' && (
+            {/* Cabecera Principal */}
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                    {viewMode === 'archive' && (
                         <button 
-                            onClick={handleSignAllClick}
-                            disabled={!reports.some(r => !r.status?.signed)}
-                            className={`flex-[1.5] h-12 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-md ${
-                                reports.some(r => !r.status?.signed) 
-                                    ? 'bg-yellow-600 text-white hover:bg-yellow-500 hover:scale-[1.01] cursor-pointer' 
-                                    : 'bg-yellow-900/10 text-yellow-600/40 border border-yellow-950/20 cursor-not-allowed'
-                            }`}
-                            title={reports.some(r => !r.status?.signed) ? "Firmar todos los reportes pendientes" : "No hay reportes pendientes de firma"}
+                            onClick={() => setViewMode('active')} 
+                            className="bg-[#2C1B15] text-[#E8DCCF] hover:text-white border border-[#9E7649]/30 hover:border-[#9E7649] px-3 py-1.5 rounded-xl flex items-center gap-1 text-xs font-bold transition-all shadow-sm"
+                            title="Volver a reportes activos"
                         >
-                            <span className="material-symbols-outlined text-xl">draw</span>
-                            <span className="hidden sm:inline">Firmar todo</span>
+                            <span className="material-symbols-outlined text-base">arrow_back</span>
+                            <span>Volver</span>
                         </button>
                     )}
-
-                    {/* Firma Por Carga */}
-                    <button 
-                        onClick={() => setShowBatchSigner(true)}
-                        className="flex-[1.5] h-12 bg-[#9E7649] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B653D] hover:scale-[1.01] transition-all shadow-md"
-                        title="Cargar firmas en lote"
-                    >
-                        <span className="material-symbols-outlined text-xl">upload_file</span>
-                        <span className="hidden sm:inline">Firma por carga</span>
-                    </button>
-
-                    {/* Limpiar */}
-                    <button 
-                        onClick={handleClearAll}
-                        className="flex-1 h-12 bg-red-950/20 text-red-400 border border-red-900/15 text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-900/20 hover:scale-[1.01] transition-all shadow-md"
-                        title="Borrar TODOS los reportes"
-                    >
-                        <span className="material-symbols-outlined text-xl">delete_sweep</span>
-                        <span className="hidden sm:inline">Limpiar todo</span>
-                    </button>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[#9E7649]">
+                            {viewMode === 'archive' ? 'inventory_2' : 'description'}
+                        </span>
+                        {viewMode === 'archive' ? 'Archivo de Reportes' : 'Reportes Musicales'}
+                    </h2>
                 </div>
-            )}
 
-            {showTutorial && (
-                 <div className="bg-[#2C1B15] border border-[#9E7649]/30 p-4 rounded-xl mb-6 flex gap-3 animate-fade-in relative">
-                    <span className="material-symbols-outlined text-[#9E7649] text-2xl">info</span>
-                    <div className="flex-1">
-                        <h4 className="font-bold text-[#9E7649] text-sm mb-1">Tus Reportes Personales</h4>
-                        <p className="text-xs text-[#E8DCCF]/80">Aquí se guardan automáticamente los PDFs que generas. Solo tú puedes verlos. Puedes descargarlos, re-editarlos o ver un resumen de tu actividad.</p>
+                <div className="flex items-center gap-2">
+                    {/* Botón Archivo al lado del botón de Resumen */}
+                    <button 
+                        onClick={() => setViewMode(prev => prev === 'archive' ? 'active' : 'archive')}
+                        className={`border px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm ${
+                            viewMode === 'archive' 
+                                ? 'bg-[#9E7649] text-white border-[#9E7649]' 
+                                : 'bg-[#2C1B15] text-[#9E7649] hover:text-[#BCA387] border-[#9E7649]/30 hover:border-[#9E7649]/60'
+                        }`}
+                        title={viewMode === 'archive' ? "Ver reportes activos" : "Abrir Archivo de reportes concluidos y archivados"}
+                    >
+                        <span className="material-symbols-outlined text-sm">inventory_2</span>
+                        <span>Archivo</span>
+                        {archivedReports.length > 0 && (
+                            <span className="ml-1 px-1.5 py-0.2 bg-[#9E7649]/30 text-amber-200 text-[10px] rounded-full font-mono">
+                                {archivedReports.length}
+                            </span>
+                        )}
+                    </button>
+
+                    {/* Botón Resumen */}
+                    {activeReports.length > 0 && viewMode === 'active' && (
+                        <button 
+                            onClick={() => setShowSummary(true)}
+                            className="bg-[#2C1B15] border border-[#9E7649]/30 hover:border-[#9E7649]/60 text-[#9E7649] hover:text-[#BCA387] px-3 py-1.5 rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all shadow-sm"
+                            title="Ver resumen estadístico"
+                        >
+                            <span className="material-symbols-outlined text-sm">analytics</span>
+                            <span className="hidden sm:inline">Resumen</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* VISTA ARCHIVO: Organizado por meses */}
+            {viewMode === 'archive' ? (
+                <div className="space-y-6 animate-fade-in">
+                    {/* Barra de información y búsqueda de Archivo */}
+                    <div className="bg-[#2C1B15] border border-[#9E7649]/30 p-4 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                <span className="material-symbols-outlined text-amber-500">history_edu</span>
+                                Historial de Reportes Archivados
+                            </h3>
+                            <p className="text-xs text-[#E8DCCF]/70 mt-0.5">
+                                Aquí se organizan por meses los reportes musicales en PDF una vez que el mes ha concluido o han sido archivados de forma adelantada.
+                            </p>
+                        </div>
+                        <div className="w-full md:w-72 relative">
+                            <input 
+                                type="text"
+                                value={archiveSearchQuery}
+                                onChange={(e) => setArchiveSearchQuery(e.target.value)}
+                                placeholder="Buscar por programa o fecha..."
+                                className="w-full bg-[#1A100C] border border-[#9E7649]/30 text-white placeholder-[#E8DCCF]/40 text-xs rounded-xl px-3 py-2 pl-9 focus:border-[#9E7649] outline-none"
+                            />
+                            <span className="material-symbols-outlined absolute left-2.5 top-2.5 text-[#E8DCCF]/40 text-base">search</span>
+                            {archiveSearchQuery && (
+                                <button 
+                                    onClick={() => setArchiveSearchQuery('')}
+                                    className="absolute right-2.5 top-2.5 text-[#E8DCCF]/40 hover:text-white"
+                                >
+                                    <span className="material-symbols-outlined text-sm">close</span>
+                                </button>
+                            )}
+                        </div>
                     </div>
-                    <button onClick={closeTutorial} className="absolute top-2 right-2 text-[#E8DCCF]/40 hover:text-white">
-                        <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                </div>
-            )}
 
-            {isLoading ? (
-                <div className="flex justify-center py-10">
-                    <div className="w-8 h-8 border-4 border-[#9E7649] border-t-transparent rounded-full animate-spin"></div>
-                </div>
-            ) : reports.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-[#E8DCCF]/40">
-                    <span className="material-symbols-outlined text-5xl mb-4 opacity-50">folder_off</span>
-                    <p>No hay reportes generados.</p>
-                    <p className="text-xs mt-2">Los reportes generados en la sección de Selección aparecerán aquí.</p>
+                    {isLoading ? (
+                        <div className="flex justify-center py-12">
+                            <div className="w-8 h-8 border-4 border-[#9E7649] border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    ) : groupedArchivedReports.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-[#E8DCCF]/40 bg-[#2C1B15]/20 rounded-2xl border border-[#9E7649]/10">
+                            <span className="material-symbols-outlined text-5xl mb-4 opacity-50">inventory_2</span>
+                            <p className="text-sm font-semibold text-[#E8DCCF]/60">
+                                {archiveSearchQuery ? 'No se encontraron reportes con ese criterio.' : 'No hay reportes en el Archivo actualmente.'}
+                            </p>
+                            <p className="text-xs mt-2 text-center max-w-md">
+                                Los reportes musicales en PDF pasan aquí automáticamente al terminar cada mes, o cuando pulsas el botón de enviar a Archivo de forma adelantada en la pantalla principal.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            {groupedArchivedReports.map(group => (
+                                <div key={group.key} className="bg-[#2C1B15]/40 rounded-2xl border border-[#9E7649]/25 p-4 shadow-sm">
+                                    <div className="flex items-center justify-between border-b border-[#9E7649]/20 pb-3 mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[#9E7649] text-xl">folder</span>
+                                            <h4 className="font-bold text-white text-base tracking-wide capitalize">{group.label}</h4>
+                                        </div>
+                                        <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#9E7649]/20 text-[#E8DCCF] border border-[#9E7649]/30">
+                                            {group.reports.length} {group.reports.length === 1 ? 'reporte' : 'reportes'}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2">
+                                        {group.reports.map(report => (
+                                            <div key={report.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm flex flex-col justify-between gap-3 group hover:border-[#9E7649]/50 transition-all relative">
+                                                <div className="absolute top-2 right-2 flex gap-1.5 items-center">
+                                                    {report.status?.signed && (
+                                                        <span title="Reporte Firmado Digitalmente" className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex items-center gap-0.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                                                            Firmado
+                                                        </span>
+                                                    )}
+                                                    {report.status?.sent && (
+                                                        <span title="Enviado por WhatsApp" className="w-2.5 h-2.5 rounded-full bg-[#25D366]"></span>
+                                                    )}
+                                                    {report.status?.downloaded && (
+                                                        <span title="Descargado" className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-start gap-3 overflow-hidden">
+                                                    <div className="size-11 rounded-lg bg-red-900/20 text-red-400 flex items-center justify-center shrink-0 border border-red-900/30 mt-0.5">
+                                                        <span className="material-symbols-outlined text-2xl">picture_as_pdf</span>
+                                                    </div>
+                                                    <div className="min-w-0 flex-1 pr-14">
+                                                        <h5 className="font-bold text-white truncate text-xs sm:text-sm" title={report.fileName}>
+                                                            {report.fileName}
+                                                        </h5>
+                                                        <div className="flex flex-wrap text-[11px] text-[#E8DCCF]/70 gap-x-3 gap-y-0.5 mt-1">
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[10px]">calendar_today</span>
+                                                                {report.date.includes('-') ? report.date.split('-').reverse().join('/') : new Date(report.date).toLocaleDateString()}
+                                                            </span>
+                                                            <span className="flex items-center gap-1 truncate">
+                                                                <span className="material-symbols-outlined text-[10px]">radio</span>
+                                                                {report.program}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[10px] text-[#E8DCCF]/40 mt-1 truncate">
+                                                            Generado por: {report.generatedBy} {report.archived && !isMonthConcluded(report.date) ? '• (Archivado adelantado)' : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Botones de acción en Archivo: editar, consultar, enviar por whatsapp, descargar y eliminar */}
+                                                <div className="flex flex-wrap gap-1.5 justify-end border-t border-[#9E7649]/15 pt-2.5 mt-1">
+                                                    {/* Editar */}
+                                                    <button 
+                                                        onClick={() => onEdit(report)}
+                                                        className="px-2.5 py-1.5 bg-[#1A100C] text-[#E8DCCF]/90 text-[11px] font-bold rounded-lg flex items-center gap-1 hover:bg-[#3E1E16] hover:text-white transition-colors border border-[#9E7649]/20"
+                                                        title="Editar reporte"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">edit_document</span>
+                                                        <span>Editar</span>
+                                                    </button>
+
+                                                    {/* Consultar */}
+                                                    <button 
+                                                        onClick={() => setConsultingReport(report)}
+                                                        className="px-2.5 py-1.5 bg-[#1A100C] text-amber-300 text-[11px] font-bold rounded-lg flex items-center gap-1 hover:bg-[#3E1E16] hover:text-amber-200 transition-colors border border-[#9E7649]/20"
+                                                        title="Consultar detalles y propiedades completas del reporte"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">visibility</span>
+                                                        <span>Consultar</span>
+                                                    </button>
+
+                                                    {/* Enviar por WhatsApp */}
+                                                    <button 
+                                                        onClick={async () => {
+                                                            if (!report.status?.signed) {
+                                                                showAlert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
+                                                                setPostSignAction({ type: 'whatsapp', reportId: report.id });
+                                                                setSigningMode('single');
+                                                                setSigningReport(report);
+                                                                setShowSignDialog(true);
+                                                                return;
+                                                            }
+                                                            await triggerSendWhatsApp(report);
+                                                        }}
+                                                        className="size-8 rounded-lg bg-[#1A100C] text-[#25D366] hover:bg-[#25D366] hover:text-white transition-colors flex items-center justify-center border border-[#9E7649]/20"
+                                                        title="Enviar por WhatsApp"
+                                                    >
+                                                        <span className="material-symbols-outlined text-base">send</span>
+                                                    </button>
+
+                                                    {/* Descargar */}
+                                                    <button 
+                                                        onClick={() => handleDownload(report)}
+                                                        className="size-8 rounded-lg bg-[#1A100C] text-blue-400 hover:bg-blue-500 hover:text-white transition-colors flex items-center justify-center border border-[#9E7649]/20"
+                                                        title="Descargar PDF"
+                                                    >
+                                                        <span className="material-symbols-outlined text-base">download</span>
+                                                    </button>
+
+                                                    {/* Restaurar a activos si fue archivado de forma adelantada */}
+                                                    {report.archived && !isMonthConcluded(report.date) && (
+                                                        <button 
+                                                            onClick={() => handleRestoreReport(report)}
+                                                            className="size-8 rounded-lg bg-[#1A100C] text-[#E8DCCF]/60 hover:bg-[#9E7649] hover:text-white transition-colors flex items-center justify-center border border-[#9E7649]/20"
+                                                            title="Restaurar a reportes activos"
+                                                        >
+                                                            <span className="material-symbols-outlined text-base">unarchive</span>
+                                                        </button>
+                                                    )}
+
+                                                    {/* Eliminar reporte (Aparece en Archivo según lo solicitado) */}
+                                                    <button 
+                                                        onClick={() => handleDelete(report.id)}
+                                                        className="size-8 rounded-lg bg-[#1A100C] text-red-400/80 hover:bg-red-600 hover:text-white transition-colors flex items-center justify-center border border-red-900/30"
+                                                        title="Eliminar reporte permanentemente"
+                                                    >
+                                                        <span className="material-symbols-outlined text-base">delete</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             ) : (
-                <div className="grid gap-4">
-                    {reports.map((report) => (
-                        <div key={report.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm flex flex-col gap-3 group hover:border-[#9E7649]/50 transition-colors relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-2 flex gap-1.5 items-center">
-                                {report.status?.signed && <span title="Resultado de firma: FIRMADO" className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse" id={`signed-indicator-${report.id}`}></span>}
-                                {report.status?.sent && <span title="Enviado por WhatsApp" className="w-2.5 h-2.5 rounded-full bg-[#25D366]" id={`whatsapp-indicator-${report.id}`}></span>}
-                                {report.status?.downloaded && <span title="Descargado" className="w-2.5 h-2.5 rounded-full bg-blue-500" id={`download-indicator-${report.id}`}></span>}
-                            </div>
-
-                            <div className="flex items-center gap-4 overflow-hidden">
-                                <div className="size-12 rounded-lg bg-red-900/20 text-red-500 flex items-center justify-center shrink-0">
-                                    <span className="material-symbols-outlined text-2xl">picture_as_pdf</span>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <h4 className="font-bold text-white truncate text-sm">{report.fileName}</h4>
-                                    <div className="flex flex-wrap text-xs text-[#E8DCCF]/60 gap-x-3 gap-y-1 mt-1">
-                                        <span className="flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[10px]">calendar_today</span> 
-                                            {report.date.includes('-') ? report.date.split('-').reverse().join('/') : new Date(report.date).toLocaleDateString()}
-                                        </span>
-                                        <span className="flex items-center gap-1 truncate"><span className="material-symbols-outlined text-[10px]">radio</span> {report.program}</span>
-                                    </div>
-                                    <p className="text-[10px] text-[#E8DCCF]/40 mt-1 truncate">Generado por: {report.generatedBy}</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-2 justify-end border-t border-[#9E7649]/10 pt-3">
-                                 <button 
-                                    onClick={() => onEdit(report)}
-                                    className="flex-1 bg-[#1A100C] text-[#E8DCCF]/80 text-[10px] font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-[#3E1E16] transition-colors"
-                                >
-                                    <span className="material-symbols-outlined text-sm">edit_document</span> Editar
-                                </button>
-
-                                {false ? (
-                                    <button 
-                                        onClick={() => {
-                                            setSigningMode('single');
-                                            setSigningReport(report);
-                                            setShowSignDialog(true);
-                                        }}
-                                        className="size-8 rounded-full bg-[#1A100C] text-yellow-500 hover:bg-yellow-500 hover:text-white transition-colors flex items-center justify-center"
-                                        title="Firmar con Estampado"
-                                    >
-                                        <span className="material-symbols-outlined text-sm">draw</span>
-                                    </button>
-                                ) : (
-                                    <div className="size-8 rounded-full hidden" title="Reporte Firmado">
-                                        <span className="material-symbols-outlined text-sm">verified</span>
-                                    </div>
-                                )}
-
+                /* VISTA ACTIVA: Reportes del mes actual */
+                <>
+                    {/* Contenedor de Botones de Acción */}
+                    {activeReports.length > 0 && (
+                        <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 w-full mb-6 bg-[#2C1B15]/30 p-2.5 rounded-2xl border border-[#9E7649]/15">
+                            {/* Firmar Todo */}
+                            {currentUser?.role === 'director' && (
                                 <button 
-                                    onClick={async () => {
-                                        if (!report.status?.signed) {
-                                            showAlert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
-                                            setPostSignAction({ type: 'whatsapp', reportId: report.id });
-                                            setSigningMode('single');
-                                            setSigningReport(report);
-                                            setShowSignDialog(true);
-                                            return;
-                                        }
+                                    onClick={handleSignAllClick}
+                                    disabled={!activeReports.some(r => !r.status?.signed)}
+                                    className={`flex-[1.4] h-12 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-md ${
+                                        activeReports.some(r => !r.status?.signed) 
+                                            ? 'bg-yellow-600 text-white hover:bg-yellow-500 hover:scale-[1.01] cursor-pointer' 
+                                            : 'bg-yellow-900/10 text-yellow-600/40 border border-yellow-950/20 cursor-not-allowed'
+                                    }`}
+                                    title={activeReports.some(r => !r.status?.signed) ? "Firmar todos los reportes pendientes" : "No hay reportes pendientes de firma"}
+                                >
+                                    <span className="material-symbols-outlined text-xl">draw</span>
+                                    <span className="hidden sm:inline">Firmar todo</span>
+                                </button>
+                            )}
 
-                                        await triggerSendWhatsApp(report);
-                                    }}
-                                    className="size-8 rounded-full bg-[#1A100C] text-[#25D366] hover:bg-[#25D366] hover:text-white transition-colors flex items-center justify-center"
-                                    title="Enviar por WhatsApp"
-                                >
-                                    <span className="material-symbols-outlined text-sm">send</span>
-                                </button>
+                            {/* Generar ZIP - Entre Firmar todo y Firma por carga */}
+                            <button 
+                                onClick={handleOpenZipModal}
+                                className="flex-[1.4] h-12 bg-amber-700/85 hover:bg-amber-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:scale-[1.01] transition-all shadow-md border border-amber-500/25"
+                                title="Empaquetar todos los reportes de esta pantalla en un archivo ZIP"
+                            >
+                                <span className="material-symbols-outlined text-xl">folder_zip</span>
+                                <span className="hidden sm:inline">Generar ZIP</span>
+                            </button>
 
-                                <button 
-                                    onClick={() => handleDownload(report)}
-                                    className="size-8 rounded-full bg-[#1A100C] text-blue-400 hover:bg-blue-500 hover:text-white transition-colors flex items-center justify-center"
-                                    title="Descargar PDF"
-                                >
-                                    <span className="material-symbols-outlined text-sm">download</span>
-                                </button>
-                                <button 
-                                    onClick={() => handleDelete(report.id)}
-                                    className="size-8 rounded-full bg-[#1A100C] text-[#E8DCCF]/40 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
-                                    title="Eliminar"
-                                >
-                                    <span className="material-symbols-outlined text-sm">delete</span>
-                                </button>
-                            </div>
+                            {/* Firma Por Carga */}
+                            <button 
+                                onClick={() => setShowBatchSigner(true)}
+                                className="flex-[1.4] h-12 bg-[#9E7649] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-[#8B653D] hover:scale-[1.01] transition-all shadow-md"
+                                title="Cargar firmas en lote"
+                            >
+                                <span className="material-symbols-outlined text-xl">upload_file</span>
+                                <span className="hidden sm:inline">Firma por carga</span>
+                            </button>
+
+                            {/* Limpiar */}
+                            <button 
+                                onClick={handleClearAll}
+                                className="flex-1 h-12 bg-red-950/20 text-red-400 border border-red-900/15 text-xs font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-red-900/20 hover:scale-[1.01] transition-all shadow-md"
+                                title="Borrar TODOS los reportes"
+                            >
+                                <span className="material-symbols-outlined text-xl">delete_sweep</span>
+                                <span className="hidden sm:inline">Limpiar todo</span>
+                            </button>
                         </div>
-                    ))}
+                    )}
+
+                    {showTutorial && (
+                        <div className="bg-[#2C1B15] border border-[#9E7649]/30 p-4 rounded-xl mb-6 flex gap-3 animate-fade-in relative">
+                            <span className="material-symbols-outlined text-[#9E7649] text-2xl">info</span>
+                            <div className="flex-1">
+                                <h4 className="font-bold text-[#9E7649] text-sm mb-1">Tus Reportes Personales</h4>
+                                <p className="text-xs text-[#E8DCCF]/80">Aquí se guardan automáticamente los PDFs que generas. Solo tú puedes verlos. Puedes descargarlos, re-editarlos o ver un resumen de tu actividad.</p>
+                            </div>
+                            <button onClick={closeTutorial} className="absolute top-2 right-2 text-[#E8DCCF]/40 hover:text-white">
+                                <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        </div>
+                    )}
+
+                    {isLoading ? (
+                        <div className="flex justify-center py-10">
+                            <div className="w-8 h-8 border-4 border-[#9E7649] border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    ) : activeReports.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-[#E8DCCF]/40">
+                            <span className="material-symbols-outlined text-5xl mb-4 opacity-50">folder_off</span>
+                            <p>No hay reportes activos en este momento.</p>
+                            <p className="text-xs mt-2 text-center max-w-sm">
+                                Los reportes generados en la sección de Selección aparecerán aquí. Si deseas consultar reportes de meses anteriores o archivados, pulsa en el botón <strong>Archivo</strong> arriba.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {activeReports.map((report) => (
+                                <div key={report.id} className="bg-[#2C1B15] p-4 rounded-xl border border-[#9E7649]/20 shadow-sm flex flex-col gap-3 group hover:border-[#9E7649]/50 transition-colors relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-2 flex gap-1.5 items-center">
+                                        {report.status?.signed && <span title="Resultado de firma: FIRMADO" className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-pulse" id={`signed-indicator-${report.id}`}></span>}
+                                        {report.status?.sent && <span title="Enviado por WhatsApp" className="w-2.5 h-2.5 rounded-full bg-[#25D366]" id={`whatsapp-indicator-${report.id}`}></span>}
+                                        {report.status?.downloaded && <span title="Descargado" className="w-2.5 h-2.5 rounded-full bg-blue-500" id={`download-indicator-${report.id}`}></span>}
+                                    </div>
+
+                                    <div className="flex items-center gap-4 overflow-hidden">
+                                        <div className="size-12 rounded-lg bg-red-900/20 text-red-500 flex items-center justify-center shrink-0">
+                                            <span className="material-symbols-outlined text-2xl">picture_as_pdf</span>
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <h4 className="font-bold text-white truncate text-sm">{report.fileName}</h4>
+                                            <div className="flex flex-wrap text-xs text-[#E8DCCF]/60 gap-x-3 gap-y-1 mt-1">
+                                                <span className="flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[10px]">calendar_today</span> 
+                                                    {report.date.includes('-') ? report.date.split('-').reverse().join('/') : new Date(report.date).toLocaleDateString()}
+                                                </span>
+                                                <span className="flex items-center gap-1 truncate"><span className="material-symbols-outlined text-[10px]">radio</span> {report.program}</span>
+                                            </div>
+                                            <p className="text-[10px] text-[#E8DCCF]/40 mt-1 truncate">Generado por: {report.generatedBy}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2 justify-end border-t border-[#9E7649]/10 pt-3">
+                                        <button 
+                                            onClick={() => onEdit(report)}
+                                            className="flex-1 bg-[#1A100C] text-[#E8DCCF]/80 text-[10px] font-bold py-2 rounded flex items-center justify-center gap-1 hover:bg-[#3E1E16] transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">edit_document</span> Editar
+                                        </button>
+
+                                        <button 
+                                            onClick={async () => {
+                                                if (!report.status?.signed) {
+                                                    showAlert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
+                                                    setPostSignAction({ type: 'whatsapp', reportId: report.id });
+                                                    setSigningMode('single');
+                                                    setSigningReport(report);
+                                                    setShowSignDialog(true);
+                                                    return;
+                                                }
+
+                                                await triggerSendWhatsApp(report);
+                                            }}
+                                            className="size-8 rounded-full bg-[#1A100C] text-[#25D366] hover:bg-[#25D366] hover:text-white transition-colors flex items-center justify-center"
+                                            title="Enviar por WhatsApp"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">send</span>
+                                        </button>
+
+                                        <button 
+                                            onClick={() => handleDownload(report)}
+                                            className="size-8 rounded-full bg-[#1A100C] text-blue-400 hover:bg-blue-500 hover:text-white transition-colors flex items-center justify-center"
+                                            title="Descargar PDF"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">download</span>
+                                        </button>
+
+                                        {/* Botón sustituido: Enviar a Archivo de forma adelantada (Sustituye a Eliminar) */}
+                                        <button 
+                                            onClick={() => handleArchiveAdvance(report)}
+                                            className="size-8 rounded-full bg-[#1A100C] text-[#9E7649] hover:bg-[#9E7649] hover:text-white transition-colors flex items-center justify-center"
+                                            title="Enviar este reporte a Archivo de forma adelantada"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">inventory_2</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Modal de Generación de Paquete ZIP */}
+            {showZipModal && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => !isZipping && setShowZipModal(false)}>
+                    <div className="bg-[#2C1B15] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 font-sans" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 text-amber-500 mb-3">
+                            <span className="material-symbols-outlined text-3xl">folder_zip</span>
+                            <h3 className="text-xl font-bold text-white">Generar Paquete ZIP</h3>
+                        </div>
+                        <p className="text-xs text-[#E8DCCF]/80 mb-4 leading-relaxed">
+                            Se empaquetarán en un único archivo comprimido los <strong>{activeReports.length} reportes musicales</strong> que están en esta pantalla.
+                        </p>
+
+                        <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20 max-h-48 overflow-y-auto mb-5 space-y-2">
+                            {activeReports.map((r, idx) => (
+                                <div key={r.id} className="flex items-center justify-between text-xs text-[#E8DCCF]/80 border-b border-[#9E7649]/10 pb-1.5 last:border-0 last:pb-0">
+                                    <div className="flex items-center gap-2 truncate mr-2">
+                                        <span className="material-symbols-outlined text-xs text-red-400">picture_as_pdf</span>
+                                        <span className="truncate">{r.fileName || r.program}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {r.status?.signed ? (
+                                            <span className="text-[10px] text-yellow-400 font-bold">Firmado</span>
+                                        ) : (
+                                            <span className="text-[10px] text-[#E8DCCF]/40">Sin firmar</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="bg-[#9E7649]/10 p-2.5 rounded-xl border border-[#9E7649]/20 mb-4 text-[11px] text-[#E8DCCF]/70 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-amber-400 text-base">contact_phone</span>
+                            <span>Destino WhatsApp: <strong>Administrador (+{getAdminPhone()})</strong></span>
+                        </div>
+
+                        {/* Bloque de aviso y acción si hay reportes sin firmar */}
+                        {hasUnsignedReports && (
+                            <div className="bg-yellow-950/40 border border-yellow-500/50 rounded-xl p-3.5 mb-4 shadow-inner animate-fade-in">
+                                <div className="flex items-start gap-2.5">
+                                    <span className="material-symbols-outlined text-yellow-400 text-xl shrink-0 mt-0.5 animate-pulse">lock</span>
+                                    <div className="text-xs">
+                                        <p className="font-bold text-yellow-300">Firma digital obligatoria</p>
+                                        <p className="text-[#E8DCCF]/90 mt-0.5 leading-relaxed text-[11px]">
+                                            Hay <strong>{unsignedReports.length} {unsignedReports.length === 1 ? 'reporte sin firmar' : 'reportes sin firmar'}</strong> en esta pantalla. Para poder empaquetarlos, descargarlos o enviarlos por WhatsApp, <strong>todos los reportes deben estar firmados digitalmente primero</strong>.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setSigningMode('all');
+                                        setShowSignDialog(true);
+                                    }}
+                                    className="w-full mt-3 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-md text-xs uppercase tracking-wider cursor-pointer hover:scale-[1.01]"
+                                >
+                                    <span className="material-symbols-outlined text-base">draw</span>
+                                    Firmar los {unsignedReports.length} {unsignedReports.length === 1 ? 'reporte pendiente' : 'reportes pendientes'}
+                                </button>
+                            </div>
+                        )}
+
+                        {isZipping ? (
+                            <div className="flex flex-col items-center justify-center py-4 space-y-2">
+                                <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                                <p className="text-xs text-amber-300 font-semibold">Empaquetando reportes en ZIP...</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2 font-bold text-xs">
+                                <button 
+                                    onClick={handleDownloadZip}
+                                    disabled={hasUnsignedReports || isZipping}
+                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
+                                        hasUnsignedReports
+                                            ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
+                                            : 'bg-[#9E7649] hover:bg-[#8B653D] text-white cursor-pointer hover:scale-[1.01]'
+                                    }`}
+                                    title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar la descarga" : "Descargar paquete ZIP en Descargas"}
+                                >
+                                    <span className="material-symbols-outlined text-lg">download</span>
+                                    Descargar en el Dispositivo
+                                </button>
+                                
+                                <button 
+                                    onClick={handleSendZipWhatsApp}
+                                    disabled={hasUnsignedReports || isZipping}
+                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
+                                        hasUnsignedReports
+                                            ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
+                                            : 'bg-[#25D366] hover:bg-[#20ba5a] text-white cursor-pointer hover:scale-[1.01]'
+                                    }`}
+                                    title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar el envío" : "Enviar paquete ZIP por WhatsApp al Administrador"}
+                                >
+                                    <span className="material-symbols-outlined text-lg">send</span>
+                                    Enviar por WhatsApp al Administrador
+                                </button>
+
+                                <button 
+                                    onClick={() => setShowZipModal(false)}
+                                    className="w-full py-2.5 text-[#E8DCCF]/60 hover:text-white transition-colors text-center text-xs mt-1"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
+            {/* Modal de Consulta Completa de Reporte (Para Archivo y Activos) */}
+            {consultingReport && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setConsultingReport(null)}>
+                    <div className="bg-[#2C1B15] w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 font-sans max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center pb-3 border-b border-[#9E7649]/20 mb-4">
+                            <div className="flex items-center gap-2 text-white">
+                                <span className="material-symbols-outlined text-[#9E7649]">description</span>
+                                <h3 className="text-base font-bold truncate">Consulta de Reporte Musical</h3>
+                            </div>
+                            <button onClick={() => setConsultingReport(null)} className="text-[#E8DCCF]/40 hover:text-white">
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                            <div className="bg-[#1A100C] p-3.5 rounded-xl border border-[#9E7649]/20 space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#E8DCCF]/60">Archivo:</span>
+                                    <span className="font-bold text-white truncate max-w-[250px]">{consultingReport.fileName}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#E8DCCF]/60">Programa:</span>
+                                    <span className="font-bold text-white">{consultingReport.program}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#E8DCCF]/60">Fecha:</span>
+                                    <span className="font-bold text-white">{consultingReport.date.split('T')[0]}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[#E8DCCF]/60">Generado por:</span>
+                                    <span className="font-bold text-[#E8DCCF]">{consultingReport.generatedBy}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#1A100C] p-3.5 rounded-xl border border-[#9E7649]/20 space-y-2">
+                                <h4 className="font-bold text-[#9E7649] uppercase tracking-wider text-[10px]">Propiedades y Estado</h4>
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-sm text-yellow-500">draw</span>
+                                        <span>Firma:</span>
+                                        <span className={`font-bold ${consultingReport.status?.signed ? 'text-yellow-400' : 'text-[#E8DCCF]/40'}`}>
+                                            {consultingReport.status?.signed ? 'Firmado' : 'Pendiente'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-sm text-[#25D366]">send</span>
+                                        <span>WhatsApp:</span>
+                                        <span className={`font-bold ${consultingReport.status?.sent ? 'text-[#25D366]' : 'text-[#E8DCCF]/40'}`}>
+                                            {consultingReport.status?.sent ? 'Enviado' : 'No enviado'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-sm text-blue-400">download</span>
+                                        <span>Descargado:</span>
+                                        <span className={`font-bold ${consultingReport.status?.downloaded ? 'text-blue-400' : 'text-[#E8DCCF]/40'}`}>
+                                            {consultingReport.status?.downloaded ? 'Sí' : 'No'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="material-symbols-outlined text-sm text-amber-500">inventory_2</span>
+                                        <span>Ubicación:</span>
+                                        <span className="font-bold text-amber-300">
+                                            {isMonthConcluded(consultingReport.date) ? 'Mes concluido' : consultingReport.archived ? 'Archivado adel.' : 'Activo'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Obras y Créditos incluidos */}
+                            <div className="bg-[#1A100C] p-3.5 rounded-xl border border-[#9E7649]/20">
+                                <h4 className="font-bold text-[#9E7649] uppercase tracking-wider text-[10px] mb-2">
+                                    Obras y Créditos Registrados ({consultingReport.items?.length || 0})
+                                </h4>
+                                {consultingReport.items && consultingReport.items.length > 0 ? (
+                                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                                        {consultingReport.items.map((item, idx) => (
+                                            <div key={item.id || idx} className="bg-[#2C1B15] p-2 rounded-lg text-[11px] flex justify-between items-center border border-[#9E7649]/10">
+                                                <div className="truncate mr-2">
+                                                    <span className="font-bold text-white">{idx + 1}. {item.title}</span>
+                                                    <span className="text-[#E8DCCF]/60 ml-1.5">({item.performer})</span>
+                                                </div>
+                                                <span className="text-[10px] text-[#E8DCCF]/40 shrink-0">{item.genre || 'Música'}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-[11px] text-[#E8DCCF]/40 italic">No hay desglose de temas musicales guardado.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Botones de acción del reporte consultado */}
+                        <div className="flex flex-wrap gap-2 pt-4 border-t border-[#9E7649]/20 mt-4 font-bold text-xs">
+                            {consultingReport.pdfBlob && (
+                                <button 
+                                    onClick={() => {
+                                        const url = URL.createObjectURL(consultingReport.pdfBlob);
+                                        window.open(url, '_blank');
+                                    }}
+                                    className="flex-1 py-2.5 bg-[#1A100C] border border-[#9E7649]/40 hover:bg-[#3E1E16] text-[#E8DCCF] rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                                >
+                                    <span className="material-symbols-outlined text-sm">visibility</span>
+                                    <span>Ver PDF</span>
+                                </button>
+                            )}
+
+                            <button 
+                                onClick={() => {
+                                    const rep = consultingReport;
+                                    setConsultingReport(null);
+                                    onEdit(rep);
+                                }}
+                                className="flex-1 py-2.5 bg-[#1A100C] border border-[#9E7649]/40 hover:bg-[#3E1E16] text-[#E8DCCF] rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                            >
+                                <span className="material-symbols-outlined text-sm">edit_document</span>
+                                <span>Editar</span>
+                            </button>
+
+                            <button 
+                                onClick={() => {
+                                    const rep = consultingReport;
+                                    setConsultingReport(null);
+                                    handleDownload(rep);
+                                }}
+                                className="flex-1 py-2.5 bg-blue-700/80 hover:bg-blue-600 text-white rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                            >
+                                <span className="material-symbols-outlined text-sm">download</span>
+                                <span>Descargar</span>
+                            </button>
+
+                            <button 
+                                onClick={async () => {
+                                    const rep = consultingReport;
+                                    setConsultingReport(null);
+                                    if (!rep.status?.signed) {
+                                        showAlert("No se puede enviar un reporte sin firmar. Por favor, fírmelo digitalmente primero.");
+                                        setPostSignAction({ type: 'whatsapp', reportId: rep.id });
+                                        setSigningMode('single');
+                                        setSigningReport(rep);
+                                        setShowSignDialog(true);
+                                        return;
+                                    }
+                                    await triggerSendWhatsApp(rep);
+                                }}
+                                className="flex-1 py-2.5 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                            >
+                                <span className="material-symbols-outlined text-sm">send</span>
+                                <span>WhatsApp</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Resumen Estadístico */}
             {showSummary && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSummary(false)}>
                     <div className="w-full max-w-sm bg-[#2C1B15] rounded-2xl shadow-xl p-6 border border-[#9E7649]/30" onClick={e => e.stopPropagation()}>
@@ -647,18 +1471,19 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 </div>
             )}
 
+            {/* Modal de Firma Digital */}
             {showSignDialog && (signingMode === 'all' || signingReport) && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowSignDialog(false)}>
                     <div className="bg-[#2C1B15] w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-[#9E7649]/30 font-sans" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3 text-yellow-500 mb-4">
                             <span className="material-symbols-outlined text-3xl">draw</span>
                             <h3 className="text-xl font-bold text-white">
-                                {signingMode === 'all' ? `Firmar ${reports.filter(r => !r.status?.signed).length} Reportes` : 'Firmar Reporte'}
+                                {signingMode === 'all' ? `Firmar ${activeReports.filter(r => !r.status?.signed).length} Reportes` : 'Firmar Reporte'}
                             </h3>
                         </div>
                         <p className="text-xs text-[#E8DCCF]/60 mb-6 font-semibold leading-relaxed">
                              {signingMode === 'all' ? (
-                                 <>Para estampar su firma digital en <strong>{reports.filter(r => !r.status?.signed).length} reportes pendientes</strong>, por favor ingrese su contraseña de certificado:</>
+                                 <>Para estampar su firma digital en <strong>{activeReports.filter(r => !r.status?.signed).length} reportes pendientes</strong>, por favor ingrese su contraseña de certificado:</>
                              ) : (
                                  <>Para estampar su firma digital en el reporte <strong>{signingReport?.program}</strong> del día <strong>{signingReport?.date.split('T')[0]}</strong>, por favor ingrese su contraseña de certificado:</>
                              )}
@@ -718,6 +1543,81 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 className="w-full py-2 bg-transparent text-stone-400 hover:text-white font-semibold rounded-xl transition-all text-[10px] uppercase underline"
                             >
                                 No mostrar de nuevo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmación para archivar reportes de meses concluidos al entrar */}
+            {showConcludedPrompt && concludedUnarchivedReports.length > 0 && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowConcludedPrompt(false)}>
+                    <div className="bg-[#2C1B15] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 font-sans" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 text-amber-400 mb-3">
+                            <span className="material-symbols-outlined text-3xl">history_toggle_off</span>
+                            <h3 className="text-lg font-bold text-white">Reportes de Meses Concluidos</h3>
+                        </div>
+                        <p className="text-xs text-[#E8DCCF]/90 leading-relaxed mb-4">
+                            Se han detectado <strong>{concludedUnarchivedReports.length} {concludedUnarchivedReports.length === 1 ? 'reporte' : 'reportes'}</strong> en la pantalla principal pertenecientes a meses ya concluidos.
+                        </p>
+                        
+                        <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20 max-h-40 overflow-y-auto mb-4 space-y-1.5 text-xs text-[#E8DCCF]/80">
+                            {concludedUnarchivedReports.map(r => (
+                                <div key={r.id} className="flex justify-between items-center py-1 border-b border-[#9E7649]/10 last:border-0">
+                                    <span className="font-semibold truncate mr-2">{r.program}</span>
+                                    <span className="text-[11px] text-[#E8DCCF]/50 shrink-0">{r.date.split('T')[0]}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <p className="text-xs text-amber-200/90 font-medium mb-5">
+                            ¿Deseas enviar estos reportes al Archivo ahora para mantener organizada la pantalla de reportes activos?
+                        </p>
+
+                        <div className="flex flex-col gap-2 font-bold text-xs uppercase tracking-wider">
+                            <button
+                                onClick={handleArchiveConcludedReports}
+                                className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl flex items-center justify-center gap-2 transition-all shadow-md"
+                            >
+                                <span className="material-symbols-outlined text-base">inventory_2</span>
+                                Sí, Enviar al Archivo ({concludedUnarchivedReports.length})
+                            </button>
+                            <button
+                                onClick={() => setShowConcludedPrompt(false)}
+                                className="w-full py-2.5 text-[#E8DCCF]/60 hover:text-white transition-colors text-center text-xs"
+                            >
+                                Mantener en Pantalla Principal
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de confirmación para pasar reportes a Archivo tras generar ZIP */}
+            {showPostZipArchivePrompt.show && (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowPostZipArchivePrompt({ show: false, reportsToArchive: [], message: '' })}>
+                    <div className="bg-[#2C1B15] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 font-sans" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 text-amber-400 mb-3">
+                            <span className="material-symbols-outlined text-3xl">inventory_2</span>
+                            <h3 className="text-lg font-bold text-white">¿Pasar Reportes al Archivo?</h3>
+                        </div>
+                        <p className="text-xs text-[#E8DCCF]/90 leading-relaxed mb-5 whitespace-pre-line">
+                            {showPostZipArchivePrompt.message || `El paquete ZIP de los reportes se ha procesado con éxito.\n\n¿Deseas pasar estos ${showPostZipArchivePrompt.reportsToArchive.length} reportes empaquetados para el Archivo?`}
+                        </p>
+
+                        <div className="flex flex-col gap-2 font-bold text-xs uppercase tracking-wider">
+                            <button
+                                onClick={handleConfirmPostZipArchive}
+                                className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl flex items-center justify-center gap-2 transition-all shadow-md"
+                            >
+                                <span className="material-symbols-outlined text-base">inventory_2</span>
+                                Sí, Pasar al Archivo ({showPostZipArchivePrompt.reportsToArchive.length})
+                            </button>
+                            <button
+                                onClick={() => setShowPostZipArchivePrompt({ show: false, reportsToArchive: [], message: '' })}
+                                className="w-full py-2.5 text-[#E8DCCF]/60 hover:text-white transition-colors text-center text-xs"
+                            >
+                                Mantener en Reportes Activos
                             </button>
                         </div>
                     </div>
