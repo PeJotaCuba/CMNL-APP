@@ -628,26 +628,69 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
     };
 
-    const handleSendZipWhatsApp = () => {
+    const handleSendZipWhatsApp = async () => {
         if (hasUnsignedReports) {
             showAlert("Todos los reportes deben estar firmados digitalmente antes de poder enviarlos por WhatsApp.");
             return;
         }
 
         try {
+            setIsZipping(true);
+            const { blob, fileName, count } = await createZipBlob();
             const phone = getAdminPhone();
             const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
             const dateStr = new Date().toLocaleDateString('es-ES');
-            const nowStr = new Date().toISOString().split('T')[0];
-            const fileName = `Reportes_Musicales_${nowStr}.zip`;
 
-            let messageText = `Hola Administrador, le adjunto el paquete de reportes musicales (${activeReports.length} reportes: ${fileName}) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}\n\n*LISTADO DE REPORTES:*\n`;
+            let messageText = `Hola Administrador, le adjunto el paquete de reportes musicales (${count} reportes: ${fileName}) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}\n\n*LISTADO DE REPORTES:*\n`;
 
             activeReports.forEach((r, idx) => {
                 messageText += `${idx + 1}. ${r.program} (${r.date.split('T')[0]}) - Firmado por: ${r.generatedBy || senderName}\n`;
             });
 
-            // Abrir WhatsApp directamente hacia el chat del Administrador (en app móvil o WhatsApp Web en PC)
+            const zipFile = new File([blob], fileName, { type: 'application/zip' });
+
+            // Intentar adjuntar el archivo ZIP directamente mediante la Web Share API (Nativa en móviles y navegadores compatibles)
+            if (typeof navigator !== 'undefined' && navigator.share) {
+                const sharePayload = {
+                    files: [zipFile],
+                    title: `Paquete de Reportes Musicales - ${fileName}`,
+                    text: messageText
+                };
+
+                if (!navigator.canShare || navigator.canShare({ files: [zipFile] })) {
+                    try {
+                        await navigator.share(sharePayload);
+                        setShowZipModal(false);
+                        setShowPostZipArchivePrompt({
+                            show: true,
+                            reportsToArchive: [...activeReports],
+                            message: `Paquete ZIP (${fileName}) enviado satisfactoriamente con todos sus reportes adjuntos.\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
+                        });
+                        return;
+                    } catch (shareErr: any) {
+                        if (shareErr && shareErr.name === 'AbortError') {
+                            // El usuario canceló la ventana de compartir
+                            return;
+                        }
+                        console.warn("Fallo al compartir archivo directamente, utilizando fallback:", shareErr);
+                    }
+                }
+            }
+
+            // Fallback para entornos donde el navegador no soporta adjuntar archivos por Web Share (ej. PC WhatsApp Web):
+            // 1. Descargamos el archivo ZIP para que lo tenga disponible inmediatamente
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+                a.remove();
+            }, 1000);
+
+            // 2. Abrimos WhatsApp con el chat del administrador y el texto preparado
             openWhatsApp(messageText, phone);
 
             setShowZipModal(false);
@@ -657,12 +700,14 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 setShowPostZipArchivePrompt({
                     show: true,
                     reportsToArchive: [...activeReports],
-                    message: `Se ha abierto WhatsApp para el envío de los reportes al Administrador (+${phone}).\n\n¿Deseas pasar estos ${activeReports.length} reportes para el Archivo?`
+                    message: `Se ha abierto WhatsApp y descargado el archivo ZIP (${fileName}) en su dispositivo para enviarlo al Administrador (+${phone}).\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
                 });
             }, 600);
         } catch (e: any) {
-            console.error("Error opening WhatsApp:", e);
-            showAlert("Error al procesar la apertura de WhatsApp: " + (e?.message || e));
+            console.error("Error al preparar o enviar ZIP por WhatsApp:", e);
+            showAlert("Error al procesar el archivo ZIP: " + (e?.message || e));
+        } finally {
+            setIsZipping(false);
         }
     };
 
