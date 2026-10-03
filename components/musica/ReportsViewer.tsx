@@ -662,20 +662,20 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         }
     };
 
-    const handleSendZipWhatsApp = async (preferredTarget: 'auto' | 'whatsapp' | 'business' | 'web' = 'auto') => {
+    const handleSendZipWhatsApp = async () => {
         if (hasUnsignedReports) {
             showAlert("Todos los reportes deben estar firmados digitalmente antes de poder enviarlos por WhatsApp.");
             return;
         }
 
         try {
+            setIsZipping(true);
             let currentBlob = preparedZip?.blob;
             let currentFile = preparedZip?.file;
             let fileName = preparedZip?.fileName;
             let count = preparedZip?.count;
 
             if (!currentBlob || !currentFile || !fileName || !count) {
-                setIsZipping(true);
                 const generated = await createZipBlob();
                 currentBlob = generated.blob;
                 fileName = generated.fileName;
@@ -687,122 +687,50 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
             const dateStr = new Date().toLocaleDateString('es-ES');
 
-            let messageText = `Hola Administrador, le adjunto el paquete de reportes musicales (${count} reportes: ${fileName}) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}\n\n*LISTADO DE REPORTES:*\n`;
+            let text = `Hola Administrador, le adjunto el paquete de reportes musicales (${count} reportes: ${fileName}) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}\n\n*LISTADO DE REPORTES:*\n`;
 
             activeReports.forEach((r, idx) => {
-                messageText += `${idx + 1}. ${r.program} (${r.date.split('T')[0]}) - Firmado por: ${r.generatedBy || senderName}\n`;
+                text += `${idx + 1}. ${r.program} (${r.date.split('T')[0]}) - Firmado por: ${r.generatedBy || senderName}\n`;
             });
 
-            const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || navigator.vendor || (window as any).opera);
-
-            // ==========================================
-            // 1. EN MÓVIL (ANDROID / iOS):
-            // ==========================================
-            if (isMobile) {
-                // Si el usuario eligió auto o compartir archivo, intentar Web Share API nativo:
-                // El SO móvil identifica automáticamente las apps instaladas (WhatsApp y WhatsApp Business)
-                // y adjunta el archivo ZIP directamente en la conversación.
-                if (typeof navigator !== 'undefined' && navigator.share && preferredTarget === 'auto') {
-                    const sharePayload = {
-                        files: [currentFile],
-                        title: `Reportes Musicales - ${fileName}`,
-                        text: messageText
-                    };
-
-                    try {
-                        if (!navigator.canShare || navigator.canShare({ files: [currentFile] })) {
-                            await navigator.share(sharePayload);
-                            setShowZipModal(false);
-                            setShowPostZipArchivePrompt({
-                                show: true,
-                                reportsToArchive: [...activeReports],
-                                message: `Paquete ZIP (${fileName}) adjuntado y enviado con éxito al Administrador.\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
-                            });
-                            return;
-                        }
-                    } catch (shareErr: any) {
-                        if (shareErr && shareErr.name === 'AbortError') {
-                            return; // El usuario canceló la hoja de compartir
-                        }
-                        console.warn("Fallo Web Share nativo en móvil, abriendo app directa:", shareErr);
+            // Intentar compartir usando API Web Share nativa si está disponible (adjuntar ZIP en opciones para compartir y el usuario elige la aplicación)
+            if (currentBlob && typeof navigator !== 'undefined' && navigator.share) {
+                try {
+                    const file = currentFile || new File([currentBlob], fileName, { type: 'application/zip' });
+                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                            files: [file],
+                            title: `Reportes Musicales - ${fileName}`,
+                            text: text
+                        });
+                        setShowZipModal(false);
+                        setShowPostZipArchivePrompt({
+                            show: true,
+                            reportsToArchive: [...activeReports],
+                            message: `Paquete ZIP (${fileName}) compartido con éxito al Administrador.\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
+                        });
+                        return; // Compartido con éxito; salimos para evitar la redirección por fallback
+                    }
+                } catch (shareErrAny: any) {
+                    if (shareErrAny && shareErrAny.name !== 'AbortError') {
+                        console.error("Fallo compartición nativa ZIP:", shareErrAny);
+                    } else if (shareErrAny && shareErrAny.name === 'AbortError') {
+                        return; // El usuario canceló la caja de compartir nativa
                     }
                 }
-
-                // Fallback o selección directa en móvil:
-                // Descargar el archivo ZIP al dispositivo
-                const url = URL.createObjectURL(currentBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    URL.revokeObjectURL(url);
-                    a.remove();
-                }, 1500);
-
-                // Abrir la aplicación de WhatsApp o WhatsApp Business en el móvil (identifica cuál está instalada)
-                openWhatsApp(messageText, phone, preferredTarget);
-
-                setShowZipModal(false);
-                setTimeout(() => {
-                    setShowPostZipArchivePrompt({
-                        show: true,
-                        reportsToArchive: [...activeReports],
-                        message: `Se ha abierto WhatsApp en su teléfono y descargado el archivo ZIP (${fileName}).\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
-                    });
-                }, 1000);
-                return;
             }
 
-            // ==========================================
-            // 2. EN PC (ESCRITORIO / NAVEGADOR):
-            // ==========================================
-            // En PC: intentar primero Web Share de Windows si está disponible (Windows 11)
-            if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [currentFile] })) {
-                try {
-                    await navigator.share({
-                        files: [currentFile],
-                        title: `Reportes Musicales - ${fileName}`,
-                        text: messageText
-                    });
-                    setShowZipModal(false);
-                    setShowPostZipArchivePrompt({
-                        show: true,
-                        reportsToArchive: [...activeReports],
-                        message: `Paquete ZIP (${fileName}) enviado con éxito al Administrador.\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
-                    });
-                    return;
-                } catch (shareErr: any) {
-                    if (shareErr && shareErr.name === 'AbortError') return;
-                }
-            }
-
-            // En PC estándar:
-            // 1. Abrir WhatsApp Web directamente en el navegador
-            openWhatsApp(messageText, phone, 'web');
-
-            // 2. Descargar el archivo ZIP para que el usuario pueda adjuntarlo (arrastrarlo o seleccionarlo) en WhatsApp Web
-            const url = URL.createObjectURL(currentBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                URL.revokeObjectURL(url);
-                a.remove();
-            }, 1500);
+            // Abrir directamente el chat de WhatsApp con el Administrador (fallback idéntico al envío de PDF)
+            openWhatsApp(text, phone);
 
             setShowZipModal(false);
             setTimeout(() => {
                 setShowPostZipArchivePrompt({
                     show: true,
                     reportsToArchive: [...activeReports],
-                    message: `Se ha abierto WhatsApp Web en el navegador y descargado el paquete ZIP (${fileName}).\n\nPara enviarlo adjunto: simplemente arrastra el archivo ZIP descargado a la ventana del chat de WhatsApp Web con el Administrador.\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
+                    message: `Se ha abierto WhatsApp para el envío de los reportes al Administrador (+${phone}).\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
                 });
-            }, 800);
-
+            }, 600);
         } catch (e: any) {
             console.error("Error al preparar o enviar ZIP por WhatsApp:", e);
             showAlert("Error al procesar el archivo ZIP: " + (e?.message || e));
@@ -1361,64 +1289,19 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                     Descargar en el Dispositivo
                                 </button>
                                 
-                                {typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || navigator.vendor || (window as any).opera) ? (
-                                    <>
-                                        <button 
-                                            onClick={() => handleSendZipWhatsApp('auto')}
-                                            disabled={hasUnsignedReports || isZipping}
-                                            className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
-                                                hasUnsignedReports
-                                                    ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
-                                                    : 'bg-[#25D366] hover:bg-[#20ba5a] text-white cursor-pointer hover:scale-[1.01]'
-                                            }`}
-                                            title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar el envío" : "Adjuntar paquete ZIP y enviar por WhatsApp o WhatsApp Business"}
-                                        >
-                                            <span className="material-symbols-outlined text-lg">send</span>
-                                            Enviar ZIP (WhatsApp / Business)
-                                        </button>
-                                        <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSendZipWhatsApp('whatsapp')}
-                                                disabled={hasUnsignedReports || isZipping}
-                                                className="flex-1 py-1.5 px-2 rounded-lg bg-[#1A100C] border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/15 text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5"
-                                                title="Abrir en WhatsApp estándar"
-                                            >
-                                                <span className="material-symbols-outlined text-sm">chat</span>
-                                                WhatsApp
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSendZipWhatsApp('business')}
-                                                disabled={hasUnsignedReports || isZipping}
-                                                className="flex-1 py-1.5 px-2 rounded-lg bg-[#1A100C] border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/15 text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5"
-                                                title="Abrir en WhatsApp Business"
-                                            >
-                                                <span className="material-symbols-outlined text-sm">storefront</span>
-                                                WhatsApp Business
-                                            </button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <button 
-                                            onClick={() => handleSendZipWhatsApp('web')}
-                                            disabled={hasUnsignedReports || isZipping}
-                                            className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
-                                                hasUnsignedReports
-                                                    ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
-                                                    : 'bg-[#25D366] hover:bg-[#20ba5a] text-white cursor-pointer hover:scale-[1.01]'
-                                            }`}
-                                            title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar el envío" : "Abrir WhatsApp Web en el navegador y preparar paquete ZIP"}
-                                        >
-                                            <span className="material-symbols-outlined text-lg">send</span>
-                                            Enviar ZIP a WhatsApp Web (PC)
-                                        </button>
-                                        <p className="text-[10px] text-[#E8DCCF]/60 text-center -mt-0.5">
-                                            Abre WhatsApp Web en el navegador y descarga el ZIP listo para arrastrar al chat
-                                        </p>
-                                    </>
-                                )}
+                                <button 
+                                    onClick={handleSendZipWhatsApp}
+                                    disabled={hasUnsignedReports || isZipping}
+                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
+                                        hasUnsignedReports
+                                            ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
+                                            : 'bg-[#25D366] hover:bg-[#20ba5a] text-white cursor-pointer hover:scale-[1.01]'
+                                    }`}
+                                    title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar el envío" : "Enviar paquete ZIP por WhatsApp al Administrador"}
+                                >
+                                    <span className="material-symbols-outlined text-lg">send</span>
+                                    Enviar por WhatsApp al Administrador
+                                </button>
 
                                 <button 
                                     onClick={() => setShowZipModal(false)}
