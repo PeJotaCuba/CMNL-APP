@@ -38,6 +38,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         fileName: string;
         count: number;
         fileSizeStr: string;
+        pdfFiles: File[];
     } | null>(null);
     const [isMobile, setIsMobile] = useState(false);
 
@@ -606,6 +607,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             const zip = new JSZip();
             let count = 0;
             const total = sourceReports.length;
+            const pdfFilesList: File[] = [];
 
             for (let idx = 0; idx < total; idx++) {
                 const r = sourceReports[idx];
@@ -620,25 +622,29 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 // Pequeña pausa para permitir que la barra de progreso se anime fluidamente
                 await new Promise(res => setTimeout(res, 60));
 
-                if (r.pdfBlob) {
-                    zip.file(filename, r.pdfBlob);
-                    count++;
-                } else {
+                let reportBlob: Blob | null = r.pdfBlob || null;
+
+                if (!reportBlob) {
                     try {
                         const userFullName = r.generatedBy || currentUser?.fullName || currentUser?.username || 'Dirección de Programa';
                         const signature = r.status?.signed ? `[REG] ${r.id}` : '';
-                        const generatedBlob = generateReportPDF({
+                        reportBlob = generateReportPDF({
                             userFullName,
                             userUniqueId: signature,
                             program: r.program,
                             date: r.date,
                             items: r.items || []
                         });
-                        zip.file(filename, generatedBlob);
-                        count++;
                     } catch (err) {
                         console.error(`Error generando PDF para reporte ${r.id}:`, err);
                     }
+                }
+
+                if (reportBlob) {
+                    zip.file(filename, reportBlob);
+                    const pdfFile = new File([reportBlob], filename, { type: 'application/pdf' });
+                    pdfFilesList.push(pdfFile);
+                    count++;
                 }
             }
 
@@ -663,7 +669,7 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
             setZipProgress(100);
             setZipStatusText(`¡Empaquetado culminado con éxito! (${fileSizeStr})`);
-            setGeneratedZip({ blob, file, fileName, count, fileSizeStr });
+            setGeneratedZip({ blob, file, fileName, count, fileSizeStr, pdfFiles: pdfFilesList });
         } catch (err: any) {
             console.error("Error al generar paquete ZIP:", err);
             showAlert("Error al generar el archivo ZIP: " + (err?.message || err));
@@ -707,48 +713,60 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
 
         let text = `Reportes musicales (${generatedZip.count} reportes empaquetados: ${generatedZip.fileName}).\nFecha: ${dateStr}\nRemitente: ${senderName}\n`;
 
-        // Flujo nativo de compartición del móvil (adjuntar archivo ZIP e invocar selector de apps: WhatsApp, Telegram, Gmail, etc.)
-        if (generatedZip.blob && typeof navigator !== 'undefined' && navigator.share) {
+        // Flujo nativo de compartición del móvil (adjuntar y desplegar selector de aplicaciones: WhatsApp, Telegram, Gmail, etc.)
+        if (typeof navigator !== 'undefined' && navigator.share) {
+            let shared = false;
+
+            // 1. Intentar compartir el archivo ZIP si el navegador lo admite (iOS Safari, etc.)
             try {
-                let file = new File([generatedZip.blob], generatedZip.fileName, { type: 'application/zip' });
-
-                // Probar variantes de tipo MIME si el navegador lo requiere para validación de compartición
-                if (navigator.canShare && !navigator.canShare({ files: [file] })) {
-                    const altFile = new File([generatedZip.blob], generatedZip.fileName, { type: 'application/x-zip-compressed' });
-                    if (navigator.canShare({ files: [altFile] })) {
-                        file = altFile;
-                    } else {
-                        const octetFile = new File([generatedZip.blob], generatedZip.fileName, { type: 'application/octet-stream' });
-                        if (navigator.canShare({ files: [octetFile] })) {
-                            file = octetFile;
-                        }
-                    }
-                }
-
-                if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+                const zipFile = generatedZip.file;
+                if (navigator.canShare && navigator.canShare({ files: [zipFile] })) {
                     await navigator.share({
-                        files: [file],
+                        files: [zipFile],
                         title: `Reportes Musicales - ${generatedZip.fileName}`,
                         text: text
                     });
-                    setShowZipModal(false);
-                    setShowPostZipArchivePrompt({
-                        show: true,
-                        reportsToArchive: [...activeReports],
-                        message: `Paquete ZIP (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
-                    });
-                    return; // Compartido con éxito; salimos
+                    shared = true;
                 }
             } catch (shareErrAny: any) {
                 if (shareErrAny && shareErrAny.name === 'AbortError') {
-                    // El usuario canceló la hoja nativa de compartir
-                    return;
+                    return; // El usuario canceló la hoja nativa
                 }
-                console.error("Fallo compartición nativa ZIP:", shareErrAny);
+                console.warn("Fallo compartición directa de .zip, reintentando con archivos PDF del paquete:", shareErrAny);
+            }
+
+            // 2. Si el navegador (como Chrome en Android) restringe la extensión .zip en Web Share API,
+            // compartimos los archivos PDF del paquete activando la misma hoja nativa de Android/iOS (igual que los PDF individuales):
+            if (!shared && generatedZip.pdfFiles && generatedZip.pdfFiles.length > 0) {
+                try {
+                    if (!navigator.canShare || navigator.canShare({ files: generatedZip.pdfFiles })) {
+                        await navigator.share({
+                            files: generatedZip.pdfFiles,
+                            title: `Reportes Musicales (${generatedZip.count} reportes)`,
+                            text: text
+                        });
+                        shared = true;
+                    }
+                } catch (pdfShareErr: any) {
+                    if (pdfShareErr && pdfShareErr.name === 'AbortError') {
+                        return;
+                    }
+                    console.error("Fallo compartición nativa de archivos PDF:", pdfShareErr);
+                }
+            }
+
+            if (shared) {
+                setShowZipModal(false);
+                setShowPostZipArchivePrompt({
+                    show: true,
+                    reportsToArchive: [...activeReports],
+                    message: `Paquete de reportes (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
+                });
+                return;
             }
         }
 
-        showAlert("Su dispositivo o navegador no admite compartir archivos ZIP directamente mediante la hoja nativa. Utilice el botón Descargar para guardarlo en su teléfono.");
+        showAlert("Su dispositivo o navegador no permite abrir el selector de aplicaciones. Utilice el botón Descargar.");
     };
 
     const loadData = async () => {
