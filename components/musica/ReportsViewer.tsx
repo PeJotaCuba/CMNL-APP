@@ -46,7 +46,8 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || navigator.vendor || (window as any).opera || '') : '';
             const isMobileUA = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
             const isIPadOS = typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-            setIsMobile(isMobileUA || isIPadOS);
+            const hasTouchAndSmall = typeof window !== 'undefined' && (('ontouchstart' in window) || (navigator && navigator.maxTouchPoints > 0)) && window.innerWidth <= 1024;
+            setIsMobile(isMobileUA || isIPadOS || hasTouchAndSmall);
         };
         checkMobile();
         window.addEventListener('resize', checkMobile);
@@ -701,41 +702,78 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const handleShareZip = async () => {
         if (!generatedZip) return;
 
+        const phone = getAdminPhone();
         const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
         const dateStr = new Date().toLocaleDateString('es-ES');
 
-        let text = `Reportes musicales (${generatedZip.count} reportes: ${generatedZip.fileName}).\nFecha: ${dateStr}\nRemitente: ${senderName}\n`;
+        let text = `Reportes musicales (${generatedZip.count} reportes empaquetados: ${generatedZip.fileName}).\nFecha: ${dateStr}\nRemitente: ${senderName}\n`;
 
         // Flujo nativo de compartición del móvil (abre las opciones de aplicaciones admisibles del teléfono: WhatsApp, Telegram, Gmail, Mensajes, etc.)
         if (typeof navigator !== 'undefined' && navigator.share) {
-            try {
-                const shareData: ShareData = {
-                    files: [generatedZip.file],
-                    title: `Reportes Musicales - ${generatedZip.fileName}`,
-                    text: text
-                };
+            let shared = false;
 
-                if (!navigator.canShare || navigator.canShare({ files: [generatedZip.file] })) {
-                    await navigator.share(shareData);
-                    setShowZipModal(false);
-                    setShowPostZipArchivePrompt({
-                        show: true,
-                        reportsToArchive: [...activeReports],
-                        message: `Paquete ZIP (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
+            // 1. Intento prioritario con el archivo adjunto (soportado en iOS Safari y navegadores que admiten compartir .zip)
+            let canShareFile = false;
+            try {
+                canShareFile = !!(navigator.canShare && navigator.canShare({ files: [generatedZip.file] }));
+            } catch (e) {
+                canShareFile = false;
+            }
+
+            if (canShareFile) {
+                try {
+                    await navigator.share({
+                        files: [generatedZip.file],
+                        title: `Reportes Musicales - ${generatedZip.fileName}`,
+                        text: text
                     });
-                    return; // Compartido con éxito; salimos
+                    shared = true;
+                } catch (shareErrAny: any) {
+                    if (shareErrAny && shareErrAny.name === 'AbortError') {
+                        // El usuario canceló la hoja nativa de compartir
+                        return;
+                    }
+                    console.warn("Fallo al compartir con archivo binario, intentando flujo nativo con texto:", shareErrAny);
                 }
-            } catch (shareErrAny: any) {
-                if (shareErrAny && shareErrAny.name === 'AbortError') {
-                    // El usuario canceló la caja de compartir nativa
-                    return;
+            }
+
+            // 2. Si el navegador (como Chrome en Android) restringe adjuntar archivos .zip en Web Share API,
+            // se activa igualmente el flujo nativo de compartir del celular para que el usuario elija la aplicación deseada:
+            if (!shared) {
+                try {
+                    await navigator.share({
+                        title: `Reportes Musicales - ${generatedZip.fileName}`,
+                        text: text
+                    });
+                    shared = true;
+                } catch (shareErrAny: any) {
+                    if (shareErrAny && shareErrAny.name === 'AbortError') {
+                        // El usuario canceló la caja de compartir nativa
+                        return;
+                    }
+                    console.error("Fallo compartición nativa:", shareErrAny);
                 }
-                console.error("Fallo compartición nativa ZIP:", shareErrAny);
+            }
+
+            if (shared) {
+                setShowZipModal(false);
+                setShowPostZipArchivePrompt({
+                    show: true,
+                    reportsToArchive: [...activeReports],
+                    message: `Paquete ZIP (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
+                });
+                return;
             }
         }
 
-        // Si la compartición nativa no está disponible en este dispositivo, descargar directamente
-        handleDownloadZipFile();
+        // Si el navegador no soporta Web Share en lo absoluto, abrir directamente WhatsApp hacia el Administrador
+        openWhatsApp(text, phone);
+        setShowZipModal(false);
+        setShowPostZipArchivePrompt({
+            show: true,
+            reportsToArchive: [...activeReports],
+            message: `Se ha abierto el envío para el Administrador (+${phone}).\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
+        });
     };
 
     const loadData = async () => {
