@@ -547,6 +547,34 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         loadData();
     };
 
+    const handleRestoreAllReports = async () => {
+        if (archivedReports.length === 0) {
+            showAlert("No hay reportes en el Archivo para restaurar.");
+            return;
+        }
+
+        const count = archivedReports.length;
+        setIsLoading(true);
+        try {
+            for (const r of archivedReports) {
+                const updated: Report = {
+                    ...r,
+                    archived: false
+                };
+                delete (updated as any).archivedAt;
+                await saveReportToDB(updated);
+            }
+            showAlert(`Se han restaurado los ${count} ${count === 1 ? 'reporte' : 'reportes'} a la pantalla de inicio de Reportes.`);
+            await loadData();
+            setViewMode('active');
+        } catch (err: any) {
+            console.error("Error al restaurar reportes:", err);
+            showAlert("Error al restaurar los reportes: " + (err?.message || err));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const getAdminPhone = (): string => {
         let admin = users.find(u => u.role === 'admin' || (u as any).classification === 'Administrador' || u.username === 'admin');
         if (!admin) {
@@ -909,26 +937,38 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 Historial de Reportes Archivados
                             </h3>
                             <p className="text-xs text-[#E8DCCF]/70 mt-0.5">
-                                Aquí se organizan por meses los reportes musicales en PDF una vez que el mes ha concluido o han sido archivados de forma adelantada.
+                                Aquí se organizan por meses los reportes musicales en PDF una vez que han sido archivados.
                             </p>
                         </div>
-                        <div className="w-full md:w-72 relative">
-                            <input 
-                                type="text"
-                                value={archiveSearchQuery}
-                                onChange={(e) => setArchiveSearchQuery(e.target.value)}
-                                placeholder="Buscar por programa o fecha..."
-                                className="w-full bg-[#1A100C] border border-[#9E7649]/30 text-white placeholder-[#E8DCCF]/40 text-xs rounded-xl px-3 py-2 pl-9 focus:border-[#9E7649] outline-none"
-                            />
-                            <span className="material-symbols-outlined absolute left-2.5 top-2.5 text-[#E8DCCF]/40 text-base">search</span>
-                            {archiveSearchQuery && (
-                                <button 
-                                    onClick={() => setArchiveSearchQuery('')}
-                                    className="absolute right-2.5 top-2.5 text-[#E8DCCF]/40 hover:text-white"
+                        <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-2.5">
+                            {archivedReports.length > 0 && (
+                                <button
+                                    onClick={handleRestoreAllReports}
+                                    className="w-full sm:w-auto px-4 py-2 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer hover:scale-[1.01] shrink-0 border border-amber-500/30"
+                                    title="Restaurar todos los reportes del Archivo a la pantalla de inicio de Reportes"
                                 >
-                                    <span className="material-symbols-outlined text-sm">close</span>
+                                    <span className="material-symbols-outlined text-base">unarchive</span>
+                                    <span>Restaurar todos al Inicio</span>
                                 </button>
                             )}
+                            <div className="w-full sm:w-64 relative">
+                                <input 
+                                    type="text"
+                                    value={archiveSearchQuery}
+                                    onChange={(e) => setArchiveSearchQuery(e.target.value)}
+                                    placeholder="Buscar por programa o fecha..."
+                                    className="w-full bg-[#1A100C] border border-[#9E7649]/30 text-white placeholder-[#E8DCCF]/40 text-xs rounded-xl px-3 py-2 pl-9 focus:border-[#9E7649] outline-none"
+                                />
+                                <span className="material-symbols-outlined absolute left-2.5 top-2.5 text-[#E8DCCF]/40 text-base">search</span>
+                                {archiveSearchQuery && (
+                                    <button 
+                                        onClick={() => setArchiveSearchQuery('')}
+                                        className="absolute right-2.5 top-2.5 text-[#E8DCCF]/40 hover:text-white"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">close</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -1052,12 +1092,12 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                                         <span className="material-symbols-outlined text-base">download</span>
                                                     </button>
 
-                                                    {/* Restaurar a activos si fue archivado de forma adelantada */}
-                                                    {report.archived && !isMonthConcluded(report.date) && (
+                                                    {/* Restaurar a la pantalla de inicio de Reportes */}
+                                                    {report.archived && (
                                                         <button 
                                                             onClick={() => handleRestoreReport(report)}
                                                             className="size-8 rounded-lg bg-[#1A100C] text-[#E8DCCF]/60 hover:bg-[#9E7649] hover:text-white transition-colors flex items-center justify-center border border-[#9E7649]/20"
-                                                            title="Restaurar a reportes activos"
+                                                            title="Restaurar a la pantalla de inicio de Reportes"
                                                         >
                                                             <span className="material-symbols-outlined text-base">unarchive</span>
                                                         </button>
