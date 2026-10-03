@@ -1,9 +1,13 @@
 
 /**
  * Utility to open WhatsApp or WhatsApp Business in a flexible and reliable way.
- * Works seamlessly on both mobile (WhatsApp App) and desktop (WhatsApp Web / PC).
+ * Works seamlessly on both mobile (WhatsApp App, WhatsApp Business) and desktop (WhatsApp Web / PC).
  */
-export const openWhatsApp = (text: string, phone: string = '') => {
+export const openWhatsApp = (
+  text: string, 
+  phone: string = '', 
+  variant: 'auto' | 'whatsapp' | 'business' | 'web' = 'auto'
+) => {
   const encodedText = encodeURIComponent(text);
   let cleanPhone = phone.replace(/\D/g, '');
   
@@ -14,46 +18,82 @@ export const openWhatsApp = (text: string, phone: string = '') => {
   
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || navigator.vendor || (window as any).opera);
 
-  // Direct URLs:
-  // On PC: web.whatsapp.com takes the user directly to the WhatsApp Web chat interface
-  // On Mobile: wa.me / api.whatsapp / whatsapp:// launches the native WhatsApp application
-  const mobileUrl = cleanPhone 
-    ? `https://wa.me/${cleanPhone}?text=${encodedText}`
-    : `https://wa.me/?text=${encodedText}`;
+  if (isMobile && variant !== 'web') {
+    // Mobile environment: Identify and open WhatsApp or WhatsApp Business
+    if (variant === 'business') {
+      const businessIntent = `intent://send?phone=${cleanPhone}&text=${encodedText}#Intent;package=com.whatsapp.w4b;scheme=whatsapp;end`;
+      const fallbackUrl = `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`;
+      try {
+        window.location.href = businessIntent;
+      } catch (e) {
+        window.location.href = fallbackUrl;
+      }
+      return;
+    }
 
+    if (variant === 'whatsapp') {
+      const standardIntent = `intent://send?phone=${cleanPhone}&text=${encodedText}#Intent;package=com.whatsapp;scheme=whatsapp;end`;
+      const fallbackUrl = `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`;
+      try {
+        window.location.href = standardIntent;
+      } catch (e) {
+        window.location.href = fallbackUrl;
+      }
+      return;
+    }
+
+    // Auto variant:
+    // whatsapp://send triggers Android OS app identification and opens whichever WhatsApp is installed
+    // (WhatsApp or WhatsApp Business, or prompts between both if both are present)
+    const nativeUri = `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`;
+    const webFallback = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`;
+
+    try {
+      window.location.href = nativeUri;
+      setTimeout(() => {
+        const win = window.open(webFallback, '_blank');
+        if (!win) {
+          const a = document.createElement('a');
+          a.href = webFallback;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => a.remove(), 300);
+        }
+      }, 1200);
+    } catch (e) {
+      window.open(webFallback, '_blank');
+    }
+    return;
+  }
+
+  // PC / Desktop: Open WhatsApp Web directly in a browser tab
   const webUrl = cleanPhone
     ? `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
     : `https://web.whatsapp.com/send?text=${encodedText}`;
 
-  const targetUrl = isMobile ? mobileUrl : webUrl;
-
   try {
-    // Try window.open first
-    const openedWindow = window.open(targetUrl, '_blank', 'noopener,noreferrer');
-    
-    // If window.open was blocked by popup blocker or iframe sandbox, use anchor dispatch
+    const openedWindow = window.open(webUrl, '_blank', 'noopener,noreferrer');
     if (!openedWindow || openedWindow.closed || typeof openedWindow.closed === 'undefined') {
       const a = document.createElement('a');
-      a.href = targetUrl;
+      a.href = webUrl;
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
-      setTimeout(() => {
-        a.remove();
-      }, 300);
+      setTimeout(() => a.remove(), 300);
     }
   } catch (err) {
-    console.warn("Error opening WhatsApp with standard methods, falling back to anchor:", err);
+    console.warn("Error opening WhatsApp Web, falling back to anchor:", err);
     const a = document.createElement('a');
-    a.href = targetUrl;
+    a.href = webUrl;
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
-      a.remove();
-    }, 300);
+    setTimeout(() => a.remove(), 300);
   }
 };
+
 
