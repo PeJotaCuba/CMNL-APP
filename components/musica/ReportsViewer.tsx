@@ -30,8 +30,28 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     // ZIP Generation modal state
     const [showZipModal, setShowZipModal] = useState(false);
     const [isZipping, setIsZipping] = useState(false);
-    const [preparedZip, setPreparedZip] = useState<{ blob: Blob; file: File; fileName: string; count: number } | null>(null);
-    const [isPreparingZip, setIsPreparingZip] = useState(false);
+    const [zipProgress, setZipProgress] = useState(0);
+    const [zipStatusText, setZipStatusText] = useState('');
+    const [generatedZip, setGeneratedZip] = useState<{
+        blob: Blob;
+        file: File;
+        fileName: string;
+        count: number;
+        fileSizeStr: string;
+    } | null>(null);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            const ua = typeof navigator !== 'undefined' ? (navigator.userAgent || navigator.vendor || (window as any).opera || '') : '';
+            const isMobileUA = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+            const isIPadOS = typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+            setIsMobile(isMobileUA || isIPadOS);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // Prompt for concluded months reports on entering Reportes
     const [showConcludedPrompt, setShowConcludedPrompt] = useState(false);
@@ -363,6 +383,13 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                 
                 setReports(newReports);
                 showAlert(`Se firmaron correctamente ${successCount} reportes.`);
+
+                // Si estaba en el modal de ZIP, iniciar de inmediato la generación con barra de progreso
+                if (showZipModal) {
+                    setTimeout(() => {
+                        startZipGeneration(newReports);
+                    }, 400);
+                }
             }
             
             setShowSignDialog(false);
@@ -551,192 +578,164 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
         return phone || '5354413935';
     };
 
-    // Pre-package ZIP in background as soon as ZIP modal opens with all signed reports
-    useEffect(() => {
-        let isMounted = true;
-        if (showZipModal && !hasUnsignedReports && activeReports.length > 0) {
-            setIsPreparingZip(true);
-            createZipBlob().then(({ blob, fileName, count }) => {
-                if (!isMounted) return;
-                const file = new File([blob], fileName, { type: 'application/zip' });
-                setPreparedZip({ blob, file, fileName, count });
-                setIsPreparingZip(false);
-            }).catch(err => {
-                if (!isMounted) return;
-                console.error("Error pre-generating ZIP package:", err);
-                setIsPreparingZip(false);
-            });
-        } else if (!showZipModal) {
-            setPreparedZip(null);
-            setIsPreparingZip(false);
-        }
-        return () => { isMounted = false; };
-    }, [showZipModal, hasUnsignedReports, activeReports.length]);
-
     const handleOpenZipModal = () => {
         if (activeReports.length === 0) {
             showAlert("No hay reportes musicales en esta pantalla para empaquetar en ZIP.");
             return;
         }
         setShowZipModal(true);
+
+        // Si todos los reportes están firmados, inicia la generación inmediatamente con barra de progreso
+        const unsigned = activeReports.filter(r => !r.status?.signed);
+        if (unsigned.length === 0) {
+            startZipGeneration();
+        }
     };
 
-    const createZipBlob = async (): Promise<{ blob: Blob; fileName: string; count: number }> => {
-        const zip = new JSZip();
-        let count = 0;
+    const startZipGeneration = async (customReportsList?: Report[]) => {
+        const sourceReports = (customReportsList || activeReports).filter(r => !isArchived(r));
+        if (sourceReports.length === 0) return;
 
-        for (let idx = 0; idx < activeReports.length; idx++) {
-            const r = activeReports[idx];
-            const safeProgram = (r.program || 'Programa').replace(/[^a-zA-Z0-9_-]/g, '_');
-            const datePart = r.date ? r.date.split('T')[0] : `reporte-${idx + 1}`;
-            const filename = `PM-${safeProgram}-${datePart}${activeReports.length > 1 ? `-${idx + 1}` : ''}.pdf`;
-
-            if (r.pdfBlob) {
-                zip.file(filename, r.pdfBlob);
-                count++;
-            } else {
-                try {
-                    const userFullName = r.generatedBy || currentUser?.fullName || currentUser?.username || 'Dirección de Programa';
-                    const signature = r.status?.signed ? `[REG] ${r.id}` : '';
-                    const generatedBlob = generateReportPDF({
-                        userFullName,
-                        userUniqueId: signature,
-                        program: r.program,
-                        date: r.date,
-                        items: r.items || []
-                    });
-                    zip.file(filename, generatedBlob);
-                    count++;
-                } catch (err) {
-                    console.error(`Error generating PDF blob for report ${r.id}:`, err);
-                }
-            }
-        }
-
-        const blob = await zip.generateAsync({ type: 'blob' });
-        const nowStr = new Date().toISOString().split('T')[0];
-        const fileName = `Reportes_Musicales_${nowStr}.zip`;
-        return { blob, fileName, count };
-    };
-
-    const handleDownloadZip = async () => {
-        if (hasUnsignedReports) {
-            showAlert("Todos los reportes deben estar firmados digitalmente antes de poder empaquetarlos y descargarlos en ZIP.");
-            return;
-        }
+        setIsZipping(true);
+        setZipProgress(5);
+        setZipStatusText("Iniciando empaquetado de reportes...");
+        setGeneratedZip(null);
 
         try {
-            setIsZipping(true);
-            let blob = preparedZip?.blob;
-            let fileName = preparedZip?.fileName;
-            let count = preparedZip?.count;
+            const zip = new JSZip();
+            let count = 0;
+            const total = sourceReports.length;
 
-            if (!blob || !fileName || !count) {
-                const generated = await createZipBlob();
-                blob = generated.blob;
-                fileName = generated.fileName;
-                count = generated.count;
+            for (let idx = 0; idx < total; idx++) {
+                const r = sourceReports[idx];
+                const safeProgram = (r.program || 'Programa').replace(/[^a-zA-Z0-9_-]/g, '_');
+                const datePart = r.date ? r.date.split('T')[0] : `reporte-${idx + 1}`;
+                const filename = `PM-${safeProgram}-${datePart}${total > 1 ? `-${idx + 1}` : ''}.pdf`;
+
+                const pct = Math.round(10 + ((idx + 1) / total) * 70);
+                setZipProgress(pct);
+                setZipStatusText(`Procesando reporte ${idx + 1} de ${total}: ${r.program || 'Programa'}...`);
+
+                // Pequeña pausa para permitir que la barra de progreso se anime fluidamente
+                await new Promise(res => setTimeout(res, 60));
+
+                if (r.pdfBlob) {
+                    zip.file(filename, r.pdfBlob);
+                    count++;
+                } else {
+                    try {
+                        const userFullName = r.generatedBy || currentUser?.fullName || currentUser?.username || 'Dirección de Programa';
+                        const signature = r.status?.signed ? `[REG] ${r.id}` : '';
+                        const generatedBlob = generateReportPDF({
+                            userFullName,
+                            userUniqueId: signature,
+                            program: r.program,
+                            date: r.date,
+                            items: r.items || []
+                        });
+                        zip.file(filename, generatedBlob);
+                        count++;
+                    } catch (err) {
+                        console.error(`Error generando PDF para reporte ${r.id}:`, err);
+                    }
+                }
             }
 
-            const url = URL.createObjectURL(blob);
+            setZipProgress(85);
+            setZipStatusText("Comprimiendo archivo ZIP final...");
+            await new Promise(res => setTimeout(res, 80));
+
+            const blob = await zip.generateAsync(
+                { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } },
+                (metadata) => {
+                    const compPct = Math.round(85 + (metadata.percent / 100) * 14);
+                    setZipProgress(Math.min(99, compPct));
+                }
+            );
+
+            const nowStr = new Date().toISOString().split('T')[0];
+            const fileName = `Reportes_Musicales_${nowStr}.zip`;
+            const file = new File([blob], fileName, { type: 'application/zip' });
+
+            const sizeInKB = Math.round(blob.size / 1024);
+            const fileSizeStr = sizeInKB > 1024 ? `${(sizeInKB / 1024).toFixed(1)} MB` : `${sizeInKB} KB`;
+
+            setZipProgress(100);
+            setZipStatusText(`¡Empaquetado culminado con éxito! (${fileSizeStr})`);
+            setGeneratedZip({ blob, file, fileName, count, fileSizeStr });
+        } catch (err: any) {
+            console.error("Error al generar paquete ZIP:", err);
+            showAlert("Error al generar el archivo ZIP: " + (err?.message || err));
+            setZipStatusText("Error durante la generación");
+        } finally {
+            setIsZipping(false);
+        }
+    };
+
+    const handleDownloadZipFile = () => {
+        if (!generatedZip) return;
+
+        try {
+            const url = URL.createObjectURL(generatedZip.blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = fileName;
+            a.download = generatedZip.fileName;
             document.body.appendChild(a);
             a.click();
             URL.revokeObjectURL(url);
             a.remove();
             setShowZipModal(false);
-            
+
             // Preguntar si se pasan estos mismos reportes para archivo
             setShowPostZipArchivePrompt({
                 show: true,
                 reportsToArchive: [...activeReports],
-                message: `Archivo ZIP descargado exitosamente en su dispositivo (${fileName}).\n\n¿Deseas pasar estos ${count} reportes empaquetados para el Archivo?`
+                message: `Archivo ZIP descargado exitosamente en su dispositivo (${generatedZip.fileName}).\n\n¿Deseas pasar estos ${generatedZip.count} reportes empaquetados para el Archivo?`
             });
         } catch (e: any) {
-            console.error("Error creating ZIP:", e);
-            showAlert("Error al generar el archivo ZIP: " + (e?.message || e));
-        } finally {
-            setIsZipping(false);
+            console.error("Error descargando ZIP:", e);
+            showAlert("Error al descargar el archivo ZIP: " + (e?.message || e));
         }
     };
 
-    const handleSendZipWhatsApp = async () => {
-        if (hasUnsignedReports) {
-            showAlert("Todos los reportes deben estar firmados digitalmente antes de poder enviarlos por WhatsApp.");
-            return;
-        }
+    const handleShareZip = async () => {
+        if (!generatedZip) return;
 
-        try {
-            setIsZipping(true);
-            let currentBlob = preparedZip?.blob;
-            let currentFile = preparedZip?.file;
-            let fileName = preparedZip?.fileName;
-            let count = preparedZip?.count;
+        const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
+        const dateStr = new Date().toLocaleDateString('es-ES');
 
-            if (!currentBlob || !currentFile || !fileName || !count) {
-                const generated = await createZipBlob();
-                currentBlob = generated.blob;
-                fileName = generated.fileName;
-                count = generated.count;
-                currentFile = new File([currentBlob], fileName, { type: 'application/zip' });
-            }
+        let text = `Reportes musicales (${generatedZip.count} reportes: ${generatedZip.fileName}).\nFecha: ${dateStr}\nRemitente: ${senderName}\n`;
 
-            const phone = getAdminPhone();
-            const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
-            const dateStr = new Date().toLocaleDateString('es-ES');
+        // Flujo nativo de compartición del móvil (abre las opciones de aplicaciones admisibles del teléfono: WhatsApp, Telegram, Gmail, Mensajes, etc.)
+        if (typeof navigator !== 'undefined' && navigator.share) {
+            try {
+                const shareData: ShareData = {
+                    files: [generatedZip.file],
+                    title: `Reportes Musicales - ${generatedZip.fileName}`,
+                    text: text
+                };
 
-            let text = `Hola Administrador, le adjunto el paquete de reportes musicales (${count} reportes: ${fileName}) correspondientes a la emisión musical.\n\nFecha: ${dateStr}\nRemitente: ${senderName}\n\n*LISTADO DE REPORTES:*\n`;
-
-            activeReports.forEach((r, idx) => {
-                text += `${idx + 1}. ${r.program} (${r.date.split('T')[0]}) - Firmado por: ${r.generatedBy || senderName}\n`;
-            });
-
-            // Intentar compartir usando API Web Share nativa si está disponible (adjuntar ZIP en opciones para compartir y el usuario elige la aplicación)
-            if (currentBlob && typeof navigator !== 'undefined' && navigator.share) {
-                try {
-                    const file = currentFile || new File([currentBlob], fileName, { type: 'application/zip' });
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({
-                            files: [file],
-                            title: `Reportes Musicales - ${fileName}`,
-                            text: text
-                        });
-                        setShowZipModal(false);
-                        setShowPostZipArchivePrompt({
-                            show: true,
-                            reportsToArchive: [...activeReports],
-                            message: `Paquete ZIP (${fileName}) compartido con éxito al Administrador.\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
-                        });
-                        return; // Compartido con éxito; salimos para evitar la redirección por fallback
-                    }
-                } catch (shareErrAny: any) {
-                    if (shareErrAny && shareErrAny.name !== 'AbortError') {
-                        console.error("Fallo compartición nativa ZIP:", shareErrAny);
-                    } else if (shareErrAny && shareErrAny.name === 'AbortError') {
-                        return; // El usuario canceló la caja de compartir nativa
-                    }
+                if (!navigator.canShare || navigator.canShare({ files: [generatedZip.file] })) {
+                    await navigator.share(shareData);
+                    setShowZipModal(false);
+                    setShowPostZipArchivePrompt({
+                        show: true,
+                        reportsToArchive: [...activeReports],
+                        message: `Paquete ZIP (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
+                    });
+                    return; // Compartido con éxito; salimos
                 }
+            } catch (shareErrAny: any) {
+                if (shareErrAny && shareErrAny.name === 'AbortError') {
+                    // El usuario canceló la caja de compartir nativa
+                    return;
+                }
+                console.error("Fallo compartición nativa ZIP:", shareErrAny);
             }
-
-            // Abrir directamente el chat de WhatsApp con el Administrador (fallback idéntico al envío de PDF)
-            openWhatsApp(text, phone);
-
-            setShowZipModal(false);
-            setTimeout(() => {
-                setShowPostZipArchivePrompt({
-                    show: true,
-                    reportsToArchive: [...activeReports],
-                    message: `Se ha abierto WhatsApp para el envío de los reportes al Administrador (+${phone}).\n\n¿Deseas pasar estos ${count} reportes para el Archivo?`
-                });
-            }, 600);
-        } catch (e: any) {
-            console.error("Error al preparar o enviar ZIP por WhatsApp:", e);
-            showAlert("Error al procesar el archivo ZIP: " + (e?.message || e));
-        } finally {
-            setIsZipping(false);
         }
+
+        // Si la compartición nativa no está disponible en este dispositivo, descargar directamente
+        handleDownloadZipFile();
     };
 
     const loadData = async () => {
@@ -1212,96 +1211,60 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
             {showZipModal && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in" onClick={() => !isZipping && setShowZipModal(false)}>
                     <div className="bg-[#2C1B15] w-full max-w-md rounded-2xl p-6 shadow-2xl border border-[#9E7649]/40 font-sans" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center gap-3 text-amber-500 mb-3">
+                        <div className="flex items-center gap-3 text-amber-500 mb-2">
                             <span className="material-symbols-outlined text-3xl">folder_zip</span>
-                            <h3 className="text-xl font-bold text-white">Generar Paquete ZIP</h3>
+                            <h3 className="text-xl font-bold text-white">
+                                {hasUnsignedReports ? 'Firma de Reportes' : generatedZip ? 'Paquete ZIP Listo' : 'Generando Paquete ZIP'}
+                            </h3>
                         </div>
                         <p className="text-xs text-[#E8DCCF]/80 mb-4 leading-relaxed">
-                            Se empaquetarán en un único archivo comprimido los <strong>{activeReports.length} reportes musicales</strong> que están en esta pantalla.
+                            {hasUnsignedReports
+                                ? `Para empaquetar los ${activeReports.length} reportes musicales en un archivo ZIP, todos deben estar firmados digitalmente.`
+                                : `Empaquetado de los ${activeReports.length} reportes musicales de la pantalla principal.`}
                         </p>
 
-                        <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20 max-h-48 overflow-y-auto mb-5 space-y-2">
-                            {activeReports.map((r, idx) => (
-                                <div key={r.id} className="flex items-center justify-between text-xs text-[#E8DCCF]/80 border-b border-[#9E7649]/10 pb-1.5 last:border-0 last:pb-0">
-                                    <div className="flex items-center gap-2 truncate mr-2">
-                                        <span className="material-symbols-outlined text-xs text-red-400">picture_as_pdf</span>
-                                        <span className="truncate">{r.fileName || r.program}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        {r.status?.signed ? (
-                                            <span className="text-[10px] text-yellow-400 font-bold">Firmado</span>
-                                        ) : (
-                                            <span className="text-[10px] text-[#E8DCCF]/40">Sin firmar</span>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="bg-[#9E7649]/10 p-2.5 rounded-xl border border-[#9E7649]/20 mb-4 text-[11px] text-[#E8DCCF]/70 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-amber-400 text-base">contact_phone</span>
-                            <span>Destino WhatsApp: <strong>Administrador (+{getAdminPhone()})</strong></span>
-                        </div>
-
                         {/* Bloque de aviso y acción si hay reportes sin firmar */}
-                        {hasUnsignedReports && (
-                            <div className="bg-yellow-950/40 border border-yellow-500/50 rounded-xl p-3.5 mb-4 shadow-inner animate-fade-in">
-                                <div className="flex items-start gap-2.5">
-                                    <span className="material-symbols-outlined text-yellow-400 text-xl shrink-0 mt-0.5 animate-pulse">lock</span>
-                                    <div className="text-xs">
-                                        <p className="font-bold text-yellow-300">Firma digital obligatoria</p>
-                                        <p className="text-[#E8DCCF]/90 mt-0.5 leading-relaxed text-[11px]">
-                                            Hay <strong>{unsignedReports.length} {unsignedReports.length === 1 ? 'reporte sin firmar' : 'reportes sin firmar'}</strong> en esta pantalla. Para poder empaquetarlos, descargarlos o enviarlos por WhatsApp, <strong>todos los reportes deben estar firmados digitalmente primero</strong>.
-                                        </p>
-                                    </div>
+                        {hasUnsignedReports ? (
+                            <div className="space-y-4">
+                                <div className="bg-[#1A100C] p-3 rounded-xl border border-[#9E7649]/20 max-h-48 overflow-y-auto space-y-2">
+                                    {activeReports.map((r) => (
+                                        <div key={r.id} className="flex items-center justify-between text-xs text-[#E8DCCF]/80 border-b border-[#9E7649]/10 pb-1.5 last:border-0 last:pb-0">
+                                            <div className="flex items-center gap-2 truncate mr-2">
+                                                <span className="material-symbols-outlined text-xs text-red-400">picture_as_pdf</span>
+                                                <span className="truncate">{r.fileName || r.program}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {r.status?.signed ? (
+                                                    <span className="text-[10px] text-yellow-400 font-bold">Firmado</span>
+                                                ) : (
+                                                    <span className="text-[10px] text-rose-400 font-bold">Sin firmar</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        setSigningMode('all');
-                                        setShowSignDialog(true);
-                                    }}
-                                    className="w-full mt-3 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-md text-xs uppercase tracking-wider cursor-pointer hover:scale-[1.01]"
-                                >
-                                    <span className="material-symbols-outlined text-base">draw</span>
-                                    Firmar los {unsignedReports.length} {unsignedReports.length === 1 ? 'reporte pendiente' : 'reportes pendientes'}
-                                </button>
-                            </div>
-                        )}
 
-                        {isZipping ? (
-                            <div className="flex flex-col items-center justify-center py-4 space-y-2">
-                                <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                                <p className="text-xs text-amber-300 font-semibold">Empaquetando reportes en ZIP...</p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-2 font-bold text-xs">
-                                <button 
-                                    onClick={handleDownloadZip}
-                                    disabled={hasUnsignedReports || isZipping}
-                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
-                                        hasUnsignedReports
-                                            ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
-                                            : 'bg-[#9E7649] hover:bg-[#8B653D] text-white cursor-pointer hover:scale-[1.01]'
-                                    }`}
-                                    title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar la descarga" : "Descargar paquete ZIP en Descargas"}
-                                >
-                                    <span className="material-symbols-outlined text-lg">download</span>
-                                    Descargar en el Dispositivo
-                                </button>
-                                
-                                <button 
-                                    onClick={handleSendZipWhatsApp}
-                                    disabled={hasUnsignedReports || isZipping}
-                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider ${
-                                        hasUnsignedReports
-                                            ? 'bg-stone-800/80 text-stone-500 border border-stone-700/30 cursor-not-allowed opacity-60'
-                                            : 'bg-[#25D366] hover:bg-[#20ba5a] text-white cursor-pointer hover:scale-[1.01]'
-                                    }`}
-                                    title={hasUnsignedReports ? "Debe firmar todos los reportes primero para habilitar el envío" : "Enviar paquete ZIP por WhatsApp al Administrador"}
-                                >
-                                    <span className="material-symbols-outlined text-lg">send</span>
-                                    Enviar por WhatsApp al Administrador
-                                </button>
+                                <div className="bg-yellow-950/40 border border-yellow-500/50 rounded-xl p-3.5 shadow-inner animate-fade-in">
+                                    <div className="flex items-start gap-2.5">
+                                        <span className="material-symbols-outlined text-yellow-400 text-xl shrink-0 mt-0.5 animate-pulse">lock</span>
+                                        <div className="text-xs">
+                                            <p className="font-bold text-yellow-300">Firma digital obligatoria</p>
+                                            <p className="text-[#E8DCCF]/90 mt-0.5 leading-relaxed text-[11px]">
+                                                Hay <strong>{unsignedReports.length} {unsignedReports.length === 1 ? 'reporte sin firmar' : 'reportes sin firmar'}</strong>. Fírmelos para iniciar de inmediato la generación del archivo ZIP.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setSigningMode('all');
+                                            setShowSignDialog(true);
+                                        }}
+                                        className="w-full mt-3 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-md text-xs uppercase tracking-wider cursor-pointer hover:scale-[1.01]"
+                                    >
+                                        <span className="material-symbols-outlined text-base">draw</span>
+                                        Firmar los {unsignedReports.length} {unsignedReports.length === 1 ? 'reporte pendiente' : 'reportes pendientes'}
+                                    </button>
+                                </div>
 
                                 <button 
                                     onClick={() => setShowZipModal(false)}
@@ -1309,6 +1272,90 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
                                 >
                                     Cancelar
                                 </button>
+                            </div>
+                        ) : isZipping || !generatedZip ? (
+                            /* BARRA DE PROGRESO DE GENERACIÓN DEL ZIP */
+                            <div className="space-y-4 py-2">
+                                <div className="bg-[#1A100C] p-4 rounded-xl border border-[#9E7649]/30 shadow-inner space-y-3">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-amber-400 font-medium truncate mr-2 flex items-center gap-1.5">
+                                            <span className="inline-block size-2 rounded-full bg-amber-400 animate-ping"></span>
+                                            {zipStatusText || 'Empaquetando reportes en ZIP...'}
+                                        </span>
+                                        <span className="text-white font-bold text-sm shrink-0">{zipProgress}%</span>
+                                    </div>
+                                    <div className="w-full bg-black/60 h-3 rounded-full overflow-hidden border border-[#9E7649]/40 p-0.5">
+                                        <div 
+                                            className="h-full bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 rounded-full transition-all duration-300 shadow-sm"
+                                            style={{ width: `${Math.max(5, zipProgress)}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-[11px] text-[#E8DCCF]/60 text-center animate-pulse">
+                                        Compilando reportes y comprimiendo archivo ZIP...
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            /* CULMINACIÓN: ARCHIVO LISTO + OPCIONES DE DESCARGAR O COMPARTIR */
+                            <div className="space-y-4">
+                                {/* Tarjeta del archivo generado */}
+                                <div className="bg-[#1A100C] p-4 rounded-xl border border-[#9E7649]/30 flex items-center gap-3.5 shadow-inner">
+                                    <div className="size-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400">
+                                        <span className="material-symbols-outlined text-2xl">folder_zip</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="text-xs font-bold text-white truncate" title={generatedZip.fileName}>
+                                            {generatedZip.fileName}
+                                        </h4>
+                                        <p className="text-[11px] text-[#E8DCCF]/70 flex items-center gap-2 mt-0.5">
+                                            <span>{generatedZip.count} reportes</span>
+                                            <span>•</span>
+                                            <span className="text-amber-300 font-semibold">{generatedZip.fileSizeStr}</span>
+                                        </p>
+                                    </div>
+                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                        Listo
+                                    </span>
+                                </div>
+
+                                <div className="bg-[#9E7649]/10 p-2.5 rounded-xl border border-[#9E7649]/20 text-[11px] text-[#E8DCCF]/70 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-amber-400 text-base">info</span>
+                                    <span>
+                                        {isMobile
+                                            ? 'Archivo ZIP generado. Puede descargarlo o compartirlo con las aplicaciones de su móvil.'
+                                            : 'Archivo ZIP generado y listo para descargar en su computadora.'}
+                                    </span>
+                                </div>
+
+                                {/* Botones de acción según el dispositivo (PC solo descargar; Móvil descargar y compartir) */}
+                                <div className="flex flex-col gap-2 font-bold text-xs pt-1">
+                                    <button 
+                                        onClick={handleDownloadZipFile}
+                                        className="w-full py-3 bg-[#9E7649] hover:bg-[#8B653D] text-white rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider cursor-pointer hover:scale-[1.01]"
+                                        title="Descargar paquete ZIP en Descargas del dispositivo"
+                                    >
+                                        <span className="material-symbols-outlined text-lg">download</span>
+                                        Descargar
+                                    </button>
+                                    
+                                    {isMobile && (
+                                        <button 
+                                            onClick={handleShareZip}
+                                            className="w-full py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-xl flex items-center justify-center gap-2 transition-all shadow-md uppercase tracking-wider cursor-pointer hover:scale-[1.01]"
+                                            title="Compartir archivo ZIP (WhatsApp, Telegram, Gmail, etc.)"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">share</span>
+                                            Compartir
+                                        </button>
+                                    )}
+
+                                    <button 
+                                        onClick={() => setShowZipModal(false)}
+                                        className="w-full py-2.5 text-[#E8DCCF]/60 hover:text-white transition-colors text-center text-xs mt-1 cursor-pointer"
+                                    >
+                                        Cerrar
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
