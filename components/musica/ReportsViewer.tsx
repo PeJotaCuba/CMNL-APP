@@ -702,78 +702,53 @@ const ReportsViewer: React.FC<ReportsViewerProps> = ({ users = [], onEdit, curre
     const handleShareZip = async () => {
         if (!generatedZip) return;
 
-        const phone = getAdminPhone();
         const senderName = currentUser?.fullName || currentUser?.name || currentUser?.username || 'Dirección de Programa';
         const dateStr = new Date().toLocaleDateString('es-ES');
 
         let text = `Reportes musicales (${generatedZip.count} reportes empaquetados: ${generatedZip.fileName}).\nFecha: ${dateStr}\nRemitente: ${senderName}\n`;
 
-        // Flujo nativo de compartición del móvil (abre las opciones de aplicaciones admisibles del teléfono: WhatsApp, Telegram, Gmail, Mensajes, etc.)
-        if (typeof navigator !== 'undefined' && navigator.share) {
-            let shared = false;
-
-            // 1. Intento prioritario con el archivo adjunto (soportado en iOS Safari y navegadores que admiten compartir .zip)
-            let canShareFile = false;
+        // Flujo nativo de compartición del móvil (adjuntar archivo ZIP e invocar selector de apps: WhatsApp, Telegram, Gmail, etc.)
+        if (generatedZip.blob && typeof navigator !== 'undefined' && navigator.share) {
             try {
-                canShareFile = !!(navigator.canShare && navigator.canShare({ files: [generatedZip.file] }));
-            } catch (e) {
-                canShareFile = false;
-            }
+                let file = new File([generatedZip.blob], generatedZip.fileName, { type: 'application/zip' });
 
-            if (canShareFile) {
-                try {
+                // Probar variantes de tipo MIME si el navegador lo requiere para validación de compartición
+                if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+                    const altFile = new File([generatedZip.blob], generatedZip.fileName, { type: 'application/x-zip-compressed' });
+                    if (navigator.canShare({ files: [altFile] })) {
+                        file = altFile;
+                    } else {
+                        const octetFile = new File([generatedZip.blob], generatedZip.fileName, { type: 'application/octet-stream' });
+                        if (navigator.canShare({ files: [octetFile] })) {
+                            file = octetFile;
+                        }
+                    }
+                }
+
+                if (!navigator.canShare || navigator.canShare({ files: [file] })) {
                     await navigator.share({
-                        files: [generatedZip.file],
+                        files: [file],
                         title: `Reportes Musicales - ${generatedZip.fileName}`,
                         text: text
                     });
-                    shared = true;
-                } catch (shareErrAny: any) {
-                    if (shareErrAny && shareErrAny.name === 'AbortError') {
-                        // El usuario canceló la hoja nativa de compartir
-                        return;
-                    }
-                    console.warn("Fallo al compartir con archivo binario, intentando flujo nativo con texto:", shareErrAny);
-                }
-            }
-
-            // 2. Si el navegador (como Chrome en Android) restringe adjuntar archivos .zip en Web Share API,
-            // se activa igualmente el flujo nativo de compartir del celular para que el usuario elija la aplicación deseada:
-            if (!shared) {
-                try {
-                    await navigator.share({
-                        title: `Reportes Musicales - ${generatedZip.fileName}`,
-                        text: text
+                    setShowZipModal(false);
+                    setShowPostZipArchivePrompt({
+                        show: true,
+                        reportsToArchive: [...activeReports],
+                        message: `Paquete ZIP (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
                     });
-                    shared = true;
-                } catch (shareErrAny: any) {
-                    if (shareErrAny && shareErrAny.name === 'AbortError') {
-                        // El usuario canceló la caja de compartir nativa
-                        return;
-                    }
-                    console.error("Fallo compartición nativa:", shareErrAny);
+                    return; // Compartido con éxito; salimos
                 }
-            }
-
-            if (shared) {
-                setShowZipModal(false);
-                setShowPostZipArchivePrompt({
-                    show: true,
-                    reportsToArchive: [...activeReports],
-                    message: `Paquete ZIP (${generatedZip.fileName}) compartido con éxito.\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
-                });
-                return;
+            } catch (shareErrAny: any) {
+                if (shareErrAny && shareErrAny.name === 'AbortError') {
+                    // El usuario canceló la hoja nativa de compartir
+                    return;
+                }
+                console.error("Fallo compartición nativa ZIP:", shareErrAny);
             }
         }
 
-        // Si el navegador no soporta Web Share en lo absoluto, abrir directamente WhatsApp hacia el Administrador
-        openWhatsApp(text, phone);
-        setShowZipModal(false);
-        setShowPostZipArchivePrompt({
-            show: true,
-            reportsToArchive: [...activeReports],
-            message: `Se ha abierto el envío para el Administrador (+${phone}).\n\n¿Deseas pasar estos ${generatedZip.count} reportes para el Archivo?`
-        });
+        showAlert("Su dispositivo o navegador no admite compartir archivos ZIP directamente mediante la hoja nativa. Utilice el botón Descargar para guardarlo en su teléfono.");
     };
 
     const loadData = async () => {
